@@ -33,3 +33,6 @@ yarn-error.log*
 # 临时文件
 *.tmp
 ~$*.docx
+
+# 本地损坏的 git 残留（勿提交）
+.git.broken/
