@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased;
+    /* 移动端禁止横向抖动 */
+    overflow-x: hidden;
+  }
+
+  /* 数字等宽，避免日程表跳动 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 隐藏滚动条但保留滚动（移动端更好看） */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer components {
+  /* 页面容器：桌面居中，移动端满宽 */
+  .page-shell {
+    @apply max-w-[560px] mx-auto pb-24;
+  }
+
+  /* 区块标题 */
+  .section-label {
+    @apply text-[11.5px] font-bold tracking-wider text-ink-faint uppercase;
+  }
+}
