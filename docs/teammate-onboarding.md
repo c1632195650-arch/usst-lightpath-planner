@@ -33,12 +33,16 @@ VS Code 必装 4 个插件：**Error Lens**（错误直接标在行尾，对新�
 ## 2. 第一步：克隆仓库
 
 ```bash
-# 把仓库拉到本地（URL 以实际远程地址为准）
-git clone <仓库地址> usst-planner
+# 把仓库拉到本地
+# 注意：这是私有仓库，队友需要让 CY 把你加为 collaborator 才能 clone/push
+git clone https://github.com/c1632195650-arch/usst-lightpath-planner.git usst-planner
 cd usst-planner
 ```
 
-> 没有仓库地址？问项目负责人（CY）要。仓库是 **私有** 的，你需要被加为 collaborator。
+> 仓库地址：https://github.com/c1632195650-arch/usst-lightpath-planner  
+> 仓库是 **私有** 的，队友需要被加为 **collaborator** 才有读写权限。加人入口：仓库 Settings → Access → Collaborators and teams → Add people。
+
+> ⚠️ 队友在本机需要 `gh auth login` 才能推送；仓库已配置为 HTTPS 协议。若在 Git Bash 下 `gh auth status` 显示未登录，先在本机 PowerShell 跑 `gh auth login`，Git Bash 里 `git push` 即可复用同一凭据。
 
 ---
 
