@@ -114,9 +114,12 @@ usst-planner/
 │   └── mocks/                   各自假数据
 ├── public/manifest.webmanifest  PWA 配置（图标待补）
 └── docs/
+    ├── PRD.md                   产品文档（总纲）← 开发/修复前必读
+    ├── roadmap.md               路线图（功能分类×顺序×HTML→App×PDF）
     ├── features.md              功能契约 ← 每人对着自己的条目看
-    ├── prompts.md               提示词库 ← 必读
     ├── decisions.md             技术决策记录 ← 答辩前必读
+    ├── prompts.md               提示词库 ← 必读
+    ├── teammate-onboarding.md   队友加入指南
     └── README.md                本文件
 ```
 
