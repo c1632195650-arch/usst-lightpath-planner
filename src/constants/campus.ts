@@ -67,19 +67,28 @@ export const BUILDING_CAMPUS_MAP: Array<{ keyword: string; campus: CampusId }> =
   { keyword: '复兴', campus: 'FUXING' },
   // 营口路
   { keyword: '营口', campus: 'YINGKOU' },
+  // 教务 PDF 里写的是简称「三教113」而不是「第三教学楼」，补别名。
+  // 注意：这些短别名必须配合「最长匹配」使用，否则「申一教301」会先命中「一教」被误判成 516。
+  { keyword: '一教', campus: 'JG516' },
+  { keyword: '三教', campus: 'JG516' },
+  { keyword: '四教', campus: 'JG334' },
+  { keyword: '五教', campus: 'JG516' },
 ];
 
 /**
  * 从上课地点字符串推断校区。
+ * 取「最长匹配」的关键字：既兼容简称（三教），又不会被短别名误吞（申一教 ≠ 一教）。
  * 识别不了就返回 UNKNOWN —— 让上层去问用户，而不是瞎猜。
  */
 export function guessCampus(rawLocation: string): CampusId {
   if (!rawLocation) return 'UNKNOWN';
   const loc = rawLocation.trim();
+  let best: { keyword: string; campus: CampusId } | null = null;
   for (const item of BUILDING_CAMPUS_MAP) {
-    if (loc.includes(item.keyword)) return item.campus;
+    if (!loc.includes(item.keyword)) continue;
+    if (!best || item.keyword.length > best.keyword.length) best = item;
   }
-  return 'UNKNOWN';
+  return best ? best.campus : 'UNKNOWN';
 }
 
 /** 取两个校区之间的转场分钟数 */

@@ -22,7 +22,8 @@ interface Props {
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const PERIODS = Array.from({ length: 11 }, (_, i) => i + 1);
+// 跟着 PERIOD_START 走：常量里加夜课（第 12、13 节）时这里自动跟着变
+const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1);
 
 const CATEGORY_COLOR: Record<string, string> = {
   '公共基础': '#4a9fe0',
