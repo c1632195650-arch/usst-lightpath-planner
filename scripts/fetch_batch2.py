@@ -7,10 +7,12 @@ import requests
 from bs4 import BeautifulSoup
 import sqlite3
 
-URLS_FILE = r"D:\WORKBUDDY DATA\学术部\usst-planner\_urls_batch2.txt"
-OUT_DIR = pathlib.Path(r"D:\WORKBUDDY DATA\学术部\usst-planner\_wx_raw2")
+ROOT = pathlib.Path(r"D:\WORKBUDDY DATA\学术部\usst-planner")
+# 用法: python scripts/fetch_batch2.py [urls文件] [输出目录]
+URLS_FILE = sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "_urls_batch2.txt")
+OUT_DIR = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else str(ROOT / "_wx_raw2"))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-DB = r"D:\WORKBUDDY DATA\学术部\usst-planner\data\usst_articles.db"
+DB = str(ROOT / "data" / "usst_articles.db")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

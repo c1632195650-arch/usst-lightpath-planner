@@ -191,10 +191,48 @@ def cosine(a, b):
     dot = sum(x * y for x, y in zip(a, b))
     return dot  # 向量已归一化时即余弦
 
+# 查询扩展：口语 → 官方术语（弥合"大功率"对不上"违规电器/额定功率"的词汇鸿沟）
+_QUERY_EXPAND = [
+    ("大功率", "违规电器 额定功率 400W 宿管会 检查条例 电热毯 电煮锅"),
+    ("断电", "熄灯 供电 用电 宿舍管理"),
+    ("门禁", "关门 关门时间 宿舍 进出 晚归"),
+    ("断网", "校园网 网络 USSTroam 无线"),
+    ("断水", "供水 水电 宿舍"),
+    ("能不能用", "是否允许 违规 禁止"),
+    ("可以带", "是否允许 违规 禁止"),
+    ("多少钱", "收费 标准 费用 价格"),
+    ("几号", "日期 时间"),
+    ("几点关", "开放时间 结束 闭馆"),
+    ("怎么预约", "预约流程 预约方式 申请 系统"),
+    ("在哪", "位置 地点 地址 位于"),
+    ("怎么走", "路线 位置 交通"),
+    ("补办", "挂失 重新办理 流程"),
+    ("重修", "重修报名 选课 流程"),
+    ("挂科", "不及格 重修 补考"),
+]
+
+
+def expand_terms(query):
+    """返回扩展出的官方术语列表（用于 OR 召回）"""
+    if not query:
+        return []
+    terms = []
+    for src, dst in _QUERY_EXPAND:
+        if src in query:
+            terms.extend(dst.split())
+    # 去重保序
+    seen, out = set(), []
+    for t in terms:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
 def search(query, k=5, top_fts=20, top_vec=20):
     conn = sqlite3.connect(DB_PATH)
 
-    # 1) FTS5 关键词
+    # 1) FTS5 关键词（原查询，AND 语义，保证精确性）
     fts_hits = {}
     try:
         q = " ".join(jieba.cut(query))
@@ -203,6 +241,22 @@ def search(query, k=5, top_fts=20, top_vec=20):
             "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
         ):
             fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
+    except Exception:
+        pass
+
+    # 1b) 扩展召回：口语→官方术语，OR 语义（FTS5 空格是 AND，扩展词必须走 OR 否则反而漏召）
+    #     分数打 0.6 折，避免盖过原查询的精确命中
+    try:
+        terms = expand_terms(query)
+        if terms:
+            q2 = " OR ".join('"' + t + '"' for t in terms[:12])
+            for r in conn.execute(
+                "SELECT rowid, bm25(articles_fts) AS score FROM articles_fts "
+                "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q2, top_fts)
+            ):
+                s = -r[1] * 0.6
+                if s > fts_hits.get(r[0], 0):
+                    fts_hits[r[0]] = s
     except Exception:
         pass
 
@@ -217,9 +271,11 @@ def search(query, k=5, top_fts=20, top_vec=20):
 
     # 3) 归并到文章级：向量得分 = 该文章最相关块的得分
     vec_article = {}
+    best_chunk = {}   # aid -> (chunk_id, 原始余弦)，用于取回最相关片段
     for cid, (aid, s) in top_chunks:
         if aid not in vec_article or s > vec_article[aid]:
             vec_article[aid] = s
+            best_chunk[aid] = (cid, s)
 
     # 4) 混合排序：归一化后加权（FTS5 权重 0.4 / 向量 0.6），再乘时效因子
     def norm(d):
@@ -260,9 +316,19 @@ def search(query, k=5, top_fts=20, top_vec=20):
             "COALESCE(resolved_url, source_url) FROM articles WHERE id=?", (aid,)
         ).fetchone()
         if r:
+            # 最相关分块（比文章开头更贴题，作为给 LLM 的 snippet）
+            best_txt = ""
+            if aid in best_chunk:
+                c = conn.execute(
+                    "SELECT chunk_text FROM chunks WHERE id=?", (best_chunk[aid][0],)
+                ).fetchone()
+                if c:
+                    best_txt = (c[0] or "").strip()
             out.append({
                 "id": r[0], "account": r[1], "title": r[2], "pub_time": r[3],
                 "score": round(score, 4),
+                "raw_vec": round(vec_article.get(aid, 0.0), 4),
+                "snippet": best_txt[:400],
                 "full_text": (r[4] or "")[:300],
                 "url": r[5] or "",
             })

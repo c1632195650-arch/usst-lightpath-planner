@@ -5,9 +5,11 @@ sys.stdout.reconfigure(encoding="utf-8")
 import sqlite3
 
 ROOT = pathlib.Path(r"D:\WORKBUDDY DATA\学术部\usst-planner")
-REPORT = ROOT / "_wx_raw2" / "抓取报告.json"
+# 用法: python scripts/ingest_wx.py [抓取目录名]
+_dirname = sys.argv[1] if len(sys.argv) > 1 else "_wx_raw2"
+REPORT = ROOT / _dirname / "抓取报告.json"
 DB = ROOT / "data" / "usst_articles.db"
-WX_DIR = ROOT / "_wx_raw2"
+WX_DIR = ROOT / _dirname
 
 # 严过滤黑名单（标题/正文匹配则标 low_value=1，拒绝入索引）
 LOW_VALUE_KW = [
