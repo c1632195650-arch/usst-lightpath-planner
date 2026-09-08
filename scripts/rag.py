@@ -100,10 +100,11 @@ def build():
         conn.execute("ALTER TABLE articles ADD COLUMN is_dup INTEGER DEFAULT 0")
     conn.commit()
 
-    # 1. 分词列（仅主条目 is_dup=0，排除 DB 层去重掉的转载）
+    # 1. 分词列（仅主条目 is_dup=0；同时排除 low_value=1 的行政公示/招标类噪音）
     #    无全文时用 summary 兜底，保证「标题+摘要」仍可检索
     rows = conn.execute(
-        "SELECT id, account, title, full_text, summary FROM articles WHERE is_dup=0"
+        "SELECT id, account, title, full_text, summary FROM articles "
+        "WHERE is_dup=0 AND COALESCE(low_value,0)=0"
     ).fetchall()
     seg_map = {}
     for aid, acct, title, ft, sm in rows:

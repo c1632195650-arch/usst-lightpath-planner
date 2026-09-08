@@ -46,3 +46,6 @@ _wx_raw/
 _wx_raw2/
 
 _wx_raw3/
+_wx_raw4/
+data/libao_memory.db
+docs/_coverage_stat.json

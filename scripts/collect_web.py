@@ -63,6 +63,42 @@ COLUMNS = [
     ("学生处", "xsc.usst.edu.cn", "/12877/list.htm", "生涯教育"),
     ("学生处", "xsc.usst.edu.cn", "/12867/list.htm", "规章制度"),
     ("学生处", "xsc.usst.edu.cn", "/12872/list.htm", "纪律处分相关"),
+
+    # ==== 第二批（2026-09-08 依据「上理校园圈·全品类校园平台汇总」新增权威源）====
+    # 后勤管理处（P0：宿舍服务/医疗服务/报修/餐饮/办事指南/规章制度）
+    ("后勤管理处", "zwc.usst.edu.cn", "/hsts/list.htm", "宿舍服务"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/xnjy/list.htm", "医疗服务"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/bxfw/list.htm", "报修服务"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/cyfw/list.htm", "餐饮服务"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/bszn/list.htm", "办事指南"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/gzzd/list.htm", "规章制度"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/xsxyshfwzn/list.htm", "新生校园生活服务指南"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/tzgg_16025/list.htm", "通知公告"),
+    ("后勤管理处", "zwc.usst.edu.cn", "/smfw/list.htm", "校园商贸"),
+    # 保卫处（户籍/入校/校内规章/消防）
+    ("保卫处", "bwc.usst.edu.cn", "/12160/list.htm", "办事指南"),
+    ("保卫处", "bwc.usst.edu.cn", "/hjfw/list.htm", "户籍业务指南"),
+    ("保卫处", "bwc.usst.edu.cn", "/xwxzclzqbb/list.htm", "校外车辆报备"),
+    ("保卫处", "bwc.usst.edu.cn", "/2800/list.htm", "校内规章"),
+    ("保卫处", "bwc.usst.edu.cn", "/2790/list.htm", "重要通知"),
+    ("保卫处", "bwc.usst.edu.cn", "/xfyaqsc/list.htm", "消防与安全生产"),
+    # 校务信息公开（学生事务/国际交流/财务资产/教育教学）
+    ("校务信息公开", "xxgk.usst.edu.cn", "/xsswgl/list.htm", "学生事务管理"),
+    ("校务信息公开", "xxgk.usst.edu.cn", "/gjjlyhz/list.htm", "国际交流与合作"),
+    ("校务信息公开", "xxgk.usst.edu.cn", "/jxgl/list.htm", "教育教学管理"),
+    ("校务信息公开", "xxgk.usst.edu.cn", "/8499/list.htm", "校内制度"),
+    ("校务信息公开", "xxgk.usst.edu.cn", "/cwyzcgl/list.htm", "财务与资产管理"),
+    # 研究生院（培养方案/管理规定/学籍）
+    ("研究生院", "yjs.usst.edu.cn", "/pyfa/list.htm", "培养方案"),
+    ("研究生院", "yjs.usst.edu.cn", "/glgd_7122/list.htm", "管理规定"),
+    ("研究生院", "yjs.usst.edu.cn", "/pygz/list.htm", "培养工作"),
+    ("研究生院", "yjs.usst.edu.cn", "/zxtz/list.htm", "最新通知"),
+    # 本科教学院（办事指南/学生资料）
+    ("本科教学院", "bksy.usst.edu.cn", "/11453/list.htm", "办事指南"),
+    ("本科教学院", "bksy.usst.edu.cn", "/11950/list.htm", "学生相关资料"),
+    ("本科教学院", "bksy.usst.edu.cn", "/11451/list.htm", "通知公告"),
+    # 基建处（规章制度）
+    ("基建处", "jjc.usst.edu.cn", "/2002/list.htm", "规章制度"),
 ]
 
 
