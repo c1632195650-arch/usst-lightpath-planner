@@ -33,3 +33,9 @@ yarn-error.log*
 # 临时文件
 *.tmp
 ~$*.docx
+
+# 数据采集过程日志（过程产物，不进仓库）
+data/*_log.txt
+
+# 本地损坏的 git 残留（勿提交）
+.git.broken/

@@ -13,8 +13,7 @@ export function Card({ children, title, subtitle, action, className = '', padded
   return (
     <section
       className={[
-        'bg-paper-card border border-paper-line rounded-card',
-        'shadow-[0_1px_2px_rgba(0,0,0,0.03)]',
+        'bg-paper-card border-2 border-ink/10 rounded-card shadow-sticker',
         className,
       ].join(' ')}
     >

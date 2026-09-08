@@ -3,6 +3,8 @@
 > 适用对象：刚加入本项目、从未碰过这个仓库的同学。
 > 目标：照着做 **10 分钟** 就能在本机跑起来、认领模块、开始写代码。
 > 更偏「agent / 协作纪律」的内容见仓库根目录 `AGENTS.md`，**那一份是给 AI 助手看的护栏，你也该扫一眼**。
+>
+> 🔔 **想先知道项目现在做到哪了？先看 [`progress-status.md`](./progress-status.md)**——那是最新进度快照（数据 255 篇、梨宝后端已通、遗留问题），本文是"怎么上手"。
 
 ---
 
@@ -72,10 +74,12 @@ npm run dev      # 浏览器自动打开 http://127.0.0.1:5173
 
 | 你如果是… | 你负责 | 你开的分支 |
 |---|---|---|
-| **A（项目负责人 CY）** | `src/features/quiz/`、`src/components/ui/`、`src/features/plan/`(UI)、文档 | `feat/quiz` `feat/ui` `feat/ai` |
-| **B（你，队友）** | `src/features/schedule/`、`src/lib/planner/` | `feat/import` `feat/planner` |
+| **A（项目负责人 CY）** | `src/features/persona/`（画像）、`src/features/libao/`（梨宝）、`src/features/calendar/`、`server/`（后端）、`scripts/`（数据）、文档 | `feat/persona` `feat/libao` `feat/data` |
+| **B（你，队友）** | `src/features/week/`（周排程）、`src/lib/`（`lbao.ts`/`persona.ts`/`api.ts`）、`src/components/` | `feat/week` `feat/lib` |
 
 > 想改对方的文件？先发消息沟通，或提 PR 让对方 review。**别默默改。**
+>
+> 完整文件地图见 [`progress-status.md`](./progress-status.md) §6。
 
 ---
 

@@ -11,6 +11,7 @@ interface Props {
   disabled?: boolean;
   full?: boolean;
   type?: 'button' | 'submit';
+  className?: string;
 }
 
 const VARIANTS: Record<Variant, string> = {
@@ -27,7 +28,7 @@ const SIZES: Record<Size, string> = {
 
 export function Button({
   children, onClick, variant = 'primary', size = 'md',
-  disabled = false, full = false, type = 'button',
+  disabled = false, full = false, type = 'button', className = '',
 }: Props) {
   return (
     <button
@@ -38,7 +39,7 @@ export function Button({
         'rounded-lg font-semibold transition-all duration-150',
         'focus:outline-none focus:ring-2 focus:ring-brand/30',
         'disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100',
-        VARIANTS[variant], SIZES[size], full ? 'w-full' : '',
+        VARIANTS[variant], SIZES[size], full ? 'w-full' : '', className,
       ].join(' ')}
     >
       {children}

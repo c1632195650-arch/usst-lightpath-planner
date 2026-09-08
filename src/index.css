@@ -9,16 +9,16 @@
 
   body {
     @apply bg-paper text-ink antialiased;
-    /* 移动端禁止横向抖动 */
     overflow-x: hidden;
+    /* 奶油底 + 细密波点，手账贴纸感 */
+    background-image: radial-gradient(rgba(43, 36, 32, 0.045) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 
-  /* 数字等宽，避免日程表跳动 */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
 
-  /* 隐藏滚动条但保留滚动（移动端更好看） */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -29,13 +29,76 @@
 }
 
 @layer components {
-  /* 页面容器：桌面居中，移动端满宽 */
   .page-shell {
-    @apply max-w-[560px] mx-auto pb-24;
+    @apply max-w-[680px] mx-auto;
   }
 
-  /* 区块标题 */
   .section-label {
     @apply text-[11.5px] font-bold tracking-wider text-ink-faint uppercase;
   }
+
+  /* 上理红 → 珊瑚粉 渐变（卡通化的品牌渐变） */
+  .usst-gradient {
+    background: linear-gradient(135deg, #a6192e 0%, #d43a45 42%, #ef5b63 78%, #f79ba3 100%);
+  }
+  .usst-gradient-text {
+    background: linear-gradient(120deg, #a6192e 0%, #d43a45 55%, #ef5b63 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* 奶油渐变（卡片/横幅底） */
+  .cream-gradient {
+    background: linear-gradient(135deg, #fff6e9 0%, #ffedd2 100%);
+  }
+
+  /* 淡入动画（延迟工具类） */
+  .fade-item {
+    animation: fadeUp .55s ease-out both;
+  }
+
+  /* 卡通贴纸卡片：白底 + 硬阴影 + 圆角（通用） */
+  .sticker {
+    @apply bg-paper-card rounded-card border-2 border-ink/10 shadow-sticker;
+  }
+
+  /* 粗描边贴纸（强调） */
+  .sticker-bold {
+    @apply bg-paper-card rounded-card border-2 border-ink/15 shadow-sticker-lg;
+  }
+}
+
+/* —— 硬阴影 utility（手写以避开 .sticker 同名冲突）—— */
+@layer utilities {
+  .shadow-sticker {
+    box-shadow: 0 3px 0 0 rgba(43, 36, 32, 0.10);
+  }
+  .shadow-sticker-lg {
+    box-shadow: 0 5px 0 0 rgba(43, 36, 32, 0.12);
+  }
+  .shadow-sticker-brand {
+    box-shadow: 0 4px 0 0 rgba(166, 25, 46, 0.28);
+  }
+  .shadow-pop {
+    box-shadow: 0 10px 24px -8px rgba(43, 36, 32, 0.18);
+  }
+}
+
+/* 欢迎页整体淡入 */
+@keyframes welcomeIn {
+  0% { opacity: 0; transform: scale(.985); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.welcome-in {
+  animation: welcomeIn .9s cubic-bezier(.2,.7,.3,1) both;
+}
+
+/* 波点装饰背景（局部使用） */
+@keyframes twinkle {
+  0%, 100% { opacity: .3; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.twinkle {
+  animation: twinkle 2.6s ease-in-out infinite;
 }
