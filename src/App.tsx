@@ -3,7 +3,7 @@ import type { AnswerEntry, AppState } from '@/types';
 import { MOCK_SCHEDULE, MOCK_TERM_START, CAL_EVENTS } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
-import { currentWeekNo, mondayOf, todayISO } from '@/lib/date';
+import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
 import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
@@ -12,9 +12,13 @@ import { MonthCalendar } from '@/features/calendar/MonthCalendar';
 import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
 import { WeekView } from '@/features/week/WeekView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
+import { ImportTester } from '@/features/import/ImportTester';
 
 type View = 'welcome' | 'persona' | 'result' | 'main';
-type MainTab = 'calendar' | 'libao' | 'profile';
+type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
+
+/** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
+const SHOW_IMPORT = import.meta.env.DEV;
 
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -32,6 +36,36 @@ export default function App() {
   useEffect(() => {
     if (!state.schedule) setState((prev) => ({ ...prev, schedule: MOCK_SCHEDULE }));
   }, [state.schedule, setState]);
+
+  /** 平移 delta 周，并限定在 [第1周, 第 totalWeeks 周] 内（边界内停下，不循环）。
+   *  鼠标 ‹ › 按钮与键盘左右键共用，保证两者行为一致。 */
+  const shiftWeekBy = (d: number) => {
+    setWeekMonday((m) => {
+      if (!m) return m;
+      const next = shiftWeekMonday(m, d);
+      const n = currentWeekNo(schedule.termStart, next);
+      if (n < 1 || n > schedule.totalWeeks) return m; // 已在首/末周，不越界
+      return next;
+    });
+  };
+
+  // 窗口级键盘：← / → 切换上一周 / 下一周（仅当正在查看周视图时）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      // 只在周视图可见时响应（mainTab=calendar 且已进入某一周）
+      if (mainTab !== 'calendar' || weekMonday === null) return;
+      // 排除输入框 / 文本域 / 可编辑区聚焦（聊天输入、文件选择等不被劫持）
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      e.preventDefault(); // 阻止课程表横向滚动误触
+      shiftWeekBy(e.key === 'ArrowRight' ? 1 : -1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainTab, weekMonday, schedule.termStart, schedule.totalWeeks]);
 
   const setAnswer = (id: string, value: AnswerEntry) => {
     setState((prev) => {
@@ -130,7 +164,7 @@ export default function App() {
             <div className="text-[10.5px] text-ink-faint tracking-wide">上理生活助手 · USST 🍐</div>
           </div>
           <nav className="flex items-center gap-1">
-            {(['calendar', 'libao', 'profile'] as MainTab[]).map((t) => (
+            {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => { setMainTab(t); if (t === 'profile') setWeekMonday(null); }}
@@ -138,7 +172,7 @@ export default function App() {
                   mainTab === t ? 'bg-brand text-white shadow-sticker' : 'text-ink-soft hover:bg-white'
                 }`}
               >
-                {t === 'calendar' ? '月历' : t === 'libao' ? '梨宝' : '画像'}
+                {t === 'calendar' ? '月历' : t === 'libao' ? '梨宝' : t === 'import' ? '课表' : '画像'}
               </button>
             ))}
           </nav>
@@ -146,7 +180,9 @@ export default function App() {
       </header>
 
       <main className="page-shell px-5 py-5">
-        {mainTab === 'libao' ? (
+        {mainTab === 'import' ? (
+          <ImportTester onApply={(s) => patchState({ schedule: s })} />
+        ) : mainTab === 'libao' ? (
           <LbaoChat
             profile={state.persona}
             schedule={schedule}
@@ -179,12 +215,7 @@ export default function App() {
             onSelectMode={(id) => patchState({ lifeMode: id })}
             persona={state.persona}
             onBack={() => setWeekMonday(null)}
-            onShiftWeek={(d) => {
-              const base = weekMonday;
-              const nd = new Date(base);
-              nd.setDate(nd.getDate() + d * 7);
-              setWeekMonday(isoOf(nd));
-            }}
+            onShiftWeek={shiftWeekBy}
           />
         ) : (
           <div className="flex flex-col gap-5">

@@ -69,6 +69,11 @@ export function mondayOf(iso: string): string {
   return addDays(iso, -back);
 }
 
+/** 从某周的周一起，平移 delta 周（delta>0 往后，<0 往前），返回新周一 ISO */
+export function shiftWeekMonday(mondayISO: string, delta: number): string {
+  return addDays(mondayISO, delta * 7);
+}
+
 /** 生成一周七天的 ISO 数组（周一 → 周日） */
 export function weekDates(mondayISO: string): string[] {
   return Array.from({ length: 7 }, (_, i) => addDays(mondayISO, i));

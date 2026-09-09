@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Course, PersonaProfile, Schedule } from '@/types';
+import type { Course, CourseTimeSlot, PersonaProfile, Schedule } from '@/types';
 import { LIFE_MODES } from '@/data/usst';
 import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
@@ -41,12 +41,19 @@ export function WeekView(props: Props) {
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
   const selectedSet = useMemo(() => new Set(selectedDays), [selectedDays]);
 
-  // 某天(1=周一)某节课是否「从第 p 节开始」
-  const courseStartingAt = (dow: number, p: number) =>
-    schedule.courses.find((c) => c.slots.some((s) => s.dayOfWeek === dow && s.startPeriod === p));
+  // 某节是否在当前周上课：weeks 为空数组 = 全学期（types.ts 约定）
+  const activeThisWeek = (slot: CourseTimeSlot, wkNo: number): boolean =>
+    slot.weeks.length === 0 || slot.weeks.includes(wkNo);
 
+  // 某天(1=周一)某节课是否「从第 p 节开始」且当前周该上
+  const courseStartingAt = (dow: number, p: number) =>
+    schedule.courses.find((c) => c.slots.some((s) =>
+      s.dayOfWeek === dow && s.startPeriod === p && activeThisWeek(s, weekNo)));
+
+  // 某节是否「被上面跨行课程盖住」且当前周该上
   const isCovered = (dow: number, p: number) =>
-    schedule.courses.some((c) => c.slots.some((s) => s.dayOfWeek === dow && s.startPeriod < p && s.endPeriod >= p));
+    schedule.courses.some((c) => c.slots.some((s) =>
+      s.dayOfWeek === dow && s.startPeriod < p && s.endPeriod >= p && activeThisWeek(s, weekNo)));
 
   const runLbao = () => {
     if (!persona) return;
@@ -120,7 +127,9 @@ export function WeekView(props: Props) {
                   {DAY_LABELS.map((_, dow) => {
                     const start = courseStartingAt(dow + 1, p);
                     if (start) {
-                      const slot = start.slots.find((s) => s.dayOfWeek === dow + 1 && s.startPeriod === p)!;
+                      const slot = start.slots.find(
+                        (s) => s.dayOfWeek === dow + 1 && s.startPeriod === p && activeThisWeek(s, weekNo),
+                      )!;
                       const span = slot.endPeriod - slot.startPeriod + 1;
                       return (
                         <td key={dow} rowSpan={span} className="p-0.5 align-top">
