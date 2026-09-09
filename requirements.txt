@@ -1,0 +1,16 @@
+# Python 后端依赖（梨宝 FastAPI + RAG + 数据工程脚本）
+# 安装：pip install -r requirements.txt
+# 用 venv 安装更佳：python -m venv .venv && source .venv/bin/activate（Windows: .venv\Scripts\activate）
+
+# ---- 梨宝问答后端 (server/app.py) ----
+fastapi
+uvicorn
+pydantic
+requests
+
+# ---- 检索 / 向量 (scripts/rag.py) ----
+jieba
+fastembed          # bge-small-zh-v1.5 CPU/ONNX；首次建索引会下载模型缓存
+
+# ---- 数据采集 (scripts/collector.py 等) ----
+beautifulsoup4
