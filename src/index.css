@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    color: #18181b;
-    background: #f6f6f4;
+    color: #172033;
+    background: #f3f5f8;
     font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
 
@@ -16,9 +16,7 @@
   body {
     @apply min-h-screen bg-paper text-ink antialiased;
     overflow-x: hidden;
-    background-image:
-      radial-gradient(circle at 12% -8%, rgba(166, 25, 46, 0.08), transparent 30rem),
-      linear-gradient(180deg, #fafafa 0%, #f6f6f4 100%);
+    background-image: radial-gradient(circle at 85% -12%, rgba(56, 101, 166, 0.08), transparent 32rem);
   }
 
   button,
@@ -48,7 +46,7 @@
 }
 
 @layer components {
-  /* The wider shell makes desktop planning views breathe without compromising mobile density. */
+  /* The wider shell keeps planning views readable without compromising mobile density. */
   .page-shell {
     @apply mx-auto w-full max-w-[1200px];
   }
@@ -62,23 +60,23 @@
   }
 
   .panel {
-    @apply rounded-2xl border border-ink/10 bg-white shadow-sm;
+    @apply rounded-2xl border border-ink/10 bg-white shadow-[0_1px_2px_rgba(23,32,51,0.03)];
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 ease-in-out hover:bg-brand-dark hover:brightness-110 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white/80 px-4 py-3 text-sm font-medium text-ink-soft shadow-sm transition-all duration-300 ease-in-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-ink active:scale-[0.99];
+    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-ink active:scale-[0.99];
   }
 
   .icon-button {
-    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white/80 text-ink-soft shadow-sm transition-all duration-300 ease-in-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-brand;
+    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-brand;
   }
 
   .nav-item {
-    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-all duration-300 ease-in-out hover:bg-white hover:text-ink;
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-200 ease-out hover:bg-white hover:text-ink;
   }
 
   .nav-item-active {

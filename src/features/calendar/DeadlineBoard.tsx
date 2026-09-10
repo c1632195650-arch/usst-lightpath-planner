@@ -13,11 +13,9 @@ const DEADLINE_COLOR: Record<Deadline['tag'], string> = {
 function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
   const urgent = days <= 7;
   return (
-    <div
-      className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white px-3 py-3 transition-colors hover:border-ink/20"
-    >
+    <div className="flex items-center gap-3 py-3">
       <div
-        className="h-8 w-1 shrink-0 rounded-full"
+        className="h-9 w-1 shrink-0 rounded-full"
         style={{ background: DEADLINE_COLOR[d.tag] ?? '#71717a' }}
       />
 
@@ -70,7 +68,7 @@ export function DeadlineBoard() {
         <span className="text-xs text-ink-faint">{upcoming.length} 项</span>
       </header>
 
-      <ul className="flex flex-col gap-2">
+      <ul className="divide-y divide-ink/10">
         {upcoming.map((d) => (
           <li key={d.id}>
             <DeadlineRow d={d} days={diffDays(today, d.date)} />

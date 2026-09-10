@@ -165,6 +165,14 @@ export default function App() {
     (count, course) => count + course.slots.filter((slot) => slot.weeks.length === 0 || slot.weeks.includes(weekNo)).length,
     0,
   );
+  /** 课表节次按星期汇总，只表达已导入的真实课程密度。 */
+  const dailySlotCounts = Array.from({ length: 7 }, (_, index) => schedule.courses.reduce(
+    (count, course) => count + course.slots.filter((slot) =>
+      slot.dayOfWeek === index + 1 && (slot.weeks.length === 0 || slot.weeks.includes(weekNo))).length,
+    0,
+  ));
+  /** 留出最小柱高，让没有课程的日期仍保有可辨认的时间刻度。 */
+  const peakDailySlots = Math.max(1, ...dailySlotCounts);
 
   return (
     <div className="min-h-screen bg-paper">
@@ -234,26 +242,49 @@ export default function App() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
             <div className="flex flex-col gap-6">
-              <section className="overflow-hidden rounded-2xl bg-ink text-white shadow-sm">
-                <div className="flex flex-col gap-6 px-5 py-7 sm:px-8 sm:py-8">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {todayISO()}</p>
-                    <h1 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">今天的安排，要留得出余地。</h1>
-                    <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">
-                      {state.persona
-                        ? `当前建议会参考「${state.persona.archetype.primary?.name ?? '你的画像'}」的节奏，以及这周正在上的课程。`
-                        : '先从校历进入本周；完成画像后，安排会更贴近你的习惯。'}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <button onClick={() => openWeek(todayISO())} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">
-                      打开本周安排
-                    </button>
-                    {!state.persona && (
-                      <button onClick={() => setView('persona')} className="min-h-11 rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10">
-                        完成画像测评
+              <section className="overflow-hidden rounded-2xl border border-ink/10 bg-ink text-white shadow-[0_16px_40px_rgba(23,32,51,0.12)]">
+                <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="flex flex-col justify-between gap-6 px-5 py-7 sm:px-8 sm:py-8">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {todayISO()}</p>
+                      <h1 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">今天的安排，要留得出余地。</h1>
+                      <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">
+                        {state.persona
+                          ? `当前建议会参考「${state.persona.archetype.primary?.name ?? '你的画像'}」的节奏，以及这周正在上的课程。`
+                          : '先从校历进入本周；完成画像后，安排会更贴近你的习惯。'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button onClick={() => openWeek(todayISO())} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">
+                        打开本周安排
                       </button>
-                    )}
+                      {!state.persona && (
+                        <button onClick={() => setView('persona')} className="min-h-11 rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                          完成画像测评
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/10 bg-white/[0.035] px-5 py-6 sm:px-8 lg:border-l lg:border-t-0 lg:px-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/45">WEEKLY PULSE</p>
+                        <p className="mt-2 text-sm font-semibold text-white">本周课程节次分布</p>
+                      </div>
+                      <p className="text-xs text-white/45">{activeSlots} 节</p>
+                    </div>
+                    <div className="mt-6 grid h-28 grid-cols-7 items-end gap-2" aria-label="本周各日期课程节次分布">
+                      {dailySlotCounts.map((count, index) => (
+                        <div key={index} className="flex h-full min-w-0 flex-col justify-end gap-2 text-center">
+                          <span className="text-xs font-semibold text-white/80 tabular-nums">{count || '–'}</span>
+                          <div className="flex h-16 items-end rounded-lg bg-white/5 p-1">
+                            <div className="w-full rounded-md bg-sky transition-[height] duration-300 ease-out" style={{ height: `${count === 0 ? 8 : Math.max(18, (count / peakDailySlots) * 100)}%` }} />
+                          </div>
+                          <span className="text-[11px] text-white/45">{['一', '二', '三', '四', '五', '六', '日'][index]}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="grid border-t border-white/10 sm:grid-cols-3">

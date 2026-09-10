@@ -4,10 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // A neutral editorial base keeps information dense but calm; deep USST red is reserved for action.
-        ink: { DEFAULT: '#18181b', soft: '#52525b', faint: '#a1a1aa' },
-        paper: { DEFAULT: '#f6f6f4', card: '#ffffff', line: '#e4e4e7' },
-        brand: { DEFAULT: '#a6192e', dark: '#7f1020', bright: '#c72c40', light: '#faeaed' },
+        // Planning uses a cool paper canvas; USST red remains a deliberate action and selection signal.
+        ink: { DEFAULT: '#172033', soft: '#536174', faint: '#8a96a8' },
+        paper: { DEFAULT: '#f3f5f8', card: '#ffffff', line: '#dfe5ee' },
+        brand: { DEFAULT: '#a6192e', dark: '#7f1020', bright: '#c83a50', light: '#fbedf0' },
+        sky: { DEFAULT: '#3865a6', light: '#edf4ff' },
         ok: { DEFAULT: '#15803d', light: '#edfdf3' },
         warn: { DEFAULT: '#b45309', light: '#fff7ed' },
         danger: { DEFAULT: '#b91c1c', light: '#fef2f2' },
