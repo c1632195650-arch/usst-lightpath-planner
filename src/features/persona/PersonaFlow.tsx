@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { AnswerEntry, AnswerMap } from '@/types';
 import { PERSONA_ITEMS, SECTION_META } from '@/data/personaBank';
 import { isAnswered } from '@/lib/persona';
@@ -30,7 +30,6 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
     const saved = answers.B05;
     return Array.isArray(saved) ? (saved as string[]) : [];
   });
-  const advanceTimer = useRef<number | null>(null);
 
   const item = items[idx];
   const isLast = idx === items.length - 1;
@@ -50,18 +49,14 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   const answeredTotal = sections.reduce((sum, entry) => sum + entry.complete, 0);
   const progress = Math.round((answeredTotal / total) * 100);
 
-  /** 为自动前进留出可感知的“已选中”反馈，而不是立即切走内容。 */
-  useEffect(() => {
-    if (item.type !== 'SORT' && answered && !isLast) {
-      advanceTimer.current = window.setTimeout(() => setIdx((current) => current + 1), 420);
-    }
-    return () => {
-      if (advanceTimer.current) clearTimeout(advanceTimer.current);
-    };
-  }, [answered, item.type, idx, isLast]);
-
   /** 记录当前题答案；外层负责把答卷持久化到本地。 */
   const answer = (value: AnswerEntry) => onAnswer(item.id, value);
+
+  /** 所有题都由明确操作进入下一步，旧答案不会在页面打开时触发跳题。 */
+  const goNext = () => {
+    if (isLast) onComplete();
+    else setIdx((current) => current + 1);
+  };
 
   /** 依次记录排序题的选择，已选项目保持顺序以明确其优先级。 */
   const handleSortTap = (key: string) => {
@@ -131,7 +126,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
         </aside>
 
         <section className="min-w-0">
-          <div className="overflow-hidden rounded-2xl border border-ink/10 bg-ink text-white shadow-[0_16px_40px_rgba(23,32,51,0.12)]">
+          <div className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
             <div className="border-b border-white/10 px-5 py-4 sm:px-8 sm:py-5">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm font-semibold text-white">{SECTION_LABELS[item.section]}</p>
@@ -239,7 +234,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                   </button>
                   <div className="flex-1" />
                   <button
-                    onClick={() => { if (isLast) onComplete(); else setIdx((current) => current + 1); }}
+                    onClick={goNext}
                     disabled={!sortDone}
                     className="min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -248,7 +243,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                 </>
               ) : (
                 <>
-                  <button onClick={() => answer('' as AnswerEntry)} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white">
+                  <button onClick={goNext} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white">
                     暂时跳过
                   </button>
                   <div className="flex-1" />
@@ -257,11 +252,9 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                       上一题
                     </button>
                   )}
-                  {isLast && answered && (
-                    <button onClick={onComplete} className="min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">
-                      生成我的画像
-                    </button>
-                  )}
+                  <button onClick={goNext} disabled={!answered} className="min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-40">
+                    {isLast ? '生成我的画像' : '下一题'}
+                  </button>
                 </>
               )}
             </footer>

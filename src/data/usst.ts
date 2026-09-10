@@ -5,7 +5,7 @@ import type { CalEvent, Course, LifeMode, Schedule } from '@/types';
  * ========================================================== */
 
 export const LIFE_MODES: LifeMode[] = [
-  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#a6192e', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
+  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#b22222', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
   { id: 'slack', name: '摸鱼模式', emoji: '🐟', color: '#4f83cc', tagline: '今天不想努力', desc: '降低任务密度，多安排休息与娱乐，见缝插针放松，拒绝内卷。' },
   { id: 'grind', name: '猛攻模式', emoji: '🚀', color: '#b45309', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，适合考试周或赶 ddl。' },
   { id: 'food', name: '吃饭模式', emoji: '🍜', color: '#c2410c', tagline: '好好吃饭是大事', desc: '每天规划探店 / 食堂路线，兼顾营养与新鲜感。' },

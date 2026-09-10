@@ -24,7 +24,7 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   return (
     <div className="min-h-full">
       <div className="page-shell px-4 py-6 sm:px-6 sm:py-8">
-        <section className="overflow-hidden rounded-2xl border border-ink/10 bg-ink text-white shadow-[0_16px_40px_rgba(23,32,51,0.12)]">
+        <section className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
           <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12 lg:px-10 lg:py-10">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">YOUR PLANNING PROFILE</p>

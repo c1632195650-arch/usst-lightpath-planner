@@ -4,11 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Planning uses a cool paper canvas; USST red remains a deliberate action and selection signal.
-        ink: { DEFAULT: '#172033', soft: '#536174', faint: '#8a96a8' },
-        paper: { DEFAULT: '#f3f5f8', card: '#ffffff', line: '#dfe5ee' },
-        brand: { DEFAULT: '#a6192e', dark: '#7f1020', bright: '#c83a50', light: '#fbedf0' },
-        sky: { DEFAULT: '#3865a6', light: '#edf4ff' },
+        // 奶油底色承接大面积内容，珊瑚与深红只用于操作、选中和重点信息。
+        ink: { DEFAULT: '#4b0000', soft: '#7a3028', faint: '#a66b5b' },
+        paper: { DEFAULT: '#fff8ec', card: '#ffffff', line: '#ffdead' },
+        brand: { DEFAULT: '#b22222', dark: '#8b0000', bright: '#ff6347', light: '#ffe4b5' },
+        sky: { DEFAULT: '#ff7f50', light: '#fff0dc' },
         ok: { DEFAULT: '#15803d', light: '#edfdf3' },
         warn: { DEFAULT: '#b45309', light: '#fff7ed' },
         danger: { DEFAULT: '#b91c1c', light: '#fef2f2' },

@@ -41,22 +41,22 @@ export function Radar({ axes, size = 320 }: { axes: Axes; size?: number }) {
           key={idx}
           points={p}
           fill="none"
-          stroke="#dfe5ee"
+          stroke="#ffdead"
           strokeWidth={idx === 3 ? 1.5 : 1}
         />
       ))}
       {/* 轴线 */}
       {AXIS_KEYS.map((_, i) => {
         const [x, y] = point(i, R);
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#dfe5ee" strokeWidth="1" />;
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#ffdead" strokeWidth="1" />;
       })}
 
       {/* 数据多边形 */}
-      <polygon points={dataPoly} fill="#3865a6" fillOpacity="0.16" stroke="#3865a6" strokeWidth="2.5" strokeLinejoin="round" />
+      <polygon points={dataPoly} fill="#ff7f50" fillOpacity="0.18" stroke="#ff7f50" strokeWidth="2.5" strokeLinejoin="round" />
       {AXIS_KEYS.map((k, i) => {
         const v = Math.max(6, Math.min(100, axes[k]));
         const [x, y] = point(i, R * (v / 100));
-        return <circle key={k} cx={x} cy={y} r="4" fill="#3865a6" stroke="#fff" strokeWidth="1.5" />;
+        return <circle key={k} cx={x} cy={y} r="4" fill="#ff7f50" stroke="#fff" strokeWidth="1.5" />;
       })}
 
       {/* 标签 + 数值 */}
@@ -69,10 +69,10 @@ export function Radar({ axes, size = 320 }: { axes: Axes; size?: number }) {
         const anchor = Math.abs(dx) < 0.3 ? 'middle' : dx > 0 ? 'start' : 'end';
         return (
           <g key={k}>
-            <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight="700" fill="#172033">
+            <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight="700" fill="#4b0000">
               {val}
             </text>
-            <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="middle" fontSize="12" fill="#536174">
+            <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="middle" fontSize="12" fill="#7a3028">
               {AXIS_META[k].short}
             </text>
           </g>

@@ -27,8 +27,8 @@ const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1)
 
 const CATEGORY_COLOR: Record<string, string> = {
   '公共基础': '#306a9f',
-  '专业核心': '#a6192e',
-  '专业选修': '#6d4bc4',
+  '专业核心': '#b22222',
+  '专业选修': '#dc143c',
   '通识选修': '#17845d',
   '实践环节': '#9a681d',
   '其他': '#71717a',
@@ -66,7 +66,7 @@ export function WeekView(props: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* 周次控制保持在同一视觉层级，切换时不丢失当前日期和课程上下文。 */}
-      <header className="flex items-center justify-between rounded-2xl bg-ink px-4 py-4 text-white shadow-sm sm:px-6">
+      <header className="hero-surface flex items-center justify-between rounded-2xl px-4 py-4 text-white shadow-[0_12px_32px_rgba(75,0,0,0.14)] sm:px-6">
         <button onClick={onBack} className="min-h-10 text-sm font-medium text-white/60 transition-colors hover:text-white">返回总览</button>
         <div className="text-center">
           <div className="text-lg font-semibold tracking-tight">第 {weekNo} 周</div>
@@ -195,8 +195,8 @@ export function WeekView(props: Props) {
       </section>
 
       <section className="pb-10">
-        <div className="overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm">
-          <div className="flex items-center gap-4 bg-ink px-5 py-5 text-white">
+        <div className="panel overflow-hidden">
+          <div className="hero-surface flex items-center gap-4 px-5 py-5 text-white">
             <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-lg">梨</div>
             <div className="flex-1">
               <div className="text-sm font-semibold">梨宝建议</div>

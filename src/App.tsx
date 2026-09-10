@@ -173,11 +173,13 @@ export default function App() {
   ));
   /** 留出最小柱高，让没有课程的日期仍保有可辨认的时间刻度。 */
   const peakDailySlots = Math.max(1, ...dailySlotCounts);
+  /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
+  const isLbaoTab = mainTab === 'libao';
 
   return (
-    <div className="min-h-screen bg-paper">
-      {/* The utility header keeps navigation concise so the planning content remains the visual focus. */}
-      <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/85 backdrop-blur-xl">
+    <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
+      {/* 紧凑导航把主要空间留给日程与对话内容。 */}
+      <header className="sticky top-0 z-20 shrink-0 border-b border-white/70 bg-paper/80 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
           <Logo120 size={32} />
           <div className="min-w-0 flex-1 leading-tight">
@@ -200,7 +202,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="page-shell px-4 py-6 sm:px-6 sm:py-8">
+      <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
         {mainTab === 'import' ? (
           <ImportTester onApply={(s) => patchState({ schedule: s })} />
         ) : mainTab === 'libao' ? (
@@ -242,7 +244,7 @@ export default function App() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
             <div className="flex flex-col gap-6">
-              <section className="overflow-hidden rounded-2xl border border-ink/10 bg-ink text-white shadow-[0_16px_40px_rgba(23,32,51,0.12)]">
+              <section className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
                 <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="flex flex-col justify-between gap-6 px-5 py-7 sm:px-8 sm:py-8">
                     <div>
@@ -303,7 +305,7 @@ export default function App() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-ink/10 bg-white p-5 shadow-sm sm:p-6">
+              <section className="panel p-5 sm:p-6">
                 <div className="mb-6 flex items-end justify-between gap-4">
                   <div>
                     <p className="section-label">CALENDAR</p>
@@ -331,9 +333,11 @@ export default function App() {
         )}
       </main>
 
-      <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
-        UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
-      </footer>
+      {!isLbaoTab && (
+        <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
+          UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
+        </footer>
+      )}
     </div>
   );
 }

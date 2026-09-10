@@ -94,8 +94,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   };
 
   return (
-    <div className="grid h-[calc(100dvh-120px)] min-h-[520px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-[0_12px_32px_rgba(23,32,51,0.08)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1">
-      <aside className="flex flex-col bg-ink px-5 py-6 text-white sm:px-6">
+    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-[0_12px_32px_rgba(75,0,0,0.08)] backdrop-blur-xl lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1">
+      <aside className="hero-surface flex flex-col px-5 py-5 text-white sm:px-6 lg:py-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold" aria-hidden="true">梨</span>
           <div>
@@ -104,14 +104,14 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
           </div>
         </div>
 
-        <div className="mt-7 border-y border-white/10 py-4">
+        <div className="mt-5 border-y border-white/10 py-4 lg:mt-7">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">WHAT I CAN HELP</p>
           <p className="mt-3 text-sm leading-6 text-white/72">校园公开资料的查询，或结合你的课表和画像，给这一周留出可执行的空间。</p>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-5 lg:mt-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">TRY ASKING</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
             {QUICK.map((question) => (
               <button
                 key={question}
@@ -125,7 +125,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
           </div>
         </div>
 
-        <div className="mt-auto pt-6">
+        <div className="mt-auto pt-4 lg:pt-6">
           <div className={`flex items-center gap-2 text-xs ${online === false ? 'text-brand-light' : 'text-white/55'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${online === true ? 'bg-ok' : online === false ? 'bg-brand-bright' : 'bg-white/35'}`} aria-hidden="true" />
             {online === true ? '校园资料服务已连接' : online === false ? '校园资料服务未连接' : '正在连接校园资料服务'}
@@ -141,7 +141,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
           </div>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2 sm:px-2" aria-live="polite">
+        <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2 sm:px-2" aria-live="polite">
           {messages.map((message, index) => (
             <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
               <div className={`flex max-w-[88%] flex-col gap-2 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>

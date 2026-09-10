@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    color: #172033;
-    background: #f3f5f8;
+    color: #4b0000;
+    background: #fff8ec;
     font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
 
@@ -16,7 +16,7 @@
   body {
     @apply min-h-screen bg-paper text-ink antialiased;
     overflow-x: hidden;
-    background-image: radial-gradient(circle at 85% -12%, rgba(56, 101, 166, 0.08), transparent 32rem);
+    background-image: radial-gradient(circle at 82% -12%, rgba(255, 179, 71, 0.2), transparent 34rem);
   }
 
   button,
@@ -46,7 +46,7 @@
 }
 
 @layer components {
-  /* The wider shell keeps planning views readable without compromising mobile density. */
+  /* 统一内容宽度，在桌面端保留信息密度，在移动端自然铺满。 */
   .page-shell {
     @apply mx-auto w-full max-w-[1200px];
   }
@@ -60,15 +60,23 @@
   }
 
   .panel {
-    @apply rounded-2xl border border-ink/10 bg-white shadow-[0_1px_2px_rgba(23,32,51,0.03)];
+    @apply rounded-2xl border border-white/80 bg-white/85 shadow-[0_8px_28px_rgba(75,0,0,0.07)] backdrop-blur-xl;
+  }
+
+  /* 暖色重点面只用于关键区域，让整页保持轻盈而不回到红黑对撞。 */
+  .hero-surface {
+    @apply bg-ink;
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(255, 99, 71, 0.42), transparent 36%),
+      radial-gradient(circle at 100% 100%, rgba(255, 127, 80, 0.28), transparent 40%);
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(178,34,34,0.2)] transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-ink active:scale-[0.99];
+    @apply inline-flex items-center justify-center rounded-xl border border-white/80 bg-white/75 px-4 py-3 text-sm font-medium text-ink-soft backdrop-blur-xl transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/60 hover:text-ink active:scale-[0.99];
   }
 
   .icon-button {
@@ -80,7 +88,7 @@
   }
 
   .nav-item-active {
-    @apply bg-ink text-white shadow-sm hover:bg-ink hover:text-white;
+    @apply bg-brand text-white shadow-sm hover:bg-brand-dark hover:text-white;
   }
 }
 
