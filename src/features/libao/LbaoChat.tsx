@@ -14,9 +14,11 @@ interface Msg {
   needProfile?: boolean;
 }
 
+/** 常见问法，避免第一次进入对话没有入口。 */
 const QUICK = ['四六级什么时候报名', '怎么选课和重修', '帮我安排这周', '这学期放假安排'];
 
-const GREETING = '害！我是梨宝 🍐 咱上理的一颗「数字闷骚梨」，住服务器里，有点懒但讲义气。你可以问我四六级、选课、放假、报到这些大小事，也可以说「帮我安排这周」，梨宝掐指一算给你排学习·吃饭·娱乐。你懂我意思吧？';
+/** 对话初始说明，明确问答与排程两个能力。 */
+const GREETING = '我是梨宝，咱上理的校园助手。你可以问四六级、选课、放假、报到等校园问题，也可以说「帮我安排这周」，我会结合你的画像和课表给出建议。';
 
 /** 推荐意图识别：安排/规划类走本地规则，其余走 RAG 问答 */
 function isRecommendIntent(q: string): boolean {
@@ -47,6 +49,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  /** 发送提问；排程意图在本地处理，其余交给校园资料问答。 */
   const send = async (raw?: string) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
@@ -59,7 +62,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       if (!profile) {
         setMessages((m) => [...m, {
           role: 'lbao',
-          text: '害！梨宝还不认识你，没法给你量身安排嗷～先去测个画像（35 道小选择），我就能按你的作息帮你排这周啦。 [梨宝摊手.jpg]',
+          text: '我还不了解你的作息偏好。完成画像后，就能按你的情况安排这一周。',
           needProfile: true,
         }]);
       } else {
@@ -80,7 +83,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       setOnline(false);
       setMessages((m) => [
         ...m,
-        { role: 'lbao', text: '呜，梨宝的后端没连上（可能没启动 server/app.py）。宝子先把后端跑起来，我就能查资料啦～ [梨宝叹气.gif]' },
+        { role: 'lbao', text: '校园资料服务暂时未连接。启动 server/app.py 后，我就可以继续查询资料。' },
       ]);
     } finally {
       setLoading(false);
@@ -88,26 +91,27 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-120px)] min-h-[480px]">
+    <div className="flex h-[calc(100dvh-120px)] min-h-[480px] flex-col rounded-2xl border border-ink/10 bg-white/70 p-3 shadow-sm sm:p-4">
       {online === false && (
-        <div className="mb-2 text-center text-[11.5px] text-ink-faint bg-white/70 border-2 border-dashed border-brand/30 rounded-xl py-1.5 px-3">
-          🔌 后端未连接 · 启动 <code className="font-bold">python server/app.py</code> 后梨宝就能查资料
+        <div className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-brand/20 bg-brand-light/40 px-3 py-2 text-center text-xs text-ink-soft">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+          服务未连接 · 启动 <code className="font-semibold text-ink">python server/app.py</code> 后可查询校园资料
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto pr-1">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-            <div className={`max-w-[86%] ${m.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
+            <div className={`flex max-w-[86%] flex-col gap-2 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
               {m.role === 'lbao' && (
-                <div className="flex items-center gap-1.5 pl-1">
-                  <span className="w-6 h-6 rounded-xl bg-brand-light grid place-items-center text-[14px] shadow-sticker">🍐</span>
-                  <span className="text-[11px] font-bold text-ink-faint">梨宝{m.mode === 'llm' ? ' · AI' : ''}</span>
+                <div className="flex items-center gap-2 pl-1">
+                  <span className="grid h-6 w-6 place-items-center rounded-md bg-brand text-[10px] font-bold text-white" aria-hidden="true">梨</span>
+                  <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-faint">梨宝{m.mode === 'llm' ? ' · AI' : ''}</span>
                 </div>
               )}
               <div
-                className={`rounded-2xl border-2 px-3.5 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap shadow-sticker ${
-                  m.role === 'user' ? 'bg-brand text-white border-brand-dark' : 'bg-white text-ink border-paper-line'
+                className={`rounded-xl border px-3.5 py-3 text-[13.5px] leading-relaxed whitespace-pre-wrap ${
+                  m.role === 'user' ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-white text-ink shadow-sm'
                 }`}
               >
                 {m.text}
@@ -117,9 +121,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
               {m.needProfile && onGoProfile && (
                 <button
                   onClick={onGoProfile}
-                  className="ml-1 px-4 py-1.5 rounded-full bg-brand text-white text-[12.5px] font-bold shadow-sticker-brand hover:-translate-y-0.5 transition-all"
+                  className="button-primary ml-1 px-3 py-2 text-xs"
                 >
-                  🧭 去测画像
+                  完成画像
                 </button>
               )}
 
@@ -128,14 +132,14 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
               {/* 来源卡片 */}
               {m.sources && m.sources.length > 0 && (
-                <div className="flex flex-col gap-1.5 pl-1 w-full">
+                <div className="flex w-full flex-col gap-2 pl-1">
                   {m.sources.slice(0, 3).map((s, j) => (
                     <a
                       key={j}
                       href={s.url || undefined}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-xl border-2 border-paper-line bg-white/70 px-3 py-2 hover:-translate-y-0.5 transition-all shadow-sticker"
+                      className="block rounded-lg border border-ink/10 bg-white/80 px-3 py-2.5 transition-colors hover:border-brand/25 hover:bg-brand-light/30"
                     >
                       <div className="text-[12px] font-bold text-ink leading-snug line-clamp-1">{s.title}</div>
                       <div className="text-[10.5px] text-ink-faint mt-0.5">{s.account} · {s.pub_time}</div>
@@ -149,8 +153,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl border-2 border-paper-line bg-white px-3.5 py-2.5 shadow-sticker">
-              <span className="w-6 h-6 rounded-xl bg-brand-light grid place-items-center text-[14px] animate-bounce-soft">🍐</span>
+            <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white px-3.5 py-3 shadow-sm">
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-brand text-[10px] font-bold text-white animate-pulse" aria-hidden="true">梨</span>
               <span className="text-[12.5px] text-ink-soft">梨宝掐指一算中…</span>
             </div>
           </div>
@@ -158,31 +162,31 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto py-2.5 -mx-1 px-1">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 py-3">
         {QUICK.map((q) => (
           <button
             key={q}
             onClick={() => send(q)}
             disabled={loading}
-            className="shrink-0 px-3 py-1.5 rounded-full border-2 border-brand/25 bg-white text-[12px] font-bold text-brand hover:bg-brand hover:text-white transition-all shadow-sticker"
+            className="shrink-0 rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-brand/25 hover:bg-brand-light hover:text-brand disabled:opacity-40"
           >
             {q}
           </button>
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 border-t border-ink/10 pt-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="问梨宝 / 或说「帮我安排这周」…"
-          className="flex-1 rounded-full border-2 border-paper-line bg-white px-4 py-2.5 text-[13.5px] text-ink outline-none focus:border-brand/50 transition-colors"
+          className="flex-1 rounded-xl border border-ink/15 bg-white px-4 py-2.5 text-[13.5px] text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
         />
         <button
           onClick={() => send()}
           disabled={loading || !input.trim()}
-          className="shrink-0 px-5 py-2.5 rounded-full bg-brand text-white font-bold text-[13.5px] shadow-sticker-brand disabled:opacity-40 hover:-translate-y-0.5 transition-all"
+          className="button-primary shrink-0 px-4 py-2.5 text-[13.5px] disabled:cursor-not-allowed disabled:opacity-40"
         >
           发送
         </button>
@@ -190,4 +194,3 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     </div>
   );
 }
-

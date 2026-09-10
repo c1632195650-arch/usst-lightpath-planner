@@ -3,16 +3,34 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color: #18181b;
+    background: #f6f6f4;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-paper text-ink antialiased;
+    @apply min-h-screen bg-paper text-ink antialiased;
     overflow-x: hidden;
-    /* 奶油底 + 细密波点，手账贴纸感 */
-    background-image: radial-gradient(rgba(43, 36, 32, 0.045) 1px, transparent 1px);
-    background-size: 22px 22px;
+    background-image:
+      radial-gradient(circle at 12% -8%, rgba(166, 25, 46, 0.08), transparent 30rem),
+      linear-gradient(180deg, #fafafa 0%, #f6f6f4 100%);
+  }
+
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible {
+    @apply outline-none ring-2 ring-brand/30 ring-offset-2 ring-offset-paper;
   }
 
   .tabular-nums {
@@ -22,6 +40,7 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -29,76 +48,58 @@
 }
 
 @layer components {
+  /* The wider shell makes desktop planning views breathe without compromising mobile density. */
   .page-shell {
-    @apply max-w-[680px] mx-auto;
+    @apply mx-auto w-full max-w-[1120px];
+  }
+
+  .content-shell {
+    @apply mx-auto w-full max-w-[720px];
   }
 
   .section-label {
-    @apply text-[11.5px] font-bold tracking-wider text-ink-faint uppercase;
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-faint;
   }
 
-  /* 上理红 → 珊瑚粉 渐变（卡通化的品牌渐变） */
-  .usst-gradient {
-    background: linear-gradient(135deg, #a6192e 0%, #d43a45 42%, #ef5b63 78%, #f79ba3 100%);
-  }
-  .usst-gradient-text {
-    background: linear-gradient(120deg, #a6192e 0%, #d43a45 55%, #ef5b63 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  .panel {
+    @apply rounded-2xl border border-ink/10 bg-paper-card/85 shadow-sm backdrop-blur-md;
   }
 
-  /* 奶油渐变（卡片/横幅底） */
-  .cream-gradient {
-    background: linear-gradient(135deg, #fff6e9 0%, #ffedd2 100%);
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 ease-in-out hover:bg-brand-dark hover:brightness-110 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
-  /* 淡入动画（延迟工具类） */
-  .fade-item {
-    animation: fadeUp .55s ease-out both;
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white/80 px-4 py-3 text-sm font-medium text-ink-soft shadow-sm transition-all duration-300 ease-in-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-ink active:scale-[0.99];
   }
 
-  /* 卡通贴纸卡片：白底 + 硬阴影 + 圆角（通用） */
-  .sticker {
-    @apply bg-paper-card rounded-card border-2 border-ink/10 shadow-sticker;
+  .icon-button {
+    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white/80 text-ink-soft shadow-sm transition-all duration-300 ease-in-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-brand;
   }
 
-  /* 粗描边贴纸（强调） */
-  .sticker-bold {
-    @apply bg-paper-card rounded-card border-2 border-ink/15 shadow-sticker-lg;
+  .nav-item {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-all duration-300 ease-in-out hover:bg-white hover:text-ink;
+  }
+
+  .nav-item-active {
+    @apply bg-ink text-white shadow-sm hover:bg-ink hover:text-white;
   }
 }
 
-/* —— 硬阴影 utility（手写以避开 .sticker 同名冲突）—— */
 @layer utilities {
-  .shadow-sticker {
-    box-shadow: 0 3px 0 0 rgba(43, 36, 32, 0.10);
-  }
-  .shadow-sticker-lg {
-    box-shadow: 0 5px 0 0 rgba(43, 36, 32, 0.12);
-  }
-  .shadow-sticker-brand {
-    box-shadow: 0 4px 0 0 rgba(166, 25, 46, 0.28);
-  }
-  .shadow-pop {
-    box-shadow: 0 10px 24px -8px rgba(43, 36, 32, 0.18);
+  .fade-item {
+    animation: fadeUp 0.45s ease-out both;
   }
 }
 
-/* 欢迎页整体淡入 */
-@keyframes welcomeIn {
-  0% { opacity: 0; transform: scale(.985); }
-  100% { opacity: 1; transform: scale(1); }
-}
-.welcome-in {
-  animation: welcomeIn .9s cubic-bezier(.2,.7,.3,1) both;
-}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 
-/* 波点装饰背景（局部使用） */
-@keyframes twinkle {
-  0%, 100% { opacity: .3; transform: scale(.8); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-.twinkle {
-  animation: twinkle 2.6s ease-in-out infinite;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

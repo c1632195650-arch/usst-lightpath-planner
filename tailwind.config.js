@@ -4,31 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 「上理生活助手 · USST」—— 卡通奶油风设计系统
-        // 关键词：chill · 有趣 · 贴纸手账 · 奶油底 + 上理红主色 + 马卡龙辅助色
-        ink: { DEFAULT: '#2b2420', soft: '#5c534c', faint: '#9c918a' },
-        paper: { DEFAULT: '#fff6e9', card: '#ffffff', line: '#f0e4d0' },
-        // 上理红（微调更亮更跳，官方红保留在 dark）
-        brand: { DEFAULT: '#d43a45', dark: '#a6192e', bright: '#ef5b63', light: '#fde3e5' },
-        // 马卡龙辅助色（贴纸 / 标签 / 课程分类）
-        butter: { DEFAULT: '#f5b840', light: '#fdeecb' },
-        mint: { DEFAULT: '#4db98a', light: '#d9f2e6' },
-        sky: { DEFAULT: '#4a9fe0', light: '#dcebfa' },
-        coral: { DEFAULT: '#f07e88', light: '#fde6e8' },
-        grape: { DEFAULT: '#9d7bf2', light: '#ece4fd' },
-        silver: { DEFAULT: '#9ba0a6', light: '#eef0f2' },
-        gold: { DEFAULT: '#b8860b', light: '#fbf3e2' },
-        ok: { DEFAULT: '#2f9e6e', light: '#e3f6ec' },
-        warn: { DEFAULT: '#d97a16', light: '#fdf0e0' },
-        danger: { DEFAULT: '#c9414b', light: '#fde6e8' },
+        // A neutral editorial base keeps information dense but calm; deep USST red is reserved for action.
+        ink: { DEFAULT: '#18181b', soft: '#52525b', faint: '#a1a1aa' },
+        paper: { DEFAULT: '#f6f6f4', card: '#ffffff', line: '#e4e4e7' },
+        brand: { DEFAULT: '#a6192e', dark: '#7f1020', bright: '#c72c40', light: '#faeaed' },
+        ok: { DEFAULT: '#15803d', light: '#edfdf3' },
+        warn: { DEFAULT: '#b45309', light: '#fff7ed' },
+        danger: { DEFAULT: '#b91c1c', light: '#fef2f2' },
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],
         display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
-      borderRadius: { card: '22px' },
-      // boxShadow 改在 src/index.css 的 @layer utilities 里手写定义，
-      // 避免与 .sticker 组件类同名导致 PostCSS 解析边界问题
+      borderRadius: { card: '16px' },
       keyframes: {
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(14px)' },

@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import type { CalEvent } from '@/types';
 import { addDays, fromISO, toISO, todayISO, weekdayOf } from '@/lib/date';
 
-const EVENT_STYLE: Record<CalEvent['type'], { dot: string; label: string; emoji: string }> = {
-  term: { dot: '#d43a45', label: '学期', emoji: '🏫' },
-  holiday: { dot: '#f5b840', label: '假期', emoji: '🎉' },
-  anniversary: { dot: '#e0a21e', label: '校庆', emoji: '🎂' },
-  exam: { dot: '#f07e88', label: '考试', emoji: '📝' },
-  activity: { dot: '#4db98a', label: '活动', emoji: '🏆' },
+const EVENT_STYLE: Record<CalEvent['type'], { dot: string; label: string }> = {
+  term: { dot: '#a6192e', label: '学期' },
+  holiday: { dot: '#b7791f', label: '假期' },
+  anniversary: { dot: '#a16207', label: '校庆' },
+  exam: { dot: '#d05262', label: '考试' },
+  activity: { dot: '#17845d', label: '活动' },
 };
 
 interface Props {
@@ -53,22 +53,20 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
 
   return (
     <div>
-      {/* 月份切换 */}
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={() => shift(-1)} className="w-9 h-9 rounded-full grid place-items-center text-ink-soft hover:bg-brand/5 border-2 border-ink/10 shadow-sticker">‹</button>
-        <div className="text-[17px] font-bold text-ink">{monthLabel}</div>
-        <button onClick={() => shift(1)} className="w-9 h-9 rounded-full grid place-items-center text-ink-soft hover:bg-brand/5 border-2 border-ink/10 shadow-sticker">›</button>
+      {/* Small previous/next controls leave the calendar grid as the primary reading surface. */}
+      <div className="mb-5 flex items-center justify-between">
+        <button onClick={() => shift(-1)} className="icon-button" aria-label="上个月">‹</button>
+        <div className="text-lg font-semibold tracking-tight text-ink">{monthLabel}</div>
+        <button onClick={() => shift(1)} className="icon-button" aria-label="下个月">›</button>
       </div>
 
-      {/* 星期表头 */}
-      <div className="grid grid-cols-7 mb-1">
+      <div className="mb-2 grid grid-cols-7">
         {weekHeader.map((w, i) => (
-          <div key={w} className={`text-center text-[12px] py-1.5 font-bold ${i >= 5 ? 'text-coral' : 'text-ink-soft'}`}>{w}</div>
+          <div key={w} className={`py-2 text-center text-[11px] font-semibold ${i >= 5 ? 'text-brand/70' : 'text-ink-faint'}`}>{w}</div>
         ))}
       </div>
 
-      {/* 日期网格 */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {cells.map(({ iso, inMonth }) => {
           const dayNum = fromISO(iso).getDate();
           const isToday = iso === today;
@@ -81,21 +79,21 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
             <button
               key={iso}
               onClick={() => inMonth && onSelectDate(iso)}
-              className={`relative aspect-[0.9] rounded-xl flex flex-col items-center justify-center transition-all text-[13.5px] ${
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition-all duration-300 ease-in-out ${
                 !inMonth ? 'text-transparent pointer-events-none' : ''
               } ${
                 isToday
-                  ? 'bg-brand text-white font-bold shadow-sticker-brand scale-105'
+                  ? 'border-brand bg-brand text-white font-semibold shadow-sm'
                   : isSelected
-                    ? 'bg-brand-light text-brand font-bold ring-2 ring-brand/40'
+                    ? 'border-brand/30 bg-brand-light text-brand font-semibold'
                     : weekend
-                      ? 'text-ink-soft hover:bg-white hover:shadow-sticker'
-                      : 'text-ink hover:bg-white hover:shadow-sticker'
+                      ? 'border-transparent text-ink-soft hover:border-ink/10 hover:bg-white'
+                      : 'border-transparent text-ink hover:border-ink/10 hover:bg-white'
               }`}
             >
               <span className="tabular-nums">{dayNum}</span>
               {evs.length > 0 && (
-                <span className="flex gap-0.5 mt-0.5">
+                <span className="mt-1 flex gap-0.5">
                   {evs.slice(0, 2).map((e, i) => (
                     <span
                       key={i}
@@ -110,11 +108,10 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
         })}
       </div>
 
-      {/* 图例 */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 text-[11.5px] text-ink-faint">
+      <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-ink-faint">
         {Object.entries(EVENT_STYLE).map(([k, v]) => (
           <span key={k} className="flex items-center gap-1">
-            <span className="text-[12px]">{v.emoji}</span>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: v.dot }} />
             {v.label}
           </span>
         ))}

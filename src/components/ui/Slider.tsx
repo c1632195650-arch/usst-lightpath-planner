@@ -29,8 +29,8 @@ export function Slider({
     <div className="w-full">
       {(label || display) && (
         <div className="flex items-baseline justify-between mb-1.5">
-          {label && <span className="text-[13.5px] font-semibold text-ink">{label}</span>}
-          {display && <span className="text-[15px] font-bold text-brand tabular-nums">{display}</span>}
+          {label && <span className="text-sm font-semibold text-ink">{label}</span>}
+          {display && <span className="text-sm font-semibold text-brand tabular-nums">{display}</span>}
         </div>
       )}
       <input
@@ -40,13 +40,12 @@ export function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer
-                   accent-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-brand"
         style={{
-          background: `linear-gradient(to right, #c2410c 0%, #c2410c ${pct}%, #e7e2da ${pct}%, #e7e2da 100%)`,
+          background: `linear-gradient(to right, #a6192e 0%, #a6192e ${pct}%, #e4e4e7 ${pct}%, #e4e4e7 100%)`,
         }}
       />
-      {hint && <p className="text-[12px] text-ink-faint mt-1.5 leading-relaxed">{hint}</p>}
+      {hint && <p className="mt-2 text-xs leading-5 text-ink-faint">{hint}</p>}
     </div>
   );
 }

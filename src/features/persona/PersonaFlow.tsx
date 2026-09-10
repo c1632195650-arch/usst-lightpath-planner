@@ -11,7 +11,6 @@ interface Props {
 }
 
 const L5_LABELS = ['完全不像我', '不太像', '一般', '比较像', '非常像我'];
-const L5_EMOJI = ['🙅', '🤔', '😐', '😄', '🤩'];
 
 export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   const items = useMemo(() => [...PERSONA_ITEMS].sort((a, b) => a.order - b.order), []);
@@ -49,31 +48,30 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   const section = SECTION_META[item.section];
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper">
-      {/* 顶栏 */}
-      <header className="sticky top-0 z-10 bg-paper/90 backdrop-blur border-b-2 border-paper-line">
-        <div className="page-shell px-5 py-3 flex items-center gap-3">
-          <button onClick={onExit} className="text-ink-faint text-[13px] hover:text-ink">← 退出</button>
+    <div className="flex min-h-screen flex-col bg-paper">
+      {/* The compact progress bar anchors a long questionnaire without adding visual noise. */}
+      <header className="sticky top-0 z-10 border-b border-ink/10 bg-paper/80 backdrop-blur-xl">
+        <div className="content-shell flex items-center gap-4 px-4 py-4 sm:px-6">
+          <button onClick={onExit} className="text-sm font-medium text-ink-faint transition-colors hover:text-ink">退出</button>
           <div className="flex-1">
-            <div className="flex items-center justify-between text-[12px] text-ink-faint mb-1.5">
-              <span className="font-bold text-brand">{section.name}</span>
+            <div className="mb-2 flex items-center justify-between text-xs text-ink-faint">
+              <span className="font-semibold text-brand">{section.name}</span>
               <span className="tabular-nums">{idx + 1} / {total}</span>
             </div>
-            <div className="h-2 rounded-full bg-paper-line overflow-hidden border border-ink/5">
-              <div className="h-full bg-brand rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            <div className="h-1 overflow-hidden rounded-full bg-ink/10">
+              <div className="h-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </div>
       </header>
 
-      {/* 题干区 */}
-      <main className="flex-1 page-shell w-full px-5 py-8 flex flex-col">
-        <p className="text-[12px] text-ink-faint mb-6">{section.hint}</p>
-        <h2 className="text-[22px] leading-relaxed font-bold text-ink mb-8">{item.text}</h2>
+      <main className="content-shell flex w-full flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
+        <p className="section-label">{section.hint}</p>
+        <h2 className="mb-10 mt-4 text-2xl font-semibold leading-9 tracking-tight text-ink sm:text-3xl">{item.text}</h2>
 
         {item.type === 'L5' && (
           <div className="mt-auto">
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-5 gap-2 sm:gap-3">
               {L5_LABELS.map((label, i) => {
                 const v = i + 1;
                 const active = answers[item.id] === v;
@@ -81,13 +79,12 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                   <button
                     key={v}
                     onClick={() => answer(v)}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
-                      active ? 'bg-brand text-white border-brand shadow-sticker-brand -translate-y-1' : 'bg-white border-ink/10 text-ink-soft hover:border-brand/40 hover:-translate-y-0.5'
+                    className={`flex flex-col items-center gap-2 rounded-xl border px-1 py-4 text-center transition-all duration-300 ease-in-out ${
+                      active ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white/80 text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                     }`}
                   >
-                    <span className="text-[20px] leading-none">{L5_EMOJI[i]}</span>
-                    <span className={`w-6 h-6 rounded-full text-[13px] font-bold grid place-items-center ${active ? 'bg-white/20' : 'bg-paper'}`}>{v}</span>
-                    <span className="text-[10.5px] leading-tight text-center">{label}</span>
+                    <span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-semibold ${active ? 'bg-white/15' : 'bg-paper text-ink-faint'}`}>{v}</span>
+                    <span className="text-[10px] leading-4 sm:text-xs">{label}</span>
                   </button>
                 );
               })}
@@ -103,14 +100,14 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                 <button
                   key={opt.key}
                   onClick={() => answer(opt.key)}
-                  className={`flex items-center gap-3 px-4 py-4 rounded-2xl border-2 text-left transition-all ${
-                    active ? 'bg-brand text-white border-brand shadow-sticker-brand -translate-y-0.5' : 'bg-white border-ink/10 hover:border-brand/40'
+                  className={`flex items-center gap-4 rounded-xl border px-4 py-4 text-left transition-all duration-300 ease-in-out ${
+                    active ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white/80 hover:border-brand/30 hover:bg-brand-light/30'
                   }`}
                 >
-                  <span className={`w-7 h-7 shrink-0 rounded-full grid place-items-center text-[13px] font-bold border-2 ${active ? 'border-white/40' : 'border-ink/10 text-ink-faint'}`}>
+                  <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-semibold ${active ? 'border-white/40' : 'border-ink/10 text-ink-faint'}`}>
                     {opt.key}
                   </span>
-                  <span className="text-[15px] font-medium">{opt.text}</span>
+                  <span className="text-sm font-medium">{opt.text}</span>
                 </button>
               );
             })}
@@ -119,8 +116,8 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
 
         {item.type === 'SORT' && (
           <div className="mt-auto">
-            <p className="text-[12px] text-ink-faint mb-3">按重要程度依次点击，第 1 次点 = 最重要</p>
-            <div className="flex flex-col gap-2.5">
+            <p className="mb-4 text-xs leading-5 text-ink-faint">按重要程度依次点击，第 1 次点击代表最重要。</p>
+            <div className="flex flex-col gap-3">
               {item.options?.map((opt) => {
                 const rank = sortPick.indexOf(opt.key);
                 const picked = rank >= 0;
@@ -128,30 +125,30 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                   <button
                     key={opt.key}
                     onClick={() => handleSortTap(opt.key)}
-                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all ${
-                      picked ? 'bg-brand text-white border-brand shadow-sticker-brand' : 'bg-white border-ink/10 hover:border-brand/40'
+                    className={`flex items-center gap-4 rounded-xl border px-4 py-4 text-left transition-all duration-300 ease-in-out ${
+                      picked ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white/80 hover:border-brand/30 hover:bg-brand-light/30'
                     }`}
                   >
-                    <span className={`w-7 h-7 shrink-0 rounded-full grid place-items-center text-[13px] font-bold ${picked ? 'bg-white/20' : 'bg-paper text-ink-faint'}`}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${picked ? 'bg-white/15' : 'bg-paper text-ink-faint'}`}>
                       {picked ? rank + 1 : '·'}
                     </span>
-                    <span className="text-[15px] font-medium flex-1">{opt.text}</span>
-                    {picked && <span className="text-[12px] opacity-80">第 {rank + 1} 位</span>}
+                    <span className="flex-1 text-sm font-medium">{opt.text}</span>
+                    {picked && <span className="text-xs opacity-80">第 {rank + 1} 位</span>}
                   </button>
                 );
               })}
             </div>
-            <div className="flex items-center gap-3 mt-4">
+            <div className="mt-5 flex items-center gap-3">
               <button
                 onClick={() => onAnswer('B05', [])}
-                className="text-[13px] text-ink-faint hover:text-ink"
+                className="text-sm font-medium text-ink-faint transition-colors hover:text-ink"
               >
                 重置
               </button>
               <button
                 onClick={() => { if (isLast) onComplete(); else setIdx((i) => i + 1); }}
                 disabled={!sortDone}
-                className="flex-1 py-3 rounded-full bg-brand text-white font-bold shadow-sticker-brand disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed transition-all active:translate-y-0.5 active:shadow-none"
+                className="button-primary flex-1"
               >
                 下一步
               </button>
@@ -162,21 +159,21 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
 
       {/* 底部操作（非 SORT） */}
       {item.type !== 'SORT' && (
-        <footer className="page-shell w-full px-5 pb-6 flex items-center gap-3">
+        <footer className="content-shell flex w-full items-center gap-3 px-4 pb-6 sm:px-6">
           <button
             onClick={() => onAnswer(item.id, '' as AnswerEntry)}
-            className="px-4 py-2.5 text-[13px] text-ink-faint hover:text-ink rounded-lg"
+            className="px-3 py-2 text-sm font-medium text-ink-faint transition-colors hover:text-ink"
           >
             跳过这题
           </button>
           <div className="flex-1" />
           {idx > 0 && (
-            <button onClick={() => setIdx((i) => i - 1)} className="px-4 py-2.5 text-[13px] text-ink-soft hover:text-ink">
+            <button onClick={() => setIdx((i) => i - 1)} className="px-3 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink">
               上一题
             </button>
           )}
           {isLast && answered && (
-            <button onClick={onComplete} className="px-6 py-2.5 rounded-full bg-brand text-white font-bold shadow-sticker-brand active:translate-y-0.5 active:shadow-none">
+            <button onClick={onComplete} className="button-primary px-5">
               生成我的画像
             </button>
           )}

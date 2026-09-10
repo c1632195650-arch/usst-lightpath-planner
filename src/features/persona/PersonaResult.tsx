@@ -12,11 +12,6 @@ interface Props {
 const CONF_LABEL = { high: '高置信', mid: '中置信', low: '低置信' } as const;
 const CONF_COLOR = { high: 'text-ok bg-ok-light', mid: 'text-warn bg-warn-light', low: 'text-ink-faint bg-paper' } as const;
 
-const SCENARIO_EMOJI: Record<string, string> = {
-  meal_radius: '🍜', planning: '📅', event_breadth: '🎪', social_radius: '👥',
-  night_supply: '🌙', exercise_trigger: '🏃', study_place: '📖', info_channel: '📡',
-};
-
 export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   const { primary, secondary } = profile.archetype;
   const primaryEmoji = primary ? ARCH_EMOJI[primary.id] ?? '🎓' : '🎓';
@@ -28,27 +23,27 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
 
   return (
     <div className="min-h-screen bg-paper">
-      <div className="page-shell px-5 py-8 flex flex-col gap-5">
-        <header className="text-center pt-2 fade-item">
-          <p className="section-label mb-1">YOUR USST PROFILE</p>
-          <h1 className="text-[26px] font-black text-ink">你的上理人设</h1>
+      <div className="content-shell flex flex-col gap-5 px-4 py-8 sm:px-6 sm:py-12">
+        <header className="fade-item pt-2 text-center">
+          <p className="section-label">PROFILE COMPLETE</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-ink">你的校园画像</h1>
           {primary ? (
             <>
-              <div className="mt-4 text-[52px] animate-bounce-soft select-none">{primaryEmoji}</div>
-              <p className="mt-2 text-[17px] font-bold text-ink">
-                鉴定完毕，你是一只 <span className="text-brand">{primaryEmoji} {primary.name}</span>
+              <div className="mx-auto mt-6 grid h-14 w-14 place-items-center rounded-2xl bg-brand-light text-2xl">{primaryEmoji}</div>
+              <p className="mt-4 text-lg font-semibold text-ink">
+                你更接近 <span className="text-brand">{primary.name}</span>
               </p>
-              <p className="mt-1 text-[13.5px] text-ink-soft">「{primary.tagline}」</p>
+              <p className="mt-2 text-sm text-ink-soft">{primary.tagline}</p>
             </>
           ) : (
-            <p className="mt-3 text-[15px] text-ink-soft">画像还差一点火候，再答几题或使用中慢慢校准。</p>
+            <p className="mt-4 text-sm leading-6 text-ink-soft">画像还需要一点时间校准；重答几题，或在使用中慢慢完善。</p>
           )}
         </header>
 
-        {/* 雷达 */}
+        {/* The radar remains the data focal point; surrounding copy is intentionally restrained. */}
         <Card className="fade-item">
           <Radar axes={profile.axes} size={300} />
-          <div className="flex justify-center gap-2 mt-3 flex-wrap">
+          <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
             {AXIS_KEYS.map((k) => (
               <span key={k} className="text-[11px] text-ink-faint">
                 {AXIS_META[k].short} <strong className="text-ink">{Math.round(profile.axes[k])}</strong>
@@ -57,64 +52,59 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
           </div>
         </Card>
 
-        {/* 原型 */}
-        <Card title="校园原型" subtitle="用于冷启动推荐，后续可随时在「我的画像」里修正" className="fade-item">
-          <div className="rounded-2xl bg-brand-light border-2 border-brand/10 p-4">
+        <Card title="推荐起点" subtitle="用于提供初始建议；之后可随你的使用习惯持续校准。" className="fade-item">
+          <div className="rounded-xl border border-brand/15 bg-brand-light/60 p-5">
             <div className="flex items-center gap-3">
-              <span className="text-[28px]">{primaryEmoji}</span>
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/70 text-xl">{primaryEmoji}</span>
               <div>
-                <div className="font-bold text-[16px] text-brand">{primary?.name ?? '画像尚不清晰'}</div>
-                <div className="text-[12.5px] text-ink-soft">{primary?.tagline ?? '再答几题，或使用中慢慢校准'}</div>
+                <div className="text-base font-semibold tracking-tight text-brand">{primary?.name ?? '画像尚不清晰'}</div>
+                <div className="mt-1 text-xs text-ink-soft">{primary?.tagline ?? '再答几题，或在使用中慢慢校准'}</div>
               </div>
             </div>
-            <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{primary?.desc ?? '目前的答题还不足以稳定归类，多使用后会更准。'}</p>
+            <p className="mt-4 text-sm leading-6 text-ink-soft">{primary?.desc ?? '目前的答题还不足以稳定归类，多使用后会更准确。'}</p>
           </div>
           {secondary && (
-            <p className="mt-3 text-[13px] text-ink-faint">
-              次接近 <strong className="text-ink-soft">{secondary.name}</strong>（{secondary.tagline}）
+            <p className="mt-4 text-xs leading-5 text-ink-faint">
+              另一种接近的倾向是 <strong className="font-semibold text-ink-soft">{secondary.name}</strong>：{secondary.tagline}
             </p>
           )}
         </Card>
 
-        {/* 八轴条形 */}
-        <Card title="八轴画像" subtitle="值越高倾向越强，仅供个性化服务，不用于任何排名" className="fade-item">
-          <div className="flex flex-col gap-3">
+        <Card title="八个生活维度" subtitle="数值越高，表示这项倾向更明显；它不用于任何排名。" className="fade-item">
+          <div className="flex flex-col gap-4">
             {AXIS_KEYS.map((k) => {
               const v = Math.round(profile.axes[k]);
               const conf = profile.confidence[k] ?? 'mid';
               return (
-                <div key={k} className="flex items-center gap-3">
-                  <div className="w-[92px] shrink-0 text-[13px] font-medium text-ink">{AXIS_META[k].label}</div>
-                  <div className="flex-1 h-2.5 rounded-full bg-paper overflow-hidden">
-                    <div className="h-full bg-brand rounded-full" style={{ width: `${v}%` }} />
+                <div key={k} className="grid grid-cols-[88px_minmax(0,1fr)_28px] items-center gap-3 sm:grid-cols-[100px_minmax(0,1fr)_32px_44px]">
+                  <div className="text-xs font-medium text-ink">{AXIS_META[k].label}</div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${v}%` }} />
                   </div>
-                  <div className="w-8 text-right text-[13px] font-bold text-ink tabular-nums">{v}</div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${CONF_COLOR[conf]}`}>{CONF_LABEL[conf]}</span>
+                  <div className="text-right text-xs font-semibold text-ink tabular-nums">{v}</div>
+                  <span className={`hidden rounded-md px-1.5 py-1 text-center text-[10px] sm:inline ${CONF_COLOR[conf]}`}>{CONF_LABEL[conf]}</span>
                 </div>
               );
             })}
           </div>
         </Card>
 
-        {/* 场景字段 */}
-        <Card title="你的校园习惯" subtitle="这些直接驱动推荐，最准" className="fade-item">
-          <div className="grid grid-cols-2 gap-2.5">
+        <Card title="日常习惯" subtitle="这些偏好会直接影响之后的校园生活推荐。" className="fade-item">
+          <div className="grid grid-cols-2 gap-3">
             {scenarioEntries.map((s) => (
-              <div key={s.key} className="rounded-xl bg-paper px-3 py-2.5 border border-paper-line">
-                <div className="text-[11px] text-ink-faint">
-                  {SCENARIO_EMOJI[s.key] ?? '📌'} {s.label}
-                </div>
-                <div className="text-[13.5px] font-semibold text-ink mt-0.5">{s.value}</div>
+              <div key={s.key} className="rounded-xl border border-ink/10 bg-paper px-3 py-3">
+                <div className="text-[11px] font-medium text-ink-faint">{s.label}</div>
+                <div className="mt-1 text-sm font-semibold text-ink">{s.value}</div>
               </div>
             ))}
           </div>
         </Card>
 
-        <div className="flex flex-col gap-3 pb-10">
-          <button onClick={onEnter} className="py-3.5 rounded-full bg-brand text-white font-bold text-[15px] shadow-sticker-brand hover:-translate-y-0.5 active:translate-y-0.5 active:shadow-none transition-all">
-            进入我的上理 →
+        <div className="flex flex-col gap-3 pb-10 pt-1">
+          <button onClick={onEnter} className="button-primary w-full">
+            进入应用
           </button>
-          <button onClick={onRetake} className="py-3 text-[13.5px] text-ink-faint hover:text-ink">
+          <button onClick={onRetake} className="py-3 text-sm font-medium text-ink-faint transition-colors hover:text-ink">
             重新测评
           </button>
         </div>
