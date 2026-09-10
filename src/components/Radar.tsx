@@ -27,7 +27,14 @@ export function Radar({ axes, size = 320 }: { axes: Axes; size?: number }) {
   }).join(' ');
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="mx-auto">
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      className="mx-auto block h-auto w-full max-w-[300px]"
+      role="img"
+      aria-label="八个生活维度的倾向分布"
+    >
       {/* 网格 */}
       {gridPolygons.map((p, idx) => (
         <polygon

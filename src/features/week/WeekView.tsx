@@ -26,12 +26,12 @@ const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', 
 const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1);
 
 const CATEGORY_COLOR: Record<string, string> = {
-  '公共基础': '#4a9fe0',
-  '专业核心': '#d43a45',
-  '专业选修': '#9d7bf2',
-  '通识选修': '#4db98a',
-  '实践环节': '#f5b840',
-  '其他': '#9c918a',
+  '公共基础': '#306a9f',
+  '专业核心': '#a6192e',
+  '专业选修': '#6d4bc4',
+  '通识选修': '#17845d',
+  '实践环节': '#9a681d',
+  '其他': '#71717a',
 };
 
 export function WeekView(props: Props) {
@@ -65,16 +65,16 @@ export function WeekView(props: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Week navigation is framed as a compact editorial masthead. */}
-      <header className="flex items-center justify-between rounded-2xl border border-ink/10 bg-white/75 px-4 py-4 shadow-sm sm:px-5">
-        <button onClick={onBack} className="text-sm font-medium text-ink-faint transition-colors hover:text-ink">返回总览</button>
+      {/* 周次控制保持在同一视觉层级，切换时不丢失当前日期和课程上下文。 */}
+      <header className="flex items-center justify-between rounded-2xl bg-ink px-4 py-4 text-white shadow-sm sm:px-6">
+        <button onClick={onBack} className="min-h-10 text-sm font-medium text-white/60 transition-colors hover:text-white">返回总览</button>
         <div className="text-center">
-          <div className="text-lg font-semibold tracking-tight text-ink">第 {weekNo} 周</div>
-          <div className="mt-0.5 text-xs text-ink-faint">{weekRange}</div>
+          <div className="text-lg font-semibold tracking-tight">第 {weekNo} 周</div>
+          <div className="mt-0.5 text-xs text-white/55">{weekRange}</div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => onShiftWeek(-1)} className="icon-button" aria-label="上一周">‹</button>
-          <button onClick={() => onShiftWeek(1)} className="icon-button" aria-label="下一周">›</button>
+          <button onClick={() => onShiftWeek(-1)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 text-white transition-colors hover:bg-white/10" aria-label="上一周">‹</button>
+          <button onClick={() => onShiftWeek(1)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 text-white transition-colors hover:bg-white/10" aria-label="下一周">›</button>
         </div>
       </header>
 
@@ -82,7 +82,7 @@ export function WeekView(props: Props) {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="section-label">FOCUS DAYS</p>
-            <h3 className="mt-2 text-base font-semibold tracking-tight text-ink">选择想安排的日期</h3>
+            <h3 className="mt-3 text-lg font-semibold tracking-tight text-ink">选择想安排的日期</h3>
           </div>
           <div className="flex gap-3 text-sm">
             <button onClick={props.onSelectWholeWeek} className="font-semibold text-brand transition-colors hover:text-brand-dark">整周</button>
@@ -96,11 +96,11 @@ export function WeekView(props: Props) {
               <button
                 key={d}
                 onClick={() => props.onToggleDay(d)}
-                className={`flex flex-col items-center rounded-xl border py-2.5 transition-all duration-300 ease-in-out ${
+                className={`flex min-h-16 flex-col items-center justify-center rounded-xl border py-2 transition-all duration-200 ease-out ${
                   sel ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white/80 text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                 }`}
               >
-                <span className="text-[10px] font-medium">{DAY_LABELS[i]}</span>
+                <span className="text-xs font-medium">{DAY_LABELS[i]}</span>
                 <span className="mt-1 text-sm font-semibold tabular-nums">{Number(d.slice(8, 10))}</span>
               </button>
             );
@@ -165,31 +165,32 @@ export function WeekView(props: Props) {
       </section>
 
       <section className="panel p-4 sm:p-5">
-        <div className="mb-4">
+        <div className="mb-5">
           <p className="section-label">PACE</p>
-          <h3 className="mt-2 text-lg font-semibold tracking-tight text-ink">选择这一周的节奏</h3>
+          <h3 className="mt-3 text-lg font-semibold tracking-tight text-ink">选择这一周的节奏</h3>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="flex flex-wrap gap-2">
           {LIFE_MODES.map((m) => {
             const active = props.lifeMode === m.id;
             return (
               <button
                 key={m.id}
                 onClick={() => props.onSelectMode(m.id)}
-                className={`rounded-xl border p-4 text-left transition-all duration-300 ease-in-out ${
-                  active ? 'border-brand bg-brand-light shadow-sm' : 'border-ink/10 bg-white/80 hover:border-brand/30 hover:bg-brand-light/30'
+                className={`flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out ${
+                  active ? 'border-brand bg-brand-light text-brand' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                 }`}
               >
-                <div className={`text-sm font-semibold ${active ? 'text-brand' : 'text-ink'}`}>{m.name}</div>
-                <div className="mt-1 text-[11px] leading-4 text-ink-faint">{m.tagline}</div>
+                <span className="h-2 w-2 rounded-full" style={{ background: m.color }} aria-hidden="true" />
+                {m.name}
               </button>
             );
           })}
         </div>
         {props.lifeMode && (
-          <p className="mt-4 border-t border-ink/10 pt-4 text-sm leading-6 text-ink-soft">
-            {LIFE_MODES.find((m) => m.id === props.lifeMode)?.desc}
-          </p>
+          <div className="mt-5 border-t border-ink/10 pt-4">
+            <p className="text-sm font-semibold text-ink">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.tagline}</p>
+            <p className="mt-1 text-sm leading-6 text-ink-soft">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.desc}</p>
+          </div>
         )}
       </section>
 

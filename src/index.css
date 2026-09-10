@@ -50,11 +50,11 @@
 @layer components {
   /* The wider shell makes desktop planning views breathe without compromising mobile density. */
   .page-shell {
-    @apply mx-auto w-full max-w-[1120px];
+    @apply mx-auto w-full max-w-[1200px];
   }
 
   .content-shell {
-    @apply mx-auto w-full max-w-[720px];
+    @apply mx-auto w-full max-w-[760px];
   }
 
   .section-label {
@@ -62,7 +62,7 @@
   }
 
   .panel {
-    @apply rounded-2xl border border-ink/10 bg-paper-card/85 shadow-sm backdrop-blur-md;
+    @apply rounded-2xl border border-ink/10 bg-white shadow-sm;
   }
 
   .button-primary {
@@ -101,5 +101,16 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -1,7 +1,6 @@
 import type { PersonaProfile } from '@/types';
-import { AXIS_KEYS, AXIS_META, SCENARIO_META, ARCH_EMOJI } from '@/lib/persona';
+import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { Radar } from '@/components/Radar';
-import { Card } from '@/components/ui/Card';
 
 interface Props {
   profile: PersonaProfile;
@@ -9,103 +8,126 @@ interface Props {
   onRetake: () => void;
 }
 
-const CONF_LABEL = { high: '高置信', mid: '中置信', low: '低置信' } as const;
-const CONF_COLOR = { high: 'text-ok bg-ok-light', mid: 'text-warn bg-warn-light', low: 'text-ink-faint bg-paper' } as const;
+const CONF_LABEL = { high: '较稳定', mid: '待校准', low: '参考' } as const;
+const CONF_COLOR = { high: 'text-ok', mid: 'text-warn', low: 'text-ink-faint' } as const;
 
+/** 将 35 题的输出收束为可用于排程的个人信号，而不是一张“人格报告”。 */
 export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   const { primary, secondary } = profile.archetype;
-  const primaryEmoji = primary ? ARCH_EMOJI[primary.id] ?? '🎓' : '🎓';
   const scenarioEntries = Object.entries(SCENARIO_META).map(([key, meta]) => ({
     key,
     label: meta.label,
-    value: meta.values[profile.scenarios[key as keyof typeof profile.scenarios]] ?? '—',
+    value: meta.values[profile.scenarios[key as keyof typeof profile.scenarios]] ?? '待补充',
   }));
 
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="content-shell flex flex-col gap-5 px-4 py-8 sm:px-6 sm:py-12">
-        <header className="fade-item pt-2 text-center">
-          <p className="section-label">PROFILE COMPLETE</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-ink">你的校园画像</h1>
-          {primary ? (
-            <>
-              <div className="mx-auto mt-6 grid h-14 w-14 place-items-center rounded-2xl bg-brand-light text-2xl">{primaryEmoji}</div>
-              <p className="mt-4 text-lg font-semibold text-ink">
-                你更接近 <span className="text-brand">{primary.name}</span>
-              </p>
-              <p className="mt-2 text-sm text-ink-soft">{primary.tagline}</p>
-            </>
-          ) : (
-            <p className="mt-4 text-sm leading-6 text-ink-soft">画像还需要一点时间校准；重答几题，或在使用中慢慢完善。</p>
-          )}
-        </header>
+    <div className="min-h-full">
+      <div className="page-shell px-4 py-6 sm:px-6 sm:py-8">
+        <section className="overflow-hidden rounded-2xl bg-ink text-white shadow-sm">
+          <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end lg:gap-12 lg:px-10 lg:py-10">
+            <div>
+              <p className="section-label text-white/50">PROFILE READY</p>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">你的节奏，已经有了轮廓。</h1>
+              {primary ? (
+                <>
+                  <p className="mt-5 text-xl font-semibold text-brand-light">{primary.name}</p>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-white/65">{primary.tagline}</p>
+                  <p className="mt-5 max-w-2xl text-sm leading-7 text-white/80">{primary.desc}</p>
+                </>
+              ) : (
+                <p className="mt-5 max-w-xl text-sm leading-6 text-white/70">目前的答案还不足以稳定归类；你可以继续使用应用，或重新完成几道题进行校准。</p>
+              )}
+              {secondary && (
+                <p className="mt-6 border-t border-white/10 pt-4 text-sm text-white/60">
+                  也接近 <strong className="font-semibold text-white">{secondary.name}</strong> · {secondary.tagline}
+                </p>
+              )}
+            </div>
 
-        {/* The radar remains the data focal point; surrounding copy is intentionally restrained. */}
-        <Card className="fade-item">
-          <Radar axes={profile.axes} size={300} />
-          <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
-            {AXIS_KEYS.map((k) => (
-              <span key={k} className="text-[11px] text-ink-faint">
-                {AXIS_META[k].short} <strong className="text-ink">{Math.round(profile.axes[k])}</strong>
-              </span>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="推荐起点" subtitle="用于提供初始建议；之后可随你的使用习惯持续校准。" className="fade-item">
-          <div className="rounded-xl border border-brand/15 bg-brand-light/60 p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/70 text-xl">{primaryEmoji}</span>
-              <div>
-                <div className="text-base font-semibold tracking-tight text-brand">{primary?.name ?? '画像尚不清晰'}</div>
-                <div className="mt-1 text-xs text-ink-soft">{primary?.tagline ?? '再答几题，或在使用中慢慢校准'}</div>
+            <div className="border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">PROFILE SIGNAL</p>
+              <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4">
+                <div>
+                  <p className="text-xs text-white/50">画像版本</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{profile.version}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/50">结果状态</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{profile.quality === 'ok' ? '可用于推荐' : '建议复测'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-white/50">用途</p>
+                  <p className="mt-1 text-sm leading-6 text-white/75">用于安排学习、休息与校园生活建议，不参与任何排名。</p>
+                </div>
               </div>
             </div>
-            <p className="mt-4 text-sm leading-6 text-ink-soft">{primary?.desc ?? '目前的答题还不足以稳定归类，多使用后会更准确。'}</p>
           </div>
-          {secondary && (
-            <p className="mt-4 text-xs leading-5 text-ink-faint">
-              另一种接近的倾向是 <strong className="font-semibold text-ink-soft">{secondary.name}</strong>：{secondary.tagline}
-            </p>
-          )}
-        </Card>
+        </section>
 
-        <Card title="八个生活维度" subtitle="数值越高，表示这项倾向更明显；它不用于任何排名。" className="fade-item">
-          <div className="flex flex-col gap-4">
-            {AXIS_KEYS.map((k) => {
-              const v = Math.round(profile.axes[k]);
-              const conf = profile.confidence[k] ?? 'mid';
-              return (
-                <div key={k} className="grid grid-cols-[88px_minmax(0,1fr)_28px] items-center gap-3 sm:grid-cols-[100px_minmax(0,1fr)_32px_44px]">
-                  <div className="text-xs font-medium text-ink">{AXIS_META[k].label}</div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
-                    <div className="h-full rounded-full bg-brand" style={{ width: `${v}%` }} />
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <section className="border border-ink/10 bg-white px-5 py-6 sm:px-8">
+            <p className="section-label">EIGHT DIMENSIONS</p>
+            <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">你的倾向分布</h2>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">八个维度共同决定建议的初始方向，数值不代表好坏。</p>
+            <div className="mt-6 flex justify-center border-y border-ink/10 py-5">
+              <Radar axes={profile.axes} size={300} />
+            </div>
+            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2">
+              {AXIS_KEYS.map((key) => (
+                <span key={key} className="text-sm text-ink-soft">
+                  {AXIS_META[key].short} <strong className="ml-1 font-semibold text-ink tabular-nums">{Math.round(profile.axes[key])}</strong>
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="border border-ink/10 bg-white px-5 py-6 sm:px-8">
+            <p className="section-label">PLANNING INPUTS</p>
+            <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">排程会参考这些信号</h2>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">以后可以重新测评，或在使用中慢慢校准。</p>
+            <dl className="mt-6 divide-y divide-ink/10 border-y border-ink/10">
+              {AXIS_KEYS.map((key) => {
+                const value = Math.round(profile.axes[key]);
+                const confidence = profile.confidence[key] ?? 'mid';
+                return (
+                  <div key={key} className="grid grid-cols-[88px_minmax(0,1fr)_40px] items-center gap-3 py-3 sm:grid-cols-[104px_minmax(0,1fr)_48px_48px]">
+                    <dt className="text-sm font-medium text-ink">{AXIS_META[key].short}</dt>
+                    <dd className="h-1.5 overflow-hidden rounded-full bg-ink/10">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${value}%` }} />
+                    </dd>
+                    <dd className="text-right text-sm font-semibold text-ink tabular-nums">{value}</dd>
+                    <dd className={`hidden text-right text-xs font-medium sm:block ${CONF_COLOR[confidence]}`}>{CONF_LABEL[confidence]}</dd>
                   </div>
-                  <div className="text-right text-xs font-semibold text-ink tabular-nums">{v}</div>
-                  <span className={`hidden rounded-md px-1.5 py-1 text-center text-[10px] sm:inline ${CONF_COLOR[conf]}`}>{CONF_LABEL[conf]}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+                );
+              })}
+            </dl>
+          </section>
+        </div>
 
-        <Card title="日常习惯" subtitle="这些偏好会直接影响之后的校园生活推荐。" className="fade-item">
-          <div className="grid grid-cols-2 gap-3">
-            {scenarioEntries.map((s) => (
-              <div key={s.key} className="rounded-xl border border-ink/10 bg-paper px-3 py-3">
-                <div className="text-[11px] font-medium text-ink-faint">{s.label}</div>
-                <div className="mt-1 text-sm font-semibold text-ink">{s.value}</div>
+        <section className="mt-6 border border-ink/10 bg-white px-5 py-6 sm:px-8">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <p className="section-label">EVERYDAY PREFERENCES</p>
+              <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">日常选择</h2>
+            </div>
+            <p className="max-w-lg text-sm leading-6 text-ink-soft">这些具体偏好会直接影响推荐地点、活动与休息时间。</p>
+          </div>
+          <dl className="mt-6 grid border-t border-ink/10 sm:grid-cols-2 lg:grid-cols-4">
+            {scenarioEntries.map((entry) => (
+              <div key={entry.key} className="border-b border-ink/10 py-4 sm:pr-5 lg:pr-6">
+                <dt className="text-sm text-ink-faint">{entry.label}</dt>
+                <dd className="mt-2 text-sm font-semibold text-ink">{entry.value}</dd>
               </div>
             ))}
-          </div>
-        </Card>
+          </dl>
+        </section>
 
-        <div className="flex flex-col gap-3 pb-10 pt-1">
-          <button onClick={onEnter} className="button-primary w-full">
-            进入应用
+        <div className="mt-6 flex flex-col-reverse gap-3 pb-8 sm:flex-row sm:items-center sm:justify-between">
+          <button onClick={onRetake} className="min-h-11 px-3 text-sm font-medium text-ink-soft transition-colors hover:text-ink">
+            重新完成测评
           </button>
-          <button onClick={onRetake} className="py-3 text-sm font-medium text-ink-faint transition-colors hover:text-ink">
-            重新测评
+          <button onClick={onEnter} className="button-primary min-h-11 px-5">
+            进入我的本周安排
           </button>
         </div>
       </div>

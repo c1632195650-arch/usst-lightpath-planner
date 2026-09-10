@@ -158,18 +158,26 @@ export default function App() {
 
   // 主界面
   const weekNo = weekMonday ? currentWeekNo(schedule.termStart, weekMonday) : currentWeekNo(schedule.termStart);
+  /** 当周真实开课数与节次，只用于总览，不虚构“实时效率”指标。 */
+  const activeCourses = schedule.courses.filter((course) =>
+    course.slots.some((slot) => slot.weeks.length === 0 || slot.weeks.includes(weekNo)));
+  const activeSlots = activeCourses.reduce(
+    (count, course) => count + course.slots.filter((slot) => slot.weeks.length === 0 || slot.weeks.includes(weekNo)).length,
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-paper">
       {/* The utility header keeps navigation concise so the planning content remains the visual focus. */}
-      <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/80 backdrop-blur-xl">
-        <div className="page-shell flex items-center gap-4 px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/85 backdrop-blur-xl">
+        <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
           <Logo120 size={32} />
           <div className="min-w-0 flex-1 leading-tight">
             <div className="text-sm font-semibold tracking-tight text-ink">上理生活助手</div>
             <div className="mt-0.5 text-[11px] font-medium tracking-[0.14em] text-ink-faint">USST · STUDENT LIFE</div>
           </div>
-          <nav className="flex items-center gap-1 rounded-xl border border-ink/10 bg-white/60 p-1" aria-label="主导航">
+          <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
+            <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
             {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
@@ -179,6 +187,7 @@ export default function App() {
                 {TAB_LABEL[t]}
               </button>
             ))}
+            </div>
           </nav>
         </div>
       </header>
@@ -225,38 +234,51 @@ export default function App() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
             <div className="flex flex-col gap-6">
-              <section className="panel overflow-hidden px-5 py-6 sm:px-7">
-                <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+              <section className="overflow-hidden rounded-2xl bg-ink text-white shadow-sm">
+                <div className="flex flex-col gap-6 px-5 py-7 sm:px-8 sm:py-8">
                   <div>
-                    <p className="section-label">WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {todayISO()}</p>
-                    <h1 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">给这一周，留一点余地。</h1>
-                    <p className="mt-3 max-w-xl text-sm leading-6 text-ink-soft">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {todayISO()}</p>
+                    <h1 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">今天的安排，要留得出余地。</h1>
+                    <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">
                       {state.persona
-                        ? `梨宝已了解你的节奏：更接近「${state.persona.archetype.primary?.name ?? '未命名画像'}」。从校历选择一天，查看这一周的安排。`
-                        : '先浏览校历与重要节点；完成画像后，可以获得更贴近自己的生活建议。'}
+                        ? `当前建议会参考「${state.persona.archetype.primary?.name ?? '你的画像'}」的节奏，以及这周正在上的课程。`
+                        : '先从校历进入本周；完成画像后，安排会更贴近你的习惯。'}
                     </p>
                   </div>
-                  {!state.persona && <button onClick={() => setView('persona')} className="button-primary shrink-0">完成画像</button>}
-                </div>
-                <div className="mt-6 grid grid-cols-2 border-t border-ink/10 pt-5 sm:max-w-md">
-                  <div className="border-r border-ink/10 pr-4">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint">SEMESTER</div>
-                    <div className="mt-1 text-sm font-semibold text-ink">{schedule.semesterName}</div>
+                  <div className="flex flex-wrap gap-3">
+                    <button onClick={() => openWeek(todayISO())} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">
+                      打开本周安排
+                    </button>
+                    {!state.persona && (
+                      <button onClick={() => setView('persona')} className="min-h-11 rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                        完成画像测评
+                      </button>
+                    )}
                   </div>
-                  <div className="pl-4">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint">SCHEDULE</div>
-                    <div className="mt-1 text-sm font-semibold text-ink">{schedule.courses.length} 门课程</div>
+                </div>
+                <div className="grid border-t border-white/10 sm:grid-cols-3">
+                  <div className="px-5 py-4 sm:px-8">
+                    <p className="text-xs text-white/45">当前学期</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{schedule.semesterName}</p>
+                  </div>
+                  <div className="border-t border-white/10 px-5 py-4 sm:border-l sm:border-t-0 sm:px-8">
+                    <p className="text-xs text-white/45">本周开课</p>
+                    <p className="mt-1 text-sm font-semibold text-white tabular-nums">{activeCourses.length} 门 · {activeSlots} 节次</p>
+                  </div>
+                  <div className="border-t border-white/10 px-5 py-4 sm:border-l sm:border-t-0 sm:px-8">
+                    <p className="text-xs text-white/45">已选日期</p>
+                    <p className="mt-1 text-sm font-semibold text-white tabular-nums">{state.selectedDays.length} / 7 天</p>
                   </div>
                 </div>
               </section>
 
-              <section className="panel p-5 sm:p-6">
+              <section className="rounded-2xl border border-ink/10 bg-white p-5 shadow-sm sm:p-6">
                 <div className="mb-6 flex items-end justify-between gap-4">
                   <div>
                     <p className="section-label">CALENDAR</p>
-                    <h2 className="mt-2 text-xl font-semibold tracking-tight text-ink">校历与本周节奏</h2>
+                    <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">从校历选择这一周</h2>
                   </div>
-                  <button onClick={() => openWeek(todayISO())} className="text-sm font-semibold text-brand transition-colors hover:text-brand-dark">查看本周</button>
+                  <button onClick={() => openWeek(todayISO())} className="shrink-0 text-sm font-semibold text-brand transition-colors hover:text-brand-dark">回到今天</button>
                 </div>
                 <MonthCalendar
                   events={CAL_EVENTS}
@@ -268,9 +290,9 @@ export default function App() {
 
             <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
               <DeadlineBoard />
-              <section className="panel p-5">
-                <p className="section-label">HOW IT WORKS</p>
-                <h2 className="mt-2 text-lg font-semibold tracking-tight text-ink">计划不是把时间填满。</h2>
+              <section className="border-y border-ink/10 py-5">
+                <p className="section-label">PLANNING PRINCIPLE</p>
+                <h2 className="mt-3 text-lg font-semibold tracking-tight text-ink">计划不是把时间填满。</h2>
                 <p className="mt-3 text-sm leading-6 text-ink-soft">从课表、个人习惯与校园节点出发，给重要的事留空间，也把休息当作日程的一部分。</p>
               </section>
             </aside>

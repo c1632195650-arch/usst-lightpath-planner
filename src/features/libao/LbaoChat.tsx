@@ -91,7 +91,22 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-120px)] min-h-[480px] flex-col rounded-2xl border border-ink/10 bg-white/70 p-3 shadow-sm sm:p-4">
+    <div className="flex h-[calc(100dvh-120px)] min-h-[480px] flex-col rounded-2xl border border-ink/10 bg-white p-3 shadow-sm sm:p-4">
+      <header className="mb-3 flex items-center justify-between gap-4 border-b border-ink/10 px-1 pb-3">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-sm font-semibold text-white" aria-hidden="true">梨</span>
+          <div>
+            <h1 className="text-sm font-semibold text-ink">梨宝</h1>
+            <p className="mt-0.5 text-xs text-ink-faint">校园问答与本周生活建议</p>
+          </div>
+        </div>
+        {online === true && (
+          <span className="flex shrink-0 items-center gap-2 text-xs font-medium text-ok">
+            <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden="true" />
+            服务已连接
+          </span>
+        )}
+      </header>
       {online === false && (
         <div className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-brand/20 bg-brand-light/40 px-3 py-2 text-center text-xs text-ink-soft">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
@@ -99,7 +114,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto pr-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pr-1">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             <div className={`flex max-w-[86%] flex-col gap-2 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>

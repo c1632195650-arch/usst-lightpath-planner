@@ -3,10 +3,10 @@ import type { CalEvent } from '@/types';
 import { addDays, fromISO, toISO, todayISO, weekdayOf } from '@/lib/date';
 
 const EVENT_STYLE: Record<CalEvent['type'], { dot: string; label: string }> = {
-  term: { dot: '#a6192e', label: '学期' },
-  holiday: { dot: '#b7791f', label: '假期' },
-  anniversary: { dot: '#a16207', label: '校庆' },
-  exam: { dot: '#d05262', label: '考试' },
+  term: { dot: '#52525b', label: '学期' },
+  holiday: { dot: '#9a681d', label: '假期' },
+  anniversary: { dot: '#6d4bc4', label: '校庆' },
+  exam: { dot: '#b91c1c', label: '考试' },
   activity: { dot: '#17845d', label: '活动' },
 };
 

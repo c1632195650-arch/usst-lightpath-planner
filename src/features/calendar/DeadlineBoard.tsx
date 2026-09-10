@@ -1,16 +1,24 @@
 import { DEADLINES, type Deadline } from '@/data/usst';
 import { diffDays, todayISO, shortCN } from '@/lib/date';
 
+/** 节点类型映射到稳定的数据色，品牌红只保留给主操作和选中态。 */
+const DEADLINE_COLOR: Record<Deadline['tag'], string> = {
+  '报名': '#306a9f',
+  '竞赛': '#6d4bc4',
+  '校庆': '#9a681d',
+  '考试': '#b91c1c',
+};
+
 /** Single deadline row keeps the date and urgency scannable in the compact overview rail. */
 function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
   const urgent = days <= 7;
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white/60 px-3 py-3 transition-all duration-300 ease-in-out hover:border-ink/20 hover:bg-white"
+      className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white px-3 py-3 transition-colors hover:border-ink/20"
     >
       <div
         className="h-8 w-1 shrink-0 rounded-full"
-        style={{ background: d.color }}
+        style={{ background: DEADLINE_COLOR[d.tag] ?? '#71717a' }}
       />
 
       <div className="flex-1 min-w-0">
@@ -29,10 +37,10 @@ function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
 
       <div className="shrink-0 text-right pl-1">
         {days === 0 ? (
-          <span className="text-xs font-semibold text-brand">今天</span>
+          <span className="text-xs font-semibold text-danger">今天</span>
         ) : (
           <>
-            <div className={`text-lg font-semibold leading-none tabular-nums ${urgent ? 'text-brand' : 'text-ink'}`}>
+            <div className={`text-lg font-semibold leading-none tabular-nums ${urgent ? 'text-danger' : 'text-ink'}`}>
               {days}<span className="ml-0.5 text-[10px] font-medium text-ink-faint">天</span>
             </div>
             <div className="mt-1 text-[10px] text-ink-faint">{urgent ? '临近' : '剩余'}</div>
