@@ -16,6 +16,21 @@ export interface TermCalendar {
   totalWeeks: number;
   /** 数据来源，便于答辩/复核时追溯 */
   source: string;
+  /**
+   * 学期阶段（校历原表）。排程引擎据此区分「这段没课」（短学期/考试周）
+   * 和「正常教学周」—— 课程周次（如 3-18 周）与理论教学阶段天然对齐。
+   */
+  phases?: Array<{
+    name: string;
+    fromWeek: number;
+    toWeek: number;
+    kind: 'short' | 'theory' | 'exam' | 'break';
+  }>;
+  /**
+   * 假期停课日（校历标注的当日）。法定放假的完整跨度以国务院通知为准，
+   * 这里只录校历原图明确标注的日期 —— 排程生成「当日有效课表」时用于剔除。
+   */
+  holidays?: Array<{ name: string; date: string; week: number }>;
 }
 
 export const TERM_CALENDAR: Record<string, TermCalendar> = {
@@ -25,7 +40,19 @@ export const TERM_CALENDAR: Record<string, TermCalendar> = {
     totalWeeks: 20,
     source:
       '上海理工大学本科生院《2026-2027学年第一学期开学教学准备工作通知》：短学期 2026-09-07(周一) 起、理论教学 09-21 起；' +
-      '计算中心《实验室预约服务开放通知》：本学期 2026-09-07 开始、2027-01-24 结束，共 20 个教学周（含 9 月短学期）。两处互证。',
+      '计算中心《实验室预约服务开放通知》：本学期 2026-09-07 开始、2027-01-24 结束，共 20 个教学周（含 9 月短学期）。两处互证。' +
+      '2026-09-11 再与《2026-2027学年校历》扫描件（CY 提供）逐行核对：第1-2周短学期、第3-18周理论教学、' +
+      '第19-20周考试周、第21周起寒假，与本表一致。',
+    phases: [
+      { name: '短学期', fromWeek: 1, toWeek: 2, kind: 'short' },
+      { name: '理论教学', fromWeek: 3, toWeek: 18, kind: 'theory' },
+      { name: '考试周', fromWeek: 19, toWeek: 20, kind: 'exam' },
+    ],
+    holidays: [
+      { name: '中秋节', date: '2026-09-25', week: 3 },
+      { name: '国庆节', date: '2026-10-01', week: 4 },
+      { name: '元旦', date: '2027-01-01', week: 17 },
+    ],
   },
 };
 
