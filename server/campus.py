@@ -203,6 +203,16 @@ def space_context(text):
     resolved = False
     for p in hits[:2]:
         blocks.append(f"\n『{p['name']}』所在校区：{campus_cn(p.get('campus'))}")
+        # 关键细节（贴心信息就在这里：楼内自习室 / 快递点 / 招牌菜 / 营业时间）
+        if p.get("note"):
+            blocks.append(f"  说明：{p['note']}")
+        if p.get("features"):
+            blocks.append("  特色：" + "；".join(p["features"][:3]))
+        if p.get("hours"):
+            h = "；".join(f"{k} {v}" for k, v in list(p["hours"].items())[:3])
+            blocks.append(f"  时间：{h}")
+        if p.get("closed"):
+            blocks.append(f"  休止：{p['closed']}")
         nb = nearby(p["name"])
         if nb:
             resolved = True
@@ -210,6 +220,8 @@ def space_context(text):
             for name, mn, note in nb:
                 tgt = find_poi(name)
                 seg = f"  - 步行约{mn}分钟 → {name}"
+                if tgt and tgt.get("campus") and tgt["campus"] != "连接":
+                    seg += f"［{tgt['campus']}］"
                 if tgt and tgt.get("signature"):
                     seg += f"（招牌：{'、'.join(tgt['signature'][:3])}）"
                 if note:
