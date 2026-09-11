@@ -259,15 +259,22 @@ def space_context(text):
         blocks.append("\n[本部食堂全览（备查）]")
         blocks.append(canteen_overview())
 
-    # 用户同时提到两个地点 → 直接算两者之间的步行路径
+    # 用户同时提到两个地点 → 直接算两者之间的步行路径（并提示是否走校外更快）
     if len(hits) >= 2:
-        r = route(hits[0]["name"], hits[1]["name"])
-        if r:
-            warn = "" if r["reliable"] else "（含估算成分，仅供参考）"
+        c = compare_paths(hits[0]["name"], hits[1]["name"])
+        if c and c["fastest"]:
+            f = c["fastest"]
+            warn = "" if f["reliable"] else "（含估算成分，仅供参考）"
             blocks.append(
-                f"\n[两点间步行] {r['from']} → {r['to']}：约 {r['meters']:.0f} 米，"
-                f"步行约 {r['minutes']:.0f} 分钟{warn}"
+                f"\n[两点间步行] {f['from']} → {f['to']}：约 {f['meters']:.0f} 米，"
+                f"步行约 {f['minutes']:.0f} 分钟{warn}"
             )
+            if c["outdoor_better"]:
+                blocks.append(
+                    f"  ⚠️ 这条**走校外（沿军工路边）更快**：比只在校园里走省 "
+                    f"{c['diff_minutes']:.0f} 分钟（仅校内需 {c['campus']['minutes']:.0f} 分钟）。"
+                    f"请如实告诉用户两种走法，让 TA 自己选。"
+                )
 
     oc = m.get("off_campus", [])
     if oc and any(k in text for k in ("校外", "校门口", "出去吃", "改善伙食", "聚餐")):
@@ -294,8 +301,11 @@ def network():
     return _network or None
 
 
-def route(a, b):
+def route(a, b, mode="fastest"):
     """任意两点步行路径。返回 {'meters','minutes','reliable',...} 或 None。
+
+    mode='fastest'（默认）—— 含校外城市道路（军工路等），即「实地怎么走最快」；
+    mode='campus'        —— 只走校内步道，用于对比纯校内绕行要多花多少时间。
 
     路网来自 OSM（© OpenStreetMap contributors，ODbL 1.0）；
     每端仍优先采用 walk_minutes 里的实测值（见 campus_network 的定位优先级）。
@@ -303,4 +313,16 @@ def route(a, b):
     net = network()
     if not net:
         return None
-    return net.route(a, b)
+    return net.route(a, b, mode)
+
+
+def compare_paths(a, b):
+    """多路径对比：最快（可走校外）vs 仅校内。
+
+    返回 {fastest, campus, diff_minutes, outdoor_better} 或 None。
+    用于回答「从七公寓（580 校门旁）去三教，是不是走校外更快」这类问题。
+    """
+    net = network()
+    if not net:
+        return None
+    return net.compare(a, b)

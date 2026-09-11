@@ -250,6 +250,30 @@ def main():
         print(f"  {'✅' if good else '❌'} 跨区不穿越校区：二公寓 → 五公寓 "
               + (f"{r['minutes']:.1f} 分钟" if r else "不可达"))
 
+        # 多路径：最快不应慢于仅校内（两端吸附口径不一致时会出错）
+        PAIRS = [("第一教学楼", "第三教学楼"), ("第三教学楼", "第五食堂"),
+                 ("580号校门", "第一教学楼"), ("516号校门", "第三教学楼"),
+                 ("第二学生公寓", "第五学生公寓")]
+        bad = []
+        for a, b in PAIRS:
+            c = campus.compare_paths(a, b)
+            if c and c["fastest"] and c["campus"] and \
+               c["fastest"]["minutes"] > c["campus"]["minutes"] + 0.05:
+                bad.append(f"{a}→{b}")
+        good = not bad
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append("多路径自相矛盾（最快反而更慢）：" + "、".join(bad))
+        print(f"  {'✅' if good else '❌'} 多路径不自相矛盾（最快 ≤ 仅校内）")
+
+        c = campus.compare_paths("580号校门", "第一教学楼")
+        good = bool(c) and c.get("outdoor_better") is True
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append("「580号校门→第一教学楼」应识别出走校外更快")
+        extra = f"（省 {c['diff_minutes']:.1f} 分）" if (c and c.get("outdoor_better")) else ""
+        print(f"  {'✅' if good else '❌'} 识别「走校外更快」：580号校门 → 第一教学楼{extra}")
+
     total = ok + fail
     print("=" * 72)
     print(f"汇总：{ok}/{total} 通过（{ok/total*100:.1f}%）")

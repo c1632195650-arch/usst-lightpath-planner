@@ -34,10 +34,23 @@ MAP_FILE = os.path.join(ROOT, "data", "campus_map.json")
 
 WALK_SPEED = 1.25  # 米/秒 ≈ 4.5 km/h
 
+# 步道 + 校内路（一定可走）
 HW_WALK = {
     "footway", "path", "steps", "pedestrian", "service",
     "residential", "living_street", "track", "corridor",
 }
+# 城市道路：行人可沿路边走（军工路 primary / 海安路 tertiary / cycleway 等）。
+# 必须纳入 —— 否则「从七公寓（580 校门旁）沿军工路走校外」这类更快路线会被漏掉，
+# 导致路径时间系统性偏慢。高德之所以给出校外路线，正是因为校外确实可能更快。
+HW_STREET = {
+    "primary", "primary_link", "secondary", "secondary_link",
+    "tertiary", "tertiary_link", "cycleway", "unclassified",
+}
+# 明确不可步行：高架快速路（中环路 trunk 等）
+HW_NO = {"trunk", "trunk_link", "motorway", "motorway_link", "raceway", "bus_guideway"}
+
+# 城市道路的步行折损：沿马路边走比校园步道慢一些，但不是不能走
+STREET_PENALTY = 1.15
 
 
 def hav(a, b):
@@ -79,7 +92,7 @@ class Network:
             if el.tag == "node":
                 nodes[el.get("id")] = (float(el.get("lat")), float(el.get("lon")))
 
-        adj, bld = {}, {}
+        adj, bld, street_edges = {}, {}, set()
         for el in root:
             if el.tag != "way":
                 continue
@@ -94,21 +107,35 @@ class Network:
                 for key in {name.strip(), norm(name)}:
                     if key:
                         bld.setdefault(key, []).append(c)
-            if tags.get("highway") in HW_WALK:
+            h = tags.get("highway")
+            if h in HW_WALK or h in HW_STREET:
+                is_street = h in HW_STREET
+                pen = STREET_PENALTY if is_street else 1.0
                 for i in range(len(pts) - 1):
                     a, b = pts[i], pts[i + 1]
                     d = hav(a, b)
                     if d <= 0:
                         continue
-                    adj.setdefault(a, []).append((b, d))
-                    adj.setdefault(b, []).append((a, d))
-        self.adj, self.bld = adj, bld
+                    adj.setdefault(a, []).append((b, d * pen))
+                    adj.setdefault(b, []).append((a, d * pen))
+                    if is_street:
+                        street_edges.add(frozenset((a, b)))
+        self.adj, self.bld, self.street_edges = adj, bld, street_edges
+        # 与至少一条步道相连的节点（用于「仅校内」模式下的吸附与寻路）
+        self.campus_nodes = {
+            n for n, lst in adj.items()
+            if any(frozenset((n, b)) not in street_edges for b, _ in lst)
+        }
 
-        # 关键节点（校门/天桥）的人工核对坐标，优先级最高
+        # 关键节点（校门/天桥）为人工核对坐标，优先级最高；approx 段是近似锚点
         try:
-            self.key_points = json.load(open(KEY_FILE, encoding="utf-8")).get("points", {})
+            _kp = json.load(open(KEY_FILE, encoding="utf-8"))
+            self.key_points = dict(_kp.get("points", {}))
+            self.approx_names = {k for k in _kp.get("approx", {}) if not k.startswith("_")}
+            for _n in self.approx_names:
+                self.key_points.setdefault(_n, _kp["approx"][_n]["coord"])
         except Exception:
-            self.key_points = {}
+            self.key_points, self.approx_names = {}, set()
 
     # ---------- 碎片桥接 ----------
     def _bridge_components(self, max_gap=300.0):
@@ -199,7 +226,8 @@ class Network:
                 # A0. 人工核对的关键节点（校门/天桥）—— 优先于一切
                 kp = self.key_points.get(p["name"])
                 if kp:
-                    c, src = tuple(kp), "keypoint"
+                    c = tuple(kp)
+                    src = "approx" if p["name"] in self.approx_names else "keypoint"
 
                 # A. OSM 建筑（命中点须与图谱标注的校区一致）
                 if c is None:
@@ -299,17 +327,24 @@ class Network:
         return None
 
     # ---------- 寻路 ----------
-    def _snap(self, pt):
+    def _snap(self, pt, campus_only=False):
+        """把坐标吸附到最近的路网节点 —— 两种模式都**优先吸附到步道节点**。
+
+        建筑物旁边理应是步道；若吸到马路边节点，会既绕远又让「仅校内」模式无路可走
+        （曾导致「一教→三教 最快 9.8 分」比「仅校内 8.5 分」还慢的矛盾结果）。
+        """
+        pool = self.campus_nodes or self.adj
         best, bd = None, 1e18
-        for n in self.adj:
+        for n in pool:
             d = hav(pt, n)
             if d < bd:
                 bd, best = d, n
         return best, bd
 
-    def _dijkstra(self, src, dst):
+    def _dijkstra(self, src, dst, mode="fastest"):
         if src not in self.adj or dst not in self.adj:
             return None
+        campus_only = (mode == "campus")
         dist, pq, seen = {src: 0.0}, [(0.0, src)], set()
         while pq:
             d, u = heapq.heappop(pq)
@@ -319,15 +354,20 @@ class Network:
             if u == dst:
                 return d
             for v, w in self.adj.get(u, ()):
+                if campus_only and frozenset((u, v)) in self.street_edges:
+                    continue   # 仅校内模式：跳过城市道路边
                 nd = d + w
                 if nd < dist.get(v, 1e18):
                     dist[v] = nd
                     heapq.heappush(pq, (nd, v))
         return None
 
-    def route(self, a, b):
+    def route(self, a, b, mode="fastest"):
         """返回 dict 或 None（未定位 / 不连通）。
 
+        mode:
+          "fastest" —— 全路网（含军工路等校外城市道路），即「实地怎么走最快」
+          "campus"  —— 只走校内步道，用来对比「纯校内绕行」要多花多少时间
         reliable=False 表示至少一端是靠 zone/campus/global 质心兜底定位的，
         或两端坐标几乎重合 —— 此时距离仅供参考。
         """
@@ -335,17 +375,19 @@ class Network:
         if not a or not b:
             return None
         pa, pb = self.poi[a], self.poi[b]
-        sa, da = self._snap(pa[0])
-        sb, db = self._snap(pb[0])
-        d = self._dijkstra(sa, sb)
+        c_only = (mode == "campus")
+        sa, da = self._snap(pa[0], c_only)
+        sb, db = self._snap(pb[0], c_only)
+        d = self._dijkstra(sa, sb, mode)
         if d is None:
             return None
         total = d + da + db
-        weak = ("zone", "campus", "global")
+        weak = ("zone", "campus", "global", "approx")
         reliable = (pa[1] not in weak and pb[1] not in weak
                     and hav(pa[0], pb[0]) > 5)
         return {
             "from": a, "to": b,
+            "mode": mode,
             "meters": total,
             "path_meters": d,
             "access": (da, db),
@@ -353,6 +395,26 @@ class Network:
             "locate": (pa[1], pb[1]),
             "reliable": reliable,
         }
+
+    def compare(self, a, b):
+        """多路径对比：全路网（最快）vs 仅校内。返回 dict 或 None。
+
+        用来回答「这条是不是得走校外才快」「从七公寓出发要不要出校门」。
+        """
+        fast = self.route(a, b, "fastest")
+        camp = self.route(a, b, "campus")
+        if not fast and not camp:
+            return None
+        res = {"from": fast["from"] if fast else camp["from"],
+               "to": fast["to"] if fast else camp["to"],
+               "fastest": fast, "campus": camp}
+        if fast and camp:
+            res["diff_minutes"] = camp["minutes"] - fast["minutes"]
+            res["outdoor_better"] = res["diff_minutes"] > 0.5
+        else:
+            res["diff_minutes"] = None
+            res["outdoor_better"] = None
+        return res
 
     def stats(self):
         n = len(self.poi)
