@@ -29,6 +29,7 @@ import xml.etree.ElementTree as ET
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OSM_FILE = os.path.join(ROOT, "data", "osm", "junchanglu.osm")
+KEY_FILE = os.path.join(ROOT, "data", "osm", "key_points.json")
 MAP_FILE = os.path.join(ROOT, "data", "campus_map.json")
 
 WALK_SPEED = 1.25  # 米/秒 ≈ 4.5 km/h
@@ -89,10 +90,10 @@ class Network:
             name = tags.get("name")
             if "building" in tags and name:
                 c = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
-                bld.setdefault(name.strip(), c)
-                n = norm(name)
-                if n:
-                    bld.setdefault(n, c)
+                # 同名建筑可能有南北两栋（如「室内体育馆」），全部保留按校区挑
+                for key in {name.strip(), norm(name)}:
+                    if key:
+                        bld.setdefault(key, []).append(c)
             if tags.get("highway") in HW_WALK:
                 for i in range(len(pts) - 1):
                     a, b = pts[i], pts[i + 1]
@@ -102,6 +103,12 @@ class Network:
                     adj.setdefault(a, []).append((b, d))
                     adj.setdefault(b, []).append((a, d))
         self.adj, self.bld = adj, bld
+
+        # 关键节点（校门/天桥）的人工核对坐标，优先级最高
+        try:
+            self.key_points = json.load(open(KEY_FILE, encoding="utf-8")).get("points", {})
+        except Exception:
+            self.key_points = {}
 
     # ---------- 碎片桥接 ----------
     def _bridge_components(self, max_gap=300.0):
@@ -147,6 +154,28 @@ class Network:
                 self.bridged.append((round(d), len(comp)))
 
     # ---------- POI 定位 ----------
+    CAMPUS_CENTER = {"北校": (31.2950161, 121.5506739), "南校": (31.2906712, 121.5535545)}
+
+    def _campus_ok(self, coord, campus):
+        """OSM 命中点的所在校区是否与图谱标注一致。
+
+        防止「南校五公寓」被同名 OSM 建筑（在北校）带偏 —— 曾导致
+        「第二学生公寓 ↔ 第五学生公寓」算出 3 分钟（跨校区实际约 15 分钟）。
+        无 campus 标注（如『连接』）则不校验。
+        """
+        if campus not in self.CAMPUS_CENTER:
+            return True
+        d_n = hav(coord, self.CAMPUS_CENTER["北校"])
+        d_s = hav(coord, self.CAMPUS_CENTER["南校"])
+        return (d_n < d_s) == (campus == "北校")
+
+    def _pick(self, key, campus):
+        """从同名候选里挑出与图谱校区相符的那个。"""
+        for cc in self.bld.get(key, []):
+            if self._campus_ok(cc, campus):
+                return cc
+        return None
+
     def _locate_pois(self):
         m = json.load(open(MAP_FILE, encoding="utf-8"))
         allp = m["pois"] + m["landmarks"]
@@ -167,15 +196,18 @@ class Network:
             for p in pending:
                 c, src = None, None
 
-                # A. OSM 建筑
-                for cand in [p["name"]] + list(p.get("alias", [])):
-                    if cand in self.bld:
-                        c, src = self.bld[cand], "osm"
-                        break
-                    n = norm(cand)
-                    if n and n in self.bld:
-                        c, src = self.bld[n], "osm"
-                        break
+                # A0. 人工核对的关键节点（校门/天桥）—— 优先于一切
+                kp = self.key_points.get(p["name"])
+                if kp:
+                    c, src = tuple(kp), "keypoint"
+
+                # A. OSM 建筑（命中点须与图谱标注的校区一致）
+                if c is None:
+                    for cand in [p["name"]] + list(p.get("alias", [])):
+                        hit = self._pick(cand, p.get("campus")) or self._pick(norm(cand), p.get("campus"))
+                        if hit:
+                            c, src = hit, "osm"
+                            break
 
                 # B. near_landmark
                 if c is None:

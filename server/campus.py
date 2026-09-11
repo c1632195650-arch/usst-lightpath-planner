@@ -117,10 +117,11 @@ _CAMPUS_CN = {
     "复兴路": "复兴中路 1195 号（中英国际学院）",
     "连接": "南北校区连接点",
 }
-# 仅北校↔南校是真实高频跨区场景；其余组合属「不在一个教学区」
-# 2026-09-11 高德实测校准：天桥两侧临近点（思餐厅 ↔ 第二学生公寓）仅 288m/4min；
-#   跨越整个校区（北校中部 → 南校西侧外语学院）约 910m/13min（含绕行军工路辅路）。
-#   原定 15 分钟偏保守，改为 10 分钟折中值；排程引擎如需精确值应查 walk_minutes。
+# 仅北校↔南校是真实高频跨区场景；其余组合属「不在一个教学区」。
+# 2026-09-11：分钟数改为**OSM 路网实算**（经海安路人行天桥，见 campus_network.route）。
+#   实测区间：天桥两侧临近点（二公寓 ↔ 五公寓）约 6 分钟；
+#   跨越整个校区（三教 → 第四教学楼 / 五食堂 → 外语学院）约 15–20 分钟。
+#   下面的常数仅作**路网算不出时的兜底**。
 _CROSS_MIN = {("北校", "南校"): 10, ("南校", "北校"): 10}
 
 def campus_of(name):
@@ -142,9 +143,24 @@ def cross_campus(a, b):
                 "note": "有一方的校区未收录，按同区处理更稳妥"}
     if ca == cb:
         return {"is_cross": False, "from": ca, "to": cb, "minutes": 0, "note": "同校区"}
+    # 只有「北校↔南校」是日常跨区场景（走海安路天桥），才用路网实算；
+    # 1100/580/复兴路 与本部相距数公里，不步行可达，直接返回 None
+    if (ca, cb) not in _CROSS_MIN:
+        return {"is_cross": True, "from": ca, "to": cb, "minutes": None,
+                "note": f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"}
+
+    # 优先用 OSM 真实路网实算（经海安路人行天桥）
+    r = route(a, b)
+    if r and r.get("reliable"):
+        mn = max(1, round(r["minutes"]))
+        return {"is_cross": True, "from": ca, "to": cb, "minutes": mn, "src": "route",
+                "note": (f"{campus_cn(ca)} → {campus_cn(cb)}，走海安路人行天桥；"
+                         f"路径约 {r['meters']:.0f} 米，预留 {mn} 分钟")}
+
+    # 算不出时回退保守常数
     mn = _CROSS_MIN.get((ca, cb))
     if mn:
-        return {"is_cross": True, "from": ca, "to": cb, "minutes": mn,
+        return {"is_cross": True, "from": ca, "to": cb, "minutes": mn, "src": "const",
                 "note": f"{campus_cn(ca)} → {campus_cn(cb)}，走海安路人行天桥，建议预留 {mn} 分钟"}
     return {"is_cross": True, "from": ca, "to": cb, "minutes": None,
             "note": f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"}

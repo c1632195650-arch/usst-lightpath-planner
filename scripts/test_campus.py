@@ -108,13 +108,13 @@ HOMONYM = [
     ("不存在的建筑XYZ", None),   # 反例：确认不会乱匹配
 ]
 
-# 跨区通行
+# 跨区通行（2026-09-11 起「北校↔南校」改用 OSM 路网实算，分钟数改为区间断言）
 CROSS = [
-    ("第一教学楼", "国合楼", True, 10),
-    ("第三教学楼", "思餐厅", True, 10),
-    ("逸兴楼", "卓越楼", False, 0),
-    ("第一教学楼", "第二食堂", False, 0),
-    ("申一教", "第一教学楼", True, None),   # 1100↔本部：跨区但无通行分钟（不参与本部排程）
+    ("第一教学楼", "国合楼", True, 8, 18),
+    ("第三教学楼", "思餐厅", True, 10, 22),
+    ("逸兴楼", "卓越楼", False, 0, 0),
+    ("第一教学楼", "第二食堂", False, 0, 0),
+    ("申一教", "第一教学楼", True, None, None),   # 1100↔本部：跨区但无通行分钟（不参与本部排程）
 ]
 
 
@@ -155,15 +155,18 @@ def main():
     print("=" * 72)
     print("E 组 · 跨校区判断（排程插缓冲块用）")
     print("=" * 72)
-    for a, b, exp_cross, exp_min in CROSS:
+    for a, b, exp_cross, lo, hi in CROSS:
         r = campus.cross_campus(a, b)
-        good = (r["is_cross"] == exp_cross) and (r["minutes"] == exp_min)
+        if lo is None:
+            good = (r["is_cross"] == exp_cross) and (r["minutes"] is None)
+        else:
+            good = (r["is_cross"] == exp_cross) and (r["minutes"] is not None) and (lo <= r["minutes"] <= hi)
         mark = "✅" if good else "❌"
         if good:
             ok += 1
         else:
             fail += 1
-            fails.append(f"{a}↔{b}: 期望 cross={exp_cross}/min={exp_min}，实际 {r['is_cross']}/{r['minutes']}")
+            fails.append(f"{a}↔{b}: 期望 cross={exp_cross}/min={lo}~{hi}，实际 {r['is_cross']}/{r['minutes']}")
         print(f"  {mark} {a} ↔ {b}")
         print(f"      跨区={r['is_cross']} 分钟={r['minutes']} ｜ {r['note']}")
 
@@ -231,6 +234,21 @@ def main():
                       f"  [{'可信' if r['reliable'] else '参考'}]")
             else:
                 print(f"  {mark} {a} → {b}: 不可达")
+
+        KPS = ["516号校门", "470号校门", "580号校门", "334号校门", "海安路人行天桥"]
+        kp_ok = all(net.poi.get(k, (None, ""))[1] == "keypoint" for k in KPS)
+        ok, fail = (ok + 1, fail) if kp_ok else (ok, fail + 1)
+        if not kp_ok:
+            fails.append("校门/天桥未使用 keypoint 坐标")
+        print(f"  {'✅' if kp_ok else '❌'} 关键节点坐标（4 校门 + 天桥）来自人工核对")
+
+        r = campus.route("第二学生公寓", "第五学生公寓")
+        good = bool(r) and r["minutes"] >= 4
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"跨区时间异常（疑似穿越校区）：{r['minutes'] if r else None}")
+        print(f"  {'✅' if good else '❌'} 跨区不穿越校区：二公寓 → 五公寓 "
+              + (f"{r['minutes']:.1f} 分钟" if r else "不可达"))
 
     total = ok + fail
     print("=" * 72)
