@@ -243,6 +243,16 @@ def space_context(text):
         blocks.append("\n[本部食堂全览（备查）]")
         blocks.append(canteen_overview())
 
+    # 用户同时提到两个地点 → 直接算两者之间的步行路径
+    if len(hits) >= 2:
+        r = route(hits[0]["name"], hits[1]["name"])
+        if r:
+            warn = "" if r["reliable"] else "（含估算成分，仅供参考）"
+            blocks.append(
+                f"\n[两点间步行] {r['from']} → {r['to']}：约 {r['meters']:.0f} 米，"
+                f"步行约 {r['minutes']:.0f} 分钟{warn}"
+            )
+
     oc = m.get("off_campus", [])
     if oc and any(k in text for k in ("校外", "校门口", "出去吃", "改善伙食", "聚餐")):
         blocks.append("\n[校外小吃]")
@@ -250,3 +260,31 @@ def space_context(text):
             blocks.append(f"  - {o['name']}（{o['where']}）：{'、'.join(o.get('signature', [])[:3])}")
 
     return "\n".join(blocks)
+
+
+# ---------- 路网寻路（OSM 派生，懒加载）----------
+_network = None
+
+
+def network():
+    """惰性初始化路网（首次约 0.1 s，之后复用）。失败则返回 None，不影响其它功能。"""
+    global _network
+    if _network is None:
+        try:
+            from campus_network import Network
+            _network = Network()
+        except Exception:
+            _network = False
+    return _network or None
+
+
+def route(a, b):
+    """任意两点步行路径。返回 {'meters','minutes','reliable',...} 或 None。
+
+    路网来自 OSM（© OpenStreetMap contributors，ODbL 1.0）；
+    每端仍优先采用 walk_minutes 里的实测值（见 campus_network 的定位优先级）。
+    """
+    net = network()
+    if not net:
+        return None
+    return net.route(a, b)

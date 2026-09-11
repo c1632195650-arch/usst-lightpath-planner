@@ -179,6 +179,59 @@ def main():
             print(f"      {h}")
         print()
 
+    print()
+    print("=" * 72)
+    print("G 组 · 路网寻路（OSM 派生·任意两点）")
+    print("=" * 72)
+    net = campus.network()
+    if net:
+        seen, comps = set(), 0
+        for n in net.adj:
+            if n in seen:
+                continue
+            comps += 1
+            st = [n]
+            seen.add(n)
+            while st:
+                x = st.pop()
+                for y, _ in net.adj.get(x, ()):
+                    if y not in seen:
+                        seen.add(y)
+                        st.append(y)
+        good = comps == 1
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"路网桥接后连通分量应为 1，实际 {comps}")
+        print(f"  {'✅' if good else '❌'} 路网连通性：分量数 = {comps}")
+
+        good = len(net.poi) >= 140
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"POI 定位数应 ≥140，实际 {len(net.poi)}")
+        print(f"  {'✅' if good else '❌'} POI 定位覆盖：{len(net.poi)}/{len(net.poi) + len(net.unlocated)}")
+
+        ROUTE_CASES = [
+            ("第三教学楼", "第五食堂", 200, 600),
+            ("三教", "五食堂", 200, 600),
+            ("南一宿舍", "清真餐厅", 50, 500),
+            ("第四宿舍 (思伊堂)", "第五食堂", 200, 800),
+            ("六公寓", "光电楼", 300, 1300),
+        ]
+        for a, b, lo, hi in ROUTE_CASES:
+            r = campus.route(a, b)
+            good = bool(r) and lo <= r["meters"] <= hi
+            mark = "✅" if good else "❌"
+            if good:
+                ok += 1
+            else:
+                fail += 1
+                fails.append(f"route({a},{b}): 期望 {lo}-{hi} 米，实际 {r['meters'] if r else None}")
+            if r:
+                print(f"  {mark} {a} → {b}: {r['meters']:.0f} 米 / {r['minutes']:.1f} 分钟"
+                      f"  [{'可信' if r['reliable'] else '参考'}]")
+            else:
+                print(f"  {mark} {a} → {b}: 不可达")
+
     total = ok + fail
     print("=" * 72)
     print(f"汇总：{ok}/{total} 通过（{ok/total*100:.1f}%）")

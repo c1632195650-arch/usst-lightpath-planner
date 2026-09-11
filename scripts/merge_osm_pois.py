@@ -202,6 +202,14 @@ def main():
             alias_to(tp, name)
             continue
 
+        # 5b) OSM「南X宿舍」→ 图谱「南校区第X宿舍」（同一栋，曾误建重复）
+        m2 = re.match(r"^南([一二三四五六七八九十])宿舍$", nname)
+        if m2:
+            tp = by_name.get(f"南校区第{m2.group(1)}宿舍")
+            if tp:
+                alias_to(tp, name)
+                continue
+
         # 6) 新增
         seq += 1
         disp = name
