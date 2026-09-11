@@ -66,3 +66,39 @@ export function lbaoSearch(q: string): Promise<{ query: string; results: SearchR
 export function lbaoHealth(): Promise<HealthResult> {
   return get<HealthResult>('/api/health');
 }
+
+/* ---------------- 步行路径（排程引擎的转场时间） ---------------- */
+
+export interface RouteResult {
+  from: string;
+  to: string;
+  /** 总步行米数（含楼到路网的接驳段） */
+  meters: number;
+  minutes: number;
+  /** false = 至少一端是靠估算锚定的，仅供参考 */
+  reliable: boolean;
+  /** 两端各自的定位来源（osm / keypoint / zone / …） */
+  locate: string[];
+  mode: 'fastest' | 'campus';
+}
+
+export type RouteMode = 'fastest' | 'campus';
+
+/** 两点间步行路径；查不到时返回 null（调用方退回估算值） */
+export async function routeBetween(
+  from: string, to: string, mode: RouteMode = 'fastest',
+): Promise<RouteResult | null> {
+  const res = await get<{ route: RouteResult | null }>(
+    `/api/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&mode=${mode}`,
+  );
+  return res.route;
+}
+
+/** 批量问路：排程时一次要问十几对，逐条请求太慢 */
+export function routeBatch(
+  pairs: Array<[string, string]>, mode: RouteMode = 'fastest',
+): Promise<{ routes: Record<string, RouteResult | null>; mode: string }> {
+  return post<{ routes: Record<string, RouteResult | null>; mode: string }>(
+    '/api/route/batch', { pairs, mode },
+  );
+}

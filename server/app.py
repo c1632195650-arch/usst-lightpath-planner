@@ -17,6 +17,8 @@
   GET  /api/search?q=&k=
   POST /api/chat   {q, session_id, user_id, k}
   POST /api/memory/reset  {session_id, user_id}
+  GET  /api/route?from=&to=&mode=         两点步行路径（排程引擎的转场时间）
+  POST /api/route/batch  {pairs:[[a,b],...]}  批量问路
 """
 import os, re, sys, io, json
 try:
@@ -27,7 +29,7 @@ except Exception:
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import rag
@@ -236,6 +238,59 @@ def api_search(q: str, k: int = 5):
     if not q:
         return {"query": q, "results": []}
     return {"query": q, "results": rag.search(q, k)}
+
+
+# ---------- 步行路径（排程引擎的转场时间来源） ----------
+class RouteBatchReq(BaseModel):
+    """批量问路：排程引擎一次要问十几对地点，逐条 HTTP 太慢。"""
+    pairs: list[list[str]] = Field(default_factory=list, max_length=200)
+    mode: str = "fastest"
+
+
+def _route_payload(a: str, b: str, mode: str = "fastest"):
+    """把 campus.route 的结果整理成前端要的形状（只留必要字段）。"""
+    r = campus.route(a, b, mode)
+    if not r:
+        return None
+    return {
+        "from": r.get("from"), "to": r.get("to"),
+        "meters": round(r.get("meters", 0)),
+        "minutes": round(r.get("minutes", 0), 1),
+        "reliable": bool(r.get("reliable", False)),
+        "locate": list(r.get("locate", [])),
+        "mode": mode,
+    }
+
+
+@app.get("/api/route")
+def api_route(src: str = Query("", alias="from"), dst: str = Query("", alias="to"),
+              mode: str = "fastest"):
+    """两点间步行路径。
+
+    q: /api/route?from=第三教学楼&to=第五食堂
+    返回 {from,to,meters,minutes,reliable,locate} 或 {"route": null}
+    （查不到时返回 null 而不是报错 —— 前端据此退回估算值）
+    """
+    if not src or not dst:
+        return {"route": None, "reason": "missing from/to"}
+    if mode not in ("fastest", "campus"):
+        mode = "fastest"
+    return {"route": _route_payload(src, dst, mode)}
+
+
+@app.post("/api/route/batch")
+def api_route_batch(body: RouteBatchReq):
+    """批量问路，返回 {'<from>→<to>': payload|null}。"""
+    mode = body.mode if body.mode in ("fastest", "campus") else "fastest"
+    out = {}
+    for pair in body.pairs[:200]:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            continue
+        a, b = str(pair[0]), str(pair[1])
+        if not a or not b:
+            continue
+        out[f"{a}→{b}"] = _route_payload(a, b, mode)
+    return {"routes": out, "mode": mode}
 
 @app.post("/api/chat")
 def api_chat(body: ChatReq):

@@ -248,6 +248,17 @@ export interface TimeBlock {
   courseId?: string;
   /** 地点（POI 名），排程时用于 route() 与就近推荐 */
   place?: string;
+  /** 上课教室（kind === 'course'） */
+  room?: string;
+  /** 任课教师（kind === 'course'） */
+  teacher?: string;
+  /** 图标（来自活动模块），用于周程页展示 */
+  emoji?: string;
+  /**
+   * 为什么把这个块排在这儿 —— 面向用户的一句话。
+   * 与 Phase.reasons 同一哲学：可解释、可反驳，不是黑箱。
+   */
+  reason?: string;
   transfer?: TransferHint;
   /** 用户确认过的块：重排时锁定不动 */
   locked?: boolean;
