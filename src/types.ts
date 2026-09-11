@@ -171,7 +171,110 @@ export interface CalEvent {
 }
 
 /* ============================================================
- * 六、持久化
+ * 六、排程（学期阶段 → 周计划 → 时间块）
+ *
+ * 分层理由：教务课表的「持续周数」决定**整学期**的形态（哪几周有课、
+ * 期末冲刺从何时开始），而「节次」只影响**单周**的呈现。二者混在一个
+ * 结构里会让每周重算整学期，所以拆成 Phase / WeekPlan / TimeBlock 三层。
+ * ========================================================== */
+
+export type PhaseKind = 'adapt' | 'normal' | 'midterm' | 'sprint' | 'exam';
+
+/**
+ * 阶段排程策略 —— 规则引擎消费的**结构化参数**，不是自由文本。
+ * LLM 可以建议这些参数的取值，用户可以直接改；引擎只认这里。
+ */
+export interface PhasePolicy {
+  /** 每天目标自习时长（分钟） */
+  dailyStudyMin: number;
+  /** 单个学习块上限（分钟）—— 超过就拆开，防止长时间疲劳 */
+  maxBlockMin: number;
+  /** 刻意留白比例 0–1：一天里不排任何事的时间占比 */
+  blankRatio: number;
+  /** 是否允许使用晚间时段（18:00 之后） */
+  eveningAllowed: boolean;
+  /** 周末是否安排学习 */
+  weekendWork: boolean;
+  /** 自习地点候选（POI 名，供 route() 算转场与 place 字段使用） */
+  studyPlaces: string[];
+}
+
+export interface Phase {
+  kind: PhaseKind;
+  name: string;
+  /** 起始周次（含），1-based */
+  fromWeek: number;
+  /** 结束周次（含） */
+  toWeek: number;
+  policy: PhasePolicy;
+  /**
+   * 为什么这样排 —— 依据画像的哪一项 / 校历的哪一段。
+   * 面向用户展示，让 TA 能质疑和修改，而不是黑箱。
+   */
+  reasons: string[];
+}
+
+export interface SemesterPlan {
+  semesterName: string;
+  totalWeeks: number;
+  phases: Phase[];
+  /** 生成时所依据的画像版本（画像更新后可重新生成对比） */
+  personaVersion?: string;
+  generatedAt?: string;
+}
+
+export type BlockKind = 'course' | 'meal' | 'study' | 'activity' | 'commute' | 'blank';
+
+/** 转场提示：由 route() 实测标注，通用日历给不出这个 */
+export interface TransferHint {
+  fromPlace?: string;
+  toPlace?: string;
+  /** 实测步行分钟 */
+  minutes: number;
+  /** 到下一件事的余量（分钟），可为负 = 来不及 */
+  slackMin: number;
+  tight: boolean;
+  note?: string;
+}
+
+export interface TimeBlock {
+  id: string;
+  kind: BlockKind;
+  dayOfWeek: DayOfWeek;
+  startMin: number;
+  endMin: number;
+  title: string;
+  /** 关联课程（kind === 'course'） */
+  courseId?: string;
+  /** 地点（POI 名），排程时用于 route() 与就近推荐 */
+  place?: string;
+  transfer?: TransferHint;
+  /** 用户确认过的块：重排时锁定不动 */
+  locked?: boolean;
+  source: 'course' | 'template' | 'user';
+}
+
+export interface PlanIssue {
+  level: 'error' | 'warn' | 'info';
+  message: string;
+  blockId?: string;
+}
+
+export interface WeekPlan {
+  weekNo: number;
+  blocks: TimeBlock[];
+  /** 汇总指标（「评估指南」的数字部分，由规则算出，不靠 LLM 编） */
+  stats: {
+    courseMin: number;
+    studyMin: number;
+    blankMin: number;
+    blockCount: number;
+  };
+  issues: PlanIssue[];
+}
+
+/* ============================================================
+ * 七、持久化
  * ========================================================== */
 
 export interface AppState {
@@ -182,6 +285,8 @@ export interface AppState {
   /** 原始答卷（可重算、可删除） */
   answers: AnswerMap | null;
   schedule: Schedule | null;
+  /** 学期阶段规划（画像或课表变化时重新生成） */
+  semesterPlan: SemesterPlan | null;
   /** 周程页选中的日期 */
   selectedDays: string[];
   /** 当前生活模式 id */
@@ -189,11 +294,12 @@ export interface AppState {
 }
 
 export const DEFAULT_APP_STATE: AppState = {
-  version: 2,
+  version: 3,
   onboarded: false,
   persona: null,
   answers: null,
   schedule: null,
+  semesterPlan: null,
   selectedDays: [],
   lifeMode: null,
 };
