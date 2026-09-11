@@ -2,6 +2,8 @@
 node_modules/
 .package-lock.json
 
+.spec-workflow/
+
 # 构建产物
 dist/
 dist-ssr/
