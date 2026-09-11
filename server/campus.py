@@ -32,28 +32,62 @@ def _all_pois():
     m = load_map()
     return list(m.get("pois", [])) + list(m.get("landmarks", []))
 
+def _names_of(p):
+    return [p["name"]] + list(p.get("alias", []))
+
+
 def find_poi(name):
-    """按名称或别名精确找 POI（长名优先，避免子串误匹配）"""
+    """按名称或别名找 POI。
+
+    匹配优先级（2026-09-11 修正）：
+      1) 精确相等（name 或 alias）
+      2) 包含匹配，但**按候选词长度降序**取最长命中
+
+    旧实现是「遍历顺序 + 双向子串」，会导致
+      『南校区图书馆』被『图书馆』抢走、『申一教』被『一教』抢走 ——
+     课表里的『南校区图书馆』会被误解析成北校区，属实质性错误。
+    """
     name = (name or "").strip()
     if not name:
         return None
-    for p in _all_pois():
-        names = sorted([p["name"]] + p.get("alias", []), key=len, reverse=True)
-        for n in names:
-            if n and (n == name or name in n or n in name):
-                return p
-    return None
+    allp = _all_pois()
+    # 1) 精确匹配
+    for p in allp:
+        if name in _names_of(p):
+            return p
+    # 2) 包含匹配：候选词越长越优先；同为最长时，POI 主名越长越优先
+    cands = []
+    for p in allp:
+        for n in _names_of(p):
+            if n and (n in name or name in n):
+                cands.append((len(n), len(p["name"]), p))
+    if not cands:
+        return None
+    cands.sort(key=lambda x: (-x[0], -x[1]))
+    return cands[0][2]
 
 def match_pois(text):
-    """从一段文本里匹配出所有提到的 POI"""
+    """从一段文本里匹配出所有提到的 POI。
+
+    按候选词长度降序匹配，命中后把该词从文本中「挖空」，
+    避免短别名（如『一教』）被『申一教』这类长名重复触发。
+    """
     text = text or ""
-    hits = []
+    cands = []
     for p in _all_pois():
-        names = sorted([p["name"]] + p.get("alias", []), key=len, reverse=True)
-        for n in names:
-            if n and n in text:
-                hits.append(p)
-                break
+        for n in _names_of(p):
+            if n:
+                cands.append((len(n), n, p))
+    cands.sort(key=lambda x: -x[0])
+    consumed = text
+    hits, used = [], set()
+    for _ln, n, p in cands:
+        if id(p) in used:
+            continue
+        if n in consumed:
+            hits.append(p)
+            used.add(id(p))
+            consumed = consumed.replace(n, "　" * len(n))
     return hits
 
 def nearby(place_name, max_min=15):
@@ -70,6 +104,47 @@ def nearby(place_name, max_min=15):
         elif place_name in to or to in place_name:
             out.append((frm, mn, w.get("note", "")))
     return sorted(out, key=lambda x: x[1])
+
+# ---- 校区归属与跨区通行（排程引擎依赖） ----
+# 分区口径：北校区 = 军工路 516 号（主校区）；南校区 = 军工路 334 号；
+#           两者合称「本部」，由海安路人行天桥连接。
+#           1100（基础学院）/ 580 / 复兴路 为独立校区，不参与本部日常排程。
+_CAMPUS_CN = {
+    "北校": "军工路 516 号（北校区·主校区）",
+    "南校": "军工路 334 号（南校区）",
+    "1100": "军工路 1100 号（基础学院）",
+    "580": "军工路 580 号",
+    "复兴路": "复兴中路 1195 号（中英国际学院）",
+    "连接": "南北校区连接点",
+}
+# 仅北校↔南校是真实高频跨区场景；其余组合属「不在一个教学区」
+_CROSS_MIN = {("北校", "南校"): 15, ("南校", "北校"): 15}
+
+def campus_of(name):
+    """查建筑/地点所属校区。返回 '北校'|'南校'|'1100'|'580'|'复兴路'|'连接'|None"""
+    p = find_poi(name)
+    return p.get("campus") if p else None
+
+def campus_cn(code):
+    return _CAMPUS_CN.get(code, code or "未知")
+
+def cross_campus(a, b):
+    """判断两地之间是否需要跨校区通行（供排程插缓冲块用）。
+    返回 dict: {is_cross, from, to, minutes, note}
+      is_cross=None 表示有一方未收录（不臆断）
+    """
+    ca, cb = campus_of(a), campus_of(b)
+    if not ca or not cb:
+        return {"is_cross": None, "from": ca, "to": cb, "minutes": None,
+                "note": "有一方的校区未收录，按同区处理更稳妥"}
+    if ca == cb:
+        return {"is_cross": False, "from": ca, "to": cb, "minutes": 0, "note": "同校区"}
+    mn = _CROSS_MIN.get((ca, cb))
+    if mn:
+        return {"is_cross": True, "from": ca, "to": cb, "minutes": mn,
+                "note": f"{campus_cn(ca)} → {campus_cn(cb)}，走海安路人行天桥，建议预留 {mn} 分钟"}
+    return {"is_cross": True, "from": ca, "to": cb, "minutes": None,
+            "note": f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"}
 
 def poi_brief(p, with_dishes=True):
     """POI 一句话简介（含招牌菜 —— 贴心细节就在这）"""
@@ -127,10 +202,11 @@ def space_context(text):
 
     resolved = False
     for p in hits[:2]:
+        blocks.append(f"\n『{p['name']}』所在校区：{campus_cn(p.get('campus'))}")
         nb = nearby(p["name"])
         if nb:
             resolved = True
-            blocks.append(f"\n『{p['name']}』周边：")
+            blocks.append("  周边步行：")
             for name, mn, note in nb:
                 tgt = find_poi(name)
                 seg = f"  - 步行约{mn}分钟 → {name}"
