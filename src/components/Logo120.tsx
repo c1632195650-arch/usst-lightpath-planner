@@ -1,7 +1,10 @@
 /**
  * 120 周年校庆标识（致敬版）
- * 圆形徽章 + 上理红渐变 + "USST" 与 "120" 组合 + 1906–2026
+ * 圆形徽章 + 中性石板灰渐变 + "USST" 与 "120" 组合 + 1906–2026
  * 注意：这是对官方标识精神的致敬与简化，非官方原件。
+ *
+ * 用石板灰而不是品牌靛蓝：徽章同时出现在浅色页头和深色首屏上，
+ * 需要一个在两种底色上都有足够对比的中间调；靛蓝在深靛面上会糊掉。
  */
 export function Logo120({ size = 120, className = '' }: { size?: number; className?: string }) {
   return (
@@ -15,13 +18,13 @@ export function Logo120({ size = 120, className = '' }: { size?: number; classNa
     >
       <defs>
         <linearGradient id="usst120g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#7a1222" />
-          <stop offset="0.5" stopColor="#a6192e" />
-          <stop offset="1" stopColor="#c62a3a" />
+          <stop offset="0" stopColor="#3C4353" />
+          <stop offset="0.5" stopColor="#5A6377" />
+          <stop offset="1" stopColor="#727B8E" />
         </linearGradient>
         <linearGradient id="usst120ring" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#e58a93" stopOpacity="0.4" />
+          <stop offset="1" stopColor="#C3C9D6" stopOpacity="0.45" />
         </linearGradient>
       </defs>
 

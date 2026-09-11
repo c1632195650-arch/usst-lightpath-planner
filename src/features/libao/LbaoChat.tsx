@@ -94,7 +94,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-[0_12px_32px_rgba(75,0,0,0.08)] backdrop-blur-xl lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1">
+    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_12px_32px_rgba(22,35,63,0.06)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1">
       <aside className="hero-surface flex flex-col px-5 py-5 text-white sm:px-6 lg:py-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold" aria-hidden="true">梨</span>
@@ -126,8 +126,10 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         </div>
 
         <div className="mt-auto pt-4 lg:pt-6">
-          <div className={`flex items-center gap-2 text-xs ${online === false ? 'text-brand-light' : 'text-white/55'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${online === true ? 'bg-ok' : online === false ? 'bg-brand-bright' : 'bg-white/35'}`} aria-hidden="true" />
+          {/* 未连接用琥珀而不是品牌靛蓝：靛蓝在这套色板里代表「正常 / 可操作」，
+              拿它表示服务不可用会把告警读成常态。 */}
+          <div className={`flex items-center gap-2 text-xs ${online === false ? 'text-accent' : 'text-white/55'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${online === true ? 'bg-ok' : online === false ? 'bg-accent' : 'bg-white/35'}`} aria-hidden="true" />
             {online === true ? '校园资料服务已连接' : online === false ? '校园资料服务未连接' : '正在连接校园资料服务'}
           </div>
         </div>
@@ -135,8 +137,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
       <section className="flex min-h-0 flex-col p-3 sm:p-5">
         {online === false && (
-          <div className="mb-3 flex items-center gap-2 border border-brand/20 bg-brand-light/55 px-3 py-2 text-sm leading-5 text-ink-soft">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+          <div className="mb-3 flex items-center gap-2 rounded-xl border border-accent/25 bg-accent-light px-3 py-2 text-sm leading-5 text-ink-soft">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
             启动 <code className="font-semibold text-ink">python server/app.py</code> 后，可继续查询校园资料；本地排程仍可使用。
           </div>
         )}

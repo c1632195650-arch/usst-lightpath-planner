@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    color: #4b0000;
-    background: #fff8ec;
+    color: #16233f;
+    background: #f6f7fa;
     font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
 
@@ -16,7 +16,8 @@
   body {
     @apply min-h-screen bg-paper text-ink antialiased;
     overflow-x: hidden;
-    background-image: radial-gradient(circle at 82% -12%, rgba(255, 179, 71, 0.2), transparent 34rem);
+    /* 页面底极淡的琥珀光晕，呼应光谱暖端，不参与信息表达。 */
+    background-image: radial-gradient(circle at 84% -12%, rgba(217, 131, 36, 0.09), transparent 32rem);
   }
 
   button,
@@ -28,7 +29,7 @@
   button:focus-visible,
   a:focus-visible,
   input:focus-visible {
-    @apply outline-none ring-2 ring-brand/30 ring-offset-2 ring-offset-paper;
+    @apply outline-none ring-2 ring-brand/40 ring-offset-2 ring-offset-paper;
   }
 
   .tabular-nums {
@@ -60,31 +61,49 @@
   }
 
   .panel {
-    @apply rounded-2xl border border-white/80 bg-white/85 shadow-[0_8px_28px_rgba(75,0,0,0.07)] backdrop-blur-xl;
+    @apply rounded-2xl border border-ink/[0.07] bg-white shadow-[0_8px_28px_rgba(22,35,63,0.06)];
   }
 
-  /* 暖色重点面只用于关键区域，让整页保持轻盈而不回到红黑对撞。 */
+  /**
+   * 深色面：深靛底 + 靛蓝与琥珀两端的光晕，整块就是一段压缩的光谱。
+   * 只用于关键区域（首屏、今日卡、画像结果、问卷题卡、周次头、梨宝侧栏）。
+   */
   .hero-surface {
     @apply bg-ink;
     background-image:
-      radial-gradient(circle at 8% 0%, rgba(255, 99, 71, 0.42), transparent 36%),
-      radial-gradient(circle at 100% 100%, rgba(255, 127, 80, 0.28), transparent 40%);
+      radial-gradient(circle at 8% 0%, rgba(43, 76, 155, 0.62), transparent 46%),
+      radial-gradient(circle at 100% 100%, rgba(217, 131, 36, 0.19), transparent 40%);
+  }
+
+  /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
+  .button-on-dark {
+    @apply min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
+  }
+
+  /**
+   * 短而宽的深色条（周次头、梨宝条）只取光谱冷端。
+   * 百分比半径是相对元素自身算的，在只有几十像素高的条上，
+   * 琥珀光晕会摊成右侧一大片褐色 —— 那不是暖调，是脏。
+   */
+  .hero-surface-flat {
+    @apply bg-ink;
+    background-image: radial-gradient(circle at 6% 50%, rgba(43, 76, 155, 0.55), transparent 58%);
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(178,34,34,0.2)] transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(43,76,155,0.22)] transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-white/80 bg-white/75 px-4 py-3 text-sm font-medium text-ink-soft backdrop-blur-xl transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/60 hover:text-ink active:scale-[0.99];
+    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
   }
 
   .icon-button {
-    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/20 hover:bg-brand-light/40 hover:text-brand;
+    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
   }
 
   .nav-item {
-    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-200 ease-out hover:bg-white hover:text-ink;
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-200 ease-out hover:bg-brand-light hover:text-brand;
   }
 
   .nav-item-active {

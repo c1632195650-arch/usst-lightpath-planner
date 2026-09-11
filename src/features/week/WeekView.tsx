@@ -5,6 +5,7 @@ import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
 import { lbaoRecommend, type LbaoPlan } from '@/lib/lbao';
 import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
+import { categoryColor } from '@/constants/chartColors';
 
 interface Props {
   weekMonday: string;
@@ -24,15 +25,6 @@ interface Props {
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 // 跟着 PERIOD_START 走：常量里加夜课（第 12、13 节）时这里自动跟着变
 const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1);
-
-const CATEGORY_COLOR: Record<string, string> = {
-  '公共基础': '#306a9f',
-  '专业核心': '#b22222',
-  '专业选修': '#dc143c',
-  '通识选修': '#17845d',
-  '实践环节': '#9a681d',
-  '其他': '#71717a',
-};
 
 export function WeekView(props: Props) {
   const { weekMonday, weekNo, schedule, selectedDays, persona, onBack, onShiftWeek } = props;
@@ -66,7 +58,7 @@ export function WeekView(props: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* 周次控制保持在同一视觉层级，切换时不丢失当前日期和课程上下文。 */}
-      <header className="hero-surface flex items-center justify-between rounded-2xl px-4 py-4 text-white shadow-[0_12px_32px_rgba(75,0,0,0.14)] sm:px-6">
+      <header className="hero-surface-flat flex items-center justify-between rounded-2xl px-4 py-4 text-white shadow-[0_12px_32px_rgba(22,35,63,0.14)] sm:px-6">
         <button onClick={onBack} className="min-h-10 text-sm font-medium text-white/60 transition-colors hover:text-white">返回总览</button>
         <div className="text-center">
           <div className="text-lg font-semibold tracking-tight">第 {weekNo} 周</div>
@@ -97,7 +89,7 @@ export function WeekView(props: Props) {
                 key={d}
                 onClick={() => props.onToggleDay(d)}
                 className={`flex min-h-16 flex-col items-center justify-center rounded-xl border py-2 transition-all duration-200 ease-out ${
-                  sel ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white/80 text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
+                  sel ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                 }`}
               >
                 <span className="text-xs font-medium">{DAY_LABELS[i]}</span>
@@ -116,8 +108,10 @@ export function WeekView(props: Props) {
           </div>
           <span className="text-xs text-ink-faint">按当前周次筛选</span>
         </div>
+        {/* 7 天 × 13 节的课表天然需要宽度，窄屏仍保留横向滚动；
+            min-w 压到 540px 后，常见手机一屏能看到 5 天左右，拖动幅度明显变小。 */}
         <div className="overflow-x-auto border-t border-ink/10 px-4 py-4 sm:px-5">
-          <table className="min-w-[620px] w-full border-separate border-spacing-0">
+          <table className="min-w-[540px] w-full border-separate border-spacing-0">
             <thead>
               <tr>
                 <th className="w-14 border-b border-ink/10 pb-3 text-left text-[11px] font-medium text-ink-faint">时间</th>
@@ -143,7 +137,7 @@ export function WeekView(props: Props) {
                         <td key={dow} rowSpan={span} className="border-b border-ink/5 p-1 align-top">
                           <div
                             className="h-full rounded-lg px-2 py-2 text-white shadow-sm"
-                            style={{ background: CATEGORY_COLOR[start.category] ?? '#9c918a' }}
+                            style={{ background: categoryColor(start.category) }}
                           >
                             <div className="text-[11px] font-semibold leading-tight">{start.name}</div>
                             <div className="mt-1 text-[9.5px] leading-tight opacity-85">
@@ -196,7 +190,7 @@ export function WeekView(props: Props) {
 
       <section className="pb-10">
         <div className="panel overflow-hidden">
-          <div className="hero-surface flex items-center gap-4 px-5 py-5 text-white">
+          <div className="hero-surface-flat flex items-center gap-4 px-5 py-5 text-white">
             <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-lg">梨</div>
             <div className="flex-1">
               <div className="text-sm font-semibold">梨宝建议</div>
@@ -205,7 +199,7 @@ export function WeekView(props: Props) {
             <button
               onClick={runLbao}
               disabled={!persona}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all duration-300 hover:bg-brand-light disabled:opacity-40"
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45"
             >
               生成建议
             </button>

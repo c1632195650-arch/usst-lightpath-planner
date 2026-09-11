@@ -16,7 +16,7 @@ interface Props {
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-brand text-white shadow-sm hover:bg-brand-dark hover:brightness-110',
-  secondary: 'border border-ink/10 bg-white/80 text-ink hover:border-brand/20 hover:bg-brand-light/40',
+  secondary: 'border border-ink/10 bg-white text-ink hover:border-brand/20 hover:bg-brand-light/40',
   ghost: 'bg-transparent text-ink-soft hover:bg-white hover:text-ink',
   danger: 'border border-danger/15 bg-danger-light text-danger hover:bg-danger hover:text-white',
 };

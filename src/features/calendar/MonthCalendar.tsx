@@ -1,14 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CalEvent } from '@/types';
 import { addDays, fromISO, toISO, todayISO, weekdayOf } from '@/lib/date';
-
-const EVENT_STYLE: Record<CalEvent['type'], { dot: string; label: string }> = {
-  term: { dot: '#52525b', label: '学期' },
-  holiday: { dot: '#9a681d', label: '假期' },
-  anniversary: { dot: '#6d4bc4', label: '校庆' },
-  exam: { dot: '#b91c1c', label: '考试' },
-  activity: { dot: '#17845d', label: '活动' },
-};
+import { EVENT_STYLE } from '@/constants/chartColors';
 
 interface Props {
   events: CalEvent[];
@@ -60,9 +53,10 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
         <button onClick={() => shift(1)} className="icon-button" aria-label="下个月">›</button>
       </div>
 
+      {/* 周末用琥珀而不是品牌靛蓝：否则会和「今天 / 已选」的主色撞在一起，弱化选中态。 */}
       <div className="mb-2 grid grid-cols-7">
         {weekHeader.map((w, i) => (
-          <div key={w} className={`py-2 text-center text-[11px] font-semibold ${i >= 5 ? 'text-brand/70' : 'text-ink-faint'}`}>{w}</div>
+          <div key={w} className={`py-2 text-center text-[11px] font-semibold ${i >= 5 ? 'text-accent' : 'text-ink-faint'}`}>{w}</div>
         ))}
       </div>
 

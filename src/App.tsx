@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AnswerEntry, AppState } from '@/types';
-import { MOCK_SCHEDULE, CAL_EVENTS } from '@/data/usst';
+import { MOCK_SCHEDULE } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
@@ -8,8 +8,7 @@ import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
-import { MonthCalendar } from '@/features/calendar/MonthCalendar';
-import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
+import { OverviewPage } from '@/features/overview/OverviewPage';
 import { WeekView } from '@/features/week/WeekView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
@@ -158,28 +157,13 @@ export default function App() {
 
   // 主界面
   const weekNo = weekMonday ? currentWeekNo(schedule.termStart, weekMonday) : currentWeekNo(schedule.termStart);
-  /** 当周真实开课数与节次，只用于总览，不虚构“实时效率”指标。 */
-  const activeCourses = schedule.courses.filter((course) =>
-    course.slots.some((slot) => slot.weeks.length === 0 || slot.weeks.includes(weekNo)));
-  const activeSlots = activeCourses.reduce(
-    (count, course) => count + course.slots.filter((slot) => slot.weeks.length === 0 || slot.weeks.includes(weekNo)).length,
-    0,
-  );
-  /** 课表节次按星期汇总，只表达已导入的真实课程密度。 */
-  const dailySlotCounts = Array.from({ length: 7 }, (_, index) => schedule.courses.reduce(
-    (count, course) => count + course.slots.filter((slot) =>
-      slot.dayOfWeek === index + 1 && (slot.weeks.length === 0 || slot.weeks.includes(weekNo))).length,
-    0,
-  ));
-  /** 留出最小柱高，让没有课程的日期仍保有可辨认的时间刻度。 */
-  const peakDailySlots = Math.max(1, ...dailySlotCounts);
   /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
   const isLbaoTab = mainTab === 'libao';
 
   return (
     <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
       {/* 紧凑导航把主要空间留给日程与对话内容。 */}
-      <header className="sticky top-0 z-20 shrink-0 border-b border-white/70 bg-paper/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
           <Logo120 size={32} />
           <div className="min-w-0 flex-1 leading-tight">
@@ -242,94 +226,15 @@ export default function App() {
             onShiftWeek={shiftWeekBy}
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="flex flex-col gap-6">
-              <section className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
-                <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="flex flex-col justify-between gap-6 px-5 py-7 sm:px-8 sm:py-8">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {todayISO()}</p>
-                      <h1 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">今天的安排，要留得出余地。</h1>
-                      <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">
-                        {state.persona
-                          ? `当前建议会参考「${state.persona.archetype.primary?.name ?? '你的画像'}」的节奏，以及这周正在上的课程。`
-                          : '先从校历进入本周；完成画像后，安排会更贴近你的习惯。'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button onClick={() => openWeek(todayISO())} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">
-                        打开本周安排
-                      </button>
-                      {!state.persona && (
-                        <button onClick={() => setView('persona')} className="min-h-11 rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10">
-                          完成画像测评
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-white/10 bg-white/[0.035] px-5 py-6 sm:px-8 lg:border-l lg:border-t-0 lg:px-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/45">WEEKLY PULSE</p>
-                        <p className="mt-2 text-sm font-semibold text-white">本周课程节次分布</p>
-                      </div>
-                      <p className="text-xs text-white/45">{activeSlots} 节</p>
-                    </div>
-                    <div className="mt-6 grid h-28 grid-cols-7 items-end gap-2" aria-label="本周各日期课程节次分布">
-                      {dailySlotCounts.map((count, index) => (
-                        <div key={index} className="flex h-full min-w-0 flex-col justify-end gap-2 text-center">
-                          <span className="text-xs font-semibold text-white/80 tabular-nums">{count || '–'}</span>
-                          <div className="flex h-16 items-end rounded-lg bg-white/5 p-1">
-                            <div className="w-full rounded-md bg-sky transition-[height] duration-300 ease-out" style={{ height: `${count === 0 ? 8 : Math.max(18, (count / peakDailySlots) * 100)}%` }} />
-                          </div>
-                          <span className="text-[11px] text-white/45">{['一', '二', '三', '四', '五', '六', '日'][index]}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid border-t border-white/10 sm:grid-cols-3">
-                  <div className="px-5 py-4 sm:px-8">
-                    <p className="text-xs text-white/45">当前学期</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{schedule.semesterName}</p>
-                  </div>
-                  <div className="border-t border-white/10 px-5 py-4 sm:border-l sm:border-t-0 sm:px-8">
-                    <p className="text-xs text-white/45">本周开课</p>
-                    <p className="mt-1 text-sm font-semibold text-white tabular-nums">{activeCourses.length} 门 · {activeSlots} 节次</p>
-                  </div>
-                  <div className="border-t border-white/10 px-5 py-4 sm:border-l sm:border-t-0 sm:px-8">
-                    <p className="text-xs text-white/45">已选日期</p>
-                    <p className="mt-1 text-sm font-semibold text-white tabular-nums">{state.selectedDays.length} / 7 天</p>
-                  </div>
-                </div>
-              </section>
-
-              <section className="panel p-5 sm:p-6">
-                <div className="mb-6 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="section-label">CALENDAR</p>
-                    <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">从校历选择这一周</h2>
-                  </div>
-                  <button onClick={() => openWeek(todayISO())} className="shrink-0 text-sm font-semibold text-brand transition-colors hover:text-brand-dark">回到今天</button>
-                </div>
-                <MonthCalendar
-                  events={CAL_EVENTS}
-                  selectedDate={state.selectedDays[state.selectedDays.length - 1]}
-                  onSelectDate={openWeek}
-                />
-              </section>
-            </div>
-
-            <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
-              <DeadlineBoard />
-              <section className="border-y border-ink/10 py-5">
-                <p className="section-label">PLANNING PRINCIPLE</p>
-                <h2 className="mt-3 text-lg font-semibold tracking-tight text-ink">计划不是把时间填满。</h2>
-                <p className="mt-3 text-sm leading-6 text-ink-soft">从课表、个人习惯与校园节点出发，给重要的事留空间，也把休息当作日程的一部分。</p>
-              </section>
-            </aside>
-          </div>
+          <OverviewPage
+            schedule={schedule}
+            weekNo={weekNo}
+            todayIso={todayISO()}
+            persona={state.persona}
+            selectedDate={state.selectedDays[state.selectedDays.length - 1]}
+            onOpenWeek={openWeek}
+            onStartPersona={() => setView('persona')}
+          />
         )}
       </main>
 

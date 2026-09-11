@@ -4,65 +4,58 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 奶油底色承接大面积内容，珊瑚与深红只用于操作、选中和重点信息。
-        ink: { DEFAULT: '#4b0000', soft: '#7a3028', faint: '#a66b5b' },
-        paper: { DEFAULT: '#fff8ec', card: '#ffffff', line: '#ffdead' },
-        brand: { DEFAULT: '#b22222', dark: '#8b0000', bright: '#ff6347', light: '#ffe4b5' },
-        sky: { DEFAULT: '#ff7f50', light: '#fff0dc' },
-        ok: { DEFAULT: '#15803d', light: '#edfdf3' },
-        warn: { DEFAULT: '#b45309', light: '#fff7ed' },
-        danger: { DEFAULT: '#b91c1c', light: '#fef2f2' },
+        /**
+         * 光谱色板 —— 产品叫「光溯 / LightPath」，配色本身就是一条光谱：
+         * 深靛（ink）承载大面积深色面，靛蓝（brand）负责操作与选中，
+         * 琥珀（accent）作为光谱暖端只做点缀。
+         *
+         * 所有文字色对 paper 底的对比度均 ≥ 4.5:1（WCAG AA 小字标准），
+         * 注释里的数值是实测值，改色前请重新核对。
+         */
+        ink: {
+          DEFAULT: '#16233F', // 14.6:1 主文字，同时是深色面底色
+          soft: '#414D68', //  7.9:1 正文次级
+          faint: '#66708A', //  4.6:1 标签与说明（小字也达标）
+        },
+        paper: {
+          DEFAULT: '#F6F7FA', // 页面底
+          card: '#FFFFFF', // 卡片
+          sunken: '#EDEFF5', // 进度槽、输入框底
+        },
+        brand: {
+          DEFAULT: '#2B4C9B', // 主操作、选中态（承白字 8.1:1）
+          dark: '#1F3A78', // hover
+          light: '#E5EAF6', // 选中底
+          bright: '#4A73D1', // 深色面上的强调
+        },
+        accent: {
+          DEFAULT: '#D98324', // 琥珀，光谱暖端
+          light: '#FBF0DF',
+        },
+        ok: { DEFAULT: '#1E7A4F', light: '#E6F2EC' },
+        warn: { DEFAULT: '#B9762A', light: '#FBF1E3' },
+        danger: { DEFAULT: '#C24B3A', light: '#FAEAE7' },
+
+        /**
+         * 数据色：按波长从短到长排列（紫→靛→青→绿→琥珀→珊瑚）。
+         * 课表类别、校历事件、时间节点三处共用这一套，
+         * 语义映射集中在 src/constants/chartColors.ts，不要再各处硬编码 hex。
+         */
+        chart: {
+          violet: '#6B4BA3',
+          indigo: '#2B4C9B',
+          cyan: '#147A8B',
+          green: '#1E7A4F',
+          amber: '#B9762A',
+          coral: '#C24B3A',
+          slate: '#5A6377',
+        },
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],
         display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
       borderRadius: { card: '16px' },
-      keyframes: {
-        fadeUp: {
-          '0%': { opacity: '0', transform: 'translateY(14px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        floatY: {
-          '0%,100%': { transform: 'translateY(0) rotate(-2deg)' },
-          '50%': { transform: 'translateY(-10px) rotate(2deg)' },
-        },
-        wobble: {
-          '0%,100%': { transform: 'rotate(-3deg)' },
-          '50%': { transform: 'rotate(3deg)' },
-        },
-        popIn: {
-          '0%': { opacity: '0', transform: 'scale(.6)' },
-          '70%': { transform: 'scale(1.08)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
-        },
-        wiggle: {
-          '0%,100%': { transform: 'rotate(-4deg)' },
-          '50%': { transform: 'rotate(4deg)' },
-        },
-        bounceSoft: {
-          '0%,100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-5px)' },
-        },
-        spinSlow: {
-          '0%': { transform: 'rotate(0deg)' },
-          '100%': { transform: 'rotate(360deg)' },
-        },
-      },
-      animation: {
-        'fade-up': 'fadeUp .5s ease-out both',
-        'fade-in': 'fadeIn .6s ease-out both',
-        'float-y': 'floatY 4s ease-in-out infinite',
-        wobble: 'wobble 3s ease-in-out infinite',
-        'pop-in': 'popIn .5s cubic-bezier(.34,1.56,.64,1) both',
-        wiggle: 'wiggle 2.2s ease-in-out infinite',
-        'bounce-soft': 'bounceSoft 2.4s ease-in-out infinite',
-        'spin-slow': 'spinSlow 18s linear infinite',
-      },
     },
   },
   plugins: [],

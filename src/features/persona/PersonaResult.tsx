@@ -24,7 +24,7 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   return (
     <div className="min-h-full">
       <div className="page-shell px-4 py-6 sm:px-6 sm:py-8">
-        <section className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
+        <section className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(22,35,63,0.18)]">
           <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12 lg:px-10 lg:py-10">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">YOUR PLANNING PROFILE</p>
@@ -105,8 +105,8 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
                 return (
                   <div key={key} className="grid grid-cols-[72px_minmax(0,1fr)_40px] items-center gap-3 border-b border-ink/10 py-4 last:border-0 sm:grid-cols-[88px_minmax(0,1fr)_44px_52px]">
                     <dt className="text-sm font-medium text-ink">{AXIS_META[key].short}</dt>
-                    <dd className="h-1.5 overflow-hidden rounded-full bg-paper">
-                      <div className="h-full rounded-full bg-sky" style={{ width: `${value}%` }} />
+                    <dd className="h-1.5 overflow-hidden rounded-full bg-paper-sunken">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${value}%` }} />
                     </dd>
                     <dd className="text-right text-sm font-semibold text-ink tabular-nums">{value}</dd>
                     <dd className={`hidden text-right text-xs font-medium sm:block ${CONF_COLOR[confidence]}`}>{CONF_LABEL[confidence]}</dd>

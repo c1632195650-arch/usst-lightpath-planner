@@ -126,7 +126,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
         </aside>
 
         <section className="min-w-0">
-          <div className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(75,0,0,0.18)]">
+          <div className="hero-surface overflow-hidden rounded-2xl border border-white/10 text-white shadow-[0_18px_44px_rgba(22,35,63,0.18)]">
             <div className="border-b border-white/10 px-5 py-4 sm:px-8 sm:py-5">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm font-semibold text-white">{SECTION_LABELS[item.section]}</p>
@@ -236,7 +236,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                   <button
                     onClick={goNext}
                     disabled={!sortDone}
-                    className="min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-40"
+                    className="button-on-dark"
                   >
                     {isLast ? '生成我的画像' : '下一步'}
                   </button>
@@ -252,7 +252,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                       上一题
                     </button>
                   )}
-                  <button onClick={goNext} disabled={!answered} className="min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-40">
+                  <button onClick={goNext} disabled={!answered} className="button-on-dark">
                     {isLast ? '生成我的画像' : '下一题'}
                   </button>
                 </>

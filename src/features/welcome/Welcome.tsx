@@ -12,7 +12,7 @@ export function Welcome({ onStart, onSkip }: Props) {
       <div className="hero-surface absolute inset-x-0 top-0 h-[42vh]" />
 
       <div className="page-shell relative z-10 flex min-h-[calc(100vh-48px)] items-center">
-        <div className="grid w-full overflow-hidden rounded-2xl border border-white/50 bg-white/90 shadow-[0_24px_72px_rgba(75,0,0,0.16)] backdrop-blur-xl lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid w-full overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_24px_72px_rgba(22,35,63,0.16)] lg:grid-cols-[1.1fr_0.9fr]">
           <section className="hero-surface flex min-h-[430px] flex-col justify-between px-7 py-8 text-white sm:px-10 sm:py-12">
             <div className="flex items-center gap-3">
               <Logo120 size={42} />
@@ -34,7 +34,7 @@ export function Welcome({ onStart, onSkip }: Props) {
             </div>
           </section>
 
-          <section className="flex flex-col justify-center bg-white/80 px-7 py-10 sm:px-10 sm:py-12">
+          <section className="flex flex-col justify-center bg-white px-7 py-10 sm:px-10 sm:py-12">
             <p className="section-label">FIRST SETUP</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">先让安排认识你</h2>
             <p className="mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，系统会把课表、校园节点和你的日常习惯放在同一个安排里。</p>

@@ -42,7 +42,7 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-brand"
         style={{
-          background: `linear-gradient(to right, #b22222 0%, #b22222 ${pct}%, #ffdead ${pct}%, #ffdead 100%)`,
+          background: `linear-gradient(to right, #2B4C9B 0%, #2B4C9B ${pct}%, #EDEFF5 ${pct}%, #EDEFF5 100%)`,
         }}
       />
       {hint && <p className="mt-2 text-xs leading-5 text-ink-faint">{hint}</p>}
