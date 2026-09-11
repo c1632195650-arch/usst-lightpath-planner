@@ -52,7 +52,7 @@ GROUPS = [
         "name": "F 组 · 空间维度扩展：自习/打印/快递/场馆（新图谱覆盖抽查）",
         "user": "u_f", "sid": "s_f",
         "turns": [
-            {"q": "学校哪里可以自习？我早起背单词", "expect": ["hybrid", "llm"], "note": "湛恩纪念图书馆 7:00 开门，应比总馆早"},
+            {"q": "学校哪里可以自习？我早起背单词", "expect": ["grounded", "hybrid", "llm"], "note": "自习点汇总命中（overlap 后 raw_vec 0.6889 跨 0.68 → grounded，回答实测准确）"},
             {"q": "一教下课去哪吃最快？", "expect": ["hybrid"], "note": "官方：二食堂离一教最近，3分钟+打包窗口"},
             {"q": "快递取了去哪拿？", "expect": ["hybrid", "llm"], "note": "菜鸟驿站近二公寓"},
             {"q": "我在南校区上课，那边有食堂吗？", "expect": ["hybrid", "llm"], "note": "思餐厅/第四/第六/清真食堂"},
