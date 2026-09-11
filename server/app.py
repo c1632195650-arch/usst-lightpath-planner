@@ -29,14 +29,20 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import rag
 import campus
 import memory
 
-app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.0")
+app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
+
+# CORS 白名单：默认本机前端；演示/局域网真机测试时用环境变量临时放开
+# 例：LIBAO_CORS_ORIGINS=http://localhost:5173,http://192.168.1.100:5173
+_CORS_DEFAULT = "http://localhost:5173,http://127.0.0.1:5173"
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.environ.get("LIBAO_CORS_ORIGINS", _CORS_DEFAULT).split(",") if o.strip()],
+    allow_credentials=False,
     allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -213,7 +219,7 @@ def extractive_answer(sources, route):
 
 # ---------- 路由 ----------
 class ChatReq(BaseModel):
-    q: str
+    q: str = Field(max_length=500)   # 防超长输入打爆 token；超长返回 422
     session_id: str = "default"
     user_id: str = "anon"
     k: int = 4
@@ -276,10 +282,10 @@ def api_chat(body: ChatReq):
     if not answer:
         answer = extractive_answer(sources, route)
 
-    # 6) 落记忆（用户问 + 梨宝答）
+    # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
     try:
         memory.remember(body.user_id, body.session_id, "user", q)
-        memory.remember(body.user_id, body.session_id, "assistant", answer)
+        memory.remember(body.user_id, body.session_id, "assistant", desensitize(answer))
     except Exception as e:
         print("[memory] 写入失败：", e)
 

@@ -12,6 +12,7 @@
   python scripts/rag.py search "四六级什么时候报名" [k]
 """
 import os, re, sys, io, sqlite3, struct, math, json
+import numpy as np
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -68,22 +69,32 @@ def embed_query(q):
 
 # ---------- 分块 ----------
 def chunk_text(text, title="", max_len=500, overlap=80):
-    """按句子边界分块，标题前置到每块"""
+    """按句子边界分块，标题前置到每块；下一块以上一块末尾约 overlap 字的完整句子开头（跨块上下文连续）"""
     text = (text or "").strip()
     if not text:
         return []
     # 按句号/换行/分号切句
-    sents = re.split(r'(?<=[。！？!?；;\n])', text)
-    chunks, cur = [], ""
+    sents = [s for s in re.split(r'(?<=[。！？!?；;\n])', text) if s.strip()]
+    chunks, cur_sents = [], []
     for s in sents:
-        if len(cur) + len(s) <= max_len:
-            cur += s
+        if sum(len(x) for x in cur_sents) + len(s) <= max_len:
+            cur_sents.append(s)
+            continue
+        if cur_sents:
+            chunks.append("".join(cur_sents).strip())
+            # 取当前块末尾约 overlap 字的完整句子作为下一块开头
+            tail, acc = [], ""
+            for prev in reversed(cur_sents):
+                acc = prev + acc
+                tail.insert(0, prev)
+                if len(acc) >= overlap:
+                    break
         else:
-            if cur.strip():
-                chunks.append(cur.strip())
-            cur = s
-    if cur.strip():
-        chunks.append(cur.strip())
+            tail = []  # 单句超长，只能硬切
+        head = "".join(tail)
+        cur_sents = [head + s] if len(head) + len(s) <= max_len else [s]
+    if cur_sents:
+        chunks.append("".join(cur_sents).strip())
     # 标题前置
     if title:
         chunks = [(title + "。" + c) if not c.startswith(title) else c for c in chunks]
@@ -242,8 +253,8 @@ def search(query, k=5, top_fts=20, top_vec=20):
             "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
         ):
             fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[rag] FTS5 原查询检索失败（降级为仅向量）: {e!r}", file=sys.stderr)
 
     # 1b) 扩展召回：口语→官方术语，OR 语义（FTS5 空格是 AND，扩展词必须走 OR 否则反而漏召）
     #     分数打 0.6 折，避免盖过原查询的精确命中
@@ -258,22 +269,28 @@ def search(query, k=5, top_fts=20, top_vec=20):
                 s = -r[1] * 0.6
                 if s > fts_hits.get(r[0], 0):
                     fts_hits[r[0]] = s
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[rag] FTS5 扩展词检索失败（降级为原查询结果）: {e!r}", file=sys.stderr)
 
-    # 2) 向量语义
-    qv = embed_query(query)
+    # 2) 向量语义（numpy 矩阵乘一次算完全部块的余弦；Python 循环在千级 chunk 时慢 10 倍以上）
+    qv = np.asarray(embed_query(query), dtype=np.float32)
+    qn = float(np.linalg.norm(qv))
+    if qn > 0:
+        qv = qv / qn  # 显式归一化，不假定模型输出已归一化
+    vec_rows = conn.execute("SELECT id, article_id, vec FROM chunks").fetchall()
     vec_hits = {}
-    for cid, aid, blob in conn.execute("SELECT id, article_id, vec FROM chunks"):
-        n = len(blob) // 4
-        v = struct.unpack(f"{n}f", blob)
-        vec_hits[cid] = (aid, cosine(qv, v))
-    top_chunks = sorted(vec_hits.items(), key=lambda x: -x[1][1])[:top_vec]
+    if vec_rows:
+        ids = np.array([r[0] for r in vec_rows])
+        aids = np.array([r[1] for r in vec_rows])
+        mat = np.frombuffer(b"".join(r[2] for r in vec_rows), dtype=np.float32).reshape(len(vec_rows), -1)
+        sims = mat @ qv
+        for i in np.argsort(-sims)[:top_vec]:
+            vec_hits[int(ids[i])] = (int(aids[i]), float(sims[i]))
 
     # 3) 归并到文章级：向量得分 = 该文章最相关块的得分
     vec_article = {}
     best_chunk = {}   # aid -> (chunk_id, 原始余弦)，用于取回最相关片段
-    for cid, (aid, s) in top_chunks:
+    for cid, (aid, s) in vec_hits.items():
         if aid not in vec_article or s > vec_article[aid]:
             vec_article[aid] = s
             best_chunk[aid] = (cid, s)
