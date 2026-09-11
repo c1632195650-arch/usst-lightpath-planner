@@ -202,7 +202,8 @@ def space_context(text):
 
     resolved = False
     for p in hits[:2]:
-        blocks.append(f"\n『{p['name']}』所在校区：{campus_cn(p.get('campus'))}")
+        loc = p.get("zone") or ""
+        blocks.append(f"\n『{p['name']}』所在校区：{campus_cn(p.get('campus'))}" + (f"｜位置：{loc}" if loc else ""))
         # 关键细节（贴心信息就在这里：楼内自习室 / 快递点 / 招牌菜 / 营业时间）
         if p.get("note"):
             blocks.append(f"  说明：{p['note']}")
