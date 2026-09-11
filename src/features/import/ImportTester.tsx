@@ -56,40 +56,40 @@ export function ImportTester({ onApply }: Props) {
   const warns = result?.issues.filter((i) => i.level === 'warn') ?? [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <section className="sticker p-4">
-        <div className="flex items-center gap-2 mb-1">
+    <div className="content-shell flex flex-col gap-5">
+      <section className="panel p-5">
+        <div className="mb-2 flex items-center gap-2">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
               online === null ? 'bg-ink-faint' : online ? 'bg-brand' : 'bg-red-500'
             }`}
           />
-          <h2 className="font-bold text-[15px] text-ink">课表解析服务</h2>
-          <span className="text-[12px] text-ink-faint">
+          <h2 className="text-base font-semibold tracking-tight text-ink">课表解析服务</h2>
+          <span className="text-xs text-ink-faint">
             {online === null ? '探测中…' : online ? '127.0.0.1:8765 已连通' : '未连通 —— 先跑 python server.py 8765'}
           </span>
-          <button onClick={() => void probe()} className="ml-auto text-[12px] text-brand font-bold">
+          <button onClick={() => void probe()} className="ml-auto text-xs font-semibold text-brand transition-colors hover:text-brand-dark">
             重试
           </button>
         </div>
-        <div className="text-[12px] text-ink-faint leading-relaxed">
-          浏览器走同源代理 <code className="bg-paper px-1 rounded">/timetable</code>，Vite 转发到 8765，所以没有跨域问题。
+        <div className="text-xs leading-relaxed text-ink-faint">
+          浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite 转发到 8765，所以没有跨域问题。
         </div>
       </section>
 
-      <section className="sticker p-4 flex flex-col gap-3">
+      <section className="panel flex flex-col gap-4 p-5">
         <div className="flex flex-wrap items-center gap-2">
           <button
             disabled={busy || !online}
             onClick={() => void run(() => fetchSchedule(meta))}
-            className="px-4 py-2 rounded-full bg-brand text-white text-[13px] font-bold shadow-sticker-brand disabled:opacity-40"
+            className="button-primary px-4 py-2 text-[13px]"
           >
             {busy ? '解析中…' : '拉取当前课表'}
           </button>
 
           <label
-            className={`px-4 py-2 rounded-full border-2 border-brand/25 text-brand text-[13px] font-bold ${
-              busy || !online ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:bg-brand-light'
+            className={`button-secondary px-4 py-2 text-[13px] ${
+              busy || !online ? 'pointer-events-none opacity-40' : 'cursor-pointer'
             }`}
           >
             上传 PDF 课表
@@ -109,37 +109,37 @@ export function ImportTester({ onApply }: Props) {
             value={semesterKey}
             onChange={(e) => setSemesterKey(e.target.value)}
             placeholder="学期 key（可留空，如 2026-2027-1）"
-            className="flex-1 min-w-[180px] px-3 py-2 rounded-full bg-paper text-[13px] text-ink placeholder:text-ink-faint outline-none focus:ring-2 focus:ring-brand/30"
+            className="min-w-[180px] flex-1 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
         </div>
-        <div className="text-[11.5px] text-ink-faint leading-relaxed">
+        <div className="text-[11.5px] leading-relaxed text-ink-faint">
           学期 key 留空时：优先用 PDF 文件名里的学期（教务默认名形如「姓名(2026-2027-1)课表.pdf」），
           再退化到校历常量表。<strong className="text-ink-soft">termStart 不用手填。</strong>
         </div>
       </section>
 
       {err && (
-        <section className="sticker p-4 border-2 border-red-300">
-          <div className="font-bold text-[13.5px] text-red-600 mb-1">导入失败</div>
+        <section className="panel border-danger/25 bg-danger-light p-5">
+          <div className="mb-1 text-[13.5px] font-semibold text-danger">导入失败</div>
           <div className="text-[12.5px] text-ink-soft whitespace-pre-wrap">{err}</div>
         </section>
       )}
 
       {result && (
         <>
-          <section className="sticker p-4">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <h3 className="font-bold text-[14px] text-ink">{result.schedule.semesterName || '（未命名学期）'}</h3>
+          <section className="panel p-5">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="text-[15px] font-semibold text-ink">{result.schedule.semesterName || '（未命名学期）'}</h3>
               <span
                 className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                  result.term.exact ? 'bg-brand-light text-brand' : 'bg-amber-100 text-amber-700'
+                  result.term.exact ? 'bg-brand-light text-brand' : 'bg-warn-light text-warn'
                 }`}
               >
                 {result.term.exact ? '校历精确' : '估算 · 待核对'}
               </span>
               <span className="text-[12px] text-ink-faint">{result.schedule.semesterType}</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
               <div className="text-ink-soft">学期起始（第1周周一）</div>
               <div className="font-bold text-ink">{result.schedule.termStart || '—— 无法解析 ——'}</div>
               <div className="text-ink-soft">总周数</div>
@@ -149,22 +149,22 @@ export function ImportTester({ onApply }: Props) {
                 {result.schedule.courses.length} 门 / {result.schedule.courses.length + result.skipped.length} 条
               </div>
             </div>
-            <div className="mt-2 text-[11.5px] text-ink-faint leading-relaxed border-t border-paper-line pt-2">
+            <div className="mt-3 border-t border-ink/10 pt-3 text-[11.5px] leading-relaxed text-ink-faint">
               来源：{result.term.source}
             </div>
           </section>
 
           {result.schedule.courses.map((c) => (
-            <section key={c.id} className="sticker p-4">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="font-bold text-[14px] text-ink">{c.name}</span>
+            <section key={c.id} className="panel p-5">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-[14px] font-semibold text-ink">{c.name}</span>
                 <span className="text-[11.5px] text-ink-faint">{c.credit} 学分 · {c.teacher ?? '—'}</span>
                 <span className="ml-auto text-[11.5px] text-ink-faint">
                   {c.campus}
                   {c.building ? ` · ${c.building}${c.room ?? ''}` : ' · 未排地点'}
                 </span>
               </div>
-              <div className="mt-2 flex flex-col gap-1">
+              <div className="mt-3 flex flex-col gap-1.5">
                 {c.slots.map((s, i) => (
                   <div key={i} className="text-[12.5px] text-ink-soft">
                     周{DAY[s.dayOfWeek]} 第{s.startPeriod}-{s.endPeriod}节
@@ -180,8 +180,8 @@ export function ImportTester({ onApply }: Props) {
           ))}
 
           {result.roomConflicts.length > 0 && (
-            <section className="sticker p-4 border-2 border-amber-300">
-              <div className="font-bold text-[13.5px] text-amber-700 mb-1">
+            <section className="panel border-warn/25 bg-warn-light p-5">
+              <div className="mb-1 text-[13.5px] font-semibold text-warn">
                 教室冲突 {result.roomConflicts.length} 条（一门课应只有一个教室）
               </div>
               {result.roomConflicts.map((rc) => (
@@ -193,8 +193,8 @@ export function ImportTester({ onApply }: Props) {
           )}
 
           {result.skipped.length > 0 && (
-            <section className="sticker p-4 border-2 border-amber-300">
-              <div className="font-bold text-[13.5px] text-amber-700 mb-1">
+            <section className="panel border-warn/25 bg-warn-light p-5">
+              <div className="mb-1 text-[13.5px] font-semibold text-warn">
                 跳过 {result.skipped.length} 条（解析不出来，未静默丢弃）
               </div>
               {result.skipped.map((s, i) => (
@@ -205,8 +205,8 @@ export function ImportTester({ onApply }: Props) {
             </section>
           )}
 
-          <section className="sticker p-4">
-            <div className="font-bold text-[13.5px] text-ink mb-2">
+          <section className="panel p-5">
+            <div className="mb-3 text-[13.5px] font-semibold text-ink">
               自检：{errors.length} 个 error，{warns.length} 个 warn
             </div>
             {errors.map((i, k) => (
@@ -223,7 +223,7 @@ export function ImportTester({ onApply }: Props) {
           <button
             disabled={errors.length > 0 || applied}
             onClick={() => { onApply(result.schedule); setApplied(true); }}
-            className="py-3 rounded-full bg-brand text-white font-bold text-[14px] shadow-sticker-brand disabled:opacity-40"
+            className="button-primary py-3 text-[14px] disabled:cursor-not-allowed"
           >
             {applied ? '已写入我的课表 ✓' : errors.length > 0 ? '先修完 error 才能写入' : '写入我的课表 →'}
           </button>

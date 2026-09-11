@@ -27,29 +27,36 @@ export function Radar({ axes, size = 320 }: { axes: Axes; size?: number }) {
   }).join(' ');
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="mx-auto">
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      className="mx-auto block h-auto w-full max-w-[300px]"
+      role="img"
+      aria-label="八个生活维度的倾向分布"
+    >
       {/* 网格 */}
       {gridPolygons.map((p, idx) => (
         <polygon
           key={idx}
           points={p}
           fill="none"
-          stroke="#f0e4d0"
+          stroke="#DCE1EC"
           strokeWidth={idx === 3 ? 1.5 : 1}
         />
       ))}
       {/* 轴线 */}
       {AXIS_KEYS.map((_, i) => {
         const [x, y] = point(i, R);
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#f0e4d0" strokeWidth="1" />;
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#DCE1EC" strokeWidth="1" />;
       })}
 
       {/* 数据多边形 */}
-      <polygon points={dataPoly} fill="#d43a45" fillOpacity="0.2" stroke="#d43a45" strokeWidth="2.5" strokeLinejoin="round" />
+      <polygon points={dataPoly} fill="#2B4C9B" fillOpacity="0.18" stroke="#2B4C9B" strokeWidth="2.5" strokeLinejoin="round" />
       {AXIS_KEYS.map((k, i) => {
         const v = Math.max(6, Math.min(100, axes[k]));
         const [x, y] = point(i, R * (v / 100));
-        return <circle key={k} cx={x} cy={y} r="4" fill="#d43a45" stroke="#fff" strokeWidth="1.5" />;
+        return <circle key={k} cx={x} cy={y} r="4" fill="#2B4C9B" stroke="#fff" strokeWidth="1.5" />;
       })}
 
       {/* 标签 + 数值 */}
@@ -62,10 +69,10 @@ export function Radar({ axes, size = 320 }: { axes: Axes; size?: number }) {
         const anchor = Math.abs(dx) < 0.3 ? 'middle' : dx > 0 ? 'start' : 'end';
         return (
           <g key={k}>
-            <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight="800" fill="#2b2420">
+            <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight="700" fill="#16233F">
               {val}
             </text>
-            <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="middle" fontSize="12" fill="#5c534c">
+            <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="middle" fontSize="12" fill="#414D68">
               {AXIS_META[k].short}
             </text>
           </g>

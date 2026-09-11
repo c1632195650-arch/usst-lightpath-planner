@@ -15,15 +15,15 @@ interface Props {
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand text-white hover:bg-brand-dark active:scale-[.98]',
-  secondary: 'bg-paper-card text-ink border border-paper-line hover:bg-paper active:scale-[.98]',
-  ghost: 'bg-transparent text-ink-soft hover:bg-paper',
-  danger: 'bg-danger-light text-danger border border-danger/20 hover:bg-danger hover:text-white',
+  primary: 'bg-brand text-white shadow-sm hover:bg-brand-dark hover:brightness-110',
+  secondary: 'border border-ink/10 bg-white text-ink hover:border-brand/20 hover:bg-brand-light/40',
+  ghost: 'bg-transparent text-ink-soft hover:bg-white hover:text-ink',
+  danger: 'border border-danger/15 bg-danger-light text-danger hover:bg-danger hover:text-white',
 };
 
 const SIZES: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-[13px]',
-  md: 'px-4 py-2.5 text-[14.5px]',
+  sm: 'px-3 py-2 text-xs',
+  md: 'px-4 py-3 text-sm',
 };
 
 export function Button({
@@ -36,9 +36,8 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={[
-        'rounded-lg font-semibold transition-all duration-150',
-        'focus:outline-none focus:ring-2 focus:ring-brand/30',
-        'disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100',
+        'rounded-xl font-semibold transition-all duration-300 ease-in-out active:scale-[.99]',
+        'disabled:pointer-events-none disabled:opacity-40',
         VARIANTS[variant], SIZES[size], full ? 'w-full' : '', className,
       ].join(' ')}
     >

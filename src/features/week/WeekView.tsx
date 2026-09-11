@@ -5,6 +5,7 @@ import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
 import { lbaoRecommend, type LbaoPlan } from '@/lib/lbao';
 import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
+import { categoryColor } from '@/constants/chartColors';
 
 interface Props {
   weekMonday: string;
@@ -24,15 +25,6 @@ interface Props {
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 // 跟着 PERIOD_START 走：常量里加夜课（第 12、13 节）时这里自动跟着变
 const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1);
-
-const CATEGORY_COLOR: Record<string, string> = {
-  '公共基础': '#4a9fe0',
-  '专业核心': '#d43a45',
-  '专业选修': '#9d7bf2',
-  '通识选修': '#4db98a',
-  '实践环节': '#f5b840',
-  '其他': '#9c918a',
-};
 
 export function WeekView(props: Props) {
   const { weekMonday, weekNo, schedule, selectedDays, persona, onBack, onShiftWeek } = props;
@@ -64,64 +56,74 @@ export function WeekView(props: Props) {
   const weekRange = `${shortCN(days[0])} – ${shortCN(days[6])}`;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* 周标题 */}
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="text-[13px] text-ink-faint hover:text-ink">← 月历</button>
+    <div className="flex flex-col gap-6">
+      {/* 周次控制保持在同一视觉层级，切换时不丢失当前日期和课程上下文。 */}
+      <header className="hero-surface-flat flex items-center justify-between rounded-2xl px-4 py-4 text-white shadow-[0_12px_32px_rgba(22,35,63,0.14)] sm:px-6">
+        <button onClick={onBack} className="min-h-10 text-sm font-medium text-white/60 transition-colors hover:text-white">返回总览</button>
         <div className="text-center">
-          <div className="text-[17px] font-bold text-ink">第 {weekNo} 周 · {weekRange}</div>
+          <div className="text-lg font-semibold tracking-tight">第 {weekNo} 周</div>
+          <div className="mt-0.5 text-xs text-white/55">{weekRange}</div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => onShiftWeek(-1)} className="w-8 h-8 rounded-full grid place-items-center border-2 border-ink/10 text-ink-soft hover:bg-white shadow-sticker">‹</button>
-          <button onClick={() => onShiftWeek(1)} className="w-8 h-8 rounded-full grid place-items-center border-2 border-ink/10 text-ink-soft hover:bg-white shadow-sticker">›</button>
+        <div className="flex gap-2">
+          <button onClick={() => onShiftWeek(-1)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 text-white transition-colors hover:bg-white/10" aria-label="上一周">‹</button>
+          <button onClick={() => onShiftWeek(1)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 text-white transition-colors hover:bg-white/10" aria-label="下一周">›</button>
         </div>
-      </div>
+      </header>
 
-      {/* 选日（可单选/多选） */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold text-[14px] text-ink">✋ 选几天（可单选或多选）</h3>
-          <div className="flex gap-2 text-[12px]">
-            <button onClick={props.onSelectWholeWeek} className="text-brand font-medium hover:underline">整周</button>
-            <button onClick={props.onClearDays} className="text-ink-faint hover:text-ink">清空</button>
+      <section className="panel p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="section-label">FOCUS DAYS</p>
+            <h3 className="mt-3 text-lg font-semibold tracking-tight text-ink">选择想安排的日期</h3>
+          </div>
+          <div className="flex gap-3 text-sm">
+            <button onClick={props.onSelectWholeWeek} className="font-semibold text-brand transition-colors hover:text-brand-dark">整周</button>
+            <button onClick={props.onClearDays} className="font-medium text-ink-faint transition-colors hover:text-ink">清空</button>
           </div>
         </div>
-        <div className="grid grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {days.map((d, i) => {
             const sel = selectedSet.has(d);
             return (
               <button
                 key={d}
                 onClick={() => props.onToggleDay(d)}
-                className={`rounded-xl py-2 flex flex-col items-center border-2 transition-all ${
-                  sel ? 'bg-brand text-white border-brand shadow-sticker-brand -translate-y-0.5' : 'bg-white border-ink/10 text-ink-soft hover:border-brand/40'
+                className={`flex min-h-16 flex-col items-center justify-center rounded-xl border py-2 transition-all duration-200 ease-out ${
+                  sel ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                 }`}
               >
-                <span className="text-[11px]">{DAY_LABELS[i]}</span>
-                <span className="text-[13px] font-bold tabular-nums">{Number(d.slice(8, 10))}</span>
+                <span className="text-xs font-medium">{DAY_LABELS[i]}</span>
+                <span className="mt-1 text-sm font-semibold tabular-nums">{Number(d.slice(8, 10))}</span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* 课表 */}
-      <section>
-        <h3 className="font-bold text-[14px] text-ink mb-2">📅 本周课程表</h3>
-        <div className="overflow-x-auto -mx-5 px-5">
-          <table className="w-full border-collapse min-w-[560px]">
+      <section className="panel overflow-hidden">
+        <div className="flex items-end justify-between px-4 pb-4 pt-5 sm:px-5">
+          <div>
+            <p className="section-label">TIMETABLE</p>
+            <h3 className="mt-2 text-lg font-semibold tracking-tight text-ink">本周课程</h3>
+          </div>
+          <span className="text-xs text-ink-faint">按当前周次筛选</span>
+        </div>
+        {/* 7 天 × 13 节的课表天然需要宽度，窄屏仍保留横向滚动；
+            min-w 压到 540px 后，常见手机一屏能看到 5 天左右，拖动幅度明显变小。 */}
+        <div className="overflow-x-auto border-t border-ink/10 px-4 py-4 sm:px-5">
+          <table className="min-w-[540px] w-full border-separate border-spacing-0">
             <thead>
               <tr>
-                <th className="w-12 text-left text-[11px] font-medium text-ink-faint pb-2 align-bottom">时间</th>
+                <th className="w-14 border-b border-ink/10 pb-3 text-left text-[11px] font-medium text-ink-faint">时间</th>
                 {DAY_LABELS.map((l) => (
-                  <th key={l} className="text-center text-[11px] font-medium text-ink-soft pb-2 px-1">{l}</th>
+                  <th key={l} className="border-b border-ink/10 px-1 pb-3 text-center text-[11px] font-medium text-ink-soft">{l}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {PERIODS.map((p) => (
-                <tr key={p} className="border-t border-paper-line">
-                  <td className="text-[10px] text-ink-faint pr-1 py-0.5 align-top tabular-nums">
+                <tr key={p}>
+                  <td className="border-b border-ink/5 py-1.5 pr-2 align-top text-[10px] text-ink-faint tabular-nums">
                     {PERIOD_START[p]}
                   </td>
                   {DAY_LABELS.map((_, dow) => {
@@ -132,22 +134,22 @@ export function WeekView(props: Props) {
                       )!;
                       const span = slot.endPeriod - slot.startPeriod + 1;
                       return (
-                        <td key={dow} rowSpan={span} className="p-0.5 align-top">
+                        <td key={dow} rowSpan={span} className="border-b border-ink/5 p-1 align-top">
                           <div
-                            className="rounded-xl px-1.5 py-1 text-white h-full shadow-sticker"
-                            style={{ background: CATEGORY_COLOR[start.category] ?? '#9c918a' }}
+                            className="h-full rounded-lg px-2 py-2 text-white shadow-sm"
+                            style={{ background: categoryColor(start.category) }}
                           >
-                            <div className="text-[11px] font-bold leading-tight">{start.name}</div>
-                            <div className="text-[9.5px] opacity-90 leading-tight mt-0.5">
+                            <div className="text-[11px] font-semibold leading-tight">{start.name}</div>
+                            <div className="mt-1 text-[9.5px] leading-tight opacity-85">
                               {start.building}{start.room ? ` ${start.room}` : ''}
                             </div>
-                            <div className="text-[9px] opacity-75">{PERIOD_START[p]}–{PERIOD_END[slot.endPeriod]}</div>
+                            <div className="mt-1 text-[9px] opacity-70">{PERIOD_START[p]}–{PERIOD_END[slot.endPeriod]}</div>
                           </div>
                         </td>
                       );
                     }
                     if (isCovered(dow + 1, p)) return null;
-                    return <td key={dow} className="p-0.5" />;
+                    return <td key={dow} className="border-b border-ink/5 p-1" />;
                   })}
                 </tr>
               ))}
@@ -156,58 +158,59 @@ export function WeekView(props: Props) {
         </div>
       </section>
 
-      {/* 生活模式 */}
-      <section>
-        <h3 className="font-bold text-[14px] text-ink mb-2">🎮 生活模式（mod）</h3>
-        <div className="grid grid-cols-3 gap-2">
+      <section className="panel p-4 sm:p-5">
+        <div className="mb-5">
+          <p className="section-label">PACE</p>
+          <h3 className="mt-3 text-lg font-semibold tracking-tight text-ink">选择这一周的节奏</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
           {LIFE_MODES.map((m) => {
             const active = props.lifeMode === m.id;
             return (
               <button
                 key={m.id}
                 onClick={() => props.onSelectMode(m.id)}
-                className={`rounded-2xl border-2 p-3 text-left transition-all ${
-                  active ? 'border-brand bg-brand-light shadow-sticker-brand -translate-y-0.5' : 'border-ink/10 bg-white hover:border-brand/40'
+                className={`flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out ${
+                  active ? 'border-brand bg-brand-light text-brand' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
                 }`}
               >
-                <div className="text-[20px]">{m.emoji}</div>
-                <div className={`text-[13px] font-bold mt-1 ${active ? 'text-brand' : 'text-ink'}`}>{m.name}</div>
-                <div className="text-[10.5px] text-ink-faint mt-0.5 leading-tight">{m.tagline}</div>
+                <span className="h-2 w-2 rounded-full" style={{ background: m.color }} aria-hidden="true" />
+                {m.name}
               </button>
             );
           })}
         </div>
         {props.lifeMode && (
-          <p className="mt-2 text-[12px] text-ink-soft">
-            {LIFE_MODES.find((m) => m.id === props.lifeMode)?.desc}
-          </p>
+          <div className="mt-5 border-t border-ink/10 pt-4">
+            <p className="text-sm font-semibold text-ink">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.tagline}</p>
+            <p className="mt-1 text-sm leading-6 text-ink-soft">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.desc}</p>
+          </div>
         )}
       </section>
 
-      {/* 梨宝 */}
       <section className="pb-10">
-        <div className="rounded-card border-2 border-brand/15 bg-white overflow-hidden shadow-sticker-lg">
-          <div className="usst-gradient px-5 py-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-white/25 grid place-items-center text-[22px] shadow-sticker">🍐</div>
+        <div className="panel overflow-hidden">
+          <div className="hero-surface-flat flex items-center gap-4 px-5 py-5 text-white">
+            <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-lg">梨</div>
             <div className="flex-1">
-              <div className="font-bold text-white text-[15px]">梨宝</div>
-              <div className="text-white/80 text-[12px]">结合你的课表 + 画像，一键安排生活</div>
+              <div className="text-sm font-semibold">梨宝建议</div>
+              <div className="mt-1 text-xs text-white/55">结合课表与画像，生成可执行的一周安排</div>
             </div>
             <button
               onClick={runLbao}
               disabled={!persona}
-              className="px-4 py-2 rounded-full bg-white text-brand font-bold text-[13px] shadow-sticker disabled:opacity-50 active:translate-y-0.5 active:shadow-none transition-all"
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45"
             >
-              一键推荐 ✨
+              生成建议
             </button>
           </div>
 
           {!persona && (
-            <p className="px-5 py-4 text-[13px] text-ink-faint">先完成画像，梨宝才能更懂你。</p>
+            <p className="px-5 py-5 text-sm leading-6 text-ink-faint">完成画像后，梨宝才能给出更贴近你习惯的建议。</p>
           )}
 
           {lbao && (
-            <div className="px-5 py-4">
+            <div className="px-5 py-5">
               <LbaoPlanView plan={lbao} />
             </div>
           )}

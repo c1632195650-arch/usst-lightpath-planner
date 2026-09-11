@@ -1,45 +1,40 @@
 import { DEADLINES, type Deadline } from '@/data/usst';
 import { diffDays, todayISO, shortCN } from '@/lib/date';
+import { deadlineColor } from '@/constants/chartColors';
 
-/** 单个时间节点行（卡通贴纸风） */
+/** Single deadline row keeps the date and urgency scannable in the compact overview rail. */
 function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
   const urgent = days <= 7;
   return (
-    <div
-      className="flex items-center gap-3 rounded-2xl border-2 px-3 py-2.5 transition-transform hover:-translate-y-0.5"
-      style={{ borderColor: `${d.color}40`, background: `${d.color}16` }}
-    >
+    <div className="flex items-center gap-3 py-3">
       <div
-        className="w-11 h-11 rounded-2xl grid place-items-center text-[22px] shrink-0 shadow-sticker"
-        style={{ background: `${d.color}30` }}
-      >
-        {d.emoji}
-      </div>
+        className="h-9 w-1 shrink-0 rounded-full"
+        style={{ background: deadlineColor(d.tag) }}
+      />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13.5px] font-bold text-ink truncate">{d.title}</span>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-ink">{d.title}</span>
           <span
-            className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-bold text-white"
-            style={{ background: d.color }}
+            className="shrink-0 rounded-md bg-ink/5 px-1.5 py-0.5 text-[10px] font-semibold text-ink-soft"
           >
             {d.tag}
           </span>
         </div>
-        <div className="text-[11.5px] text-ink-faint mt-0.5 truncate">
+        <div className="mt-1 truncate text-xs text-ink-faint">
           {shortCN(d.date)}{d.note ? ` · ${d.note}` : ''}
         </div>
       </div>
 
       <div className="shrink-0 text-right pl-1">
         {days === 0 ? (
-          <span className="text-[13px] font-black text-brand">就是今天！</span>
+          <span className="text-xs font-semibold text-danger">今天</span>
         ) : (
           <>
-            <div className={`text-[17px] font-black leading-none tabular-nums ${urgent ? 'text-brand' : 'text-ink'}`}>
-              {days}<span className="text-[10px] font-bold text-ink-faint"> 天</span>
+            <div className={`text-lg font-semibold leading-none tabular-nums ${urgent ? 'text-danger' : 'text-ink'}`}>
+              {days}<span className="ml-0.5 text-[10px] font-medium text-ink-faint">天</span>
             </div>
-            <div className="text-[9.5px] text-ink-faint mt-0.5">{urgent ? '⚠️ 倒计时' : '剩余'}</div>
+            <div className="mt-1 text-[10px] text-ink-faint">{urgent ? '临近' : '剩余'}</div>
           </>
         )}
       </div>
@@ -57,14 +52,16 @@ export function DeadlineBoard() {
   if (upcoming.length === 0) return null;
 
   return (
-    <section className="sticker p-4 fade-item">
-      <header className="flex items-center gap-2 mb-3">
-        <span className="text-[20px] animate-bounce-soft">⏰</span>
-        <h3 className="font-bold text-[15.5px] text-ink">别错过的日子</h3>
-        <span className="ml-auto text-[11px] text-ink-faint">四六级 · 竞赛 · 校历</span>
+    <section className="panel p-5 fade-item">
+      <header className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <p className="section-label">UP NEXT</p>
+          <h3 className="mt-2 text-lg font-semibold tracking-tight text-ink">接下来的节点</h3>
+        </div>
+        <span className="text-xs text-ink-faint">{upcoming.length} 项</span>
       </header>
 
-      <ul className="flex flex-col gap-2.5">
+      <ul className="divide-y divide-ink/10">
         {upcoming.map((d) => (
           <li key={d.id}>
             <DeadlineRow d={d} days={diffDays(today, d.date)} />

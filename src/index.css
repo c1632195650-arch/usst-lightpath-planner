@@ -3,16 +3,33 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color: #16233f;
+    background: #f6f7fa;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-paper text-ink antialiased;
+    @apply min-h-screen bg-paper text-ink antialiased;
     overflow-x: hidden;
-    /* 奶油底 + 细密波点，手账贴纸感 */
-    background-image: radial-gradient(rgba(43, 36, 32, 0.045) 1px, transparent 1px);
-    background-size: 22px 22px;
+    /* 页面底极淡的琥珀光晕，呼应光谱暖端，不参与信息表达。 */
+    background-image: radial-gradient(circle at 84% -12%, rgba(217, 131, 36, 0.09), transparent 32rem);
+  }
+
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible {
+    @apply outline-none ring-2 ring-brand/40 ring-offset-2 ring-offset-paper;
   }
 
   .tabular-nums {
@@ -22,6 +39,7 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -29,76 +47,95 @@
 }
 
 @layer components {
+  /* 统一内容宽度，在桌面端保留信息密度，在移动端自然铺满。 */
   .page-shell {
-    @apply max-w-[680px] mx-auto;
+    @apply mx-auto w-full max-w-[1200px];
+  }
+
+  .content-shell {
+    @apply mx-auto w-full max-w-[760px];
   }
 
   .section-label {
-    @apply text-[11.5px] font-bold tracking-wider text-ink-faint uppercase;
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-faint;
   }
 
-  /* 上理红 → 珊瑚粉 渐变（卡通化的品牌渐变） */
-  .usst-gradient {
-    background: linear-gradient(135deg, #a6192e 0%, #d43a45 42%, #ef5b63 78%, #f79ba3 100%);
-  }
-  .usst-gradient-text {
-    background: linear-gradient(120deg, #a6192e 0%, #d43a45 55%, #ef5b63 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  .panel {
+    @apply rounded-2xl border border-ink/[0.07] bg-white shadow-[0_8px_28px_rgba(22,35,63,0.06)];
   }
 
-  /* 奶油渐变（卡片/横幅底） */
-  .cream-gradient {
-    background: linear-gradient(135deg, #fff6e9 0%, #ffedd2 100%);
+  /**
+   * 深色面：深靛底 + 靛蓝与琥珀两端的光晕，整块就是一段压缩的光谱。
+   * 只用于关键区域（首屏、今日卡、画像结果、问卷题卡、周次头、梨宝侧栏）。
+   */
+  .hero-surface {
+    @apply bg-ink;
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(43, 76, 155, 0.62), transparent 46%),
+      radial-gradient(circle at 100% 100%, rgba(217, 131, 36, 0.19), transparent 40%);
   }
 
-  /* 淡入动画（延迟工具类） */
-  .fade-item {
-    animation: fadeUp .55s ease-out both;
+  /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
+  .button-on-dark {
+    @apply min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
   }
 
-  /* 卡通贴纸卡片：白底 + 硬阴影 + 圆角（通用） */
-  .sticker {
-    @apply bg-paper-card rounded-card border-2 border-ink/10 shadow-sticker;
+  /**
+   * 短而宽的深色条（周次头、梨宝条）只取光谱冷端。
+   * 百分比半径是相对元素自身算的，在只有几十像素高的条上，
+   * 琥珀光晕会摊成右侧一大片褐色 —— 那不是暖调，是脏。
+   */
+  .hero-surface-flat {
+    @apply bg-ink;
+    background-image: radial-gradient(circle at 6% 50%, rgba(43, 76, 155, 0.55), transparent 58%);
   }
 
-  /* 粗描边贴纸（强调） */
-  .sticker-bold {
-    @apply bg-paper-card rounded-card border-2 border-ink/15 shadow-sticker-lg;
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(43,76,155,0.22)] transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
+  }
+
+  .icon-button {
+    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
+  }
+
+  .nav-item {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-200 ease-out hover:bg-brand-light hover:text-brand;
+  }
+
+  .nav-item-active {
+    @apply bg-brand text-white shadow-sm hover:bg-brand-dark hover:text-white;
   }
 }
 
-/* —— 硬阴影 utility（手写以避开 .sticker 同名冲突）—— */
 @layer utilities {
-  .shadow-sticker {
-    box-shadow: 0 3px 0 0 rgba(43, 36, 32, 0.10);
-  }
-  .shadow-sticker-lg {
-    box-shadow: 0 5px 0 0 rgba(43, 36, 32, 0.12);
-  }
-  .shadow-sticker-brand {
-    box-shadow: 0 4px 0 0 rgba(166, 25, 46, 0.28);
-  }
-  .shadow-pop {
-    box-shadow: 0 10px 24px -8px rgba(43, 36, 32, 0.18);
+  .fade-item {
+    animation: fadeUp 0.45s ease-out both;
   }
 }
 
-/* 欢迎页整体淡入 */
-@keyframes welcomeIn {
-  0% { opacity: 0; transform: scale(.985); }
-  100% { opacity: 1; transform: scale(1); }
-}
-.welcome-in {
-  animation: welcomeIn .9s cubic-bezier(.2,.7,.3,1) both;
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* 波点装饰背景（局部使用） */
-@keyframes twinkle {
-  0%, 100% { opacity: .3; transform: scale(.8); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-.twinkle {
-  animation: twinkle 2.6s ease-in-out infinite;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

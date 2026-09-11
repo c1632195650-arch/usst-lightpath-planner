@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AnswerEntry, AppState } from '@/types';
-import { MOCK_SCHEDULE, MOCK_TERM_START, CAL_EVENTS } from '@/data/usst';
+import { MOCK_SCHEDULE } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
@@ -8,8 +8,7 @@ import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
-import { MonthCalendar } from '@/features/calendar/MonthCalendar';
-import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
+import { OverviewPage } from '@/features/overview/OverviewPage';
 import { WeekView } from '@/features/week/WeekView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
@@ -19,6 +18,14 @@ type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
 
 /** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
 const SHOW_IMPORT = import.meta.env.DEV;
+
+/** Navigation copy stays close to the shell so development-only entries cannot drift from their labels. */
+const TAB_LABEL: Record<MainTab, string> = {
+  calendar: '总览',
+  libao: '梨宝',
+  profile: '我的画像',
+  import: '课表',
+};
 
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -150,36 +157,36 @@ export default function App() {
 
   // 主界面
   const weekNo = weekMonday ? currentWeekNo(schedule.termStart, weekMonday) : currentWeekNo(schedule.termStart);
+  /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
+  const isLbaoTab = mainTab === 'libao';
 
   return (
-    <div className="min-h-screen bg-paper">
-      {/* 顶栏 */}
-      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b-2 border-paper-line">
-        <div className="page-shell px-5 py-3 flex items-center gap-3">
-          <Logo120 size={34} className="animate-float-y" />
-          <div className="flex-1 leading-tight">
-            <div className="font-bold text-[14px] text-ink">
-              <span className="text-brand">U</span>gh-<span className="text-brand">S</span>tudy-<span className="text-brand">S</span>aps-<span className="text-brand">T</span>ime
-            </div>
-            <div className="text-[10.5px] text-ink-faint tracking-wide">上理生活助手 · USST 🍐</div>
+    <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
+      {/* 紧凑导航把主要空间留给日程与对话内容。 */}
+      <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
+        <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
+          <Logo120 size={32} />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="text-sm font-semibold tracking-tight text-ink">上理生活助手</div>
+            <div className="mt-0.5 text-[11px] font-medium tracking-[0.14em] text-ink-faint">USST · STUDENT LIFE</div>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
+            <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
             {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => { setMainTab(t); if (t === 'profile') setWeekMonday(null); }}
-                className={`px-3 py-1.5 rounded-full text-[13px] font-bold transition-all ${
-                  mainTab === t ? 'bg-brand text-white shadow-sticker' : 'text-ink-soft hover:bg-white'
-                }`}
+                className={`nav-item whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
               >
-                {t === 'calendar' ? '月历' : t === 'libao' ? '梨宝' : t === 'import' ? '课表' : '画像'}
+                {TAB_LABEL[t]}
               </button>
             ))}
+            </div>
           </nav>
         </div>
       </header>
 
-      <main className="page-shell px-5 py-5">
+      <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
         {mainTab === 'import' ? (
           <ImportTester onApply={(s) => patchState({ schedule: s })} />
         ) : mainTab === 'libao' ? (
@@ -196,10 +203,11 @@ export default function App() {
               onRetake={() => setView('persona')}
             />
           ) : (
-            <div className="text-center py-20">
-              <div className="text-5xl mb-3 animate-bounce-soft">🧭</div>
-              <p className="text-ink-soft mb-4">还没有画像，先测一测让梨宝更懂你</p>
-              <button onClick={() => setView('persona')} className="px-6 py-2.5 rounded-full bg-brand text-white font-bold shadow-sticker-brand">去测画像</button>
+            <div className="content-shell panel px-6 py-16 text-center sm:px-10">
+              <p className="section-label">PROFILE</p>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
+              <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
             </div>
           )
         ) : weekMonday ? (
@@ -218,42 +226,23 @@ export default function App() {
             onShiftWeek={shiftWeekBy}
           />
         ) : (
-          <div className="flex flex-col gap-5">
-            <section className="sticker p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-brand-light grid place-items-center text-[22px] shadow-sticker">🍐</div>
-              <div className="flex-1 text-[13.5px] text-ink-soft leading-snug">
-                {state.persona
-                  ? <>梨宝已认识你（更接近「{state.persona.archetype.primary?.name ?? '——'}」）。点月历里任意一天，进入那周的安排。</>
-                  : <>先完成画像，梨宝才能为你安排<strong className="text-ink">学习 · 吃饭 · 娱乐</strong>。</>}
-              </div>
-              {!state.persona && (
-                <button onClick={() => setView('persona')} className="shrink-0 px-4 py-2 rounded-full bg-brand text-white text-[13px] font-bold shadow-sticker-brand">去测</button>
-              )}
-            </section>
-
-            <DeadlineBoard />
-
-            <section className="sticker p-4">
-              <MonthCalendar
-                events={CAL_EVENTS}
-                selectedDate={state.selectedDays[state.selectedDays.length - 1]}
-                onSelectDate={openWeek}
-              />
-            </section>
-
-            <button
-              onClick={() => openWeek(todayISO())}
-              className="py-3 rounded-full bg-white border-2 border-brand/25 text-brand font-bold text-[14px] shadow-sticker hover:-translate-y-0.5 transition-all"
-            >
-              回到本周 →
-            </button>
-          </div>
+          <OverviewPage
+            schedule={schedule}
+            weekNo={weekNo}
+            todayIso={todayISO()}
+            persona={state.persona}
+            selectedDate={state.selectedDays[state.selectedDays.length - 1]}
+            onOpenWeek={openWeek}
+            onStartPersona={() => setView('persona')}
+          />
         )}
       </main>
 
-      <footer className="text-center text-[11px] text-ink-faint pb-8 pt-2">
-        信义勤爱 · 思学志远 · 1906–2026 · 上理生活助手 Demo 🍐
-      </footer>
+      {!isLbaoTab && (
+        <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
+          UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
+        </footer>
+      )}
     </div>
   );
 }

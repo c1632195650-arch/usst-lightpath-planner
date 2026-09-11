@@ -2,6 +2,11 @@
 node_modules/
 .package-lock.json
 
+# 设计脑暴样张（本地过程产物）
+.superpowers/
+
+.spec-workflow/
+
 # 构建产物
 dist/
 dist-ssr/

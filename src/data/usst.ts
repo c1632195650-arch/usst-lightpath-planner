@@ -4,13 +4,14 @@ import type { CalEvent, Course, LifeMode, Schedule } from '@/types';
  * 上理工 · 生活模式
  * ========================================================== */
 
+/** color 取自光谱色板（constants/chartColors.ts 的 SPECTRUM），改色请两边同步。 */
 export const LIFE_MODES: LifeMode[] = [
-  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#a6192e', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
-  { id: 'slack', name: '摸鱼模式', emoji: '🐟', color: '#4f83cc', tagline: '今天不想努力', desc: '降低任务密度，多安排休息与娱乐，见缝插针放松，拒绝内卷。' },
-  { id: 'grind', name: '猛攻模式', emoji: '🚀', color: '#b45309', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，适合考试周或赶 ddl。' },
-  { id: 'food', name: '吃饭模式', emoji: '🍜', color: '#c2410c', tagline: '好好吃饭是大事', desc: '每天规划探店 / 食堂路线，兼顾营养与新鲜感。' },
-  { id: 'health', name: '健康模式', emoji: '🏃', color: '#1f7a4d', tagline: '早睡早起多运动', desc: '规律作息 + 每日运动打卡，给身体充能。' },
-  { id: 'social', name: '社交模式', emoji: '🎉', color: '#7c3aed', tagline: '把日子过热闹', desc: '空余时间留给活动、约饭、搭子，拓展朋友圈。' },
+  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#2B4C9B', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
+  { id: 'slack', name: '摸鱼模式', emoji: '🐟', color: '#147A8B', tagline: '今天不想努力', desc: '降低任务密度，多安排休息与娱乐，见缝插针放松，拒绝内卷。' },
+  { id: 'grind', name: '猛攻模式', emoji: '🚀', color: '#C24B3A', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，适合考试周或赶 ddl。' },
+  { id: 'food', name: '吃饭模式', emoji: '🍜', color: '#B9762A', tagline: '好好吃饭是大事', desc: '每天规划探店 / 食堂路线，兼顾营养与新鲜感。' },
+  { id: 'health', name: '健康模式', emoji: '🏃', color: '#1E7A4F', tagline: '早睡早起多运动', desc: '规律作息 + 每日运动打卡，给身体充能。' },
+  { id: 'social', name: '社交模式', emoji: '🎉', color: '#6B4BA3', tagline: '把日子过热闹', desc: '空余时间留给活动、约饭、搭子，拓展朋友圈。' },
 ];
 
 /* ============================================================
@@ -49,14 +50,15 @@ export interface Deadline {
   note?: string;
 }
 
+/** color 与 constants/chartColors.ts 的 deadlineColor(tag) 保持一致。 */
 export const DEADLINES: Deadline[] = [
-  { id: 'cet-reg', date: '2026-09-11', title: '四六级报名开启', emoji: '📝', tag: '报名', color: '#4a9fe0', note: '各考点时间不同，盯紧教务处通知' },
-  { id: 'gdb', date: '2026-09-28', title: '光电杯报名截止', emoji: '🏆', tag: '竞赛', color: '#4db98a', note: '作品抓紧交，别拖到最后' },
-  { id: 'anniv', date: '2026-10-25', title: '建校 120 周年校庆', emoji: '🎂', tag: '校庆', color: '#f5b840', note: '校庆日，校园有活动' },
-  { id: 'midterm', date: '2026-11-09', title: '期中考试周', emoji: '📚', tag: '考试', color: '#f07e88', note: '提前开始复习不慌' },
-  { id: 'cet-set', date: '2026-11-21', title: '四六级口试', emoji: '🎤', tag: '考试', color: '#f07e88', note: 'CET-SET · 11.21–11.22' },
-  { id: 'cet', date: '2026-12-12', title: '四六级笔试', emoji: '✏️', tag: '考试', color: '#f07e88', note: '四级上午 / 六级下午' },
-  { id: 'final', date: '2027-01-11', title: '期末考试周', emoji: '😱', tag: '考试', color: '#9d7bf2', note: '最后一搏，冲' },
+  { id: 'cet-reg', date: '2026-09-11', title: '四六级报名开启', emoji: '📝', tag: '报名', color: '#147A8B', note: '各考点时间不同，盯紧教务处通知' },
+  { id: 'gdb', date: '2026-09-28', title: '光电杯报名截止', emoji: '🏆', tag: '竞赛', color: '#6B4BA3', note: '作品抓紧交，别拖到最后' },
+  { id: 'anniv', date: '2026-10-25', title: '建校 120 周年校庆', emoji: '🎂', tag: '校庆', color: '#B9762A', note: '校庆日，校园有活动' },
+  { id: 'midterm', date: '2026-11-09', title: '期中考试周', emoji: '📚', tag: '考试', color: '#C24B3A', note: '提前开始复习不慌' },
+  { id: 'cet-set', date: '2026-11-21', title: '四六级口试', emoji: '🎤', tag: '考试', color: '#C24B3A', note: 'CET-SET · 11.21–11.22' },
+  { id: 'cet', date: '2026-12-12', title: '四六级笔试', emoji: '✏️', tag: '考试', color: '#C24B3A', note: '四级上午 / 六级下午' },
+  { id: 'final', date: '2027-01-11', title: '期末考试周', emoji: '😱', tag: '考试', color: '#C24B3A', note: '最后一搏，冲' },
 ];
 
 /* ============================================================

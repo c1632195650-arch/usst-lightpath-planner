@@ -4,76 +4,58 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 「上理生活助手 · USST」—— 卡通奶油风设计系统
-        // 关键词：chill · 有趣 · 贴纸手账 · 奶油底 + 上理红主色 + 马卡龙辅助色
-        ink: { DEFAULT: '#2b2420', soft: '#5c534c', faint: '#9c918a' },
-        paper: { DEFAULT: '#fff6e9', card: '#ffffff', line: '#f0e4d0' },
-        // 上理红（微调更亮更跳，官方红保留在 dark）
-        brand: { DEFAULT: '#d43a45', dark: '#a6192e', bright: '#ef5b63', light: '#fde3e5' },
-        // 马卡龙辅助色（贴纸 / 标签 / 课程分类）
-        butter: { DEFAULT: '#f5b840', light: '#fdeecb' },
-        mint: { DEFAULT: '#4db98a', light: '#d9f2e6' },
-        sky: { DEFAULT: '#4a9fe0', light: '#dcebfa' },
-        coral: { DEFAULT: '#f07e88', light: '#fde6e8' },
-        grape: { DEFAULT: '#9d7bf2', light: '#ece4fd' },
-        silver: { DEFAULT: '#9ba0a6', light: '#eef0f2' },
-        gold: { DEFAULT: '#b8860b', light: '#fbf3e2' },
-        ok: { DEFAULT: '#2f9e6e', light: '#e3f6ec' },
-        warn: { DEFAULT: '#d97a16', light: '#fdf0e0' },
-        danger: { DEFAULT: '#c9414b', light: '#fde6e8' },
+        /**
+         * 光谱色板 —— 产品叫「光溯 / LightPath」，配色本身就是一条光谱：
+         * 深靛（ink）承载大面积深色面，靛蓝（brand）负责操作与选中，
+         * 琥珀（accent）作为光谱暖端只做点缀。
+         *
+         * 所有文字色对 paper 底的对比度均 ≥ 4.5:1（WCAG AA 小字标准），
+         * 注释里的数值是实测值，改色前请重新核对。
+         */
+        ink: {
+          DEFAULT: '#16233F', // 14.6:1 主文字，同时是深色面底色
+          soft: '#414D68', //  7.9:1 正文次级
+          faint: '#66708A', //  4.6:1 标签与说明（小字也达标）
+        },
+        paper: {
+          DEFAULT: '#F6F7FA', // 页面底
+          card: '#FFFFFF', // 卡片
+          sunken: '#EDEFF5', // 进度槽、输入框底
+        },
+        brand: {
+          DEFAULT: '#2B4C9B', // 主操作、选中态（承白字 8.1:1）
+          dark: '#1F3A78', // hover
+          light: '#E5EAF6', // 选中底
+          bright: '#4A73D1', // 深色面上的强调
+        },
+        accent: {
+          DEFAULT: '#D98324', // 琥珀，光谱暖端
+          light: '#FBF0DF',
+        },
+        ok: { DEFAULT: '#1E7A4F', light: '#E6F2EC' },
+        warn: { DEFAULT: '#B9762A', light: '#FBF1E3' },
+        danger: { DEFAULT: '#C24B3A', light: '#FAEAE7' },
+
+        /**
+         * 数据色：按波长从短到长排列（紫→靛→青→绿→琥珀→珊瑚）。
+         * 课表类别、校历事件、时间节点三处共用这一套，
+         * 语义映射集中在 src/constants/chartColors.ts，不要再各处硬编码 hex。
+         */
+        chart: {
+          violet: '#6B4BA3',
+          indigo: '#2B4C9B',
+          cyan: '#147A8B',
+          green: '#1E7A4F',
+          amber: '#B9762A',
+          coral: '#C24B3A',
+          slate: '#5A6377',
+        },
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],
         display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
-      borderRadius: { card: '22px' },
-      // boxShadow 改在 src/index.css 的 @layer utilities 里手写定义，
-      // 避免与 .sticker 组件类同名导致 PostCSS 解析边界问题
-      keyframes: {
-        fadeUp: {
-          '0%': { opacity: '0', transform: 'translateY(14px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        floatY: {
-          '0%,100%': { transform: 'translateY(0) rotate(-2deg)' },
-          '50%': { transform: 'translateY(-10px) rotate(2deg)' },
-        },
-        wobble: {
-          '0%,100%': { transform: 'rotate(-3deg)' },
-          '50%': { transform: 'rotate(3deg)' },
-        },
-        popIn: {
-          '0%': { opacity: '0', transform: 'scale(.6)' },
-          '70%': { transform: 'scale(1.08)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
-        },
-        wiggle: {
-          '0%,100%': { transform: 'rotate(-4deg)' },
-          '50%': { transform: 'rotate(4deg)' },
-        },
-        bounceSoft: {
-          '0%,100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-5px)' },
-        },
-        spinSlow: {
-          '0%': { transform: 'rotate(0deg)' },
-          '100%': { transform: 'rotate(360deg)' },
-        },
-      },
-      animation: {
-        'fade-up': 'fadeUp .5s ease-out both',
-        'fade-in': 'fadeIn .6s ease-out both',
-        'float-y': 'floatY 4s ease-in-out infinite',
-        wobble: 'wobble 3s ease-in-out infinite',
-        'pop-in': 'popIn .5s cubic-bezier(.34,1.56,.64,1) both',
-        wiggle: 'wiggle 2.2s ease-in-out infinite',
-        'bounce-soft': 'bounceSoft 2.4s ease-in-out infinite',
-        'spin-slow': 'spinSlow 18s linear infinite',
-      },
+      borderRadius: { card: '16px' },
     },
   },
   plugins: [],
