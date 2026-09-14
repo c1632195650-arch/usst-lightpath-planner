@@ -40,6 +40,8 @@ import {
   DEFAULT_TEMPLATES, MEAL_SLOTS, customTemplate, openAt,
   type ActivityCategory, type ActivityTemplate, type UserTask,
 } from './templates.ts';
+// 显式地点表（规格书 §9-T0.1）：取代 campusOfName 的关键字猜测
+import { campusOfPlace } from './places.ts';
 
 /* ============================================================
  * 一、注入式依赖
@@ -73,22 +75,29 @@ const CAMPUS_KEYWORDS: Array<{ kw: string; campus: keyof typeof CAMPUS_TRANSFER_
   { kw: '清真', campus: 'JG334' },
 ];
 
-/** 按关键字判断一个地点名大概在哪个校区 */
-export function campusOfName(name: string): keyof typeof CAMPUS_TRANSFER_MIN {
+/**
+ * 按关键字判断一个地点名大概在哪个校区。
+ *
+ * @deprecated 过渡回退用。新代码请改用 `places.ts` 的 `campusOfPlace()`（显式地点表）。
+ * ⚠️ 2026-09-14 起**命中失败返回 null**（不再默认 JG516）—— 遵循本项目「不猜」纪律，
+ *    修掉旧问题 #9「未识别地点被悄悄判成北校」。
+ */
+export function campusOfName(name: string): keyof typeof CAMPUS_TRANSFER_MIN | null {
   for (const { kw, campus } of CAMPUS_KEYWORDS) {
     if (name.includes(kw)) return campus;
   }
-  return 'JG516'; // 默认北校（本部主校区）
+  return null; // 认不出就是认不出，交给调用方决定（不再默认北校）
 }
 
 /**
  * 兜底转场：只处理**跨校区**，且明确标 reliable:false。
  * 同校区返回 null —— 「同校区多远」这件事只有真实路网能答，不猜。
+ * 校区认不出来（campusOfName 返回 null）同样返回 null —— 不猜。
  */
 export const campusFallbackTransfer: TransferProvider = (from, to) => {
   const a = campusOfName(from);
   const b = campusOfName(to);
-  if (a === b) return null;
+  if (!a || !b || a === b) return null;
   const minutes = CAMPUS_TRANSFER_MIN[a]?.[b];
   if (!minutes) return null;
   return { minutes, source: 'campus-estimate', reliable: false };
@@ -319,6 +328,8 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
   let courseMin = 0;
   let blankMin = 0;
   let seq = 0;
+  /** 排到了「数据未核实」的食堂几次（南校食堂营业时段为推算值）→ 汇总成一条 note */
+  let unverifiedMeals = 0;
   const newId = (day: number, kind: string, startMin: number) => `${day}-${kind}-${startMin}-${++seq}`;
 
   for (const day of DAY_ORDER) {
@@ -390,8 +401,12 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
         // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
         if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
         const res = placeMeal({ day, meal, placed, dayStartMin, dayEndMin, templates, scenarios, transfer, dayCampus });
-        if (res.block) placed = [...placed, res.block];
-        else if (res.skippedReason) issues.push({ level: 'info', message: `${dayName}：${res.skippedReason}` });
+        if (res.block) {
+          placed = [...placed, res.block];
+          if (res.unverified) unverifiedMeals++;
+        } else if (res.skippedReason) {
+          issues.push({ level: 'info', message: `${dayName}：${res.skippedReason}` });
+        }
       }
     }
 
@@ -459,8 +474,19 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     `每天自习目标 ${policy.dailyStudyMin} 分钟｜单块上限 ${policy.maxBlockMin} 分钟`
     + `｜刻意留白 ${Math.round(policy.blankRatio * 100)}%`,
   );
-  if (!policy.eveningAllowed) notes.push('这个阶段不占用晚间（18:00 之后），晚上留给你自己');
+  // ⚠️ 措辞讲究：晚间**可能有课程**（11-13 节是既成事实，不归 policy 管）。
+  //    旧文案「这个阶段不占用晚间」会与课表上的晚课自相矛盾（旧问题 #18 / 规格书 §8.2）。
+  if (!policy.eveningAllowed) {
+    notes.push('这个阶段不主动占用晚间（18:00 之后）—— 晚课照常显示，剩下的晚上留给你自己');
+  }
   if (!policy.weekendWork) notes.push('这个阶段不占周末');
+  // 数据治理：排到未核实的食堂（南校食堂营业时段是推算值）要如实标注，不能当既成事实
+  if (unverifiedMeals > 0) {
+    notes.push(
+      `本周有 ${unverifiedMeals} 顿排在南校食堂 —— 那边的营业时段是按常规饭点推算的（未核实），`
+      + '出发前最好确认一下',
+    );
+  }
 
   return {
     plan: {
@@ -490,16 +516,21 @@ function dominantCampus(slots: EffectiveSlot[]): string {
   return best;
 }
 
-function campusLabel(id: string): string {
+function campusLabel(id: string | null): string {
   if (id === 'JG334') return '南校';
   if (id === 'JG1100') return '1100';
   if (id === 'FUXING') return '复兴路';
   if (id === 'YINGKOU') return '营口路';
   if (id === 'JG516') return '北校';
-  return 'any';
+  return 'unknown'; // 校区未知（不再默认「北校」）
 }
 
-interface MealPick { block: TimeBlock | null; skippedReason?: string }
+interface MealPick {
+  block: TimeBlock | null;
+  skippedReason?: string;
+  /** 选中的食堂数据是否**未核实**（如南校食堂营业时段是推算值）→ 供 notes 如实标注 */
+  unverified?: boolean;
+}
 
 /**
  * 排一顿饭。顺序有讲究：
@@ -609,6 +640,7 @@ function placeMeal(args: {
         + (tail > 0 && next?.place ? `；吃完走到${next.place}约 ${tail} 分钟` : ''),
       source: 'template',
     },
+    unverified: chosen.verified === false,
   };
 }
 
@@ -707,6 +739,9 @@ function studyCandidates(
   const wanted = policy.studyPlaces.map((p, i) => {
     const hit = templates.find((t) => t.place === p && t.category === 'study');
     if (hit) return hit;
+    // 策略里的自习点不在模块库 → 现场造一个。
+    // 校区走**显式地点表**；查不到就按「不限」处理（不再默认北校，规格书 §9-T0.1）
+    const place = campusOfPlace(p);
     return {
       id: `study-policy-${i}`,
       name: `自习 · ${p}`,
@@ -715,15 +750,17 @@ function studyCandidates(
       kind: 'study' as const,
       durations: [45, 60, 90],
       place: p,
-      campus: campusLabel(campusOfName(p)) as ActivityTemplate['campus'],
+      campus: (place ? campusLabel(place) : 'any') as ActivityTemplate['campus'],
       windows: [],
       priority: 60,
       verified: true,
     };
   });
+  // 补充候选：同校区的其它自习点。
+  // 校区来自**显式地点表**（旧实现靠 campusOfName 关键字猜 + 默认北校）——行为等价但不再猜
   const extra = templates.filter(
     (t) => t.category === 'study'
-      && campusLabel(campusOfName(t.place ?? '')) === campusLabel(dayCampus)
+      && campusOfPlace(t.place ?? '') === dayCampus
       && !wanted.some((w) => w.place === t.place),
   );
   return [...wanted, ...extra];
@@ -818,10 +855,17 @@ function attachTransfers(
   dayName: string,
   issues: PlanIssue[],
 ): void {
+  const missing: TimeBlock[] = []; // 缺地点、算不出转场的相邻对
   for (let i = 0; i < dayBlocks.length - 1; i++) {
     const prev = dayBlocks[i];
     const next = dayBlocks[i + 1];
-    if (!prev.place || !next.place || prev.place === next.place) continue; // 同一栋楼，不用赶
+    if (prev.place && next.place && prev.place === next.place) continue; // 同一栋楼，不用赶
+    if (!prev.place || !next.place) {
+      // 缺地点 → **不按 0 分钟糊过去**，否则会排出「刚好来得及」的假排程
+      // （旧问题 #17 / 规格书 §8.2）。如实收集，循环后汇总一条 info。
+      missing.push(prev.place ? next : prev);
+      continue;
+    }
 
     const info = transfer(prev.place, next.place);
     if (!info) continue;
@@ -854,6 +898,15 @@ function attachTransfers(
           + `只剩 ${slackMin} 分钟余量，偏紧`,
       });
     }
+  }
+
+  // 缺地点导致的转场盲区：汇总成一条，提醒用户「这段别按刚好来得及算」
+  if (missing.length) {
+    const names = [...new Set(missing.map((b) => b.title))].join('、');
+    issues.push({
+      level: 'info',
+      message: `${dayName}：有环节缺地点（${names}），这几段转场时间算不出来，别按「刚好来得及」安排`,
+    });
   }
 }
 
