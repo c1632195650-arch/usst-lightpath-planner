@@ -225,6 +225,33 @@ export interface SemesterPlan {
 
 export type BlockKind = 'course' | 'meal' | 'study' | 'activity' | 'commute' | 'blank';
 
+/**
+ * 块的锁级别（v2 三级锁）—— 决定重排时这个块能不能动、动了代价多大。
+ *   hard：不动（课程、用户显式锁定的块）
+ *   soft：可动但代价高（用户先前确认过、引擎不该轻易改的块）
+ *   free：可动（引擎自己排的块）
+ * 缺省由引擎按块来源推断，见 `planner/model.ts::resolveLockLevel`。
+ */
+export type LockLevel = 'hard' | 'soft' | 'free';
+
+/**
+ * 计划问题的**机器可读码**。
+ *
+ * 为什么需要它：前端此前只能拿中文 `message` 做判断 —— `level` 只能过滤严重程度，
+ * 想区分「转场偏紧」和「自习不够」就得做字符串包含匹配，**文案一改前端就静默失效**。
+ *
+ * 取值来自引擎**实际产出**的 7 类问题（`planner/schedule.ts` 的各处 `issues.push`），
+ * 不是凭空设计的一套。
+ */
+export type PlanIssueCode =
+  | 'time-conflict'       // 同一天两门课时间重叠
+  | 'course-no-place'     // 某节课没有上课地点
+  | 'meal-skipped'        // 食堂没排上（营业时段 / 距离）
+  | 'study-shortfall'     // 自习总量低于阶段目标
+  | 'transfer-late'       // 转场时间不够，会迟到
+  | 'transfer-tight'      // 转场余量偏紧
+  | 'transfer-no-place';  // 有环节缺地点，转场时间算不出来
+
 /** 转场提示：由 route() 实测标注，通用日历给不出这个 */
 export interface TransferHint {
   fromPlace?: string;
@@ -262,6 +289,8 @@ export interface TimeBlock {
   transfer?: TransferHint;
   /** 用户确认过的块：重排时锁定不动 */
   locked?: boolean;
+  /** 三级锁：hard 不动 / soft 代价高 / free 可动。缺省由引擎按块的来源推断 */
+  lockLevel?: LockLevel;
   source: 'course' | 'template' | 'user';
   /** 若来自校历事件（如「光电杯报名材料」），这里是事件 id —— UI 据此做特殊标注 */
   fromEventId?: string;
@@ -270,6 +299,8 @@ export interface TimeBlock {
 export interface PlanIssue {
   level: 'error' | 'warn' | 'info';
   message: string;
+  /** 机器可读的问题码 —— 让前端不必去匹配中文 `message` */
+  code?: PlanIssueCode;
   blockId?: string;
 }
 
@@ -287,7 +318,49 @@ export interface WeekPlan {
 }
 
 /* ============================================================
- * 七、持久化
+ * 七、排程持久化（v2 契约层）
+ * ========================================================== */
+
+/**
+ * 跨周负荷状态（引擎侧的计算输入）。
+ *
+ * 为什么它**也在契约层**：因为它要持久化（见 `PlanPersistState.rolling`），
+ * 而契约层**不能 import** `planner/model.ts`（§3.3 禁止反向依赖）。
+ * 定义在这里、由引擎 re-export，是唯一不产生「同名两份定义」的位置。
+ */
+export interface RollingState {
+  /** 最近若干周的实际负荷（分钟），越靠后越近 */
+  recentLoad: number[];
+  /** 即将到来的交期（供紧迫度排序） */
+  upcoming: Array<{ id: string; title: string; dueAtWeek: number; urgency: number }>;
+  /** 按星期几累计的负荷（长度 8；下标 1–7 有效，0 位留空） */
+  loadByDow: number[];
+}
+
+/**
+ * 排程的持久化状态 —— 只存「跨会话必须记住」的东西。
+ *
+ * 刻意**不存整周计划本身**：计划由引擎随时重算，存下来反而会与输入
+ * （课表 / 画像）不一致，出现「页面显示的和你改过的对不上」。
+ * 这里存的是**重算所需要**的状态。
+ */
+export interface PlanPersistState {
+  /** 状态版本，供后续迁移 */
+  version: number;
+  /** 上次排程的周次；null = 从未排过 */
+  lastPlanWeek: number | null;
+  /** blockId → 锁级别（用户确认过的块记在这里） */
+  locks: Record<string, LockLevel>;
+  /** 累计扰动分钟数，用于「最小扰动」目标 */
+  churnMin: number;
+  /** ISO 时间戳，用于判断状态新鲜度 */
+  updatedAt: string;
+  /** 跨周负荷；null = 尚未积累 */
+  rolling: RollingState | null;
+}
+
+/* ============================================================
+ * 八、应用状态
  * ========================================================== */
 
 export interface AppState {
@@ -304,10 +377,12 @@ export interface AppState {
   selectedDays: string[];
   /** 当前生活模式 id */
   lifeMode: string | null;
+  /** 排程持久化状态（锁 / 扰动 / 跨周负荷）；null = 尚未排过 */
+  planState: PlanPersistState | null;
 }
 
 export const DEFAULT_APP_STATE: AppState = {
-  version: 3,
+  version: 4,
   onboarded: false,
   persona: null,
   answers: null,
@@ -315,4 +390,5 @@ export const DEFAULT_APP_STATE: AppState = {
   semesterPlan: null,
   selectedDays: [],
   lifeMode: null,
+  planState: null,
 };

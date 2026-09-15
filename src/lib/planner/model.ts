@@ -3,32 +3,41 @@
  * ============================================================
  * 依据：`排程引擎-v2-技术规格书.md` §4「关键数据结构与接口定义」。
  *
- * 本文件是**新类型的唯一归口**。
- * ⚠️ 红线：**不改 `src/types.ts`**（锁死契约，改动须 CY 与 B 双方确认，见规格书 §7.2）。
- *    因此 v2 引入的一切新类型都落在本文件，`types.ts` 保持零改动。
+ * 本文件是 **v2 新增类型的归口**。
+ *
+ * 契约边界（2026-09-15 T1.0 落地后更新）：
+ *   · `src/types.ts` 收「**要持久化 / UI 要读**」的那几项：`LockLevel`、`PlanIssueCode`、
+ *     `RollingState`、`PlanPersistState`，以及 `TimeBlock.lockLevel?` / `PlanIssue.code?` /
+ *     `AppState.planState`。
+ *   · 其余 v2 新类型（Place / Commit / Weights / PlanRequest / PlanResult …）仍只在本文件定义。
+ * 判据是「**有几个模块 import 它**」，不是「它重不重要」—— 被这个判据漏掉的
+ * `LockLevel` / `RollingState` 本文件一律 **re-export**，不再本地重复定义。
+ *   · 本文件**禁止**被 `src/types.ts` import（规格书 §3.3 反向依赖）。
  *
  * 设计纪律（与仓库其它纯函数模块一致）：
  *   · 纯类型 + 纯函数；不 fetch、不读时钟、不用随机数。
  *   · 本文件内所有函数都是**确定性**的（同输入同输出）。
  */
 import type {
-  BlockKind, CampusId, DayOfWeek, PhasePolicy, Schedule, TimeBlock,
-  WeekPlan, PersonaProfile, ScenarioFields,
+  BlockKind, CampusId, DayOfWeek, LockLevel, PhasePolicy, RollingState,
+  Schedule, TimeBlock, WeekPlan, PersonaProfile, ScenarioFields,
 } from '@/types';
 import type { TransferProvider } from './schedule.ts';
+
+// 契约层已收归的类型：本文件只 re-export，不再本地定义（见头部「契约边界」）
+export type { LockLevel, RollingState } from '@/types';
 
 /* ============================================================
  * 一、基础扩充类型（规格书 §4.1）
  * ========================================================== */
 
-/**
- * 锁级别（替代旧布尔 `locked`）。
+/*
+ * `LockLevel` 已上提至 `src/types.ts`（T1.0 契约层），本文件仅在上方 re-export。
  *   hard = 钉死（课程、用户固定块）；improve 邻域**必须**排除
  *   soft = 可动，但改动要付 churn 惩罚（尽量别动）
  *   free = 自由（引擎自排的软块）
- * 旧字段 `TimeBlock.locked` 保留，二者并存以兼容现有 UI。
+ * 旧字段 `TimeBlock.locked` 保留，与新字段并存以兼容现有 UI。
  */
-export type LockLevel = 'hard' | 'soft' | 'free';
 
 /** 可用时段窗（复刻 templates.ts 的 ActivityWindow 语义，避免跨模块依赖） */
 export interface Window {
@@ -159,15 +168,14 @@ export const DEFAULT_SOLVER_CONFIG: Required<Omit<SolverConfig, 'seed'>> & { see
  * 四、滚动状态（规格书 §4.4 / §5.8）
  * ========================================================== */
 
-/** 周与周之间传递的状态：累积负荷 / 临近交期 / 疲劳 */
-export interface RollingState {
-  /** 最近 N 天的实际负荷（分钟），用于疲劳建模 */
-  recentLoad: number[];
-  /** 未来临近的交期项（供本周参考） */
-  upcoming: Array<{ id: string; title: string; dueAtWeek: number; urgency: number }>;
-  /** 每星期几的历史负荷均值（索引 1..7 使用，0 占位） */
-  loadByDow: number[];
-}
+/*
+ * `RollingState` 已上提至 `src/types.ts`（T1.0 契约层），本文件仅在顶部 re-export。
+ * 上提理由：它要**持久化**（`PlanPersistState.rolling`），而契约层不能 import 本文件。
+ * 语义 —— 周与周之间传递的状态：累积负荷 / 临近交期 / 疲劳。
+ *   recentLoad  最近 N 天的实际负荷（分钟），用于疲劳建模
+ *   upcoming    未来临近的交期项（供本周参考）
+ *   loadByDow   每星期几的历史负荷均值（索引 1..7 使用，0 占位）
+ */
 
 /** 空滚动状态（第一周或上一周无数据时使用） */
 export function emptyRollingState(): RollingState {
