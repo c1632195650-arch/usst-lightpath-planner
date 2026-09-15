@@ -14,12 +14,17 @@
 
 接口：
   GET  /api/health
-  GET  /api/search?q=&k=
+  GET  /api/search?q=&k=                  公众号文章库检索（政策/通知/攻略）
+  GET  /api/poi?q=&funcs=&k=              校园地点检索（147 地点·支持口语黑话）
+  GET  /api/nearby?from=&k=&funcs=&types=  就近推荐（按步行分钟，OSM 路网实算）
   POST /api/chat   {q, session_id, user_id, k}
   POST /api/memory/reset  {session_id, user_id}
   GET  /api/route?from=&to=&mode=         两点步行路径（排程引擎的转场时间）
   POST /api/route/batch  {pairs:[[a,b],...]}  批量问路
   GET  /api/weather?days=7                未来天气（Open-Meteo · 分时段摘要）
+
+🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
+   真实坐标只用于后端算路与排序，不出现在任何响应体里。
 """
 import os, re, sys, io, json
 try:
@@ -256,6 +261,7 @@ def health():
             "model": LLM_MODEL if LLM_API_KEY else None,
             "thresholds": {"raw_high": RAW_HIGH, "raw_low": RAW_LOW}}
 
+
 # ---------- 天气（Open-Meteo · 免 Key · 免注册） ----------
 # 数据源取舍与「高德要 Key 有配额所以弃用」同源：排程要天天问天气，
 # 只有免费且无需注册才可能长期跑下去。
@@ -421,6 +427,56 @@ def api_search(q: str, k: int = 5):
     return {"query": q, "results": rag.search(q, k)}
 
 
+# ---------- 校园地点检索（口语 → 地点）----------
+# 与 /api/search 的分工：/api/search 查的是「公众号文章库」（政策、通知、攻略），
+# /api/poi 查的是「校园空间图谱」（147 个地点）。两者数据源完全不同，不要混。
+#
+# 🔴 本接口**不返回经纬度**（2026-09-15 决策 D4）：
+#    `campus_map.json` 按合规设计本就不落坐标，投影层再显式白名单一次，
+#    保证既不暴露、也不给未来的改动留后门。
+@app.get("/api/poi")
+def api_poi(q: str = "", funcs: str = "", k: int = 5):
+    """`/api/poi?q=吃饭&funcs=life&k=5`
+
+    q 支持官方名（第三教学楼）、别名（三教）、口语黑话（图文 / 取快递 / 看病）。
+    funcs 为五类功能过滤：teach 教学 / office 办公 / life 生活 / sport 运动 / transport 交通。
+    返回 {query, funcs, results:[{id,name,type,func,emoji,campus,campus_cn,zone,hours,…}]}
+
+    ⚠️ 参数名**不能叫 `func`** —— FastAPI 内部
+    `run_in_threadpool(func, ...)` 的第一个位置参数就叫 `func`，
+    接口签名里再用 `func` 会撞成 `got multiple values for argument 'func'`，
+    运行时直接 500（2026-09-15 实测踩到，故改名 `funcs`）。
+    """
+    q = (q or "").strip()
+    k = max(1, min(k, 20))
+    if not q and not funcs:
+        return {"query": q, "funcs": funcs, "results": []}
+    results = campus.search_pois(q, func=funcs or None, limit=k)
+    return {"query": q, "funcs": funcs, "results": results}
+
+
+@app.get("/api/nearby")
+def api_nearby(src: str = Query("", alias="from"), k: int = 5,
+               funcs: str = "", types: str = "", max_min: float = 0):
+    """`/api/nearby?from=第三教学楼&k=5&funcs=life&types=食堂`
+
+    按**步行分钟**（OSM 路网实算，不是直线距离）升序返回最近的设施。
+    候选只取 `pois`（吃/买/快递/打印/办事），校园地标不参与。
+    `funcs` 五类功能过滤；`types` 精确到 type（「下课饿了去哪吃」用 `types=食堂`
+    比 `funcs=life` 准 —— 后者会把心理健康中心也带进来）。
+    起点无法定位、或与某地点分属不同教学区时不猜：前者 `walkable:false`，
+    后者直接不出现在结果里。
+    返回 `results`（可算分钟的，按分钟升序）+ `unrefined`（位置只细化到片区、
+    与起点落在同一参考点，**给不出分钟就不给**）；后者不占 `k` 名额，也不会被丢掉。
+
+    ⚠️ 同理，参数名避开 `func`（FastAPI 保留），见 `/api/poi` 的说明。
+    """
+    k = max(1, min(k, 20))
+    ts = [t.strip() for t in types.split(",") if t.strip()] or None
+    return campus.nearby_by_walk(src, limit=k, funcs=funcs or None,
+                                 types=ts, max_min=(max_min or None))
+
+
 # ---------- 步行路径（排程引擎的转场时间来源） ----------
 class RouteBatchReq(BaseModel):
     """批量问路：排程引擎一次要问十几对地点，逐条 HTTP 太慢。"""
@@ -487,8 +543,8 @@ def api_chat(body: ChatReq):
     results = rag.search(q, max(1, min(body.k, 6)))
     sources = [{
         "title": r["title"], "account": r["account"], "pub_time": r["pub_time"],
-        # snippet 为空（仅 BM25 命中、无向量命中的文章）时退回 full_text ——
-        # 否则下游拿到空上下文，并会让 llm_answer 里的 `s['full_text']` 直接 KeyError。
+        # snippet 为空（缺全文的公众号文章）时退回 full_text —— 否则下游拿到空上下文，
+        # 且会让 llm_answer 里的 `s['full_text']` 直接 KeyError（详见该处注释）。
         "snippet": (r.get("snippet") or r.get("full_text") or "")[:400],
         "url": r.get("url", ""),
         "score": r["score"], "raw_vec": r.get("raw_vec", 0.0),

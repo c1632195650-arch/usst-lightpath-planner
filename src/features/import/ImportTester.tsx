@@ -75,6 +75,18 @@ export function ImportTester({ onApply }: Props) {
         <div className="text-xs leading-relaxed text-ink-faint">
           浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite 转发到 8765，所以没有跨域问题。
         </div>
+        {online === false && (
+          /* 服务没起来时，光说「先跑 server.py」是不够的 —— 它是个**独立仓库**，
+             没装的人（比如答辩现场的这台机器）照着做也跑不起来。
+             这里把「不依赖它的两条替代路径」摆出来，免得现场卡住。 */
+          <div className="mt-3 rounded-xl bg-paper px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-faint">
+            <strong className="text-ink-soft">没有这个服务也能用真实课表</strong>：课表解析器是**独立仓库**，
+            不在本仓库内。两条替代路径 ——
+            <br />① 把导出的课表 JSON 放到 <code className="rounded bg-paper px-1 text-ink-soft">public/my_schedule.json</code>，首页会自动加载（该文件已 gitignore，不进仓库）；
+            <br />② 什么都不放时，界面用 <code className="rounded bg-paper px-1 text-ink-soft">MOCK_SCHEDULE</code> 演示课表跑通全流程 —— 排程、周计划、梨宝都照常工作。
+            <br />本页的「上传 PDF 导入」是**依赖该服务**的增强功能，服务不在时无法演示（按钮已置灰），不影响其余功能。
+          </div>
+        )}
       </section>
 
       <section className="panel flex flex-col gap-4 p-5">
