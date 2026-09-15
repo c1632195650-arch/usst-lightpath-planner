@@ -177,8 +177,13 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
         return None
     ctx = ""
     if sources:
+        # ⚠️ 必须用 .get 兜底：`api_chat` 投影出的 sources **不含 full_text**，
+        #    而「仅 BM25 命中的文章」其 snippet 为空（见 rag.py 的 best_chunk 只在向量命中时赋值）
+        #    → 直接下标会 KeyError。又因为本段在 try 之外，异常会一路冒到 HTTP 500。
+        #    实测：20 条真实提问里 2 条（10%）会触发。
         ctx = "\n\n".join(
-            f"[{i+1}]《{s['title']}》（{s['account']}·{s['pub_time']}）\n{s.get('snippet') or s['full_text'][:400]}"
+            f"[{i+1}]《{s['title']}》（{s['account']}·{s['pub_time']}）\n"
+            f"{(s.get('snippet') or s.get('full_text') or '')[:400]}"
             for i, s in enumerate(sources)
         )
     blocks = []
@@ -223,7 +228,11 @@ def extractive_answer(sources, route):
         return ("害！这个梨宝翻遍服务器也没查到官方说法 [梨宝摊手.jpg]\n"
                 "建议宝子去学校官网或问辅导员确认一下嗷～")
     top = sources[0]
-    body = (top.get("snippet") or top["full_text"]).strip()[:280]
+    body = (top.get("snippet") or top.get("full_text") or "").strip()[:280]
+    if not body:
+        # 检索到了条目却连正文都取不到 —— 与其回一个只有抬头的空壳，不如照实说没查到
+        return ("害！这个梨宝翻遍服务器也没查到官方说法 [梨宝摊手.jpg]\n"
+                "建议宝子去学校官网或问辅导员确认一下嗷～")
     if route == "grounded":
         head = f"梨宝掐指一算，《{top['title']}》里有答案，你懂我意思吧？"
     else:
@@ -321,7 +330,10 @@ def api_chat(body: ChatReq):
     results = rag.search(q, max(1, min(body.k, 6)))
     sources = [{
         "title": r["title"], "account": r["account"], "pub_time": r["pub_time"],
-        "snippet": r.get("snippet", "")[:400], "url": r.get("url", ""),
+        # snippet 为空（仅 BM25 命中、无向量命中的文章）时退回 full_text ——
+        # 否则下游拿到空上下文，并会让 llm_answer 里的 `s['full_text']` 直接 KeyError。
+        "snippet": (r.get("snippet") or r.get("full_text") or "")[:400],
+        "url": r.get("url", ""),
         "score": r["score"], "raw_vec": r.get("raw_vec", 0.0),
     } for r in results[:4]]
 
