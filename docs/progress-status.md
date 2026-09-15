@@ -130,7 +130,7 @@ usst-planner/
 │  ├─ fulltext.py                  # 搜狗 /link 解真链 + 抓全文
 │  ├─ clean_text.py                # 清洗（引流尾巴 / 低价值标记）
 │  └─ dedup_db.py                  # DB 软合并去重
-├─ data/usst_articles.db           # 主库（255 主条目 + FTS5 + 910 向量块）
+├─ data/usst_articles.db           # 主库（520 主条目 / 515 篇入 FTS5 / 1873 向量块）
 └─ docs/                           # PRD / roadmap / decisions / features / prompts / 本文件
 ```
 
