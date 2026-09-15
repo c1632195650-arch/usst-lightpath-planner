@@ -306,7 +306,10 @@ test('campusOfName 能识别主要跨区地标', () => {
   assert.equal(campusOfName('国合楼'), 'JG334');
   assert.equal(campusOfName('思餐厅'), 'JG334');
   assert.equal(campusOfName('卓越楼'), 'JG334');
-  assert.equal(campusOfName('第三教学楼'), 'JG516');
+  // ⚠️「第三教学楼」不在 CAMPUS_KEYWORDS 里：它此前是靠「未命中 → 默认 JG516」蒙对的，
+  //    P0 起改为不猜（命中失败返回 null）。它的校区识别已由显式地点表接管 ——
+  //    campusOfPlace('第三教学楼') === 'JG516'，见 tests/places-buildings.test.ts。
+  assert.equal(campusOfName('第三教学楼'), null);
   assert.equal(campusOfName('申一教'), 'JG1100');
 });
 
