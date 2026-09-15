@@ -51,8 +51,14 @@ export interface Place {
   campus: CampusId;
   /** 营业/可用时段；空数组 = 不限 */
   hours: Window[];
-  /** meal / study / sport / life ...（来自模块库） */
+  /** meal / study / sport / life / building ...（来自模块库或建筑表） */
   category?: string;
+  /**
+   * 同一地点的其它写法（课表/课表解析里可能写别名）。
+   * 例：`逸兴楼` 的别名是 `第四教学楼` —— 教务课表用的是后者。
+   * `buildPlaceIndex()` 会把别名一并注册，避免「同一个地方两种写法、只有一种能查到」。
+   */
+  alias?: string[];
 }
 
 /* ============================================================
