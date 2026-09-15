@@ -14,7 +14,7 @@
 对外接口：
   space_context(text)  -> 给 LLM 的空间上下文字符串（无空间意图返回 ""）
 """
-import os, json
+import os, json, re as _re
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 MAP_PATH = os.path.join(_HERE, "..", "data", "campus_map.json")
@@ -252,11 +252,82 @@ def canteen_overview():
 #    44+ 弱信号：tag 出现在查询里 / 查询是 tag 的片段
 _SCORE_NAME_EQ = 100
 _SCORE_NAME_IN = 72
+#    68  拼音全拼整段相等        → 「tushuguan」→ 图书馆。用户用拼音把整个名字打全了。
+#    66  拼音首字母整段相等      → 「tsg」→ 图书馆。
+#                                  ⚠️ 必须**高于口语词拼音档（62）**：实测「tsg」曾把
+#                                  『湛恩纪念图书馆』（标签『图书馆』的首字母也是 tsg）排到了
+#                                  『图书馆（图文信息中心）』前面 —— 命中**名字**永远强于命中**标签**。
+_SCORE_PY_EQ = 68
+_SCORE_PYI_EQ = 66
+#    65  tags 精确（中文）
 _SCORE_TAG_EQ = 65
+#    62  口语同义词拼音整段相等  → 「dahuo」→ 学生活动中心、「chifan」→ 食堂。
+_SCORE_PYG_EQ = 62
 _SCORE_FRAG_IN = 58
+#    52  拼音全拼前缀            → 「tushu」→ 图书馆（拼音还没打完，最常见的输入中间态）
+#    44  拼音首字母前缀          → 「tsgx」→ 图书馆（图文信息中心）
+_SCORE_PY_PRE = 52
+#    48  类型拼音整段相等        → 「shitang」→ 所有食堂、「sushe」→ 所有宿舍…
+#    42  口语同义词拼音前缀      → 「qukua」→ 取快递 → 菜鸟驿站
+#    38  类型拼音前缀
+_SCORE_PYT_EQ = 48
+_SCORE_PYI_PRE = 44
+_SCORE_PYG_PRE = 42
+_SCORE_PYT_PRE = 38
 _SCORE_TYPE_EQ = 50
 _SCORE_WEAK = 44
 _CAP = 8          # 长度加成上限：够区分「打印」和「南校区红塔打印」，又不至于碾压档位
+
+# 纯字母数字（允许空格/中横线/下划线分隔）→ 视为「拼音输入」。
+# 之所以要求**整串**都是字母数字：混了中文的查询（「tushuguan在哪」）走中文那几档更准。
+_ASCII_ALNUM = _re.compile(r"^[a-z0-9]+$")
+
+
+def _score_pinyin(p, q):
+    """拼音匹配打分。`pyf` / `pyi` / `pyt` / `pyg` 由 `scripts/build_pinyin_index.py` 离线生成。
+
+    **只做「整段相等」与「前缀」，不做子串** —— 这是刻意的：
+    `disanjiaoxuelou` 里确实含 `sanjiao`（那正是别名『三教』，命中是对的），
+    但 `xue` 也"含"于一大串名字 → 子串会带来大量假命中。
+    前缀则正好对应「拼音还没打完」这个真实场景（tushu → 图书馆）。
+
+    四档分值刻意分层，对应中文化那几档的语义：
+        名字/别名拼音 > 口语同义词拼音 > 类型拼音
+    —— 「找一个具体的地方」永远优先于「浏览某一类」。
+    """
+    best = 0
+    for f in (p.get("pyf") or "").split("|"):
+        if not f:
+            continue
+        if f == q:
+            best = max(best, _SCORE_PY_EQ)
+        elif len(q) >= 3 and f.startswith(q):
+            best = max(best, _SCORE_PY_PRE)
+    for i in (p.get("pyi") or "").split("|"):
+        # 首字母缩写至少 2 位才有区分度（「y」这种单字母会命中一大片）
+        if len(i) < 2:
+            continue
+        if i == q:
+            best = max(best, _SCORE_PYI_EQ)
+        elif len(q) >= 3 and i.startswith(q):
+            best = max(best, _SCORE_PYI_PRE)
+    # 口语同义词（tags）的拼音
+    for g in (p.get("pyg") or "").split("|"):
+        if len(g) < 2:
+            continue
+        if g == q:
+            best = max(best, _SCORE_PYG_EQ)
+        elif len(q) >= 3 and g.startswith(q):
+            best = max(best, _SCORE_PYG_PRE)
+    # 类型拼音（最弱：只用于「列一类」）
+    for t in (p.get("pyt") or "").split("|"):
+        if len(t) < 2:
+            continue
+        if t == q:
+            best = max(best, _SCORE_PYT_EQ)
+        elif len(q) >= 3 and t.startswith(q):
+            best = max(best, _SCORE_PYT_PRE)
+    return best
 
 
 def _score_poi(p, query, want_type=False):
@@ -272,7 +343,10 @@ def _score_poi(p, query, want_type=False):
             best = max(best, _SCORE_NAME_EQ)
         elif n in q:
             best = max(best, _SCORE_NAME_IN + min(len(n), _CAP))
-        elif q in n:
+        # 「查询是名字的片段」这一档要求 q 至少 2 个字符：
+        # 单字符会顺着**拉丁字母别名**乱命中 —— 实测「a」「y」都会命中『全家』
+        # （它的别名里有 `Familymart`），而用户输入单个 `a` 时显然不是这个意思。
+        elif len(q) >= 2 and q in n:
             best = max(best, _SCORE_FRAG_IN + min(len(q), _CAP))
     if best < _SCORE_TAG_EQ:
         for t in p.get("tags", []):
@@ -282,6 +356,10 @@ def _score_poi(p, query, want_type=False):
                 best = max(best, _SCORE_TAG_EQ)
             elif q in t or t in q:
                 best = max(best, _SCORE_WEAK + min(len(t), _CAP))
+    # 拼音：仅在**整串都是字母数字**时才走（含中文的查询交给中文那几档，更准）
+    q_py = _re.sub(r"[\s\-_]+", "", q.lower())
+    if len(q_py) >= 2 and _ASCII_ALNUM.match(q_py):
+        best = max(best, _score_pinyin(p, q_py))
     if want_type and p.get("type") and p["type"] == q:
         best = max(best, _SCORE_TYPE_EQ)
     return best
@@ -344,7 +422,7 @@ def search_pois(text, func=None, limit=5):
 
 
 # ---------- 营业时间（把开放时间变成可判断的事实，而不是一串字符串）----------
-import re as _re
+# `re` 与 `datetime` 已在文件顶部 / 此处导入；纯函数部分不读时钟，时钟只在这一段用。
 import datetime as _dt
 
 _TIME_RANGE = _re.compile(r"(\d{1,2})\s*[:：]\s*(\d{2})\s*[-—~～]\s*(\d{1,2})\s*[:：]\s*(\d{2})")
