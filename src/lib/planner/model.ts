@@ -22,7 +22,10 @@ import type {
   BlockKind, CampusId, DayOfWeek, LockLevel, PhasePolicy, RollingState,
   Schedule, TimeBlock, WeekPlan, PersonaProfile, ScenarioFields,
 } from '@/types';
-import type { TransferProvider } from './schedule.ts';
+// ⚠️ 依赖下沉：`campusLookup.ts` 不依赖任何 planner 模块，故此处不会成环
+//    （若 import `./schedule.ts`，而 `schedule.ts` 又要 import `./construct.ts` → 环）
+import type { TransferProvider } from './campusLookup.ts';
+import type { UserTask } from './templates.ts';
 
 // 契约层已收归的类型：本文件只 re-export，不再本地定义（见头部「契约边界」）
 export type { LockLevel, RollingState } from '@/types';
@@ -60,8 +63,14 @@ export interface Place {
   campus: CampusId;
   /** 营业/可用时段；空数组 = 不限 */
   hours: Window[];
-  /** meal / study / sport / life ...（来自模块库） */
+  /** meal / study / sport / life / building ...（来自模块库或建筑表） */
   category?: string;
+  /**
+   * 同一地点的其它写法（课表/课表解析里可能写别名）。
+   * 例：`逸兴楼` 的别名是 `第四教学楼` —— 教务课表用的是后者。
+   * `buildPlaceIndex()` 会把别名一并注册，避免「同一个地方两种写法、只有一种能查到」。
+   */
+  alias?: string[];
 }
 
 /* ============================================================
@@ -195,6 +204,16 @@ export interface PlanRequest {
   policy: PhasePolicy;
   /** 需要被安排的事（含交期） */
   commits: Commit[];
+  /**
+   * 旧版「用户自定义模块」入口（P1 兼容层）。
+   *
+   * 为什么还在：现有 UI / `scripts/scheduler.test.ts` / golden 语料都走这条口，
+   * 而 P1-T1.1 的验收是「`construct` 与旧引擎**逐块一致**」——把 `UserTask`
+   * 硬映射成 `Commit` 会丢信息（`UserTask.durations` 是时长档位、`place` 是 POI 名
+   * 而非 `Place.id`），反而破坏等价性。
+   * ⚠️ P2 由 `commits` 完全取代后删除本字段（届时 UI 一起改）。
+   */
+  tasks?: UserTask[];
 
   // —— 可选 ——
   persona?: PersonaProfile | null;
@@ -245,6 +264,23 @@ export interface PlanResult {
   diagnostics: Diagnostics;
   /** 传给下一周的滚动状态 */
   nextRolling: RollingState;
+
+  // —— 为未来留口，P1 不填（规格书 §4.4 / §12.3 D-2）——
+  /** 多版本；P1 恒为 `undefined`（或长度 1 = 上面的 `plan`） */
+  variants?: PlanVariant[];
+  /** 每块的可替换项（blockId → 同类候选）。P1 不启用。 */
+  blockCandidates?: Record<string, Array<{ title: string; placeId?: string }>>;
+}
+
+/** 计划变体（多版本）。P1 只产出 1 个，字段先占位，避免日后二次改契约 */
+export interface PlanVariant {
+  /** 变体标识，如 'balanced' / 'compact' / 'relaxed' */
+  id: string;
+  /** 该变体对应的权重（便于比较与复现） */
+  weights: Weights;
+  /** 该变体的成本分 */
+  cost: number;
+  plan: WeekPlan;
 }
 
 /* ============================================================
@@ -335,4 +371,47 @@ export function churnCost(
 /** 位置或时长是否变了（用于 churn 判定） */
 function moved(a: TimeBlock, b: TimeBlock): boolean {
   return a.dayOfWeek !== b.dayOfWeek || a.startMin !== b.startMin || a.endMin !== b.endMin;
+}
+
+/* ============================================================
+ * 七、确定性 id 规范（规格书 §6.4）
+ *
+ * 🔴 `blockId = w{weekNo}-d{dayOfWeek}-{kind}-{语义键}`，**语义键严禁含时间**。
+ *
+ * 为什么必须去掉 `startMin`（这是 P1 的前置条件，不是可选项）：
+ *   `churn`（扰动代价）与 `lockLevels`（锁）都靠 **id 匹配「同一个块」**。
+ *   若 id 含 `startMin`，块被平移 30 分钟后 id 就变了 → 引擎判成「删了一个 + 新增一个」：
+ *     ① churn 虚高（只是平移却算成一次删除 + 一次新增）；
+ *     ② **锁彻底失效**（id 一变就锁不住），三级锁从根上建不起来。
+ * ========================================================== */
+
+/** 生成语义键 block id（规格书 §6.4 的唯一实现点） */
+export function blockId(
+  weekNo: number,
+  dayOfWeek: DayOfWeek,
+  kind: string,
+  semanticKey: string,
+): string {
+  return `w${weekNo}-d${dayOfWeek}-${kind}-${semanticKey}`;
+}
+
+/** 形状：`w3-d2-course-CS101p3` */
+export const BLOCK_ID_RE = /^w\d+-d\d+-\w+-.+$/;
+
+/**
+ * 「3–4 位数字被连字符夹住」= 旧规则 `day-kind-startMin-seq` 的时间残留。
+ * ⚠️ 理论上语义键自带 `-1234-` 这种写法会被误判，属可接受的假阳性
+ *    （我们的语义键是 courseId/taskId/templateId/mealId，不带纯数字段）。
+ */
+export const BLOCK_ID_TIME_FRAGMENT_RE = /-\d{3,4}-/;
+
+/** 是否为合规的语义键 id（T1.1 验收 2） */
+export function isSemanticBlockId(id: string): boolean {
+  return BLOCK_ID_RE.test(id) && !BLOCK_ID_TIME_FRAGMENT_RE.test(id);
+}
+
+/** 从 id 里取语义键（调试/测试用）；不匹配返回 null */
+export function semanticKeyOf(id: string): string | null {
+  const m = /^w\d+-d\d+-\w+-(.+)$/.exec(id);
+  return m ? m[1] : null;
 }

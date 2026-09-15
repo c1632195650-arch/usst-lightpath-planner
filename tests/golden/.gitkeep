@@ -1,0 +1,6 @@
+# golden baseline 快照目录
+#
+# 快照由 `tests/golden-snapshot.ts` 生成，格式 `week-<输入id>.json`。
+# ⚠️ 只在 CY 的 feat/events-and-diversity **合入 dev 之后**拍一次
+#    （基准必须唯一，且含语义键 id 规则），见规格书 §9 T1.6 / §12.5.3。
+# 对比口径：**块内容（时间/类型/标题/地点）逐块一致，id 不参与比对**（§12.5.5-3）。
