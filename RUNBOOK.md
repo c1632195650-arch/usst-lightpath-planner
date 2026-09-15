@@ -107,3 +107,62 @@ python server.py 8765
 | 课表 tab 显示「未连通」| 8765 PDF 解析服务没启动，见 §③ |
 | 梨宝问答报后端未连接 | 8000 的 FastAPI 没启动，见 §② |
 | typecheck 报错 | 提交前先修；这是本仓库门禁 |
+
+---
+
+## ④ 梨宝「答得不对」怎么查（可对话调试）
+
+目标是**一次定位到是哪一层坏了**，而不是靠猜。梨宝的一轮回答会经过四层：
+
+```
+① 检索    把问题向量化，从 520 篇公众号文章里召回 top-k
+② 装配    把召回的 snippet 拼成上下文（这一段最容易出错）
+③ 生成    LLM 读上下文 + 人设 + 你的档案，写出回答
+④ 渲染    前端把 answer / 来源显示出来
+```
+
+### 四个观测口
+
+| 观测口 | 怎么开 | 看得到什么 |
+|---|---|---|
+| **前端调试抽屉** | `npm run dev`（**仅 DEV**，生产构建里不存在） | 每条回答下方一行 `route · intent · raw_vec · 空间/记忆/档案 · 耗时`，展开还能看每条来源的 `score / raw_vec / snippet` |
+| **后端 trace** | `LIBAO_DEBUG=1 python server/app.py` | 每轮**一行**日志，带 `request_id`，含 `top_raw` 与 top3 来源的 `score/raw_vec/snip长度` |
+| **命令行调试器** | `python scripts/test_libao.py --ask "你的问题"` | 不用开浏览器：打出全部中间量 **+ 每条来源的 snippet 正文** |
+| **回归批** | `python scripts/test_libao.py` | 45 轮固定题，路由 + 内容双判据；证明「没退化」 |
+
+> 前端抽屉与后端 trace 的 `request_id` 是同一个值 —— 页面上看到异常那轮，拿这 8 位十六进制去日志里 grep 即可。
+
+### 四类故障怎么分（对照上面的抽屉/trace 看）
+
+| 看到什么 | 坏在哪 | 下一步 |
+|---|---|---|
+| `raw_vec` < 0.56，且来源标题跟问题毫不相干 | **检索错** | 查 `data/usst_articles.db` 有没有覆盖该话题；词面命中的查询看 FTS 分支 |
+| 来源标题对，但 `snip` 很短、或 snippet 里根本没有答案 | **上下文错** | 就是 `scripts/rag.py` 的 `pick_snippet()` 该管的事：只有首块带 `★` 才会优先取首块 |
+| snippet 里明明有答案，回答却跑偏/拒答 | **模型错** | 看 `route`：`grounded` 要求严格依据；`hybrid` 允许常识补充；`llm` 是知识库外 |
+| 抽屉里一切正常，页面上显示的不对 | **渲染错** | 前端问题；`answer` 与页面文字对一下 |
+
+**`raw_vec` 阈值**（`server/app.py`，可用环境变量微调）：
+`≥ 0.68` 知识库确实有 ｜ `0.56 ~ 0.68` 相关但可能不全 ｜ `< 0.56` 判定知识库外。
+⚠️ `score` 是**归一化排序分**（top1 恒接近 1.0），**不能**用来判相关性 —— 判边界一律看 `raw_vec`。
+
+### 常用命令
+
+```bash
+# 后端带调试日志
+LIBAO_DEBUG=1 python server/app.py
+
+# 自由提问（可重复 --ask；也可 --interactive 交互式）
+python scripts/test_libao.py --ask "今年什么时候放寒假？"
+python scripts/test_libao.py --ask "三教附近有啥吃的" --ask "怎么选课重修"
+
+# 换端口/换身份（与后端隔离，别污染真实记忆）
+LIBAO_BASE=http://127.0.0.1:8010 LIBAO_USER=u-debug LIBAO_SESSION=s-debug \
+  python scripts/test_libao.py --interactive
+```
+
+### 改完检索层后必须做的三件事
+
+1. `python scripts/test_campus.py` —— 校园图谱 / 就近推荐（117 项）
+2. `python scripts/test_libao.py` —— 45 轮真实对话回归
+3. 重启后端 —— `rag.py` / `campus.py` / `app.py` 的改动**不会**热更新
+

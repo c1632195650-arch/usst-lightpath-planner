@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
 import { currentWeekNo } from '@/lib/date';
-import { lbaoChat, lbaoHealth, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, type ChatResult, type RagSource } from '@/lib/api';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
 import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
+import { ChatDebug } from '@/features/libao/ChatDebug';
+
+/** DEV 专用：把「已经拿回来、但一直没人看」的检索与路由信号显示出来。
+ *  `import.meta.env.DEV` 在生产构建里是字面量 false → 整段被摇掉，线上零变化。 */
+const SHOW_DEBUG = import.meta.env.DEV;
 
 interface Msg {
   role: 'user' | 'lbao';
@@ -16,6 +21,9 @@ interface Msg {
   /** 提示去哪儿看完整时间轴 */
   goWeek?: boolean;
   needProfile?: boolean;
+  /** 后端这一轮的完整元数据（route / intent / top_raw_vec / used_* / 耗时）。
+   *  只用于 DEV 调试抽屉 —— 见本目录 ChatDebug.tsx 的说明。 */
+  debug?: ChatResult;
 }
 
 /** 常见问法，避免第一次进入对话没有入口。 */
@@ -183,7 +191,14 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       const response = await lbaoChat(q, identity, profileCtx);
       // `n` = 召回到的资料来源条数：0 条就是「白问了一次」，是召回质量最直接的信号
       track('search', { ok: true, ms: Date.now() - t1, n: response.sources?.length ?? 0 });
-      setMessages((current) => [...current, { role: 'lbao', text: response.answer, sources: response.sources, mode: response.mode }]);
+      setMessages((current) => [...current, {
+        role: 'lbao', text: response.answer, sources: response.sources,
+        mode: response.mode,
+        // 后端本来就把 route/intent/top_raw_vec/used_* 一起返回了，此前只取
+        // answer/sources/mode，其余当场丢掉 —— 于是「答得不对」时没有第二手信息。
+        // 整包存下来给 DEV 调试抽屉，生产构建不渲染。
+        debug: response,
+      }]);
       setOnline(true);
     } catch {
       track('degrade', { id: 'chat-offline' });
@@ -295,6 +310,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
                     ))}
                   </div>
                 )}
+
+                {SHOW_DEBUG && message.debug && <ChatDebug data={message.debug} />}
               </div>
             </div>
           ))}
