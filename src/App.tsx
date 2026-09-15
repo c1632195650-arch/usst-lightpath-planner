@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AnswerEntry, AppState } from '@/types';
+import type { AnswerEntry, AppState, Schedule } from '@/types';
 import { MOCK_SCHEDULE } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
@@ -10,11 +10,14 @@ import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
 import { WeekView } from '@/features/week/WeekView';
+import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 
 type View = 'welcome' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
+/** 周视图子模式：课表网格 vs 排程计划时间轴 */
+type WeekSubTab = 'timetable' | 'plan';
 
 /** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
 const SHOW_IMPORT = import.meta.env.DEV;
@@ -36,12 +39,28 @@ export default function App() {
   const [view, setView] = useState<View>('welcome');
   const [mainTab, setMainTab] = useState<MainTab>('calendar');
   const [weekMonday, setWeekMonday] = useState<string | null>(null);
+  // 默认落在「周计划」：这是感受测试的主体（课表网格是既有功能，随时可切回）
+  const [weekSubTab, setWeekSubTab] = useState<WeekSubTab>('plan');
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
-  // 进入主界面时若没有课表，加载模拟课表
+  // 优先加载本机真实课表 my_schedule.json（public/ 下 Vite 自动 serve；文件已 gitignore）。
+  // ⚠️ 关键：localStorage 里可能残留演示课表（source='demo'），那种情况**也必须**用真实课表覆盖，
+  //    否则真实课表永远进不来（曾因 `if (state.schedule) return` 踩此坑 —— 用户看到的还是假课表）。
   useEffect(() => {
-    if (!state.schedule) setState((prev) => ({ ...prev, schedule: MOCK_SCHEDULE }));
+    if (state.schedule && state.schedule.source !== 'demo') return; // 已是真实课表，不覆盖
+    fetch('/my_schedule.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Schedule | null) => {
+        if (data && Array.isArray(data.courses) && data.courses.length > 0) {
+          setState((prev) => ({ ...prev, schedule: data }));
+        } else if (!state.schedule) {
+          setState((prev) => ({ ...prev, schedule: MOCK_SCHEDULE }));
+        }
+      })
+      .catch(() => {
+        if (!state.schedule) setState((prev) => ({ ...prev, schedule: MOCK_SCHEDULE }));
+      });
   }, [state.schedule, setState]);
 
   /** 平移 delta 周，并限定在 [第1周, 第 totalWeeks 周] 内（边界内停下，不循环）。
@@ -211,20 +230,45 @@ export default function App() {
             </div>
           )
         ) : weekMonday ? (
-          <WeekView
-            weekMonday={weekMonday}
-            weekNo={weekNo}
-            schedule={schedule}
-            selectedDays={state.selectedDays}
-            onToggleDay={toggleDay}
-            onSelectWholeWeek={selectWholeWeek}
-            onClearDays={() => patchState({ selectedDays: [] })}
-            lifeMode={state.lifeMode}
-            onSelectMode={(id) => patchState({ lifeMode: id })}
-            persona={state.persona}
-            onBack={() => setWeekMonday(null)}
-            onShiftWeek={shiftWeekBy}
-          />
+          <div className="space-y-3">
+            {/* 课表 / 周计划 切换 */}
+            <div className="flex items-center gap-1 rounded-xl border border-ink/10 bg-white p-1 w-fit">
+              <button
+                onClick={() => setWeekSubTab('timetable')}
+                className={`nav-item whitespace-nowrap ${weekSubTab === 'timetable' ? 'nav-item-active' : ''}`}
+              >
+                课表
+              </button>
+              <button
+                onClick={() => setWeekSubTab('plan')}
+                className={`nav-item whitespace-nowrap ${weekSubTab === 'plan' ? 'nav-item-active' : ''}`}
+              >
+                周计划
+              </button>
+            </div>
+            {weekSubTab === 'plan' ? (
+              <WeekPlanView
+                schedule={schedule}
+                weekNo={weekNo}
+                persona={state.persona}
+              />
+            ) : (
+              <WeekView
+                weekMonday={weekMonday}
+                weekNo={weekNo}
+                schedule={schedule}
+                selectedDays={state.selectedDays}
+                onToggleDay={toggleDay}
+                onSelectWholeWeek={selectWholeWeek}
+                onClearDays={() => patchState({ selectedDays: [] })}
+                lifeMode={state.lifeMode}
+                onSelectMode={(id) => patchState({ lifeMode: id })}
+                persona={state.persona}
+                onBack={() => setWeekMonday(null)}
+                onShiftWeek={shiftWeekBy}
+              />
+            )}
+          </div>
         ) : (
           <OverviewPage
             schedule={schedule}
