@@ -178,9 +178,8 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
     ctx = ""
     if sources:
         # ⚠️ 必须用 .get 兜底：`api_chat` 投影出的 sources **不含 full_text**，
-        #    而「仅 BM25 命中的文章」其 snippet 为空（见 rag.py 的 best_chunk 只在向量命中时赋值）
-        #    → 直接下标会 KeyError。又因为本段在 try 之外，异常会一路冒到 HTTP 500。
-        #    实测：20 条真实提问里 2 条（10%）会触发。
+        #    而 snippet 在检索侧可能为空（缺全文的文章）→ 直接下标会 KeyError。
+        #    本段又在 try 之外，异常会一路冒到 HTTP 500。实测：20 条真实提问里 2 条（10%）会触发。
         ctx = "\n\n".join(
             f"[{i+1}]《{s['title']}》（{s['account']}·{s['pub_time']}）\n"
             f"{(s.get('snippet') or s.get('full_text') or '')[:400]}"

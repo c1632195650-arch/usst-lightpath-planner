@@ -97,8 +97,18 @@ function restFor(p: PersonaProfile): LbaoBlock {
   };
 }
 
-/** 梨宝：结合课表 + 画像 + 选中日期，一键生成生活方案。
- *  @param modeId 可选——用户手动指定的生活模式（周程页选择）；缺省则按画像自动选。 */
+/**
+ * 梨宝：结合课表 + 画像 + 选中日期，一键生成生活方案。
+ *
+ * @deprecated 已被排程引擎取代 —— 本函数只做**规则模板**（时间来自官方课时表常量，
+ *   但没有真实转场时间、没有校历事件、没有问题清单），因此它与周计划页会给出
+ *   两套口径不同的答案（"双轨"）。
+ *   梨宝对话侧已并轨真引擎：见 `features/libao/weekPlanForChat.ts` → `buildWeekPlan`。
+ *   现存调用点只剩 `features/week/WeekView.tsx:53`（属 B 的目录），清理需与 B 确认；
+ *   新代码请勿再使用本函数。
+ *
+ * @param modeId 可选——用户手动指定的生活模式（周程页选择）；缺省则按画像自动选。
+ */
 export function lbaoRecommend(
   profile: PersonaProfile,
   schedule: Schedule,

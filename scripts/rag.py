@@ -41,6 +41,27 @@ def seg(text):
         return ""
     return " ".join(jieba.cut(text))
 
+# FTS5 查询串里允许保留的 token 内容：中文、字母、数字。
+# 其余字符（`-`、`？`、`·` 等）既无检索价值，又会构成**空 phrase** 让 FTS5 直接报语法错。
+_TOK_KEEP = re.compile(r"[0-9A-Za-z\u4e00-\u9fff]")
+
+def fts_query(query):
+    """jieba 分词 → FTS5 安全查询串。
+
+    每个 token 单独加双引号（单 token phrase 等价于 token 匹配，AND 语义不变），
+    并丢掉纯标点 token。**不要退回 `" ".join(jieba.cut(q))`**：
+    `jieba.cut("2026-2027学年校历")` 会把 `-` 切成独立 token，
+    FTS5 于是报 `no such column: 2027`；该异常被调用处的 except 吞掉后，
+    BM25 的 0.4 权重会**静默归零**，整个检索退化成纯向量。
+    """
+    parts = []
+    for t in jieba.cut(query):
+        t = t.strip()
+        if not t or not _TOK_KEEP.search(t):
+            continue
+        parts.append('"' + t.replace('"', '""') + '"')
+    return " ".join(parts)
+
 # ---------- 向量嵌入 ----------
 EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
 QUERY_PREFIX = "为这个句子生成表示以用于检索相关文章："
@@ -241,18 +262,64 @@ def expand_terms(query):
     return out
 
 
+# ---------- 给 LLM 的正文片段 ----------
+# 预算受 SNIPPET_MAX 限制；server/app.py 的 sources 投影也按 400 截断，改这里要同步。
+SNIPPET_MAX = 400     # 片段总长上限（与 server/app.py 的 [:400] 一致）
+SNIPPET_STAR = 240    # 「★核心速查」块的保留量
+SNIPPET_SIM = 150     # 最相似块的补充量
+STAR_LEAD = 60        # ★ 之前多留一点，免得把「【核心速查·××】」小节标题切掉
+
+def pick_snippet(conn, aid, full_text, chunk_cos):
+    """挑出送给 LLM 的正文片段。规则全部来自实测，不是直觉：
+
+    1. **首块含「★」→ 以该块为主**。项目约定把高价值数值前置成「★核心速查」块，
+       关键日期/数值就落在那里。实测：问「今年什么时候放寒假？」，校历文章检索排第 1，
+       但按余弦选中的是**课表时段块**；含「★ 寒假开始：2027年1月25日」的首块以
+       0.045 的余弦差落选 → 模型只看到课表，于是诚实拒答「没找到确切日期」。
+       全库 461 篇有向量块的文章里**只有 16 篇（3.5%）首块带 ★**，故这条规则作用面精确。
+    2. **其余文章保持原行为（余弦最相似块）**。
+       ⚠️ 曾试过「所有文章一律首块优先」，实测**回归 5/12**：96.5% 的首块是样板开场白
+       （学生手册的欢迎辞、通知的「根据…要求」），会把命中答案的块挤掉 ——
+       例如「怎么申请助学贷款」原块含「国家助学贷款」，换首块后只剩「亲爱的新同学：金秋九月…」。
+    3. **没有向量块的文章 → 退回全文开头**。旧实现此处返回空串，既是「上下文为空」的来源，
+       也是下游 500 的根因。
+    """
+    cands = conn.execute(
+        "SELECT id, chunk_text FROM chunks WHERE article_id=? ORDER BY id", (aid,)
+    ).fetchall()
+    if not cands:
+        return (full_text or "").strip()[:SNIPPET_MAX]
+
+    head_id, head_raw = cands[0]          # id 升序 = 文内顺序，首个即文章开头
+    head_txt = (head_raw or "").strip()
+    sim_id, sim_raw = max(cands, key=lambda c: chunk_cos.get(c[0], 0.0))
+    sim_txt = (sim_raw or "").strip()
+
+    star = head_txt.find("★")
+    if star < 0:
+        # 非 ★ 文章：与旧实现**逐字节一致**（sim_txt 已 strip，此处不再二次 strip，
+        # 免得把切片正好落在第 400 位的空格也吃掉 —— 那会让"零回归"对不上账）
+        return sim_txt[:SNIPPET_MAX] or head_txt[:SNIPPET_MAX]
+
+    start = max(0, star - STAR_LEAD)
+    parts = [head_txt[start:start + SNIPPET_STAR]]
+    if sim_id != head_id:
+        parts.append(sim_txt[:SNIPPET_SIM])
+    return "\n…\n".join(p for p in parts if p).strip()[:SNIPPET_MAX]
+
 def search(query, k=5, top_fts=20, top_vec=20):
     conn = sqlite3.connect(DB_PATH)
 
     # 1) FTS5 关键词（原查询，AND 语义，保证精确性）
     fts_hits = {}
     try:
-        q = " ".join(jieba.cut(query))
-        for r in conn.execute(
-            "SELECT rowid, bm25(articles_fts) AS score FROM articles_fts "
-            "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
-        ):
-            fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
+        q = fts_query(query)
+        if q:
+            for r in conn.execute(
+                "SELECT rowid, bm25(articles_fts) AS score FROM articles_fts "
+                "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
+            ):
+                fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
     except Exception as e:
         print(f"[rag] FTS5 原查询检索失败（降级为仅向量）: {e!r}", file=sys.stderr)
 
@@ -279,11 +346,13 @@ def search(query, k=5, top_fts=20, top_vec=20):
         qv = qv / qn  # 显式归一化，不假定模型输出已归一化
     vec_rows = conn.execute("SELECT id, article_id, vec FROM chunks").fetchall()
     vec_hits = {}
+    chunk_cos = {}   # cid -> 余弦。**全量**保留供挑分块用（vec_hits 只有全局 top20，不够）
     if vec_rows:
         ids = np.array([r[0] for r in vec_rows])
         aids = np.array([r[1] for r in vec_rows])
         mat = np.frombuffer(b"".join(r[2] for r in vec_rows), dtype=np.float32).reshape(len(vec_rows), -1)
         sims = mat @ qv
+        chunk_cos = {int(ids[i]): float(sims[i]) for i in range(len(ids))}
         for i in np.argsort(-sims)[:top_vec]:
             vec_hits[int(ids[i])] = (int(aids[i]), float(sims[i]))
 
@@ -334,19 +403,11 @@ def search(query, k=5, top_fts=20, top_vec=20):
             "COALESCE(resolved_url, source_url) FROM articles WHERE id=?", (aid,)
         ).fetchone()
         if r:
-            # 最相关分块（比文章开头更贴题，作为给 LLM 的 snippet）
-            best_txt = ""
-            if aid in best_chunk:
-                c = conn.execute(
-                    "SELECT chunk_text FROM chunks WHERE id=?", (best_chunk[aid][0],)
-                ).fetchone()
-                if c:
-                    best_txt = (c[0] or "").strip()
             out.append({
                 "id": r[0], "account": r[1], "title": r[2], "pub_time": r[3],
                 "score": round(score, 4),
                 "raw_vec": round(vec_article.get(aid, 0.0), 4),
-                "snippet": best_txt[:400],
+                "snippet": pick_snippet(conn, aid, r[4], chunk_cos),
                 "full_text": (r[4] or "")[:300],
                 "url": r[5] or "",
             })
