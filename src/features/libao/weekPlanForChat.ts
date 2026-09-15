@@ -1,7 +1,7 @@
 /**
  * 对话场景的一周排程（路线 C2：技术并轨）
  * ============================================================
- * 与「周计划」页**共用同一个引擎**（`buildWeekPlan`），而不是另起一套模板。
+ * 与「周计划」页**共用同一个引擎**（`planWeek()`），而不是另起一套模板。
  *
  * 为什么必须并轨：`lib/lbao.ts::lbaoRecommend` 是硬编码时间的模板
  * （08:00 / 11:45 / 19:00），不排转场、不读校历、不认用户锁定块。
@@ -11,9 +11,13 @@
  * 与周计划页的唯一差别是**输出形态**：那边铺完整时间轴，这边只取要点
  * （见 `summarizeWeekPlan`）。**数据同源、呈现分层** ——
  * 「对话给建议、周页给执行」本就是产品设计上该有的分工，不是妥协。
+ *
+ * ⚠️ 两遍法**不在本文件里手写**：编排统一走 `planner/planWeek.ts`（唯一编排点）。
+ *    原先这里与 `features/week/WeekPlanView.tsx` 各抄了一份，同一套逻辑两个副本。
  */
 import type { PersonaProfile, Schedule, WeekPlan } from '@/types';
-import { buildWeekPlan } from '@/lib/planner/schedule';
+import { toPlanRequest } from '@/lib/planner/schedule';
+import { planWeek } from '@/lib/planner/planWeek';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { TERM_CALENDAR } from '@/constants/term';
 import { WEEKDAY_CN } from '@/lib/date';
@@ -31,8 +35,9 @@ function calendarOf(schedule: Schedule) {
  *
  * @returns `null` = 排不了（该周不在学期范围内）→ 调用方应降级为纯引导，**不要编造日程**。
  *
- * 后端未连通时**不失败**：退回第一遍的估算转场。估算值也远好过硬编码模板 ——
- * 这是与周计划页一致的降级策略（那边也是 `backendOk=false` 时继续显示）。
+ * 后端未连通时**不失败**：`planWeek` 的降级策略保证仍能给出结果 ——
+ * 转场退回跨校区估算值。估算值也远好过硬编码模板，这是与周计划页一致的
+ * 降级行为（那边也是 `backendOk=false` 时继续显示）。
  */
 export async function planWeekForChat(
   schedule: Schedule,
@@ -50,20 +55,13 @@ export async function planWeekForChat(
     scenarios: profile?.scenarios ?? null,
   };
 
-  // 第一遍：用兜底转场收集「谁走到谁」的点对
-  const pass1 = buildWeekPlan(base);
-  try {
-    // 动态引入：转场模块会把后端客户端（lib/api）拉进模块图，而后者用了 Vite 专有的
-    // `import.meta.env`。静态 import 会让「只想读排程要点」的测试也被拖进这层依赖。
-    // 顺带好处：Vite 会把它 code-split，打开对话时不必立刻加载。
-    const { buildTransferProvider } = await import('@/lib/planner/transfer');
-    const cache = await buildTransferProvider(pass1.plan.blocks);
-    if (cache.size() === 0) return pass1.plan;
-    // 第二遍：换成后端实测的步行时间，这才是给用户看的版本
-    return buildWeekPlan({ ...base, transfer: cache.provider }).plan;
-  } catch {
-    return pass1.plan;
-  }
+  // 两遍法编排统一走公共入口（`planner/planWeek.ts`）。
+  // 它内部**动态** import `transfer.ts` —— 转场模块会把后端客户端（lib/api）拉进
+  // 模块图，而后者用了 Vite 专有的 `import.meta.env`。静态 import 会让「只想读
+  // 排程要点」的测试也被拖进这层依赖；动态 import 顺带让 Vite 把它 code-split。
+  // 取不到 provider（如 Node 单测）时它会**降级为单遍**，不会抛错。
+  const result = await planWeek(toPlanRequest(base));
+  return result.plan;
 }
 
 /**
