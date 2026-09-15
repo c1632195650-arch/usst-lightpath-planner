@@ -1,7 +1,7 @@
 /**
  * 天气 → 可排程任务（weatherToTasks）
  * ============================================================
- * 与 `lib/planner/events.ts` **同构**：产出 `UserTask[]`，通过 `buildWeekPlan` 的
+ * 与 `lib/planner/events.ts` **同构**：产出 `UserTask[]`，通过排程入口的
  * `tasks` 入参喂进引擎。**引擎完全不知道有「天气」这回事** —— 它只看到
  * 「周三有个 30 分钟的活」。
  *
