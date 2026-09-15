@@ -2,8 +2,8 @@
 
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
-> **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-14。
-> **状态**：Draft v1.3 —— **P0 已完成并推送**（`feat/planner-v2-p0` @ `28e95aa`）。**CY 的 P0 线已就绪**：`feat/events-and-diversity` @ `4e6fa0b`（父提交 = `22bdee8`，已完成 rebase、已推远端），内含 D-5 语义键 id 与 `studyCandidates` 冲突解 —— **P1 的合入前置仅剩「B review + 合入」一步**（见 §12.5.3）。
+> **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-15。
+> **状态**：Draft v1.4 —— **P0 已完成并推送**（`feat/planner-v2-p0` @ `53d1d62`，PR #2 → `dev`）。**CY 的 P0 线已就绪**：`feat/events-and-diversity` @ `4e6fa0b`（父提交 = `22bdee88`，已完成 rebase、已推远端），内含 D-5 语义键 id 与 `studyCandidates` 冲突解。**PR #3 已开**（`refs/pull/3/head`），但 base 实为 `feat/planner-v2-p0`（栈式 PR），须在 PR #2 合入后改为 `dev` —— **P1 的合入前置仅剩「B review + 合入」一步**（见 §12.5.3）。
 > **与 `docs/engine-plan.md` 的关系**：4 处分歧已全部裁决（§12.3）；CY 的最终裁决与契约边界见 **§12.5**。
 > **契约裁决已闭环**：§12.5.1（5 项落 `types.ts`）。P1 开工方式与边界见 §13。
 > **读者**：协作者 B（本仓库 `src/lib/`、`src/features/week/` 负责人）、CY（`src/types.ts` 契约层负责人）、后续接手的 Agent。
@@ -682,19 +682,22 @@ blockId = `w{weekNo}-d{dayOfWeek}-{kind}-{语义键}`
 
 ### 7.3 零依赖单测跑法（已在本机验证）
 
-**位置已定（2026-09-15 实况）**：CY 已实现零依赖钩子，落在 **`scripts/register-alias.mjs` + `scripts/alias-hook.mjs`**（而非原约定的 `tests/`）。**处置：不搬家、不重复造钩子**——保留 `scripts/` 下这一个钩子作为**全仓唯一测试钩子**，P1 的引擎测试放 `tests/`，通过相对路径复用同一钩子。这样既满足 D4「引擎测试与数据工程测试分开」的**意图**（目录分开），又避免两份同功能钩子并存。
+**位置（v1.4 定案，修正 v1.3 的误判）**：钩子归 **`tests/register.mjs` + `tests/alias-hook.mjs`**（**B 的地盘**，由仓库外 `_devtools/` 那两份迁入，已在 Node 22 上验证可用）。
+CY 的 `scripts/register-alias.mjs` + `scripts/alias-hook.mjs` 是**临时**的（他已在自己的 PR 描述里标注待删）——**全部合并到 `tests/` 这一套，全仓只留一个钩子。**
+
+> **为什么不是留在 `scripts/`（v1.3 的写法）**：① CY 明确要求删掉他那两份，只是等 B 的版本先落地；② `scripts/` 属 CY 地盘，让 B 的引擎测试长期 hard-depend 一个 CY 打算删除的文件是隐患；③ B 的两份现成可用，迁入成本 ≈ 一次 `cp`。**故采纳 CY 的 `tests/` 方案。**
 
 ```bash
-# 引擎测试（放 tests/，复用 scripts/ 的钩子）
-node --import ./scripts/register-alias.mjs --test "tests/**/*.test.ts"
+# 引擎测试（tests/，自带钩子）
+node --import ./tests/register.mjs --test "tests/**/*.test.ts"
 
-# CY 侧既有测试（原路径不搬家）
-node --import ./scripts/register-alias.mjs --test "scripts/**/*.test.ts"
-# → 等价于 npm run test:ui
+# CY 侧既有测试（scripts/ 目录不搬家，但**钩子改用 tests/ 这一套**）
+node --import ./tests/register.mjs --test "scripts/**/*.test.*"
+# → 等价于 npm run test:ui（package.json 由 CY 改指向 tests/register.mjs）
 ```
 
-- 钩子把 `@/x` 解析到 `src/x.ts`；`scripts/` 与 `tests/` 共用，**不得再新增第二个钩子**。
-- ⚠️ **待办**：`package.json` 需补一条引擎测试脚本（如 `"test:engine"`），归 CY 侧改动，随 PR 一并提。
+- 钩子把 `@/x` 解析到 `src/x.ts`；**全仓唯一，不得再新增第二个**。
+- ⚠️ **待办（CY 侧，合并后一次性）**：删 `scripts/register-alias.mjs` + `scripts/alias-hook.mjs`；`package.json` 的 `test:ui` 改指向 `./tests/register.mjs`，并补 `"test:engine": "node --import ./tests/register.mjs --test \"tests/**/*.test.ts\""`。
 - ⚠️ `src/lib/api.ts` 使用 `import.meta.env`，**Node 里加载不了**；因此任何 `import` 了 `api.ts` 的模块（如 `planner/transfer.ts`）不能直接被测试加载。测试 v2 求解器时，**用桩 provider 注入**，不要 import `transfer.ts`。
 - ⚠️ **禁止引入 `tsx` / `ts-node` 等运行器**（零新增依赖纪律）。CY 已按此移除 `tsx`。
 
@@ -703,6 +706,7 @@ node --import ./scripts/register-alias.mjs --test "scripts/**/*.test.ts"
 | 数据 | 来源 | 现状 |
 |---|---|---|
 | 地点表 | `data/campus_map.json`（146 POI） | 需补显式 `campus` 与核实 `hours` |
+| **课程楼缺口（P1 前置）** | `data/campus_map.json` landmarks（`卓越楼` / `国合楼` 具显式 `campus`） | ⚠️ `BUILTIN_PLACES` **只从模块库抽**，查不到课程楼 → `campusOfPlace('国合楼') = null`，与 `campusOfName = JG334` 打架。**必须在 A3 前修，见 §13.7** |
 | 营业时段 | `templates.ts` 的 `windows` | 南校食堂标「（估）」需核实 |
 | 节次表 | `constants/time.ts` | 与项目记忆有冲突，以 time.ts 为准，待回教务复核 |
 | 交期 | `data/usst.ts` 的 `DEADLINES[]`、`Course.examDate` | **已存在，待接入** |
@@ -951,6 +955,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | v1.1 | 2026-09-14 | ① 状态更新为 P0 已完成（`8b29816`），明确「契约隔离」使 `types.ts` 对齐顺延至 P1；② 新增 §12.3 与 `docs/engine-plan.md` 的 4 处分歧对照 + 调和建议；③ 记录 `engine-plan.md` 中「`src/lib/planner/` 不存在」已过期 |
 | v1.2 | 2026-09-15 | 吸收 CY 最终裁决（§12.5）：① §3.3 明确 `LockLevel` 落 `types.ts` 且仅允许 `model.ts → types.ts` 单向依赖；② §4.1 拆分契约层/引擎侧并新增 `PlanIssueCode`；③ §4.4 拆分 `RollingState`（引擎）与 `PlanPersistState`（持久化），`PlanResult` 新增 `variants` / `blockCandidates` 占位；④ §6.2 裁决 `cost`/`churnMin` 放 `diagnostics` 不动 `stats`；⑤ **§6.4 修正 block id 规则为语义键（去时间）**；⑥ §7.3 测试钩子入仓、明令禁用 `tsx`；⑦ §7.2 补合入顺序；⑧ §12.2 四问全部标注「已裁决」 |
 | v1.3 | 2026-09-15 | 按 CY 分支 `4e6fa0b` 实况校正：① §12.5.1 契约项 **4 → 5**（补 `TimeBlock.fromEventId?`，并说明「撤回 `model.ts`」技术上不可行）；② §12.5.3 合入顺序改为**实况状态表**（①②③ 已完成/作废，关键路径 = B review）；③ §12.5.4 记录 `studyCandidates` **实际合并口径**（`campusOfPlace` + `null` 保守保留）并采纳；④ §12.5.6 **D-4 结案**（`WeekPlanView` 留用、P1 不动 UI）；⑤ §7.3 钩子确定在 `scripts/`（不搬家、不重复造）；⑥ §9 T1.0 按达成项修正；⑦ **新增 §13 P1 开工方案**（可立即启动项 / 需同步项 / 约束 / 产出） |
+| v1.4 | 2026-09-15 | 吸收 CY《P1-答复B的第三轮》并**修正 v1.3 的两处自相矛盾**：① §12.5.4 **删掉文中残留的 `t.campus ?? 'any'` 式子**（`sameCampus` → CY 实装的 `inCampus`，彻底不用 `t.campus`）——v1.3 的代码块与紧随其后的「以 CY 版为准」互相矛盾；② §7.3 / §13.1-A2 / §13.4-R2 测试钩子**改回 `tests/register.mjs`**（v1.3 定在 `scripts/` 是误判：CY 明确其 `scripts/` 两钩子为临时、待删；B 已有 `_devtools/` 两份可直接迁入）；③ 新增 **§12.5.8**：把「校区未知(`null`)不罚不排」从 `studyCandidates` 局部口径**升格为全局口径**（`objective::placeMismatch` 同受约束）；④ §12.5.4 补录 CY 的**课程楼论据**与「`null` 取保留」的决定性理由；⑤ **新增 §13.7 前置缺陷**：`BUILTIN_PLACES` 只从模板抽、不含课程楼 → `campusOfPlace('国合楼')=null` 而 `campusOfName=JG334`，须在 A3 前修；⑥ §12.5.3 更新 PR #3 实况（已开、base 为 `feat/planner-v2-p0`）；⑦ §12.4 补「旧测试零处硬编码 block id」的核对结论 |
 
 ### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
@@ -1047,16 +1052,17 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 |---|---|---|
 | ① | CY `rebase` 到 `22bdee88` | ✅ **已完成**（`4e6fa0b` 的父提交即 `22bdee8`） |
 | ② | CY 撤回 `types.ts` 的 `TimeBlock.fromEventId` → 改 `model.ts` | ❌ **作废**（技术不可行，见 §12.5.1 修正说明）；`fromEventId` 保留在 `types.ts` |
-| ③ | CY 提 PR 到 `dev`（`feat/events-and-diversity`） | ✅ **已推送**（远端 `4e6fa0b`），PR 待开/待 review |
-| ④ | B review + 合入 | ⬜ **当前关键路径** |
-| ⑤ | B 基于合并后版本抽 `construct`（T1.1）+ 拍 golden baseline（只拍一次） | ⬜ 待 ④ |
+| ③ | CY 提 PR 到 `dev`（`feat/events-and-diversity`） | ⚠️ **已推送且已开 PR #3**（远端 `4e6fa0b`），但 **base 实为 `feat/planner-v2-p0` 而非 `dev`**（栈式 PR）。→ 须先合 PR #2，再改 PR #3 的 base 为 `dev`（此时 merge-base 回到 `22bdee88`，diff 收敛为「仅本分支改动」）；**反序会把 P0 一并带进 `dev`，使 PR #2 变空** |
+| ④ | **PR #2 合入 `dev`**（`feat/planner-v2-p0` @ `53d1d62`，含 P0 + 规格书） | ⬜ 待合。B 自有线；本 PR 由 CY review（`docs/` 属其地盘） |
+| ⑤ | **PR #3 改 base 为 `dev` → B review → 合入** | ⬜ **当前关键路径**。改 base 必须在 ④ 之后（否则 diff 会含 P0） |
+| ⑥ | B 基于合并后版本抽 `construct`（T1.1）+ 拍 golden baseline（**只拍一次**） | ⬜ 待 ⑤ |
 
 **CY 分支已完成的内容（B review 时核对）**：
 
 - ✅ **D-5 id 规则已落地**：`w${weekNo}-d${day}-${kind}-${key}`，5 个调用点全部改为语义键（`course: {courseId}p{period}` / `user: taskId` / `meal: mealId` / `template: tplId` / `study: {tplId}-{n}`）。
 - ✅ **`studyCandidates` 冲突已解**，返回 `{ preferred, fallback }`。
 - ✅ **`tsx` 已移除**（`package.json` 无该依赖），改用零依赖钩子。
-- ⚠️ **钩子落在 `scripts/`**（`scripts/register-alias.mjs` + `scripts/alias-hook.mjs`），而非 §3.3 约定的 `tests/`。CY 已在提交说明中自行标注该重复。**处置见 §7.3**。
+- ✅ **钩子曾落在 `scripts/`**（`scripts/register-alias.mjs` + `scripts/alias-hook.mjs`）—— CY 已在 PR 描述中自行标注其为**临时**、待 B 的 `tests/` 版落地后删除。**处置（v1.4 定）见 §7.3**：B 在 `tests/` 落 `register.mjs` + `alias-hook.mjs` 作**全仓唯一钩子**，CY 删其 `scripts/` 两份并改 `test:ui`。
 - ⚠️ `types.ts` 只加了 `fromEventId`；`lockLevel` / `PlanIssueCode` / `PlanPersistState` **仍未加**（属 P1 的 T1.0，正常）。
 
 #### 12.5.4 真实冲突面：只有 `studyCandidates` 一处（已解）
@@ -1072,7 +1078,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | `schedule.ts::attachTransfers` | ✅ 缺地点处理 | ❌ | 无 |
 | `buildPhases.ts`（`STUDY_PLACES`） | ❌ | ✅ 改池 | 无 |
 | `templates.ts` | ❌ | ✅ `fromEventId`/`notBeforeMin`/`essential` | 无 |
-| `types.ts` | ❌ | ✅ `fromEventId`（**将撤回**） | 无 |
+| `types.ts` | ❌ | ✅ `fromEventId`（**已定保留**，见 §12.5.1 修正说明） | 无 |
 | 新增文件 | `model/objective/places.ts` | `events.ts` / `WeekPlanView.tsx` / `events.test.ts` | 无 |
 
 **唯一冲突的解法**（保留两侧改动，合并为一个函数）：
@@ -1082,18 +1088,27 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
   const all = policy.studyPlaces.map((p, i) => { /* …原逻辑… */ });
 
   // ← 保留 B 的改动：校区判断走显式地点表（campusOfPlace），不再关键字猜
-  const sameCampus = (t: ActivityTemplate) =>
-    (t.campus ?? 'any') === 'any' || campusOfPlace(t.place ?? '') === dayCampus;
+  // ⚠️ v1.4 修正：此处原写 `(t.campus ?? 'any') === 'any' || campusOfPlace(...) === dayCampus`
+  //     —— 那个式子**仍带 `t.campus` 的洞**（未填模板时 `?? 'any'` 静默放行），
+  //     与本节下方「以 CY 版为准」的结论自相矛盾。现改为 CY 实际合并的版本：
+  const inCampus = (t: ActivityTemplate) => {
+    const c = campusOfPlace(t.place ?? '');
+    return c == null || c === dayCampus;   // 查不到校区时「保守保留」，且**彻底不用 `t.campus`**
+  };
 
   // ← 保留 CY 的改动：池内轮换 + 兜底分离
-  const preferred = all.filter(sameCampus);
+  const preferred = all.filter(inCampus);
   const fallback = templates.filter(
-    (t) => t.category === 'study' && sameCampus(t)
+    (t) => t.category === 'study' && inCampus(t)
       && !preferred.some((w) => w.place === t.place),
   );
   return { preferred: preferred.length ? preferred : all, fallback };
 }
 ```
+
+> **v1.4 修正说明（自相矛盾已消除）**：v1.3 的代码块里 `sameCampus` 用的正是 CY §1.2 批评的那条式子，
+> 而紧接着的注释又写「以 CY 版为准」—— 同一节两个结论。现**统一为 CY 实际合并的 `inCampus`**，
+> 并把 `t.campus` 从本节**全部剔除**（它是手填字段，`??` 会把「未填」混同于「不限」）。
 
 > **校区判断的最终口径（2026-09-15 实况）**：CY 已按本条实现，但**判空策略与本文原建议不同**，且**本文接受 CY 版本**：
 >
@@ -1112,6 +1127,12 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 >
 > **采纳理由**：两者都保留 `campusOfPlace`（核心分歧已消除）；`null` 分支的差异是**保守程度**而非**是否猜测**——`null` 时无法证明它跨校区，「保留 + 让转场代价去惩罚」比「直接排除」更少副作用，且不会因数据缺失导致今天排不出自习。**此口径已固化，实现时以 CY 版为准，勿再改动。**
 >
+> ⭐ **决定性论据（CY §四，2026-09-15 补录）**：「`null` 取排除」不只是保守程度问题，它会**产生真实误伤**。
+> `BUILTIN_PLACES = placesFromTemplates(DEFAULT_TEMPLATES)`（`places.ts:239`）**只从模块库抽表**，
+> 而**课程楼不在模块库里** → `campusOfPlace('国合楼') = null`（但 `campusOfName('国合楼') = 'JG334'`，
+> `schedule.ts:63-76` 的关键字表认得它）。若按「`null` → 排除 / 惩罚」，**所有在卓越楼、国合楼上的课都会被误判**。
+> 故「`null` 取保留」是**必需**，不是偏好。根因与修法见 **§13.7**。
+>
 > 配套（CY 已实现）：`fillStudy` 内 `rotateFrom(preferred, day + blocks.length)`；`fallback` 仅作兜底（偏好池全关门时）。
 
 #### 12.5.5 代码约定（P1 起生效）
@@ -1119,10 +1140,10 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 1. **纯度**：`construct` / `improve` / `objective` / `explain` 禁止 `fetch`、读时钟、`Math.random`（种子由入参注入）。
 2. **block id 规则**：`w{weekNo}-d{day}-{kind}-{语义键}`，**不得含时间**（详见 §6.4）。
 3. **构造等价**：`construct` 必须与**合并后**的 `schedule.ts` **逐块一致（块内容，不含 id）**；id 按 §6.4 新规则生成。golden baseline 以此为准，**只拍一次**。
-4. **不猜**：认不出就返回 `null` + 出 `info`，不得回退关键字猜测或默认值（沿用 `campusOfName → null` 纪律）。
+4. **不猜**：认不出就返回 `null` + 出 `info`，不得回退关键字猜测或默认值（沿用 `campusOfName → null` 纪律）。⚠️ `null` 的**消费口径见 §12.5.8**（**不惩罚、不排除**），`objective::placeMismatch` 同样受约束。
 5. **可解释**：100% 软块有非空 `reason`。
 6. **提交规范**：conventional commits（`feat(planner): …` / `fix(schedule): …` / `docs(scheduler): …`）。
-7. **依赖纪律**：**禁止 `tsx` / `ts-node`**（零新增依赖）。✅ CY 已于 `4e6fa0b` 移除 `tsx`，测试统一走 `scripts/register-alias.mjs`（见 §7.3）。
+7. **依赖纪律**：**禁止 `tsx` / `ts-node`**（零新增依赖）。✅ CY 已于 `4e6fa0b` 移除 `tsx`；测试统一走 **`tests/register.mjs`**（见 §7.3）。
 
 #### 12.5.6 待办与环境（2026-09-15 实况更新）
 
@@ -1140,6 +1161,30 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 3. 每条事实性结论请**附核对命令与 ref**（如 `git show 8b29816:path | grep -n …`），避免口径漂移。
 4. 出现新分歧，**追加到本文件**并在 PR 里引用，不另开新文档分散结论。
 
+#### 12.5.8 校区未知（`null`）的全局口径（v1.4 新增，P1 起生效）
+
+> 来源：CY §四「课程楼不在 `BUILTIN_PLACES` 里」的新发现。原口径只写在 `studyCandidates` 一处，v1.4 **升格为全局规则**。
+
+**规则**：任何模块遇到「校区查不出来」（`campusOfPlace(...)` 返回 `null`）时：
+
+| ✅ 允许 | ❌ 禁止 |
+|---|---|
+| 保留该候选 / **不加惩罚** / 不改动它 | 排除它、给它加罚、或回退到关键字猜测或默认校区 |
+
+**适用面（不止 `studyCandidates`）**：
+
+| 位置 | 状态 |
+|---|---|
+| `schedule.ts::studyCandidates` | ✅ CY 已实现（`inCampus`，见 §12.5.4） |
+| **`objective.ts::placeMismatch`（A3）** | ⬜ **必须同口径** —— 否则所有在卓越楼/国合楼的课被系统性误罚（根因见 §13.7） |
+| `construct.ts` / `improve.ts` 中任何「跨校区」判定 | ⬜ P1 落地时遵守 |
+
+**理由**：`null` 只说明**数据未登记**，不说明**跨校区**。当成跨校区 → 制造误伤（课程楼就是活例）；当成同校区 → 只损失一点转场惩罚的准确度，而真跨校区会被 `travelNeed`（权重 2.0）自然惩罚出来。
+
+**配套（必需）**：同时降低 `null` 的发生率（见 §13.7）。**「不罚」是兜底，不是免修数据缺口的借口。**
+
+**验收（AC）**：A3 的单测必须含一条用例 —— 「课程楼（`campusOfPlace` 原本查不到）不得产生 `placeMismatch` 惩罚」。
+
 ---
 
 ## 13. P1 开工方案（2026-09-15 定）
@@ -1152,7 +1197,7 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 | 序 | 任务 | 为什么现在就能做 | 对应章节 |
 |---|---|---|---|
 | **A1** | **审 CY 的 PR**（`feat/events-and-diversity` @ `4e6fa0b`） | 已推远端；review 只需读 diff，不阻塞任何事 | §12.5.3 |
-| **A2** | **建 `tests/` 骨架**：迁移/接入测试钩子、目录约定、golden 目录 | 纯 B 地盘；钩子已在 `scripts/register-alias.mjs`（复用不搬家） | §7.3 |
+| **A2** | **建 `tests/` 骨架**：把 `_devtools/` 的 `register.mjs` + `alias-hook.mjs` **迁入 `tests/`**、定目录约定、建 golden 目录 | 纯 B 地盘，**零 CY 依赖**；`_devtools/` 两份已在 Node 22 验证可用，迁入 ≈ 一次 `cp` | §7.3 |
 | **A3** | **T1.2 `objective.ts::evaluate` / `evaluateDelta`** | 只依赖 `model.ts`（P0 已提供 `lockFactorOf` / `churnCost` / `churnMinutes`）与 `WeekPlan`，**不依赖 `construct` 是否重构**。可在现有 `schedule.ts` 输出上直接验证 | §5.5 / §5.6 |
 | **A4** | **T1.6 golden baseline 工具**（快照器 + 对比器 + 指标脚本） | 工具先建好；**实际拍摄**留到合并后一次完成 | §9 T1.6 |
 | **A5** | **T1.3 `improve.ts` 五个算子** | 依赖 A3 的 `evaluate`，与 `construct` 无关；可用手工构造的 `WeekPlan` 做单测 | §5.7 |
@@ -1167,6 +1212,13 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 | **B2** | **T1.1 抽 `construct.ts`** + 语义键 id 落地 | 「构造等价」的比对基准必须是**合并后**的 `schedule.ts`（含 CY 的 id 规则与 `studyCandidates` 合并结果） |
 | **B3** | **T1.6 golden baseline 实际拍摄** | 同上——基准只能有一个，且**只拍一次** |
 | **B4** | **T1.4 `solver.ts` / `index.ts` 编排** | 需要 B1 与 B2 的产物 |
+
+> **`construct` 只需一份基准的依据（CY《第三轮》§三.2，已逐条核对 `.id` 断言）**：
+> `scripts/**/*.test.*` **零处断言硬编码 block id** ——
+> `scheduler.test.ts:95,96,480` 断的是 **`course.id`**；`scheduler.test.ts:391` 断的是**模板** id（`ActivityTemplate`）；
+> `events.test.ts:117` 断的是 **`Deadline.id`**；`events.test.ts:65` 是**同输入两次运行的确定性对比**（非硬编码）。
+> → 这正是 D-5 改完 id 后 **58/58 仍全绿**的原因。
+> **结论：直接按新规则走即可，不需要「旧规则 + feature flag」两套并存；golden baseline 只拍一份。**
 
 ### 13.3 仍需与 CY 同步的事项（仅此 4 类）
 
@@ -1184,7 +1236,7 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 | # | 偏差 | 处置（B 决定，PR 评论中说明） |
 |---|---|---|
 | **R1** | `types.ts` 仍加 `fromEventId`（其 §3.1② 原拟撤回 `model.ts`） | ✅ **接受**。理由：`TimeBlock` 定义在 `types.ts`，**TS 无法跨模块扩展已存在的 interface**；且 UI 已消费它（来源徽标）。该字段属「UI 展示字段」，与 `lockLevel` 同类。已据此把 §12.5.1 的契约项从 4 项更正为 **5 项** |
-| **R2** | 测试钩子落在 `scripts/`，而非约定的 `tests/` | ✅ **接受，不搬家**。CY 自己已在提交说明中标注该重复。处置：保留 `scripts/register-alias.mjs` 为**全仓唯一钩子**，P1 引擎测试放 `tests/` 并复用该钩子 → 满足「目录分开」的意图，同时避免两份同功能钩子。**不得再新增第二个钩子** |
+| **R2** | 测试钩子落在 `scripts/`（CY 自标为「临时、待删」） | ✅ **采纳 CY 的方案**（v1.4 修正 v1.3 的误判）。处置：B 把 `_devtools/` 的 `register.mjs` + `alias-hook.mjs` 迁入 **`tests/`** 作**全仓唯一钩子**；CY 删其 `scripts/` 两份，并把 `package.json` 的 `test:ui` 指向 `./tests/register.mjs`、补 `test:engine`。**不得再新增第二个钩子** |
 
 ### 13.5 分支与提交策略
 
@@ -1215,6 +1267,43 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 
 **验收口径汇总**：§10 的 AC-1~AC-10 + PF-1~PF-3 + QL-1~QL-3 全绿。其中 AC-7（增量最小扰动）与 AC-10（两趟收敛）属 P2，P1 只需保证不劣化。
 
+### 13.7 ⚠️ 前置缺陷：`BUILTIN_PLACES` 不含课程楼（**必须在 A3 之前修**）
+
+> 来源：CY《P1-答复B的第三轮》§四。B 已逐条核验（ref 见下）。**这是 v1.4 新发现，v1.3 未覆盖。**
+
+**症状（`campusOfPlace` 与 `campusOfName` 两套表打架）**：
+
+```
+第三教学楼            campusOfPlace = JG516    campusOfName = null
+图书馆（图文信息中心）  campusOfPlace = JG516    campusOfName = null
+第四食堂              campusOfPlace = JG334    campusOfName = null
+思餐厅               campusOfPlace = JG334    campusOfName = JG334
+国合楼               campusOfPlace = null     campusOfName = JG334   ← 只有关键字表认得
+卓越楼               campusOfPlace = null     campusOfName = JG334   ← 同上
+```
+
+**根因（B 已核，附 ref）**：
+
+| 事实 | ref |
+|---|---|
+| 内置地点表只从**模块库**抽，课程楼不在模块库 → 查不到 | `src/lib/planner/places.ts:239` `BUILTIN_PLACES = placesFromTemplates(DEFAULT_TEMPLATES)` |
+| 关键字表**认得**卓越楼 / 国合楼 / 第四教学楼 → JG334 | `src/lib/planner/schedule.ts:63-76`（`CAMPUS_KEYWORDS`），另见 `src/constants/campus.ts:57-59` |
+| 数据其实**存在**于 campus_map 的 landmarks，且带显式 `campus` | `data/campus_map.json:750-773`（`卓越楼` id `zhuoyue`，campus `南校`；`国合楼` id `guohe`，campus `南校`） |
+
+→ 即：**不是没数据，是没把 landmarks 吃进内置索引**。
+
+**影响范围**：`objective.ts::placeMismatch`（A3）。若按「未登记 = 跨校区」加罚，**所有在卓越楼、国合楼上的课都会被系统性误罚** —— 而用户课表里这类课很多。
+
+**修法（两处，均在 B 地盘，不动 `types.ts`）**：
+
+1. **`places.ts` 补齐课程楼**（消 `null`）。注意该文件**明令不 import JSON**（Node 测试环境加载不了），故不能直接塞 `campus_map.json`。两个可行选项：
+   - **(i) 显式硬编码这几栋**（卓越楼 / 国合楼 / 第四教学楼 / 第三教学楼 / 图文信息中心 …）—— 数量少且稳定，与 `CAMPUS_KEYWORDS` 同源；
+   - **(ii) 由调用方注入 landmarks 后 buildIndex** —— 更通用，但要改 `schedule.ts` 侧的调用约定。
+   **倾向 (i)**（改动最小、不引入注入复杂度），并要求补一条单测：**`CAMPUS_KEYWORDS` 里每个 `kw` 都必须能被 `campusOfPlace` 解析**（防两套表再次漂移）。
+2. **口径兜底**：按 **§12.5.8** —— `null` 一律**不罚不排**。修法 1 是「消 `null`」，修法 2 是「万一还有 `null` 也不误伤」，**两者都要做**。
+
+**排期**：列为 **A3 的前置**（写 `objective::placeMismatch` 之前完成），属「求解器链」，**不等 CY 合入**。
+
 ---
 
-*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `28e95aa`）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）。*
+*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `53d1d62`，PR #2）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）。*
