@@ -3,8 +3,9 @@
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
 > **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-14。
-> **状态**：Draft v1.1 —— **P0 已完成并推送**（分支 `feat/planner-v2-p0`，commit `8b29816`）。P0 以「契约隔离」落地：新类型只定义在 `src/lib/planner/model.ts`，**未改动** `src/types.ts`。因此 `types.ts` 契约对齐**不是** P0 的前置条件，而是 **P1 的前置条件**。
-> **与 `docs/engine-plan.md` 的关系**：该文件（CY，2026-09-11）与本文件在 4 处给出不同落法。逐条对照与裁决请求集中在 **§12.3**，请 CY 在此答复。
+> **状态**：Draft v1.2 —— **P0 已完成并推送**（分支 `feat/planner-v2-p0` @ `22bdee88`，含 `8b29816` + 规格书文档提交；PR #2）。P0 以「契约隔离」落地：新类型只定义在 `src/lib/planner/model.ts`，**未改动** `src/types.ts`。P1 将**一次性**落 4 项契约改动（T1.0，见 §12.5.1），此后不再动契约。
+> **与 `docs/engine-plan.md` 的关系**：该文件（CY，2026-09-11）与本文件在 4 处给出不同落法。逐条对照与裁决请求见 **§12.3**；CY 的最终裁决与契约边界见 **§12.5**。
+> **契约裁决已闭环**：CY 于 2026-09-15 给出裁决（`LockLevel` 等 4 项落 `types.ts`，其余留 `model.ts`），已固化进 **§12.5**，并据此修订 §3.3 / §4.1 / §4.4。
 > **读者**：协作者 B（本仓库 `src/lib/`、`src/features/week/` 负责人）、CY（`src/types.ts` 契约层负责人）、后续接手的 Agent。
 
 ---
@@ -138,6 +139,8 @@
 ### 3.3 依赖方向（禁止反向依赖）
 
 ```
+types.ts（契约层：LockLevel / TimeBlock.lockLevel / PlanIssue.code / PlanPersistState）
+     ↑ 单向被依赖，永不被 import 回来
 index.ts → solver.ts → { construct.ts, improve.ts, objective.ts, explain.ts }
                           ↘ model.ts ← places.ts
 incremental.ts → solver.ts（复用求解，不做平行实现）
@@ -147,23 +150,82 @@ objective.ts / explain.ts → 不得 import 任何 *Client.ts（网络层）
 
 **红线**：`objective.ts`、`improve.ts`、`construct.ts` 均为**纯函数**，**禁止** `fetch`、读时钟、`Math.random`（随机种子必须由入参注入）。
 
+**🔴 例外与唯一允许方向（2026-09-15 契约裁决，见 §12.5）**：`LockLevel` 落在 `types.ts`，因为 `AppState.locks: Record<string, LockLevel>` 需要它在契约层可见；若把 `LockLevel` 定义在 `model.ts`，`types.ts` 就必须 `import` `model.ts`，**违反本条「禁止反向依赖」**。故：
+
+```ts
+// src/types.ts —— 定义（唯一真源）
+export type LockLevel = 'hard' | 'soft' | 'free';
+
+// src/lib/planner/model.ts —— re-export，不得另行定义
+export type { LockLevel } from '@/types';
+```
+
+即：`model.ts → types.ts` 的单向依赖**允许**（`model.ts` 是消费方）；`types.ts → model.ts` 的依赖**永久禁止**。
+
 ---
 
 ## 4. 关键数据结构与接口定义
 
-> 所有类型定义于 `src/lib/planner/model.ts`。**不改 `src/types.ts`**。若确需改契约，须先与 CY 确认。
+> **契约归属（2026-09-15 裁决，详见 §12.5）**：以下类型分两类——
+> - **落 `src/types.ts`**（契约层，改动需 CY + B 双方确认）：`LockLevel`、`TimeBlock.lockLevel?`、`PlanIssue.code?`、`PlanPersistState`。
+> - **留 `src/lib/planner/model.ts`**：`Commit` / `Place` / `Weights` / `SolverConfig` / `PlanRequest` / `PlanResult` / `Diagnostics` / `RollingState`。
+>
+> 下文 §4.1 起为便于阅读，仍按逻辑分组给出全部定义；**每个类型标注了归属**，实现时请以标注为准。
 
 ### 4.1 基础扩充类型
 
-```ts
-import type {
-  BlockKind, CampusId, Course, DayOfWeek, PhasePolicy, PlanIssue,
-  ScenarioFields, Schedule, TimeBlock, WeekPlan, PersonaProfile,
-} from '@/types';
+**契约层部分**（落 `types.ts`）：
 
+```ts
+// ── src/types.ts ──
 /** 锁级别（替换旧布尔 locked；旧字段保留以兼容 UI） */
 export type LockLevel = 'hard' | 'soft' | 'free';
 
+export interface TimeBlock {
+  // …既有字段…
+  /** 用户确认过的块：重排时锁定不动 */
+  locked?: boolean;
+  /** 三级锁；缺省视为 'free'（P1-T1.5 启用） */
+  lockLevel?: LockLevel;
+  /** 来源事件 id（校历事件展开的准备块用，P1 不启用） */
+  fromEventId?: string;
+}
+
+export interface PlanIssue {
+  // …既有字段…
+  /** 机器可读的问题码；前端不得靠中文 message 匹配 */
+  code?: PlanIssueCode;
+}
+
+export type PlanIssueCode =
+  | 'transfer.missing_place'      // 相邻块缺地点，通勤算不出
+  | 'transfer.tight'              // 通勤余量偏紧
+  | 'transfer.late'               // 通勤来不及
+  | 'data.unverified'             // 数据未核实（营业时段为推算值）
+  | 'data.place_unregistered'     // 地点未登记在 places
+  | 'capacity.overload'           // 当日负荷超容量
+  | 'due.overdue'                 // 交期已过
+  | 'due.insufficient_capacity';  // 交期邻近但产能不足
+```
+
+**引擎侧部分**（留 `model.ts`）：
+
+```ts
+// ── src/lib/planner/model.ts ──
+import type {
+  BlockKind, CampusId, Course, DayOfWeek, PhasePolicy, PlanIssue, LockLevel,
+  ScenarioFields, Schedule, TimeBlock, WeekPlan, PersonaProfile,
+} from '@/types';
+
+// LockLevel 从契约层 re-export（唯一真源在 types.ts，禁止在此另行定义）
+export type { LockLevel } from '@/types';
+```
+
+> ⚠️ **术语统一**：`LockLevel` 一律指三级锁 `'hard' | 'soft' | 'free'`；旧布尔字段 `TimeBlock.locked` 保留仅为 UI 兼容，**引擎内部判定一律走 `lockLevel`**，`resolveLockLevel()` 负责把 `locked:true` 映射为 `'hard'`。
+
+**引擎侧其余基础类型**（继续留 `model.ts`）：
+
+```ts
 /** 可用时段窗（复刻 ActivityWindow 语义，避免跨模块依赖） */
 export interface Window { startMin: number; endMin: number; label?: string }
 
@@ -242,8 +304,11 @@ export interface SolverConfig {
 
 ### 4.4 求解请求与结果
 
+> ⚠️ **命名澄清（2026-09-15，见 §12.5）**：`RollingState` 与「持久化状态」**是两个不同的东西**，早期版本混用同一名字，容易在实现时把「跨周疲劳模型」和「存进 localStorage 的东西」写成一个类型。现拆为：
+
 ```ts
-/** 滚动状态（周与周之间传递） */
+/* ── 引擎侧（model.ts）── */
+/** 滚动状态：周与周之间传递的**负荷与疲劳模型**。只活在引擎内存里。 */
 export interface RollingState {
   /** 最近 N 天的实际负荷（分钟），用于疲劳建模 */
   recentLoad: number[];
@@ -253,6 +318,28 @@ export interface RollingState {
   loadByDow: number[];
 }
 
+/* ── 契约侧（types.ts）── */
+/** 持久化状态：写进 AppState / localStorage 的那份。 */
+export interface PlanPersistState {
+  /** 状态版本号，供迁移用（当前 1） */
+  version: number;
+  /** 上次排程的周次；null = 从未排过 */
+  lastPlanWeek: number | null;
+  /** blockId → 锁级别（三级锁的持久化载体） */
+  locks: Record<string, LockLevel>;
+  /** 上一周传来的滚动状态；null = 首次排程 */
+  rolling: RollingState | null;
+  /** 累计扰动分钟数（用于「最小扰动」目标与 UI 提示） */
+  churnMin: number;
+  /** 最后更新时间（ISO），用于判断状态新鲜度 */
+  updatedAt: string;
+}
+```
+
+> ⚠️ **`rolling` 不能省**：`RollingState` 的 `recentLoad` / `loadByDow` / `upcoming` 是「变化三 · 一周很累下一周自动松一点」的**唯一数据载体**。若 `PlanPersistState` 只存 `locks` + `churnMin` 而不存 `rolling`，跨周疲劳在 P2 会没有数据来源。
+
+```ts
+/* ── 引擎侧（model.ts）── */
 export interface PlanRequest {
   // —— 必需 ——
   schedule: Schedule;
@@ -288,13 +375,34 @@ export interface Diagnostics {
   churnMin: number;
 }
 
+/** 计划变体（多版本）。P1 只产出 1 个，字段先占位，避免日后二次改契约。 */
+export interface PlanVariant {
+  /** 变体标识，如 'balanced' / 'compact' / 'relaxed' */
+  id: string;
+  /** 该变体对应的权重（便于比较与复现） */
+  weights: Weights;
+  /** 该变体的成本分 */
+  cost: number;
+  plan: WeekPlan;
+}
+
 export interface PlanResult {
   plan: WeekPlan;          // 结构兼容旧版（只增字段）
   notes: string[];         // 面向用户的生成说明
   diagnostics: Diagnostics;
   nextRolling: RollingState; // 传给下一周的滚动状态
+
+  // —— 为未来留口，P1 不填（见 §12.3 D-2）——
+  /** 多版本；P1 恒为 undefined 或长度 1（= 上面的 plan） */
+  variants?: PlanVariant[];
+  /** 每块的可替换项（blockId → 同类候选）。P1 不启用。 */
+  blockCandidates?: Record<string, Array<{ title: string; placeId?: string }>>;
 }
 ```
+
+> **为什么 `variants` 现在就加而不等 P2**：`PlanResult` 是跨人契约面。若 P2 才加，届时 `features/week/*` 的消费代码与测试快照都要跟着改一次。现在只加**可选字段**、P1 不填，成本为零、改契约次数从 2 降到 1。
+>
+> **`blockCandidates` 为什么不进 `TimeBlock`**：进 `TimeBlock` 会改契约层的既有结构；放 `PlanResult` 则是纯新增，且「可替换项」本就是求解结果而非块的固有属性。
 
 ### 4.5 对外入口（唯一）
 
@@ -493,11 +601,15 @@ dirtyRegion(previousPlan, changedInput) =
 ### 6.2 输出规范（PlanResult）
 
 - `plan.blocks`：按 `dayOfWeek ASC, startMin ASC` 排序；`id` 确定性（见 §6.4）。
-- `plan.stats`：`courseMin / studyMin / blankMin / blockCount`（兼容旧结构）。
-- `plan.issues`：`error` / `warn` / `info` 三级；**硬约束违反必须为 error**。
+- `plan.stats`：`courseMin / studyMin / blankMin / blockCount`（**保持旧结构不变**）。
+- `plan.issues`：`error` / `warn` / `info` 三级；每项**必须带 `code`**（见 §4.1），前端按 `code` 分支，**不得匹配中文 `message`**；硬约束违反必须为 error。
 - `notes`：面向用户的过程说明（沿用旧文案风格 + 新增交期/产能说明）。
 - `diagnostics`：面向开发者；不进入用户可见 UI。
 - `nextRolling`：供下一周 `PlanRequest.rolling` 使用。
+
+> **裁决（2026-09-15）**：新增的 `cost` / `churnMin` / `hardViolations` **放 `PlanResult.diagnostics`，不动 `WeekPlan.stats`**。
+> 理由：`stats` 是「用户可见的时长统计」，语义窄且已被 UI 消费；`cost`/`churnMin` 是求解器内部指标，混进去会让 `stats` 的语义变浑。分开放既是纯新增（不改既有结构），也让「给用户看的数」与「给开发者看的数」边界清晰。
+> 若将来 UI 确需展示质量分，从 `diagnostics.cost.total` 读，**不复制进 `stats`**。
 
 ### 6.3 默认权重（工程默认，可覆盖）
 
@@ -517,11 +629,32 @@ export const DEFAULT_WEIGHTS: Weights = {
 
 ### 6.4 确定性 id 规范
 
+**🔴 规则（2026-09-15 修订，原 `day-kind-startMin-seq` 作废）**：
+
 ```
-blockId = `${dayOfWeek}-${kind}-${startMin}-${seq}`
-courseBlockId = `${dayOfWeek}-course-${startMin}-${courseId}`
+blockId = `w{weekNo}-d{dayOfWeek}-{kind}-{语义键}`
 ```
-同输入 + 同 config → id 完全一致。`improve` 阶段移动块时**保留原 id**（仅位置变），便于 diff 与前端 key 稳定。
+
+其中 `语义键` 是该块**固有身份**的稳定标识，**严禁包含时间**：
+
+| 块类型 | 语义键 | 示例 |
+|---|---|---|
+| `course` | `{courseId}p{startPeriod}` | `w3-d2-course-CS101p3` |
+| `user`（固定任务） | `{taskId}` | `w3-d4-user-t1742...` |
+| `meal` | `{mealId}`（breakfast/lunch/dinner） | `w3-d1-meal-lunch` |
+| 模板块 | `{templateId}` | `w3-d5-template-sport-01` |
+| `study` | `{templateId}-{第几块}` | `w3-d1-study-lib-2` |
+
+**为什么必须去掉 `startMin`（这是 P1 的前置条件，不是可选项）**：
+
+`churn`（扰动代价）与 `lockLevels`（锁）都靠 **id 匹配「同一个块」**。若 id 含 `startMin`，则块被移动后 id 跟着变 → 引擎会把它判成「删了一个 + 新增一个」，导致：
+
+1. `churn` 虚高：明明只是平移 30 分钟，却被计为一次删除 + 一次新增，扰动代价翻倍；
+2. **锁彻底失效**：`locked` 的语义是「这个块换时间后还是它自己」，id 一变就锁不住 → 三级锁与「变化一 · 确认过的安排不会再跑掉」从根上建不起来。
+
+`improve` 阶段移动块时**保留原 id**（仅位置变），便于 diff 与前端 key 稳定。同输入 + 同 config → id 完全一致。
+
+> ⚠️ **与旧引擎的差异**：`schedule.ts` @ `8b29816` 仍是旧规则 `day-kind-startMin-seq`。P1-T1.1 抽 `construct` 时，**同步按本条改为语义键**，并以改后的输出拍一次 golden baseline。此事已与 CY 对齐（见 §12.5 / §12.3 D-5）。
 
 ---
 
@@ -541,19 +674,27 @@ courseBlockId = `${dayOfWeek}-course-${startMin}-${courseId}`
 
 1. **零新增依赖**：约束禁止引新依赖；PDF 相关只允许 `pdfjs-dist`（与本引擎无关）。
 2. **`src/types.ts` 是锁死契约**：本规格的所有新类型放 `planner/model.ts`；确需改契约须 CY + B 双方确认。
-3. **文件所有权**：本引擎模块均属 B 的地盘（`src/lib/`）；改动他人文件前先打招呼。
+3. **文件所有权**：本引擎模块均属 B 的地盘（`src/lib/`）；改动他人文件前先打招呼。**2026-09-15 补充**：新建 `tests/` 归 B；`src/lib/planner/**` 新增文件全部归 B；由 CY 更新 `AGENTS.md` 所有权表 + `docs/progress-status.md` 文件地图。
 4. **一次只做一个阶段**：P0 做完跑通再进 P1（协作红线）。
 5. **不在主仓库执行 `git stash`**；日常 git 建议用户在自带终端（`D:\program file\Git`）操作。
 6. **`PhasePolicy` 数值区间**：`dailyStudyMin ∈ [0, 600]`；`maxBlockMin ∈ [20, 240]`；`blankRatio ∈ [0, 0.9]`。
+7. **合入顺序（2026-09-15 裁决）**：CY 先 `rebase` 到 `22bdee88` → 撤回 `types.ts` 的 `TimeBlock.fromEventId`（改到 `model.ts` 扩展）→ 提 PR 到 `dev`（分支 `feat/events-and-diversity`）；B review 合入后，**再**基于合并后的版本抽 `construct`（T1.1）+ 拍 golden baseline（**只拍一次**）。
 
 ### 7.3 零依赖单测跑法（已在本机验证）
 
+**位置已入仓（2026-09-15 裁决，见 §12.5）**：钩子从仓库外 `_devtools/` 移入仓库 `tests/`，与 CY 的 `scripts/`（数据工程）分开，归 B。
+
 ```bash
-# 脚本放仓库外 _devtools/，用别名钩子注册 @/ 解析（仓库零改动）
-node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
+# 引擎测试（v2 求解器）
+node --import ./tests/register.mjs --test "tests/**/*.test.ts"
+
+# CY 侧既有数据工程测试（维持原路径不搬家，仅换运行方式）
+node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 ```
-- 钩子把 `@/x` 解析到 `src/x.ts`。
+
+- 钩子 `tests/register.mjs` + `tests/alias-hook.mjs` 把 `@/x` 解析到 `src/x.ts`。
 - ⚠️ `src/lib/api.ts` 使用 `import.meta.env`，**Node 里加载不了**；因此任何 `import` 了 `api.ts` 的模块（如 `planner/transfer.ts`）不能直接被测试加载。测试 v2 求解器时，**用桩 provider 注入**，不要 import `transfer.ts`。
+- ⚠️ **禁止引入 `tsx` / `ts-node` 等运行器**（零新增依赖纪律）。Node 22 原生类型剥离 + 别名钩子已覆盖此需求。
 
 ### 7.4 数据前置
 
@@ -563,7 +704,7 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 | 营业时段 | `templates.ts` 的 `windows` | 南校食堂标「（估）」需核实 |
 | 节次表 | `constants/time.ts` | 与项目记忆有冲突，以 time.ts 为准，待回教务复核 |
 | 交期 | `data/usst.ts` 的 `DEADLINES[]`、`Course.examDate` | **已存在，待接入** |
-| 学期校历 | `constants/term.ts` 的 `TERM_CALENDAR` | 每学年需补一条 |
+| 学期校历 | `constants/term.ts` 的 `TERM_CALENDAR` | 每学年需补一条；**含 `phases` / `holidays`（假期与考试周边界），直接复用，勿另开通道**（2026-09-15 更正） |
 
 ---
 
@@ -628,7 +769,11 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 
 ## 9. 分步骤实现要点（Agent 可执行清单）
 
-> **执行纪律**：一次只做一个任务（Task）；每个任务完成即跑 `typecheck` + 该任务的验收脚本；通过后再接下一个。**每个 Task 均须 A/B 双方对 `types.ts` 无改动达成默契**（本规格不要求改契约）。
+> **执行纪律**：一次只做一个任务（Task）；每个任务完成即跑 `typecheck` + 该任务的验收脚本；通过后再接下一个。
+>
+> ⚠️ **契约前置（2026-09-15 裁决后修订）**：T1.1 **会**触碰 `types.ts`（`LockLevel` 落契约层，见 §12.5.1），故 **T1.1 开工前须先与 CY 确认该 4 项契约改动**。除此之外，P1 其余任务不改契约。
+>
+> ⚠️ **开工前置（合入顺序）**：T1.1 必须在 **CY 的 `feat/events-and-diversity` 合入 `dev` 之后**基于合并版本开工（见 §7.2 第 7 条 / §12.5.3）。
 
 ### P0 —— 低风险、高回报（先做）
 
@@ -666,9 +811,21 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 
 ### P1 —— 求解器重构（核心）
 
-#### T1.1 抽取 `construct.ts`
-- 把现有 `schedule.ts` 的 7 步抽成 `construct(req, ctx): WeekPlan`，**行为保持等价**。
-- **验收**：同一输入下，`construct` 输出与旧 `buildWeekPlan` **逐块一致**（golden test）。
+#### T1.0 契约层先行（P1 唯一改 `types.ts` 的任务）
+- **目标**：按 §12.5.1 落地 4 项契约改动，之后 P1 不再碰 `types.ts`。
+- **步骤**：① `types.ts` 加 `LockLevel` / `PlanIssueCode` / `TimeBlock.lockLevel?` / `PlanPersistState`；② `model.ts` 改为 `export type { LockLevel } from '@/types'`（删本地定义）；③ `AppState` 加 `planState: PlanPersistState | null`；④ `storage.ts` 迁移 v3→v4。
+- **产出**：契约层 + 迁移逻辑。
+- **验收**：`typecheck` 绿；旧 localStorage 数据能迁移到 v4 且不丢字段；`model.ts` 内 `grep "type LockLevel"` **零命中**（证明未重复定义）。
+- **责任**：①② 由 B 提交、CY review；③④ 属 CY 地盘（`types.ts` + `storage.ts`），由 CY 实施。
+
+#### T1.1 抽取 `construct.ts`（⚠️ 含 id 规则变更）
+- 把现有 `schedule.ts` 的 7 步抽成 `construct(req, ctx): WeekPlan`。
+- ⚠️ **同时把 block id 规则改为语义键**（§6.4）：`w{weekNo}-d{day}-{kind}-{语义键}`，**去掉 `startMin`**。这是 `churn` 与 `lockLevels` 能工作的前提（见 §6.4 说明）。
+- **验收**：
+  1. **块内容等价**：同一输入下，`construct` 输出的块集合（时间 / 类型 / 标题 / 地点）与合并后的 `buildWeekPlan` **逐块一致**；
+  2. **id 已改**：断言所有 id 匹配 `^w\d+-d\d+-\w+-.+$` 且**不含任何形如 `-\d{3,4}-` 的时间片段**；
+  3. 断言连续两次运行输出逐字节相同（确定性）。
+- **注**：因 id 规则变更，「与旧引擎逐块一致」**仅指块内容，不含 id**——§10 中「含 id」的表述作废，以本条为准。
 
 #### T1.2 实现 `objective.ts`
 - 实现 `evaluate` / `evaluateDelta`（§5.5、§5.6、§5.4、§5.3）。
@@ -688,7 +845,7 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 - **验收**：每个软块都有非空 `reason`；issues 分级正确。
 
 #### T1.6 Golden baseline 与指标
-- 生成 `_devtools/golden/week-*.json` 快照（旧引擎输出）。
+- 生成 `tests/golden/week-*.json` 快照（**合并后**的旧引擎输出，只拍一次）。
 - 实现指标脚本：硬约束违反数、cost、软目标达成率、churn、耗时。
 - **验收**：新引擎在全部 golden 输入上 `hardViolations=0` 且 `cost <= baseline`。
 
@@ -723,7 +880,7 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 | ID | 验收项 | 判定方法 | 通过阈值 |
 |---|---|---|---|
 | AC-1 | 硬约束零违反 | 遍历所有块对 + 通勤检查 | `hardViolations === 0` |
-| AC-2 | 构造等价 | 与旧 `buildWeekPlan` 逐块比对 | 100% 一致 |
+| AC-2 | 构造等价 | 与**合并后**的 `buildWeekPlan` 逐块比对 | **块内容 100% 一致；id 按 §6.4 新规则生成，不参与比对** |
 | AC-3 | 目标函数更优 | `cost_v2` vs `cost_greedy` | `cost_v2 <= cost_greedy`（全部 golden 输入） |
 | AC-4 | 交期生效 | 有交期项的排序权重 | 高于无交期同类项 |
 | AC-5 | 锁生效 | `hard` 块 improve 前后 | 坐标不变 |
@@ -755,13 +912,16 @@ node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
 # 1) 类型门禁
 npm run typecheck
 
-# 2) 零依赖验收脚本（仓库外，别名钩子注入）
-node --import ./_devtools/register.mjs _devtools/planner-v2-check.ts
+# 2) 零依赖验收脚本（钩子已入仓 tests/，见 §7.3）
+node --import ./tests/register.mjs --test "tests/**/*.test.ts"
 
 # 3) Golden 对照
-node --import ./_devtools/register.mjs _devtools/golden-compare.ts
+node --import ./tests/register.mjs tests/golden-compare.ts
+
+# 4) CY 侧既有数据工程测试（原路径不搬家，仅换运行方式）
+node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 ```
-> 另建议：为每个 Task 单独写一个 `_devtools/task-*.ts` 断言脚本，跑通即视为该 Task 验收通过。
+> 另建议：为每个 Task 单独写一个 `tests/task-*.test.ts` 断言脚本，跑通即视为该 Task 验收通过。
 
 ---
 
@@ -769,7 +929,7 @@ node --import ./_devtools/register.mjs _devtools/golden-compare.ts
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| `types.ts` 契约需变更 | 阻塞 | 所有新类型放 `planner/model.ts`，契约零改动；确需改动先与 CY 对齐 |
+| `types.ts` 契约需变更 | 阻塞 | **已裁决（§12.5.1）**：仅 4 项进契约层，其余留 `model.ts`；T1.0 一次性完成，之后 P1 不再动契约 |
 | improve 耗时不达标 | 体验 | 先纯爬山小规模验证；必要时降 `maxIterations` / 用 `budgetMs` 硬截断 |
 | 权重难调 | 结果偏差 | 提供 `DEFAULT_WEIGHTS` + 单测固定若干场景做回归；权重变更有快照 |
 | 数据质量（校区/时段） | 结果不可信 | P0 数据治理先行；`verified:false` 降权 + 标注 |
@@ -786,13 +946,18 @@ node --import ./_devtools/register.mjs _devtools/golden-compare.ts
 |---|---|---|
 | v1.0 | 2026-09-14 | 首版：架构 + 数据模型 + 目标函数 + 三期任务 + 验收标准 |
 | v1.1 | 2026-09-14 | ① 状态更新为 P0 已完成（`8b29816`），明确「契约隔离」使 `types.ts` 对齐顺延至 P1；② 新增 §12.3 与 `docs/engine-plan.md` 的 4 处分歧对照 + 调和建议；③ 记录 `engine-plan.md` 中「`src/lib/planner/` 不存在」已过期 |
+| v1.2 | 2026-09-15 | 吸收 CY 最终裁决（§12.5）：① §3.3 明确 `LockLevel` 落 `types.ts` 且仅允许 `model.ts → types.ts` 单向依赖；② §4.1 拆分契约层/引擎侧并新增 `PlanIssueCode`；③ §4.4 拆分 `RollingState`（引擎）与 `PlanPersistState`（持久化），`PlanResult` 新增 `variants` / `blockCandidates` 占位；④ §6.2 裁决 `cost`/`churnMin` 放 `diagnostics` 不动 `stats`；⑤ **§6.4 修正 block id 规则为语义键（去时间）**；⑥ §7.3 测试钩子入仓 `tests/`、明令禁用 `tsx`；⑦ §7.2 补合入顺序；⑧ §12.2 四问全部标注「已裁决」 |
 
-### 12.2 待与 CY 确认清单
+### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
-1. `Commit`/`Place`/`LockLevel` 是否最终收敛进 `types.ts`，或永久留在 `planner/model.ts`。
-2. `Course.examDate` 接入引擎（P0-T0.2）是否属「契约使用方变更」，需否同步。
-3. 是否允许在 `WeekPlan.stats` 上新增 `cost` / `churnMin` 字段（属 `types.ts`）。
-4. `src/lib/planner/` 新增文件是否全部归 B，还是需在 CODEOWNERS/文档登记。
+| # | 问题 | 裁决 |
+|---|---|---|
+| 1 | `Commit`/`Place`/`LockLevel` 是否收敛进 `types.ts`？ | **`LockLevel` 进 `types.ts`**（因 `AppState.locks` 需在契约层可见，否则 `types.ts` 要 import `model.ts`）；`Commit`/`Place`/`Weights`/`SolverConfig`/`PlanRequest`/`PlanResult`/`Diagnostics`/`RollingState` **留 `model.ts`**。见 §12.5 |
+| 2 | `Course.examDate` 接入引擎是否属「契约使用方变更」？ | **不算**（只读既有字段，未改结构）。`examDate → string[]` 的扩展**推迟到 P2**。见 §12.5 |
+| 3 | 是否允许在 `WeekPlan.stats` 加 `cost` / `churnMin`？ | **不加。** 改放 `PlanResult.diagnostics`（纯新增、语义更清晰）。见 §6.2 |
+| 4 | `src/lib/planner/` 新增文件是否全归 B？ | **归 B**；另新建 `tests/` 归 B；由 CY 更新 `AGENTS.md` 所有权表 + `docs/progress-status.md`。见 §7.2 |
+
+> 完整裁决（含 `PlanPersistState` 字段、`studyCandidates` 冲突解法、id 规则、`tsx` 处置）见 **§12.5**。
 
 ### 12.3 与 `docs/engine-plan.md` 的分歧（需 CY 裁决）
 
@@ -809,20 +974,22 @@ node --import ./_devtools/register.mjs _devtools/golden-compare.ts
 | **D-1** | 新类型落位 | `Phase` / `WeekPlan` / `TimeBlock` / `PlanTask` 新增进 `src/types.ts` | `Commit` / `Place` / `LockLevel` / `Weights` 等**只定义在 `src/lib/planner/model.ts`**，且禁止 `from '@/types'` 反向导入 | 落 `types.ts`：每次改模型都要双方会签，P1 的每一步都卡在评审上；落 `model.ts`：日后若决定搬家，代价仅 1 个文件的 re-export |
 | **D-2** | 单版本 vs 多版本 | 推荐层产出 **3–4 个风格不同版本**，每块带 `reason` + `candidates` | 产出**单一周计划** + 加权目标函数 + 最小扰动增量重排 | 多版本会让「锁等级 / 滚动视野 / 增量重排」语义复杂化（哪一版是基准、锁施加在哪一版？）；单版本则失去「用户自己挑一版」的兜底能力 |
 | **D-3** | 模块命名 | `layout.ts`（确定性层）+ `recommend.ts`（推荐层） | 保留 `buildPhases.ts`，新增 `model.ts` / `places.ts` / `objective.ts` + 求解器 | 命名不一致 → P1 的 diff 无法按模块 review，也无法挂到同一份任务清单上 |
-| **D-4** | 消费方目标与时机 | 接通 Newton 幕墙 v9，补 `WeekPlan → blocks` 适配层（≈80 行），列为**第 4 步（P1 内）** | 消费方为 `features/week/*`（§4 模块表），但排在 **P2 收尾** | 若 P1 结束时仍无任何消费方，则 P1 改完无人验证、无验收出口（§10 的验收标准只能退化为纯单测覆盖）；若两边各接一套（幕墙 + `features/week`），会产生两份适配层 |
+| **D-4** | 消费方目标与时机 | 接通 Newton 幕墙 v9，补 `WeekPlan → blocks` 适配层（≈80 行），列为**第 4 步（P1 内）** | 消费方为 `features/week/*`（§4 模块表），但排在 **P2 收尾** | 若 P1 结束时仍无任何消费方，则 P1 改完无人验证、无验收出口；若两边各接一套会产生两份适配层 |
+| **D-5** | block id 规则 | 未提及 | ⚠️ **原为 `day-kind-startMin-seq`（含时间）** | id 含时间 → 块移动后 id 变 → `churn` 虚高 + **锁失效**。三级锁与「变化一」都建不起来 |
+
+#### 分歧裁决结果（2026-09-15，CY 已答复，详见 §12.5）
+
+| # | 裁决 |
+|---|---|
+| **D-1** | ✅ **不进 `types.ts`**（`LockLevel` 例外，见 §12.5）。判据：**看几个模块 import 它**，而非「它重不重要」。 |
+| **D-2** | ✅ **不做整周多版本；做 `candidates`**。`PlanResult` 定形为 `{ plan, variants?, blockCandidates? }`——P1 只填 1 个，为未来留口、**改契约次数从 2 降到 1**。 |
+| **D-3** | ✅ **以实际代码为准**；保留 `buildPhases.ts`（已被 `App.tsx` 引用，改名会波及 CY 的 UI 接线）。`docs/engine-plan.md` 由 CY 标注「相关段落已被 v2 规格书取代」。 |
+| **D-4** | ⚠️ **情况已变**：CY 的未提交 P0 已**新建 `features/week/WeekPlanView.tsx` 并接进 `App.tsx`** —— 消费方**已存在**，不再是「幕墙 vs features/week」二选一。问题变为「该组件**留用**（改消费 `PlanResult`）还是**重做**」，需双方当面定。 |
+| **D-5** | ✅ **采纳语义键规则**：`w{weekNo}-d{day}-{kind}-{语义键}`，**不得含时间**。已写入 §6.4 并列为 T1.1 前置。 |
 
 #### 事实更新（CY 原文已过期的一处）
 
-`engine-plan.md` §二 写「**已确认 `src/lib/planner/` 目录不存在**」——该判断在 2026-09-11 成立，现已不成立。P0 已在该目录落地 4 个模块：`model.ts`（契约）、`places.ts`（地点表）、`objective.ts`（交期/紧迫度）、`schedule.ts`（旧引擎，T0.1/T0.4 已改）。提交 `8b29816`。
-
-#### 建议的调和方案（供 CY 参考，非强制）
-
-| # | 建议 |
-|---|---|
-| D-1 | 维持 `planner/model.ts`（P0 已按此落地）。CY 若要求进 `types.ts`，只需改 `model.ts` 一个文件的 re-export，其余模块零改动——这正是选「契约隔离」的目的：把返工面从「整个 P1」压到「1 个文件」。 |
-| D-2 | **多版本降级为 P2 的可选特性**，不进 P1 主干。P1 先把「单版本 + 目标函数 + 增量重排」做对；多版本可复用同一求解器，用不同 `Weights` 权重跑 N 次即可，增量成本极低。 |
-| D-3 | 由 CY 定名，本文件接受改名（改名只影响 import 路径，不影响逻辑）。 |
-| D-4 | 建议 P1 就打通**一个**可见出口，且只选一个：要么先补 `WeekPlan → Newton blocks` 适配层（约 80 行），要么让 `features/week` 先只读展示 `PlanResult`。理由与 CY 原文一致——这是唯一能让「打磨逻辑」立刻变成「看得见成果」的路径。两者选其一即可，**不建议同时接**，否则会出现两份语义可能漂移的适配层。 |
+`engine-plan.md` §二 写「**已确认 `src/lib/planner/` 目录不存在**」——该判断在 2026-09-11 成立，现已不成立。P0 已在该目录落地 4 个模块：`model.ts`、`places.ts`、`objective.ts`、`schedule.ts`。分支 `feat/planner-v2-p0` @ `22bdee88`。
 
 ### 12.4 参考文件
 
@@ -833,10 +1000,114 @@ node --import ./_devtools/register.mjs _devtools/golden-compare.ts
 - `usst-lightpath-planner/src/lib/planner/transfer.ts`（两趟法）
 - `usst-lightpath-planner/src/types.ts`（锁死契约）
 - `usst-lightpath-planner/src/data/usst.ts`（DEADLINES，交期数据源）
+- `usst-lightpath-planner/src/constants/term.ts`（`TERM_CALENDAR`：假期 / 考试周边界，**已有数据，勿另开通道**）
 - `usst-lightpath-planner/src/constants/time.ts`（节次表，时间基准）
-- `usst-lightpath-planner/docs/engine-plan.md`（CY 的实施顺序方案，2026-09-11；与本文件的分歧见 §12.3）
-- `_devtools/register.mjs` + `alias-hook.mjs`（零依赖测试钩子。**注意：`_devtools/` 位于仓库外，被 `.gitignore` 的 `_*` 规则忽略，不在本 PR 内**）
+- `usst-lightpath-planner/docs/engine-plan.md`（CY 的实施顺序方案，2026-09-11；相关段落已被本文件取代，分歧见 §12.3）
+- `usst-lightpath-planner/tests/register.mjs` + `tests/alias-hook.mjs`（零依赖测试钩子，**P1 起入仓**；此前在仓库外 `_devtools/`）
+
+### 12.5 契约边界与协作指令（✅ CY 最终裁决，2026-09-15）
+
+> 本节为**已生效**的裁决，非建议。实现时以本节为准；与上文任何旧表述冲突时，以本节为准。
+> 来源：CY《光溯排程 · 体验变更说明与协作指令》§2/§3/§4。
+
+#### 12.5.1 契约归属（最终）
+
+**落 `src/types.ts`（契约层，改动需双方确认）——仅这 4 项：**
+
+| 项 | 理由 |
+|---|---|
+| `LockLevel`（类型本身） | ⚠️ **连带要求**：`AppState.locks: Record<string, LockLevel>` 需它在契约层可见；否则 `types.ts` 必须 import `model.ts`，**违反 §3.3「禁止反向依赖」**。故定在 `types.ts`，`model.ts` 改为 `re-export`（见 §3.3） |
+| `TimeBlock.lockLevel?: LockLevel` | 要持久化 + UI 展示锁状态 |
+| `PlanIssue.code?: PlanIssueCode` | 前端不得靠中文 `message` 匹配（文案一改就断） |
+| `PlanPersistState` | 写进 `AppState` 的持久化结构（见 12.5.2） |
+
+**留 `src/lib/planner/model.ts`：**`Commit` / `Place` / `Weights` / `SolverConfig` / `PlanRequest` / `PlanResult` / `Diagnostics` / `RollingState`。
+
+#### 12.5.2 ⚠️ `RollingState` 与 `PlanPersistState` 必须拆名
+
+| 名字 | 归属 | 字段 | 用途 |
+|---|---|---|---|
+| `RollingState` | `model.ts` | `recentLoad` / `loadByDow` / `upcoming` | **跨周负荷与疲劳建模**（引擎内存） |
+| `PlanPersistState` | `types.ts` | `version` / `lastPlanWeek` / `locks` / **`rolling: RollingState \| null`** / `churnMin` / `updatedAt` | 持久化到 `AppState` |
+
+> ⚠️ **易错点**：`PlanPersistState.rolling` 不能省。若只存 `locks` + `churnMin`，「变化三 · 一周很累下一周自动松一点」在 P2 会**没有数据载体**。
+
+#### 12.5.3 合入顺序（最终）
+
+```
+① CY:  git rebase 到 22bdee88（预期仅 studyCandidates 一处冲突）
+② CY:  按 D-1 撤回 types.ts 的 TimeBlock.fromEventId → 改到 model.ts 扩展
+③ CY:  提 PR 到 dev（分支 feat/events-and-diversity）
+④ B:   review + 合入
+⑤ B:   基于合并后版本抽 construct（T1.1）+ 拍 golden baseline（只拍一次）
+```
+
+#### 12.5.4 真实冲突面：只有 `studyCandidates` 一处
+
+逐文件核对结论（CY §1.3，附 ref 与行号）：
+
+| 文件 / 函数 | B 改了吗 | CY 改了吗 | 冲突 |
+|---|---|---|---|
+| `schedule.ts::newId` | ❌ | ✅ | 无 |
+| **`schedule.ts::studyCandidates`** | ✅ `campusOfPlace` | ✅ `sameCampus` + `preferred/fallback` | 🔴 **会冲突** |
+| `schedule.ts::campusOfName` | ✅ 返回 null | ❌ | 无 |
+| `schedule.ts::placeMeal` | ✅ unverified | ❌ | 无 |
+| `schedule.ts::attachTransfers` | ✅ 缺地点处理 | ❌ | 无 |
+| `buildPhases.ts`（`STUDY_PLACES`） | ❌ | ✅ 改池 | 无 |
+| `templates.ts` | ❌ | ✅ `fromEventId`/`notBeforeMin`/`essential` | 无 |
+| `types.ts` | ❌ | ✅ `fromEventId`（**将撤回**） | 无 |
+| 新增文件 | `model/objective/places.ts` | `events.ts` / `WeekPlanView.tsx` / `events.test.ts` | 无 |
+
+**唯一冲突的解法**（保留两侧改动，合并为一个函数）：
+
+```ts
+function studyCandidates(policy, dayCampus, templates): { preferred; fallback } {
+  const all = policy.studyPlaces.map((p, i) => { /* …原逻辑… */ });
+
+  // ← 保留 B 的改动：校区判断走显式地点表（campusOfPlace），不再关键字猜
+  const sameCampus = (t: ActivityTemplate) =>
+    (t.campus ?? 'any') === 'any' || campusOfPlace(t.place ?? '') === dayCampus;
+
+  // ← 保留 CY 的改动：池内轮换 + 兜底分离
+  const preferred = all.filter(sameCampus);
+  const fallback = templates.filter(
+    (t) => t.category === 'study' && sameCampus(t)
+      && !preferred.some((w) => w.place === t.place),
+  );
+  return { preferred: preferred.length ? preferred : all, fallback };
+}
+```
+
+> **裁决：校区判断取 `campusOfPlace` 而非 `t.campus`。** 两者在「模板未填 `campus` 字段」时会分叉——`campusOfPlace` 走显式地点表（T0.1 的成果，查不到返回 `null`），`t.campus` 依赖模板手填。**只保留一套判断，勿两套并存。**
+>
+> 配套：`fillStudy` 内 `rotateFrom(preferred, day + blocks.length)`；`fallback` 仅作兜底（偏好池全关门时）。
+
+#### 12.5.5 代码约定（P1 起生效）
+
+1. **纯度**：`construct` / `improve` / `objective` / `explain` 禁止 `fetch`、读时钟、`Math.random`（种子由入参注入）。
+2. **block id 规则**：`w{weekNo}-d{day}-{kind}-{语义键}`，**不得含时间**（详见 §6.4）。
+3. **构造等价**：`construct` 必须与**合并后**的 `schedule.ts` **逐块一致（块内容，不含 id）**；id 按 §6.4 新规则生成。golden baseline 以此为准，**只拍一次**。
+4. **不猜**：认不出就返回 `null` + 出 `info`，不得回退关键字猜测或默认值（沿用 `campusOfName → null` 纪律）。
+5. **可解释**：100% 软块有非空 `reason`。
+6. **提交规范**：conventional commits（`feat(planner): …` / `fix(schedule): …` / `docs(scheduler): …`）。
+7. **依赖纪律**：**撤掉 `tsx`**（CY 侧 `package.json` 的 `tsx: ^4.23.13` 与 +400 行 lock 变更），改用 §7.3 的零依赖钩子。
+
+#### 12.5.6 待双方当面确认（不阻塞开工）
+
+| # | 事项 | 现状 |
+|---|---|---|
+| 1 | **D-4 的「留用还是重做」** | `WeekPlanView.tsx` 已存在并接了 `App.tsx`（CY 侧）。需定：让它改消费 `PlanResult`（留用），还是重做。涉及 CY 的 UI 工作量保留与否 |
+| 2 | 权重冻结 | 双方确认后冻结，再改须写 ADR |
+| 3 | `_devtools/` 收进 `tests/` 的具体文件名 | 建议 `tests/register.mjs` + `tests/alias-hook.mjs` |
+| 4 | PR review 时延 | 答辩节点紧（9/28 报名、10 月底决赛），建议 24h 内回 |
+
+#### 12.5.7 沟通流程
+
+1. 一切改动走 **`feat/*` → `dev`**，**禁止直接 push `main`**（AGENTS.md 红线 2）。
+2. 跨人文件（`types.ts`）改动**先对齐再动手**，不先写代码后通知。
+3. 每条事实性结论请**附核对命令与 ref**（如 `git show 8b29816:path | grep -n …`），避免口径漂移。
+4. 出现新分歧，**追加到本文件**并在 PR 里引用，不另开新文档分散结论。
 
 ---
 
-*本规格书是设计依据。P0 已完成并推送（`8b29816`），改动落在 `src/lib/planner/` 的四个模块内。进入 P1 前，请 CY 答复 §12.2 与 §12.3。*
+*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `22bdee88`，PR #2）。契约裁决与协作指令见 **§12.5**（已生效）。进入 P1 前，请确认 §12.5.6 的 4 项待办。*
