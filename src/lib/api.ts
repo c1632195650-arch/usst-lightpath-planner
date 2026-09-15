@@ -18,6 +18,18 @@ export interface ChatResult {
   answer: string;
   mode: 'llm' | 'extractive' | 'empty';
   sources: RagSource[];
+  /* ---- 以下字段后端 /api/chat 一直在返回，此前这里没声明 → 调试信号全丢。
+     不是「新增能力」，只是把已经算出来的东西如实声明出来。 ---- */
+  /** 路由判定：llm / hybrid / extractive / empty（决定这轮走合成还是抽取） */
+  route?: string;
+  /** 意图标签（后端 classify_intent 的产物） */
+  intent?: string;
+  /** 检索最高原始向量相似度 —— 边界外判定的信号源，排查「为什么答不上来」看它 */
+  top_raw_vec?: number;
+  /** 本轮是否注入了校园空间上下文（食堂/问路等） */
+  used_space?: boolean;
+  /** 本轮是否读到了记忆（长期画像 / 增量摘要 / 最近原话） */
+  used_memory?: boolean;
 }
 
 export interface SearchResult {
@@ -52,9 +64,37 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** 梨宝问答 */
-export function lbaoChat(q: string): Promise<ChatResult> {
-  return post<ChatResult>('/api/chat', { q });
+/* ---------------- 对话身份（记忆层的前置条件） ---------------- */
+
+/**
+ * `user_id` 与 `session_id` 是两个不同的概念，必须分开传：
+ *   - `user_id`   设备级、持久、跨会话 —— 决定「长期画像」能否跨会话累积；
+ *   - `session_id` 会话级、可重置      —— 决定「最近原话」的窗口范围。
+ * 合并成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。
+ */
+export interface ChatIdentity {
+  userId?: string;
+  sessionId?: string;
+}
+
+/** 梨宝问答。
+ *  @param identity   对话身份。不传则后端落回 `default`/`anon` —— 记忆层不会生效。
+ *  @param profileCtx 用户档案摘要（画像轴值 + 课表概览 + 学期阶段），
+ *                    由 `features/libao/` 侧生成；后端会将其作为独立段落注入 system prompt，
+ *                    使回答建立在「你是谁」之上，而不是一个匿名提问者。
+ */
+export function lbaoChat(
+  q: string,
+  identity: ChatIdentity = {},
+  profileCtx = '',
+): Promise<ChatResult> {
+  // 值为 undefined 时 JSON.stringify 会省略该键 → 后端沿用自身默认值，天然向后兼容
+  return post<ChatResult>('/api/chat', {
+    q,
+    user_id: identity.userId,
+    session_id: identity.sessionId,
+    profile_ctx: profileCtx || undefined,
+  });
 }
 
 /** 梨宝检索（无 LLM 合成，直接返回文章） */

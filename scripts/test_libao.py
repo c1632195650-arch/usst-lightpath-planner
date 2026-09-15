@@ -5,9 +5,19 @@
 用法（需先启动后端 python server/app.py）：
     python scripts/test_libao.py
     python scripts/test_libao.py --only A      # 只跑某一组
+    python scripts/test_libao.py --route-only  # 只判路由，跳过内容断言
 输出：控制台 + docs/test-report-libao.md
+
+判据（2026-09-15 加固）
+------------------------
+过去本脚本**只断言路由**（`ok = route in t["expect"]`），导致同一份报告里
+「今年什么时候放寒假」答错与答对**都被判 ✅**。现在改为 **路由 + 内容** 双判据：
+  · `must_include`     —— 答案里必须出现其中**任意一个**关键词（去空白后匹配）
+  · `must_not_include` —— 答案里不得出现任何一个
+  · 全局兜底：答案不得过短、不得泄露 prompt 内部标记（【人设内核】【用户档案】…）
+判据宁松勿误：关键词取自该轮 `note` 里已确认的事实，且用"任一命中"而非"全部命中"。
 """
-import os, sys, json, time, argparse, datetime
+import os, sys, re, json, time, argparse, datetime
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -19,8 +29,34 @@ os.environ["no_proxy"] = "127.0.0.1,localhost"
 
 import requests
 
-API = "http://127.0.0.1:8000"
+# 后端地址可用环境变量覆盖（与 scripts/libao_eval.py 同一约定），便于在 8001 等端口联调
+API = os.environ.get("LIBAO_BASE", "http://127.0.0.1:8000")
 CHAT = API + "/api/chat"
+
+# 答案里不该出现的 prompt 内部标记（注入/越权时最容易在这里露出来）
+LEAK_MARKERS = ["【人设内核】", "【回答铁律】", "【本轮依据】", "【用户档案】", "【校园资讯】"]
+
+
+def norm(s):
+    """去空白后再匹配 —— 模型经常输出「9 月 7 日」这种带空格的写法。"""
+    return re.sub(r"\s+", "", s or "")
+
+
+def content_check(turn, answer):
+    """返回 (是否通过, 原因)。任何一个内容判据不满足即不通过。"""
+    a = norm(answer)
+    if len(a) < 8:
+        return False, "答案过短或为空"
+    leaked = [m for m in LEAK_MARKERS if m in a]
+    if leaked:
+        return False, f"泄露 prompt 内部标记 {leaked}"
+    mi = turn.get("must_include") or []
+    if mi and not any(norm(k) in a for k in mi):
+        return False, f"未含任一关键词 {mi}"
+    bad = [k for k in (turn.get("must_not_include") or []) if norm(k) in a]
+    if bad:
+        return False, f"出现禁止词 {bad}"
+    return True, ""
 
 # 每组：user_id 相同=跨会话共享长期画像；session_id 相同=同一段对话
 GROUPS = [
@@ -80,8 +116,10 @@ GROUPS = [
         "user": "u_h", "sid": "s_h",
         "turns": [
             {"q": "体育馆怎么预约？收费吗？", "expect": ["grounded", "hybrid"], "note": "体育场馆全指南：公众号在线订场/室外免费"},
-            {"q": "宿舍能用大功率电器吗？电磁炉行不行", "expect": ["grounded", "hybrid"], "note": "宿管会条例：违规电器清单、400W、黑牌取消奖学金"},
-            {"q": "图书馆借书能借几本？能借多久？", "expect": ["grounded", "hybrid"], "note": "借阅秘籍：本专科生 30 册/30 天"},
+            {"q": "宿舍能用大功率电器吗？电磁炉行不行", "expect": ["grounded", "hybrid"], "note": "宿管会条例：违规电器清单、400W、黑牌取消奖学金",
+             "must_include": ["400W", "400w"]},
+            {"q": "图书馆借书能借几本？能借多久？", "expect": ["grounded", "hybrid"], "note": "借阅秘籍：本专科生 30 册/30 天",
+             "must_include": ["30册", "30天"]},
             {"q": "图书馆超期了会罚款吗？", "expect": ["grounded", "hybrid"], "note": "不罚款但停借，还清自动恢复"},
             {"q": "图书馆自习需要预约座位吗？", "expect": ["grounded", "hybrid"], "note": "Welink 选座系统，未签到释放座位"},
             {"q": "宿舍晚上断电吗？", "expect": ["hybrid", "llm", "grounded"], "note": "库里无明确断电时间，应诚实或给用电规定"},
@@ -151,15 +189,19 @@ def chat(q, sid, uid, timeout=90):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="", help="只跑指定组，如 A 或 A,B")
+    ap.add_argument("--route-only", action="store_true",
+                    help="只判路由，跳过内容断言（内容断言打真实 LLM，偶发波动时用这个逃生）")
     args = ap.parse_args()
     only = [x.strip().upper() for x in args.only.split(",") if x.strip()]
+    check_content = not args.route_only
 
     try:
         h = requests.get(API + "/api/health", timeout=8).json()
     except Exception as e:
         print("❌ 后端没起来。请先运行：python server/app.py\n  错误：", e)
         return 1
-    print(f"后端 OK：llm={h.get('llm')} model={h.get('model')} 阈值={h.get('thresholds')}\n")
+    print(f"后端 {API}：llm={h.get('llm')} model={h.get('model')} 阈值={h.get('thresholds')}")
+    print(f"判据：路由{' + 内容' if check_content else '（仅路由）'}\n")
 
     results = []
     t0 = time.time()
@@ -173,24 +215,47 @@ def main():
             try:
                 res = chat(t["q"], g["sid"], g["user"])
             except Exception as e:
-                print(f"  Q{i}: {t['q']}\n   ❌ 请求失败：{e}")
+                # ⚠️ 必须记账：旧实现在这里 continue，**失败的轮次根本不进分母**，
+                #    于是一次 HTTP 500 会把「43/45」悄悄变成「44/44」。
+                results.append({
+                    "group": g["id"], "q": t["q"], "route": "(请求失败)",
+                    "expect": t["expect"], "ok": False,
+                    "route_ok": False, "content_ok": False,
+                    "reason": f"请求失败：{e}", "note": t["note"],
+                    "answer": "", "titles": [], "raw": None, "intent": None,
+                    "space": None, "mem": None, "mode": None,
+                })
+                print(f"\n  Q{i}: {t['q']}\n   ❌ 请求失败：{e}")
                 continue
+
             route = res.get("route", "?")
-            ok = route in t["expect"]
+            answer = res.get("answer", "")
+            route_ok = route in t["expect"]
+            if check_content:
+                content_ok, reason = content_check(t, answer)
+            else:
+                content_ok, reason = True, ""
+            ok = route_ok and content_ok
             rec = {
                 "group": g["id"], "q": t["q"], "route": route,
                 "expect": t["expect"], "ok": ok,
+                "route_ok": route_ok, "content_ok": content_ok, "reason": reason,
                 "raw": res.get("top_raw_vec"), "intent": res.get("intent"),
                 "space": res.get("used_space"), "mem": res.get("used_memory"),
                 "mode": res.get("mode"), "note": t["note"],
-                "answer": res.get("answer", ""),
+                "answer": answer,
                 "titles": [s["title"] for s in res.get("sources", [])][:3],
             }
             results.append(rec)
             flag = "✅" if ok else "⚠️"
+            why = ""
+            if not route_ok:
+                why += " [路由不符]"
+            if not content_ok:
+                why += f" [内容：{reason}]"
             print(f"\n  Q{i}: {t['q']}")
             print(f"   {flag} route={route} (期望{t['expect']}) | raw_vec={rec['raw']} "
-                  f"| intent={rec['intent']} | 空间={rec['space']} 记忆={rec['mem']}")
+                  f"| intent={rec['intent']} | 空间={rec['space']} 记忆={rec['mem']}{why}")
             print(f"   命中: {rec['titles']}")
             print(f"   梨宝: {rec['answer'][:220].replace(chr(10), ' ')}")
             time.sleep(0.3)
@@ -199,10 +264,14 @@ def main():
     # ---- 汇总 ----
     total = len(results)
     passed = sum(1 for r in results if r["ok"])
+    route_passed = sum(1 for r in results if r.get("route_ok"))
+    content_passed = sum(1 for r in results if r.get("content_ok"))
     from collections import Counter
     dist = Counter(r["route"] for r in results)
     print("=" * 72)
-    print(f"汇总：{passed}/{total} 轮路由符合预期（{passed/total*100 if total else 0:.0f}%）")
+    print(f"汇总：{passed}/{total} 全判据通过")
+    print(f"      路由 {route_passed}/{total} ｜ 内容 {content_passed}/{total}"
+          f"{'（已跳过）' if not check_content else ''}")
     print(f"路由分布：{dict(dist)}")
     print(f"耗时 {time.time()-t0:.1f}s")
 
@@ -211,8 +280,9 @@ def main():
     lines = [
         "# 梨宝多轮测试报告", "",
         f"> 生成时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} ｜ "
-        f"后端 llm={h.get('llm')} model={h.get('model')}", "",
-        f"**路由符合预期：{passed}/{total}（{passed/total*100 if total else 0:.0f}%）** ｜ 分布：{dict(dist)}", "",
+        f"后端 {API} llm={h.get('llm')} model={h.get('model')}", "",
+        f"**全判据通过：{passed}/{total}** ｜ 路由 {route_passed}/{total} ｜ 内容 {content_passed}/{total}"
+        f"{'（内容断言已跳过）' if not check_content else ''} ｜ 分布：{dict(dist)}", "",
     ]
     cur = None
     for r in results:
@@ -220,8 +290,13 @@ def main():
             cur = r["group"]
             lines += ["", f"## {cur} 组", ""]
         flag = "✅" if r["ok"] else "⚠️"
+        why = ""
+        if not r.get("route_ok"):
+            why += " 〔路由不符〕"
+        if not r.get("content_ok", True):
+            why += f" 〔内容：{r.get('reason')}〕"
         lines += [
-            f"**Q：{r['q']}**  {flag}",
+            f"**Q：{r['q']}**  {flag}{why}",
             "",
             f"- 路由：`{r['route']}`（期望 {r['expect']}）｜ raw_vec={r['raw']} ｜ "
             f"意图={r['intent']} ｜ 用空间={r['space']} ｜ 用记忆={r['mem']}",

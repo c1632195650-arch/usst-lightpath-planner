@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
-import { lbaoRecommend, type LbaoPlan } from '@/lib/lbao';
-import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
-import { mondayOf, weekDates, todayISO } from '@/lib/date';
+import { currentWeekNo } from '@/lib/date';
 import { lbaoChat, lbaoHealth, type RagSource } from '@/lib/api';
+import { buildProfileContext } from '@/features/libao/profileContext';
+import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
 
 interface Msg {
   role: 'user' | 'lbao';
   text: string;
   sources?: RagSource[];
   mode?: string;
-  plan?: LbaoPlan;
+  /** 排程要点。来自**真引擎**（与「周计划」页同源），不是模板 —— 见 weekPlanForChat.ts */
+  planPoints?: string[];
+  /** 提示去哪儿看完整时间轴 */
+  goWeek?: boolean;
   needProfile?: boolean;
 }
 
@@ -20,12 +23,61 @@ const QUICK = ['四六级什么时候报名', '怎么选课和重修', '帮我�
 /** 对话初始说明，明确问答与排程两个能力。 */
 const GREETING = '我是梨宝，咱上理的校园助手。你可以问四六级、选课、放假、报到等校园问题，也可以说「帮我安排这周」，我会结合你的画像和课表给出建议。';
 
-/** 推荐意图识别：安排/规划类走本地规则，其余走 RAG 问答。 */
+/** 推荐意图识别：安排/规划类走真排程，其余走 RAG 问答。 */
 function isRecommendIntent(q: string): boolean {
   const s = q.trim();
   if (/(安排|规划|计划一下|怎么过|排一下|帮我排|给我排)/.test(s)) return true;
   if (/(这周|本周|今天|明天|后天|周末)/.test(s) && /(怎么|干嘛|做啥|干点|过|安排)/.test(s)) return true;
   return false;
+}
+
+/* ---------------- 对话身份 ----------------
+ * 后端 `/api/chat` 早就接受 `session_id` / `user_id`，但前端此前**只发一个问题字符串**，
+ * 后端只好落回 `default` / `anon` —— 结果三层记忆在前端链路上完全空转，
+ * 且所有用户共用同一份画像（演示时连着问两轮不同身份就会串味）。
+ * 补上身份，是让那套已经写好的记忆层真正生效的唯一前置条件。
+ */
+
+function newId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* 老浏览器 / 非安全上下文没有 randomUUID，走下面的兜底 */
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** 设备级标识：持久化复用 —— 后端的「长期画像」靠它跨会话累积。
+ *  ⚠️ 换设备或清缓存 = 变成另一个人，这是无登录体系下的已知限制。 */
+function deviceUserId(): string {
+  const KEY = 'usst.libao.user_id';
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved) return saved;
+    const id = `u-${newId()}`;
+    localStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    // 隐私模式等场景 localStorage 不可写 → 退回后端默认，功能降级但不报错
+    return 'anon';
+  }
+}
+
+/** 会话级标识：存 sessionStorage，关掉标签页即失效 —— 对应后端「最近原话」的窗口。
+ *  与 user_id **刻意分开**：合成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。 */
+function currentSessionId(): string {
+  const KEY = 'usst.libao.session_id';
+  try {
+    const saved = sessionStorage.getItem(KEY);
+    if (saved) return saved;
+    const id = `s-${newId()}`;
+    sessionStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    return 'default';
+  }
 }
 
 /** 将本地排程建议和校园资料问答放进同一段对话，而不混用两种数据来源。 */
@@ -39,6 +91,20 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
+  const [identity] = useState(() => ({
+    userId: deviceUserId(),
+    sessionId: currentSessionId(),
+  }));
+
+  /** 用户档案摘要：画像轴值 + 本周课表 + 学期阶段。
+   *  每轮随请求发出，但只在 profile / schedule 变化时重算 —— 后端会把它注入 system prompt，
+   *  这是「梨宝知道你是谁」这件事的全部数据来源。 */
+  const profileCtx = useMemo(
+    () => buildProfileContext(profile, schedule),
+    [profile, schedule],
+  );
 
   /** 首次进入时只探测资料服务状态，不影响本地排程能力。 */
   useEffect(() => {
@@ -60,18 +126,42 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     setMessages((current) => [...current, { role: 'user', text: q }]);
     setLoading(true);
 
-    /** 推荐意图只使用已在本地的画像和课表，不等待后端服务。 */
+    /** 排程意图：走**真引擎**（与「周计划」页同源），只把结果要点化后回话。
+     *  这里刻意不再调用 `lbaoRecommend` —— 那份是硬编码时间的模板（08:00/11:45/19:00），
+     *  排出来会和周计划页对不上；用户连着看两处就会发现，这就是「双轨」的破绽。 */
     if (isRecommendIntent(q)) {
-      if (!profile) {
+      // 既无画像也无课表 → 没有可排的输入。说清楚缺什么，不假装能排。
+      if (!profile && schedule.courses.length === 0) {
         setMessages((current) => [...current, {
           role: 'lbao',
-          text: '我还不了解你的作息偏好。完成画像后，就能按你的情况安排这一周。',
+          text: '我还不了解你的作息偏好，也还没看到你的课表。完成画像或导入课表后，我就能按你的实际情况安排这一周。',
           needProfile: true,
         }]);
-      } else {
-        const days = weekDates(mondayOf(todayISO()));
-        const plan = lbaoRecommend(profile, schedule, days);
-        setMessages((current) => [...current, { role: 'lbao', text: '梨宝掐指一算，给你安排好啦，你懂我意思吧？', plan }]);
+        setLoading(false);
+        return;
+      }
+
+      const weekNo = currentWeekNo(schedule.termStart);
+      try {
+        const plan = await planWeekForChat(schedule, profile, weekNo);
+        setMessages((current) => [...current, plan ? {
+          role: 'lbao',
+          text: `第 ${weekNo} 周我按你的课表排了一版，你懂我意思吧：`,
+          planPoints: summarizeWeekPlan(plan),
+          goWeek: true,
+        } : {
+          // 引擎排不了（该周不在学期范围）→ 直说，不编造日程
+          role: 'lbao',
+          text: '这一周不在本学期的范围里，我排不出来。换一周再问我，或者直接去「周计划」翻翻看。',
+          goWeek: true,
+        }]);
+      } catch {
+        // 引擎异常 → 诚实说明。**绝不用模板兜底**，那正是我们要消灭的东西。
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
+          goWeek: true,
+        }]);
       }
       setLoading(false);
       return;
@@ -79,7 +169,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
     /** 问答意图经过后端检索；服务不可用时保留当前对话并给出恢复方式。 */
     try {
-      const response = await lbaoChat(q);
+      // 带上身份与档案：前者让后端记忆层生效，后者让回答建立在「你是谁」之上
+      const response = await lbaoChat(q, identity, profileCtx);
       setMessages((current) => [...current, { role: 'lbao', text: response.answer, sources: response.sources, mode: response.mode }]);
       setOnline(true);
     } catch {
@@ -163,7 +254,17 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
                   <button onClick={onGoProfile} className="button-primary ml-1 px-3 py-2 text-xs">完成画像</button>
                 )}
 
-                {message.plan && <LbaoPlanView plan={message.plan} />}
+                {message.planPoints && message.planPoints.length > 0 && (
+                  <ul className="w-full space-y-1 pl-1">
+                    {message.planPoints.map((point, i) => (
+                      <li key={i} className="text-[12.5px] leading-5 text-ink-soft">· {point}</li>
+                    ))}
+                  </ul>
+                )}
+
+                {message.goWeek && (
+                  <p className="pl-1 text-[11.5px] text-ink-faint">完整时间轴在「总览 → 选一周 → 周计划」</p>
+                )}
 
                 {message.sources && message.sources.length > 0 && (
                   <div className="w-full divide-y divide-ink/10 border-y border-ink/10 pl-1">
