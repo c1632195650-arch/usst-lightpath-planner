@@ -256,6 +256,13 @@ function pickDuration(durations: number[], availableMin: number): number | null 
   return usable.length ? usable[usable.length - 1] : null;
 }
 
+/** 把数组从 offset 处轮转（确定性：同一 offset 必得同一顺序，不引入随机数） */
+function rotateFrom<T>(arr: T[], offset: number): T[] {
+  if (arr.length <= 1) return arr;
+  const k = ((offset % arr.length) + arr.length) % arr.length;
+  return [...arr.slice(k), ...arr.slice(0, k)];
+}
+
 function sortBlocks(blocks: TimeBlock[]): TimeBlock[] {
   return [...blocks].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin);
 }
@@ -327,10 +334,17 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
   let studyMin = 0;
   let courseMin = 0;
   let blankMin = 0;
-  let seq = 0;
   /** 排到了「数据未核实」的食堂几次（南校食堂营业时段为推算值）→ 汇总成一条 note */
   let unverifiedMeals = 0;
-  const newId = (day: number, kind: string, startMin: number) => `${day}-${kind}-${startMin}-${++seq}`;
+  /**
+   * 稳定 id：只与「周次 + 星期 + 类型 + 语义键」有关，**与时间无关**。
+   *
+   * 为什么必须这样：`locked`（用户确认过的块，重排时不动）要求「同一个块换时间后
+   * 还是同一个 id」。早期版本用 `day-kind-开始分钟-序号` 生成 id，时间一调 id 就变，
+   * 锁根本锁不住 —— 「确认 → 重排 → 保持」这条闭环从根上建不起来。
+   * （v2 的 churn / lockLevels 同样靠它匹配「同一个块」，故这是三级锁的前置条件。）
+   */
+  const newId = (day: number, kind: string, key: string) => `w${weekNo}-d${day}-${kind}-${key}`;
 
   for (const day of DAY_ORDER) {
     const dayName = DAY_NAME[day];
@@ -341,7 +355,7 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     const courseBlocks: TimeBlock[] = daySlots.map((s) => {
       courseMin += s.endMin - s.startMin;
       return {
-        id: newId(day, 'course', s.startMin),
+        id: newId(day, 'course', `${s.course.id}p${s.slot.startPeriod}`),
         kind: 'course' as const,
         dayOfWeek: day,
         startMin: s.startMin,
@@ -378,7 +392,7 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     const userBlocks: TimeBlock[] = fixedTasks
       .filter((t) => t.dayOfWeek === day && taskActive(t))
       .map((t) => ({
-        id: newId(day, 'user', t.startMin as number),
+        id: newId(day, 'user', t.id as string),
         kind: t.kind ?? 'activity',
         dayOfWeek: day,
         startMin: t.startMin as number,
@@ -400,7 +414,9 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
       for (const meal of MEAL_SLOTS) {
         // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
         if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
-        const res = placeMeal({ day, meal, placed, dayStartMin, dayEndMin, templates, scenarios, transfer, dayCampus });
+        const res = placeMeal({
+          day, meal, placed, dayCampus, dayStartMin, dayEndMin, templates, scenarios, transfer, newId,
+        });
         if (res.block) {
           placed = [...placed, res.block];
           if (res.unverified) unverifiedMeals++;
@@ -416,10 +432,15 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     totalFree += freeTotal;
     // 留白是「下限」：至少留下 blankRatio 的空档不被占用
     const usable = Math.max(0, freeTotal - Math.round(freeTotal * policy.blankRatio));
-    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4));
+    // 事件准备块（有截止日期）是硬需求：单独留出预算，不与日常活动抢额度。
+    // 「光电杯明天截止」比「今天少自习一小时」严重得多，不该被活动预算挤掉。
+    const essentialMin = floatingTasks
+      .filter((t) => t.essential && taskActive(t) && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .reduce((n, t) => n + (t.durationMin ?? 60), 0);
+    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4)) + essentialMin;
 
     /* --- 6.5 活动模块（运动/午休/取快递/夜宵/自定义…） --- */
-    const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive);
+    const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day);
     const perCat: Record<string, number> = {};
     let activityMin = 0;
     for (const tpl of candidates) {
@@ -488,6 +509,24 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     );
   }
 
+  /* --- 6.9 id 唯一性自检 --- */
+  // 语义键 id 是 v2 的 `lockLevels` / `churn` 匹配「同一个块」的依据。
+  // 一旦重复，锁会作用于**错误的对象**（静默失效）—— 比抛错危险得多，所以这里直接断言。
+  // ⚠️ 刻意**不自动改名**：静默追加 `-2` 会让「同一个块」的身份漂移，同样破坏 id 的语义。
+  // 目前 `template` 分支用的是裸 `tpl.id`（无序号），如将来允许同模板一天排两次，这里会先报出来。
+  const idSeen = new Set<string>();
+  const idDup: string[] = [];
+  for (const b of allBlocks) {
+    if (idSeen.has(b.id)) idDup.push(b.id);
+    idSeen.add(b.id);
+  }
+  if (idDup.length) {
+    throw new Error(
+      `[schedule] blockId 重复：${[...new Set(idDup)].join(', ')}`
+      + ' —— 语义键冲突，请检查 newId 各调用点的 key 是否唯一',
+    );
+  }
+
   return {
     plan: {
       weekNo,
@@ -548,8 +587,9 @@ function placeMeal(args: {
   templates: ActivityTemplate[];
   scenarios: ScenarioFields | null;
   transfer: TransferProvider;
+  newId: (day: number, kind: string, key: string) => string;
 }): MealPick {
-  const { day, meal, placed, dayCampus, dayStartMin, dayEndMin, templates, scenarios, transfer } = args;
+  const { day, meal, placed, dayCampus, dayStartMin, dayEndMin, templates, scenarios, transfer, newId } = args;
   const nominal = toMinutes(meal.nominal);
   const dur = meal.durationMin;
   const label = campusLabel(dayCampus);
@@ -627,7 +667,7 @@ function placeMeal(args: {
 
   return {
     block: {
-      id: `${day}-meal-${start}`,
+      id: newId(day, 'meal', meal.id),
       kind: 'meal',
       dayOfWeek: day,
       startMin: start,
@@ -653,6 +693,7 @@ function buildCandidates(
   scenarios: ScenarioFields | null,
   floatingTasks: UserTask[],
   taskActive: (t: UserTask) => boolean,
+  day: DayOfWeek,
 ): ActivityTemplate[] {
   const tpls = templates.filter((t) => {
     // 食堂由 placeMeal 专门处理（要按校区与营业时段选），自习由 fillStudy 处理（要按策略分块），
@@ -665,7 +706,12 @@ function buildCandidates(
     }
     return true;
   });
-  const custom = floatingTasks.filter(taskActive).map(customTemplate);
+  // 浮动任务里「指定了星期几」的，只在那一星期几参与。
+  // 这是事件准备块能精确落到日期的关键 —— 否则「截止前每天一块」会变成一周里天天出现。
+  const custom = floatingTasks
+    .filter(taskActive)
+    .filter((t) => t.dayOfWeek == null || t.dayOfWeek === day)
+    .map(customTemplate);
   return [...custom, ...tpls].sort((a, b) => b.priority - a.priority);
 }
 
@@ -679,7 +725,7 @@ function placeTemplate(args: {
   day: DayOfWeek;
   placed: TimeBlock[];
   dayCampus: string;
-  newId: (day: number, kind: string, startMin: number) => string;
+  newId: (day: number, kind: string, key: string) => string;
   policy: PhasePolicy;
   transfer: TransferProvider;
   dayStartMin: number;
@@ -699,7 +745,7 @@ function placeTemplate(args: {
       ? tpl.windows.map((w) => ({ startMin: w.startMin, endMin: w.endMin }))
       : [gap];
     for (const z of zones) {
-      const floor = Math.max(gap.startMin, z.startMin);
+      const floor = Math.max(gap.startMin, z.startMin, tpl.notBeforeMin ?? 0);
       const ceiling = Math.min(gap.endMin, z.endMin);
       // 两头都要留走路时间：从上个块走过来 + 待会儿还要走到下一个块
       const prev = lastBlockBefore(placed, floor);
@@ -710,7 +756,7 @@ function placeTemplate(args: {
       const dur = pickDuration(tpl.durations, ceiling - s - tail - (tail ? SOFT_BUFFER_MIN : 0));
       if (dur == null) continue;
       return {
-        id: newId(day, tpl.kind, s),
+        id: newId(day, tpl.kind, tpl.id),
         kind: tpl.kind,
         dayOfWeek: day,
         startMin: s,
@@ -721,6 +767,7 @@ function placeTemplate(args: {
         reason: tpl.note ?? '常用模块，按空档大小自动选了这个时长',
         // 用户自定义的模块要能一眼分辨出来（后续「确认 → 行为记录」靠这个）
         source: tpl.category === 'custom' ? 'user' : 'template',
+        fromEventId: tpl.fromEventId,
       };
     }
   }
@@ -735,8 +782,8 @@ function studyCandidates(
   policy: PhasePolicy,
   dayCampus: string,
   templates: ActivityTemplate[],
-): ActivityTemplate[] {
-  const wanted = policy.studyPlaces.map((p, i) => {
+): { preferred: ActivityTemplate[]; fallback: ActivityTemplate[] } {
+  const all = policy.studyPlaces.map((p, i) => {
     const hit = templates.find((t) => t.place === p && t.category === 'study');
     if (hit) return hit;
     // 策略里的自习点不在模块库 → 现场造一个。
@@ -756,14 +803,22 @@ function studyCandidates(
       verified: true,
     };
   });
-  // 补充候选：同校区的其它自习点。
-  // 校区来自**显式地点表**（旧实现靠 campusOfName 关键字猜 + 默认北校）——行为等价但不再猜
-  const extra = templates.filter(
+  // 校区判断统一走**显式地点表**（取代 campusOfName 的关键字猜测）。
+  // 查不到校区时保守保留 —— 不因数据缺失把候选一刀切掉（真跨校区的点由转场时间自己暴露）。
+  const inCampus = (t: ActivityTemplate) => {
+    const c = campusOfPlace(t.place ?? '');
+    return c == null || c === dayCampus;
+  };
+  // 按当天所在校区过滤：偏好点在南校、而今天课在北校时，
+  // 不该为了「遵守偏好」跨校区去自习（走过去就半小时）。
+  const preferred = all.filter(inCampus);
+  const fallback = templates.filter(
     (t) => t.category === 'study'
-      && campusOfPlace(t.place ?? '') === dayCampus
-      && !wanted.some((w) => w.place === t.place),
+      && inCampus(t)
+      && !preferred.some((w) => w.place === t.place),
   );
-  return [...wanted, ...extra];
+  // 偏好池在当天校区一个不剩时退回未过滤的偏好池 —— 宁可用远一点的点，也不能不自习
+  return { preferred: preferred.length ? preferred : all, fallback };
 }
 
 function fillStudy(args: {
@@ -774,7 +829,7 @@ function fillStudy(args: {
   policy: PhasePolicy;
   templates: ActivityTemplate[];
   dayCampus: string;
-  newId: (day: number, kind: string, startMin: number) => string;
+  newId: (day: number, kind: string, key: string) => string;
   transfer: TransferProvider;
   dayStartMin: number;
   dayEndMin: number;
@@ -786,22 +841,32 @@ function fillStudy(args: {
   if (isWeekend && !policy.weekendWork) return []; // 这个阶段不占周末
   if (budget < MIN_CHUNK) return [];
 
-  const cands = studyCandidates(policy, dayCampus, templates);
+  const { preferred, fallback } = studyCandidates(policy, dayCampus, templates);
   const blocks: TimeBlock[] = [];
   let remaining = budget;
+  /**
+   * 轮换**只在画像偏好池内**进行 —— fallback（同校区其他自习点）只作兜底。
+   * 否则「说喜欢图书馆」的人会被轮到宿舍自习去，画像就白搭了。
+   * 偏移随「星期几 + 今天第几块」平移，是确定性的（不用随机数，测试可复现）。
+   */
+  const rotated = () => rotateFrom(preferred, day + blocks.length);
 
   // 每次都重新算空档：放完一块后布局变了，下一块的走路时间也要跟着重算
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
+    const cands = rotated();
 
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);
-      // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）
+      // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）；
+      // 偏好池全关门时才退到同校区的兜底自习点
       const tpl = cands.find((t) => openAt(t, gap.startMin, gap.startMin + MIN_CHUNK))
         ?? cands.find((t) => openAt(t, gap.endMin - MIN_CHUNK, gap.endMin))
-        ?? cands[0];
+        ?? fallback.find((t) => openAt(t, gap.startMin, gap.startMin + MIN_CHUNK))
+        ?? cands[0]
+        ?? fallback[0];
       if (!tpl) continue;
       const need = travelNeed(transfer, prev?.place, tpl.place);
       const s = prev ? Math.max(gap.startMin, prev.endMin + need + SOFT_BUFFER_MIN) : gap.startMin;
@@ -821,7 +886,7 @@ function fillStudy(args: {
     if (!best) break;
 
     blocks.push({
-      id: newId(day, 'study', best.start),
+      id: newId(day, 'study', `${best.tpl.id}-${blocks.length + 1}`),
       kind: 'study',
       dayOfWeek: day,
       startMin: best.start,
@@ -829,7 +894,8 @@ function fillStudy(args: {
       title: best.tpl.name,
       place: best.tpl.place,
       emoji: best.tpl.emoji,
-      reason: `阶段策略：单块不超过 ${policy.maxBlockMin} 分钟，这块用了 ${best.dur} 分钟`,
+      reason: `阶段策略：单块不超过 ${policy.maxBlockMin} 分钟，这块用了 ${best.dur} 分钟`
+        + (preferred[0] && best.tpl.place !== preferred[0].place ? `；换个点（${best.tpl.place}），别总待在一处` : ''),
       source: 'template',
     });
     placed = [...placed, blocks[blocks.length - 1]];

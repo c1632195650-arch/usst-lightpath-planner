@@ -40,6 +40,30 @@ export const CAL_EVENTS: CalEvent[] = [
  * 上理工 · 时间节点 / 倒计时（即将到来的重要节点）
  * ========================================================== */
 
+/**
+ * 排程准备策略 —— 把「截止日」变成日程里真正的准备块。
+ *
+ * 为什么需要它：一个倒计时数字只回答「还有几天」，不回答「我什么时候动手」。
+ * 有了 prep，光电杯截止前 10 天就会开始往日程里塞「报名材料」的块，
+ * 四六级考前四周开始每周排真题 —— 事件从此**参与排程**，而不只是被展示。
+ *
+ * 只有「需要提前准备」的事件才配 prep；纯提醒类（报名开启、校庆活动）留空。
+ */
+export interface PrepPlan {
+  /** 提前几天开始准备（窗口 = [截止日 − leadDays, 截止日前一天]） */
+  leadDays: number;
+  /** 每次准备块的时长（分钟），也是引擎挑空档的档位 */
+  blockMin: number;
+  /** 总共需要几小时准备 —— 用它和 blockMin 算出要排几块，再在窗口内均匀铺开 */
+  prepHours: number;
+  /** 准备块标题（出现在日程里的名字） */
+  taskTitle: string;
+  /** 准备地点（POI 名，可选；给了就能算转场时间） */
+  place?: string;
+  /** 优先级，默认 88 —— 略低于用户手动添加的 90，高于系统建议的自习块 */
+  priority?: number;
+}
+
 export interface Deadline {
   id: string;
   date: string;   // ISO 日期
@@ -48,17 +72,39 @@ export interface Deadline {
   tag: string;
   color: string;  // 贴纸主色
   note?: string;
+  /** 有 prep = 这个事件会反向展开成日程里的准备块；没有 = 纯提醒 */
+  prep?: PrepPlan;
 }
 
 /** color 与 constants/chartColors.ts 的 deadlineColor(tag) 保持一致。 */
 export const DEADLINES: Deadline[] = [
   { id: 'cet-reg', date: '2026-09-11', title: '四六级报名开启', emoji: '📝', tag: '报名', color: '#147A8B', note: '各考点时间不同，盯紧教务处通知' },
-  { id: 'gdb', date: '2026-09-28', title: '光电杯报名截止', emoji: '🏆', tag: '竞赛', color: '#6B4BA3', note: '作品抓紧交，别拖到最后' },
+  {
+    id: 'gdb', date: '2026-09-28', title: '光电杯报名截止', emoji: '🏆', tag: '竞赛', color: '#6B4BA3',
+    note: '作品抓紧交，别拖到最后',
+    prep: { leadDays: 10, blockMin: 90, prepHours: 6, taskTitle: '光电杯报名材料', place: '第三教学楼' },
+  },
   { id: 'anniv', date: '2026-10-25', title: '建校 120 周年校庆', emoji: '🎂', tag: '校庆', color: '#B9762A', note: '校庆日，校园有活动' },
-  { id: 'midterm', date: '2026-11-09', title: '期中考试周', emoji: '📚', tag: '考试', color: '#C24B3A', note: '提前开始复习不慌' },
-  { id: 'cet-set', date: '2026-11-21', title: '四六级口试', emoji: '🎤', tag: '考试', color: '#C24B3A', note: 'CET-SET · 11.21–11.22' },
-  { id: 'cet', date: '2026-12-12', title: '四六级笔试', emoji: '✏️', tag: '考试', color: '#C24B3A', note: '四级上午 / 六级下午' },
-  { id: 'final', date: '2027-01-11', title: '期末考试周', emoji: '😱', tag: '考试', color: '#C24B3A', note: '最后一搏，冲' },
+  {
+    id: 'midterm', date: '2026-11-09', title: '期中考试周', emoji: '📚', tag: '考试', color: '#C24B3A',
+    note: '提前开始复习不慌',
+    prep: { leadDays: 12, blockMin: 90, prepHours: 12, taskTitle: '期中复习', place: '图书馆（图文信息中心）' },
+  },
+  {
+    id: 'cet-set', date: '2026-11-21', title: '四六级口试', emoji: '🎤', tag: '考试', color: '#C24B3A',
+    note: 'CET-SET · 11.21–11.22',
+    prep: { leadDays: 7, blockMin: 45, prepHours: 4, taskTitle: '四六级口语练习' },
+  },
+  {
+    id: 'cet', date: '2026-12-12', title: '四六级笔试', emoji: '✏️', tag: '考试', color: '#C24B3A',
+    note: '四级上午 / 六级下午',
+    prep: { leadDays: 28, blockMin: 60, prepHours: 24, taskTitle: '四六级真题', place: '图书馆（图文信息中心）' },
+  },
+  {
+    id: 'final', date: '2027-01-11', title: '期末考试周', emoji: '😱', tag: '考试', color: '#C24B3A',
+    note: '最后一搏，冲',
+    prep: { leadDays: 16, blockMin: 90, prepHours: 30, taskTitle: '期末复习', place: '图书馆（图文信息中心）' },
+  },
 ];
 
 /* ============================================================

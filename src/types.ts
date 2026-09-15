@@ -263,6 +263,8 @@ export interface TimeBlock {
   /** 用户确认过的块：重排时锁定不动 */
   locked?: boolean;
   source: 'course' | 'template' | 'user';
+  /** 若来自校历事件（如「光电杯报名材料」），这里是事件 id —— UI 据此做特殊标注 */
+  fromEventId?: string;
 }
 
 export interface PlanIssue {

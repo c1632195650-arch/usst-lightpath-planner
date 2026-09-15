@@ -60,6 +60,13 @@ export interface ActivityTemplate {
   note?: string;
   /** 数据是否已核实；false 时 UI 应提示「信息待确认」 */
   verified: boolean;
+  /** 若由校历事件展开而来，这里是事件 id（供 UI 标注与溯源） */
+  fromEventId?: string;
+  /**
+   * 最早可开始分钟 —— 事件准备块用它避开清早。
+   * 不加这个限制时，引擎会按「最大空档优先」把四六级真题排到 07:00（还没起床）。
+   */
+  notBeforeMin?: number;
 }
 
 /** "06:30-09:30" / "10:45-13:30,16:30-19:30" → 时段数组 */
@@ -282,6 +289,16 @@ export interface UserTask {
   priority?: number;
   /** 用户写下的说明 */
   note?: string;
+  /**
+   * 硬需求标记 —— 有截止日期的事件准备块用它（如「光电杯报名材料」「四六级真题」）。
+   * 引擎会为这类任务**单独留预算**，不让「日常活动预算」把备考/交材料挤掉：
+   * 有 deadline 的事没做，比少自习一小时严重得多。
+   */
+  essential?: boolean;
+  /** 来自哪个校历事件（事件准备块专用，用于 UI 溯源） */
+  fromEventId?: string;
+  /** 最早可开始分钟（如 540 = 09:00）；不设 = 随时可排 */
+  notBeforeMin?: number;
 }
 
 /** 由用户输入构造一个可排程的模块 */
@@ -299,6 +316,8 @@ export function customTemplate(task: UserTask): ActivityTemplate {
     priority: task.priority ?? 90, // 用户自己要排的事，优先于系统建议
     note: task.note,
     verified: true,
+    fromEventId: task.fromEventId,
+    notBeforeMin: task.notBeforeMin,
   };
 }
 

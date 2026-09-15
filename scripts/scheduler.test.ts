@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   activeInWeek, buildWeekPlan, campusOfName, describeDay, effectiveCourses, effectiveSlots, slotsOn,
 } from '../src/lib/planner/schedule.ts';
+import { campusOfPlace } from '../src/lib/planner/places.ts';
 import { customTemplate, DEFAULT_TEMPLATES, openAt } from '../src/lib/planner/templates.ts';
 import { toMinutes } from '../src/constants/time.ts';
 
@@ -242,6 +243,29 @@ test('自习地点跟随画像偏好（宿舍 vs 图书馆）', () => {
   assert.ok(dorm.blocks.some((b) => b.kind === 'study' && b.place === '第二学生公寓'));
 });
 
+test('自习地点在画像给的池子里轮换，而不是永远同一个', () => {
+  // 「说喜欢去图书馆就一直推荐同一个图书馆」的修复：
+  // 偏好现在是一个池子，引擎按天轮换 —— 但**只在池内**轮换，不会轮到宿舍去。
+  const pool = ['图书馆（图文信息中心）', '湛恩纪念图书馆', '老图书馆'];
+  const plan = build({ policy: policy({ studyPlaces: pool }) });
+  const study = plan.blocks.filter((b) => b.kind === 'study');
+  assert.ok(study.length >= 2, `应至少排出两个自习块才能谈轮换，实际 ${study.length}`);
+
+  // ① 全部落在画像池内（画像不是摆设）
+  assert.ok(
+    study.every((b) => pool.includes(b.place ?? '')),
+    `自习点应来自画像池，实际：${[...new Set(study.map((b) => b.place))].join(' / ')}`,
+  );
+
+  // ② 不同天的自习点不该总是同一个
+  const firstOfDay = new Map<number, string | undefined>();
+  for (const b of study) if (!firstOfDay.has(b.dayOfWeek)) firstOfDay.set(b.dayOfWeek, b.place);
+  assert.ok(
+    new Set(firstOfDay.values()).size >= 2,
+    `不同天的自习点应有所不同，实际：${[...firstOfDay.values()].join(' / ')}`,
+  );
+});
+
 /* ---------------- 六、转场（本项目的差异化所在） ---------------- */
 
 test('转场时间与余量被标注到后一个块上', () => {
@@ -302,15 +326,30 @@ test('跨校区转场在拿不到实测值时，兜底会标明自己只是估�
   assert.equal(fri.place, '国合楼');
 });
 
-test('campusOfName 能识别主要跨区地标', () => {
+test('campusOfName 能识别主要跨区地标（认不出返回 null，不再默认北校）', () => {
   assert.equal(campusOfName('国合楼'), 'JG334');
   assert.equal(campusOfName('思餐厅'), 'JG334');
   assert.equal(campusOfName('卓越楼'), 'JG334');
-  // ⚠️「第三教学楼」不在 CAMPUS_KEYWORDS 里：它此前是靠「未命中 → 默认 JG516」蒙对的，
-  //    P0 起改为不猜（命中失败返回 null）。它的校区识别已由显式地点表接管 ——
-  //    campusOfPlace('第三教学楼') === 'JG516'，见 tests/places-buildings.test.ts。
-  assert.equal(campusOfName('第三教学楼'), null);
   assert.equal(campusOfName('申一教'), 'JG1100');
+  // ⚠️ v2 P0 的行为变更：关键字认不出的**不再默认北校**，返回 null 交给调用方。
+  //    「第三教学楼」在关键字表里没有条目 → null（改用下面的 campusOfPlace）
+  assert.equal(campusOfName('第三教学楼'), null);
+  assert.equal(campusOfName('某个不存在的地方'), null);
+});
+
+test('campusOfPlace 用显式地点表判校区，覆盖关键字认不出的 POI', () => {
+  // 这些是模板里的自习点/食堂：关键字表认不出，显式表认得
+  assert.equal(campusOfPlace('第三教学楼'), 'JG516');
+  assert.equal(campusOfPlace('图书馆（图文信息中心）'), 'JG516');
+  assert.equal(campusOfPlace('第二学生公寓'), 'JG516');
+  assert.equal(campusOfPlace('第四食堂'), 'JG334');
+  assert.equal(campusOfPlace('思餐厅'), 'JG334');
+  assert.equal(campusOfPlace('某个不存在的地方'), null);
+
+  // 两张表**互补**：显式地点表由模块库抽取，暂不含课程楼（国合楼/卓越楼只在关键字表里）。
+  // 见 PR 说明「placesFromTemplates 建议补课程楼」。
+  assert.equal(campusOfPlace('国合楼'), null);
+  assert.equal(campusOfName('国合楼'), 'JG334');
 });
 
 /* ---------------- 七、用户自定义模块 ---------------- */
@@ -425,6 +464,20 @@ test('该周没课（考试周）也能排出合法计划', () => {
   assert.equal(plan.blocks.filter((b) => b.kind === 'course').length, 0);
   assert.ok(plan.blocks.some((b) => b.kind === 'study'), '没课也要有自习安排');
   assert.equal(plan.issues.filter((i) => i.level === 'error').length, 0);
+});
+
+test('blockId 全局唯一，且是「不含时间」的语义键', () => {
+  // v2 的 lockLevels / churn 靠 blockId 匹配「同一个块」；重复会让锁作用于错误对象。
+  // 格式为 w{周次}-d{星期}-{类型}-{语义键}，**不允许出现时间片段**（否则块一移动 id 就变）。
+  const plan = build({});
+  const ids = plan.blocks.map((b) => b.id);
+  const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
+  assert.equal(dup.length, 0, `blockId 应唯一，实际重复：${[...new Set(dup)].join(', ')}`);
+  assert.ok(ids.length > 0, '应有块可供检查');
+  for (const id of ids) {
+    assert.match(id, /^w\d+-d\d+-[a-z]+-.+$/, `id 应符合 w{n}-d{n}-{kind}-{key} 形式：${id}`);
+    assert.ok(!/-\d{3,4}-/.test(id), `id 不应含时间片段（分钟数）：${id}`);
+  }
 });
 
 test('stats 与实际块一致', () => {
