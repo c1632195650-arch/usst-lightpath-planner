@@ -3,23 +3,32 @@
 本文件供参与本项目的 **AI 助手与协作者（含人类开发者）** 阅读。
 **任何 agent 在本仓库动手前，必须先读完本文件**，并严格遵守下方红线。
 
-> 📌 **三个入口，按顺序读**：
-> 1. **`docs/progress-status.md`** ← **先看这个**：当前做到哪了、有哪些能力已实现、数据资产状态、遗留问题。
-> 2. `docs/PRD.md` ← 产品与技术总纲（定位/需求/技术路线/数据契约/验收标准）。
-> 3. `docs/roadmap.md` ← 功能分类 × 实现顺序 × HTML→App 策略。
+> 📌 **四个入口，按顺序读**：
+> 0. **`docs/project-core.md`** ← **先看这个**：项目是什么、为什么这么做、智能边界四层、记忆点。**这是定位的唯一权威。**
+> 1. **`docs/progress-status.md`** ← 当前做到哪了、数据资产状态、遗留问题。
+> 2. `docs/scheduler-v2-spec.md` ← 排程引擎 v2 规格、字段与裁决（改排程必读）。
+> 3. `docs/decisions.md` ← 为什么这么选（注意 ADR-002 / 003 / 005 顶部的修正注）。
 >
 > 本文是**协作护栏**（红线 + 纪律 + 分工），不是开发总纲。
+>
+> ⚠️ **已归档**：`docs/PRD.md`、`docs/roadmap.md`、`docs/product-vision.md`、`docs/project-intro.md`。
+> 其中的**产品定位与核心主张口径一律作废**，以 `docs/project-core.md` 为准。
 
 ---
 
-## 〇、当前进度快照 · 动手前必读（2026-09-08）
+## 〇、当前进度快照 · 动手前必读（2026-09-15）
 
-### 项目是「双线」，不是单线
+### 项目是「一条主线 + 一个角色」，不是双线
 
-| 线 | 名字 | 是什么 | 形态 |
+| 项 | 名字 | 是什么 | 形态 |
 |---|---|---|---|
-| **主线** | 光溯 | 生涯规划：课表 → 画像 → 学期五阶段 → 周/日排程（含留白） | 纯前端，数据存 localStorage |
-| **副线** | 梨宝 | 校园生活问答 + 生活推荐（"宝子/咱上理"人格） | 前端 Tab「梨宝」+ FastAPI 后端 + 本地 RAG |
+| **主线** | 光溯 | **懂上理的智能决策伙伴**：知识问答（L1）→ 场景引导（L2）→ 画像建议（L3）→ 排程（L3 的一种输出形式） | 前端 + FastAPI 后端 + 本地 RAG |
+| **角色** | 梨宝 | 承载上述全部能力的统一人格入口（"宝子 / 咱上理"） | 前端 Tab「梨宝」+ 后端 |
+| **红线** | 智能边界 | 梨宝**可以递地图、陪走一段、指方向，但绝不替用户拍板**（L4 不做） | 见 `docs/project-core.md` §4 |
+
+> ⚠️ **旧口径已废**：不再把项目描述成"排程工具 + 配角助手"的双线结构；「反内卷 / 留白率」**已从核心卖点降为排程引擎的一个可调软参数**（`blankDeficit`），不得再出现在对外材料的主叙事里。
+
+> **2026-09-15 起的分工**：梨宝线由 **CY 单独推进**，B 专注**排程引擎与排程内容**（见 §二）。
 
 ### ⚠️ 已经实现、不要重复造轮子的清单
 
@@ -32,27 +41,27 @@
 | 画像规则映射（8–10 题，非 MBTI） | `src/lib/persona.ts` `buildProfile()` | ✅ 跑通 |
 | 月历 + 截止事项看板 | `src/features/calendar/` | ✅ 跑通 |
 | 周排程视图 + 生活模式 | `src/features/week/WeekView.tsx` | ✅ 跑通 |
-| 规则推荐引擎（周程页与梨宝共用同一入口） | `src/lib/lbao.ts` `lbaoRecommend()` + `features/libao/LbaoPlanView.tsx` | ✅ 已收敛为单入口 |
-| 梨宝对话（意图分流：推荐走本地规则 / 问答走后端 RAG） | `src/features/libao/LbaoChat.tsx` | ✅ 跑通 |
+| 规则推荐引擎 `lbaoRecommend()`（硬编码时间模板，非真引擎） | `src/lib/lbao.ts` + `features/libao/LbaoPlanView.tsx`（渲染） | ⚠️ **收敛中**：真引擎入口是 `buildWeekPlan`。周计划页接入在 **PR #3**，梨宝对话侧并轨在 **PR #4**。`features/week/WeekView.tsx:53` 仍调 `lbaoRecommend`，待清理 |
+| 梨宝对话（意图分流：排程走真引擎 / 问答走后端 RAG） | `src/features/libao/LbaoChat.tsx` + `weekPlanForChat.ts` | ✅ 跑通（PR #4） |
 | 后端 API：`/api/health` `/api/search` `/api/chat` | `server/app.py` | ✅ 跑通 |
 | 检索：jieba → FTS5 BM25(0.4) + bge-small-zh-v1.5 向量(0.6) × 时效因子 | `scripts/rag.py` | ✅ 就绪 |
 | 问答：脱敏网关 → RAG → DeepSeek 合成（梨宝人格），无 Key 自动降级抽取式 | `server/app.py` | ✅ 实测 `mode:"llm"` |
-| **校园资讯数据资产：255 主条目（官网 148 + 公众号 107）+ 910 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
+| **校园资讯数据资产：520 主条目（515 篇可全文检索）+ 1873 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
 | 数据工程流水线（采集/抓全文/清洗/去重/建索引，五步可单独重跑） | `scripts/*.py` | ✅ 齐全 |
 
 ### 数据资产说明（重要）
 
-- 数据库 `data/usst_articles.db`（约 9 MB，**已在仓库中，开箱即用**）。
-- 主条目 **255 篇**（`is_dup=0`；另有 21 篇重复已软合并），官网 148 + 公众号 107，全文 204 篇，向量块 910 个。
+- 数据库 `data/usst_articles.db`（约 17 MB，**已在仓库中，开箱即用**）。
+- 主条目 **520 篇**（`is_dup=0`；全表 612 条含已软合并的重复），其中 **515 篇**进入 FTS 全文索引；向量块（`chunks` 表）**1873** 个。
 - **不要重新爬取**。要新增数据请复用 `scripts/` 里的脚本增量采集，然后跑 `python scripts/rag.py build` 重建索引。
 - 重建索引需 `fastembed`（bge-small-zh-v1.5 ONNX，CPU），模型缓存在 `~/.workbuddy/cache/fastembed`。
 
 ### 遗留 / 可以接手的活（按优先级）
 
-1. **补数据缺口**：生活服务（食堂/宿舍/校园卡）仅 5 篇、数字校园仅 1 篇 → 找后勤保障处 / 信息化办公室官网补爬。
-2. **重采全文**：约 57 篇公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
+1. **补数据缺口**：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 → 找后勤保障处 / 信息化办公室官网补爬。
+2. **重采全文**：部分公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
 3. **决赛材料**：申报书 / PPT / 演示视频（9/28 报名截止，10 月底决赛）。
-4. 前端：周排程算法打磨（留白策略、跨校区转场 buffer）。
+4. 前端：周排程算法打磨（增量滚动、锁定、截止驱动、跨校区转场 buffer）。
 
 > 详细清单见 `docs/progress-status.md` §8–§9。
 
@@ -63,6 +72,8 @@
 - 每次改动完成后，都必须创建一个对应的 Git commit，以便后续追踪和回滚。
 - 每次改动后，都必须编写或更新相关测试，并在交付给用户前，确保所有测试和验证全部通过。
 - 提交前必须运行 `npm run typecheck`，确保类型检查全绿，禁止带红字提交。
+- 同时运行测试入口：`npm run test:ui`（全仓 UI/脚本测试）；引擎相关改动另跑 `npm run test:engine`。
+  （这两个入口随 **PR #3** 合入——它引入 `scripts/register-alias.mjs` 作为 `@/` 别名的加载钩子。）
 - **不要重写已实现的能力**（见 §〇 清单）。要扩展就复用现有模块，或先提 PR 讨论。
 
 ## 二、角色与文件所有权（防冲突的第一道闸）
@@ -71,8 +82,11 @@
 
 | 成员 | 负责目录 | 内容 |
 |---|---|---|
-| **A（项目负责人 CY）** | `src/features/persona/`、`src/features/libao/`、`src/features/calendar/`、`server/`、`scripts/`、`docs/` | 画像、梨宝、月历、后端、数据工程、文档 |
-| **B（队友）** | `src/features/week/`、`src/lib/`（`lbao.ts`/`persona.ts`/`api.ts`）、`src/components/` | 周排程算法与视图、规则/接口封装、UI 组件 |
+| **A（项目负责人 CY）** | `src/features/persona/`、`src/features/libao/`、`src/features/calendar/`、`server/`、`scripts/`、`docs/`、**`src/lib/api.ts`、`src/lib/lbao.ts`** | 画像、**梨宝（含其接口封装与规则层）**、月历、后端、数据工程、文档 |
+| **B（队友 RAY）** | `src/features/week/`、**`src/lib/planner/`**、`src/lib/persona.ts`、`src/components/` | 周排程算法与视图、**排程引擎（含 v2）**、UI 组件 |
+
+> **2026-09-15 调整**：梨宝线改由 CY 单独推进，B 专注排程引擎与排程内容。据此把 `src/lib/api.ts`、`src/lib/lbao.ts` 从 B 名下划归 CY；`src/lib/` 的其余部分（`planner/`、`persona.ts`）留在 B 名下。
+> 梨宝**天然跨人**的接缝由此收敛为**一个点**：`features/libao/ ↔ lib/planner/`，见 §三 红线 6。
 
 > 分工可按实际协商调整，但**调整后必须同步更新本表**。
 > 要改对方的文件？先发消息沟通，或提 PR 让对方 review。**不要默默改。**
@@ -86,14 +100,21 @@
    - 后端 DeepSeek Key 在 `server/.env`，**已 gitignore，绝不提交**；仓库只留 `.env.example`。
 4. **不要把预处理产物当源码反复提交**：向量索引、FTS5 索引等由 `rag.py build` 生成，改数据后重建即可，不要手工编辑 `data/` 里的二进制。
 5. **小步提交，每 commit 可独立回滚。**
+6. **`features/libao/**` 与排程引擎之间只允许一个接缝（接口冻结）。**
+   - `features/libao/**` **禁止直接 `import '@/lib/planner/*'`**；唯一例外是防腐层 `src/features/libao/weekPlanForChat.ts`。
+   - `buildWeekPlan` 的输入 `BuildWeekPlanInput` 与输出 `BuildWeekPlanResult`（其 `plan: WeekPlan`）视为**跨模块契约**，与 `src/types.ts` 同级：字段增删**必须双方确认**，**禁止用 `any` 绕过**。
+   - 引擎侧重构（抽 `construct`、改内部数据结构、换 block id 生成方式）**不得改变这两个类型的语义**。要改语义就先同步，别让对话层被动跟着炸。
 
 ## 四、分支模型
 
 ```
-main      ← 受保护，只合「能跑、能演示」的版本（当前 = 2026-09-08 进度快照）
+main      ← 受保护，只合「能跑、能演示」的版本
 dev       ← 日常集成分支，两人都往这合
 feat/xxx  ← 各自的功能分支（feat/week、feat/data、feat/libao ...）
 ```
+
+> ⚠️ **栈式 PR 的合并顺序**：`feat/events-and-diversity`（#3）与 `feat/weather`（#5）在**内容上叠在** `feat/planner-v2-p0`（#2）之上。
+> 合并必须按 **#2 → #3 → #4 → #5** 的顺序；先合后置的会把前置内容一并带进来，让前置 PR 变空。
 
 ## 五、每日标准动作（每人）
 
@@ -130,10 +151,11 @@ python server/app.py                          # 后端 → http://127.0.0.1:8000
 
 | 文件 | 作用 | 谁该看 |
 |---|---|---|
+| `docs/project-core.md` | **项目定位唯一权威**：三钩子 / 智能边界四层 / 能力地图 / 记忆点 | **开发前必读** |
 | `AGENTS.md`（本文） | 协作护栏 + **进度快照 + 已实现清单** | **agent 第一入口** |
 | `docs/progress-status.md` | 当前进度、数据资产、已打通能力、遗留问题 | 所有人（尤其新加入者）|
-| `docs/PRD.md` | 产品与技术总纲 | 开发前 |
-| `docs/roadmap.md` | 功能分类 × 顺序 × PDF 导入 | 排期时 |
-| `docs/features.md` | 模块级契约（M0–M9） | 写具体模块前 |
+| `docs/scheduler-v2-spec.md` | 排程引擎 v2 规格、字段、裁决记录 | 改排程前 |
 | `docs/decisions.md` | 决策记录（为什么这么做） | 想改架构前 |
 | `docs/teammate-onboarding.md` | 环境/克隆/每日动作/冲突处理 | 人类队友 |
+| ~~`docs/PRD.md`~~ / ~~`docs/roadmap.md`~~ / ~~`docs/product-vision.md`~~ / ~~`docs/project-intro.md`~~ | **已归档**，定位口径作废 | 仅查历史 |
+| `docs/features.md` / `docs/engine-plan.md` / `docs/prompts.md` | 模块契约 / 引擎计划 / 提示词库 | 写具体模块前 |
