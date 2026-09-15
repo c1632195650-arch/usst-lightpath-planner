@@ -53,6 +53,37 @@ HW_NO = {"trunk", "trunk_link", "motorway", "motorway_link", "raceway", "bus_gui
 STREET_PENALTY = 1.15
 
 
+# ---------- 可步行分组（校区隔离的唯一口径）----------
+# 为什么需要它：`_locate_pois` 的 near_landmark / zone / global 档位原先**不校验校区**，
+# 于是独立校区的地点会被本部地标吸附 —— 实测 `1100教育超市`、`申一教`、`申二教`、
+# `1100图书馆` 曾全部塌缩到北校「学生活动中心」坐标，进而算出「三教 → 1100教育超市 4.5 分钟」
+# 这种离谱结果（两处实际相距约 600 米以上、且本路网未收录 1100 的路）。
+# 口径与 campus.py 的 `_CAMPUS_CN` / `_meta.notes` 一致：
+#   本部 = 北校（军工路 516）＋ 南校（军工路 334），由海安路人行天桥相连；
+#          580 号（军工路 580，北校西北角同一片街区，七公寓/民族餐厅在此）并入本部，可步行。
+#   独立 = 1100 基础学院 / 复兴路 —— 相距较远，且 jichuxueyuan.osm / fuxinglu.osm 未进本路网。
+_WALK_GROUP = {"北校": "本部", "南校": "本部", "580": "本部", "连接": "本部"}
+
+
+def walk_group(campus):
+    """校区码 → 可步行分组。未知（None / 空）返回 None。"""
+    if not campus:
+        return None
+    return _WALK_GROUP.get(campus, campus)
+
+
+def same_walk_group(a, b):
+    """两个校区码是否属于同一可步行分组。
+
+    任一方未知时返回 True —— 保持既有宽松行为（不因为缺标注就拒绝定位），
+    只有**明确分属两个不同分组**时才阻断。
+    """
+    ga, gb = walk_group(a), walk_group(b)
+    if ga is None or gb is None:
+        return True
+    return ga == gb
+
+
 def hav(a, b):
     R = 6371000.0
     la1, lo1 = math.radians(a[0]), math.radians(a[1])
@@ -237,19 +268,23 @@ class Network:
                             c, src = hit, "osm"
                             break
 
-                # B. near_landmark
+                # B. near_landmark（**须同可步行分组**，否则跨区引用会把独立校区带偏）
                 if c is None:
                     nb = []
                     for x in p.get("near_landmark", []):
                         x = re.sub(r"[（(].*", "", x).strip()
                         xn = alias_resolve(x)
-                        if xn and xn in res:
-                            nb.append(res[xn][0])
+                        if not xn or xn not in res:
+                            continue
+                        peer = by_name.get(xn)
+                        if peer and not same_walk_group(p.get("campus"), peer.get("campus")):
+                            continue
+                        nb.append(res[xn][0])
                     if nb:
                         c = (sum(y[0] for y in nb) / len(nb), sum(y[1] for y in nb) / len(nb))
                         src = "near_landmark"
 
-                # C. roads 路段相邻点
+                # C. roads 路段相邻点（同样须同分组）
                 if c is None:
                     for road in m.get("roads", []):
                         segs = [s.strip() for s in road["line"].split("→")]
@@ -261,21 +296,28 @@ class Network:
                         for j in (i - 1, i + 1):
                             if 0 <= j < len(segs):
                                 xn = alias_resolve(segs[j])
-                                if xn and xn in res:
-                                    nb.append(res[xn][0])
+                                if not xn or xn not in res:
+                                    continue
+                                peer = by_name.get(xn)
+                                if peer and not same_walk_group(p.get("campus"), peer.get("campus")):
+                                    continue
+                                nb.append(res[xn][0])
                         if nb:
                             c = (sum(y[0] for y in nb) / len(nb), sum(y[1] for y in nb) / len(nb))
                             src = "roads"
                             break
 
-                # D. walk_minutes 邻居（按分钟数反比加权）
+                # D. walk_minutes 邻居（按分钟数反比加权；同样须同分组）
                 if c is None:
                     nb = []
                     for w in m.get("walk_minutes", []):
-                        if w["from"] == p["name"] and w["to"] in res:
-                            nb.append((res[w["to"]][0], float(w.get("minutes", 3))))
-                        elif w["to"] == p["name"] and w["from"] in res:
-                            nb.append((res[w["from"]][0], float(w.get("minutes", 3))))
+                        for me, other in ((w["from"], w["to"]), (w["to"], w["from"])):
+                            if me != p["name"] or other not in res:
+                                continue
+                            peer = by_name.get(other)
+                            if peer and not same_walk_group(p.get("campus"), peer.get("campus")):
+                                continue
+                            nb.append((res[other][0], float(w.get("minutes", 3))))
                     if nb:
                         tw = sum(1.0 / max(mn, 0.5) for _, mn in nb)
                         c = (sum(cc[0] / max(mn, 0.5) for cc, mn in nb) / tw,
@@ -291,13 +333,18 @@ class Network:
                 break
 
         # E. 兜底：逐级放宽 —— 同 zone → 同校区 → 全局质心
+        #    全部按可步行分组过滤：独立校区若在本路网内没有任何同组锚点，
+        #    就**如实保持未定位**（宁可不给，也不编一个本部坐标）。
         for p in pending:
             tiers = [
                 ("zone", [res[q["name"]][0] for q in allp
-                          if q.get("zone") == p.get("zone") and q["name"] in res]),
+                          if q.get("zone") == p.get("zone") and q["name"] in res
+                          and same_walk_group(p.get("campus"), q.get("campus"))]),
                 ("campus", [res[q["name"]][0] for q in allp
                             if q.get("campus") == p.get("campus") and q["name"] in res]),
-                ("global", [v[0] for v in res.values()]),
+                ("global", [res[q["name"]][0] for q in allp
+                            if q["name"] in res
+                            and same_walk_group(p.get("campus"), q.get("campus"))]),
             ]
             for src_name, peers in tiers:
                 if peers:
@@ -307,6 +354,9 @@ class Network:
 
         self.poi = res
         self.unlocated = [p["name"] for p in allp if p["name"] not in res]
+
+        # 主名 → 校区码，供 route() 做「跨分组不产生步行时间」的判定
+        self._campus_of = {p["name"]: p.get("campus") for p in allp}
 
         # 别名 → 主名，供 route() 解析口语名（如「第四宿舍 (思伊堂)」）
         self.alias_map = {}
@@ -363,18 +413,24 @@ class Network:
         return None
 
     def route(self, a, b, mode="fastest"):
-        """返回 dict 或 None（未定位 / 不连通）。
+        """返回 dict 或 None（未定位 / 不连通 / 跨教学工作区）。
 
         mode:
           "fastest" —— 全路网（含军工路等校外城市道路），即「实地怎么走最快」
           "campus"  —— 只走校内步道，用来对比「纯校内绕行」要多花多少时间
         reliable=False 表示至少一端是靠 zone/campus/global 质心兜底定位的，
         或两端坐标几乎重合 —— 此时距离仅供参考。
+
+        ⚠️ 两端若**分属不同的可步行分组**（本部 vs 1100 基础学院 / 复兴路），
+        本路网没有它们之间的道路数据，一律返回 None ——
+        让上层用 `cross_campus()` 说明「分属不同教学区」，而不是编一个步行分钟。
         """
         a, b = self.resolve(a), self.resolve(b)
         if not a or not b:
             return None
         pa, pb = self.poi[a], self.poi[b]
+        if not same_walk_group(self._campus_of[a], self._campus_of[b]):
+            return None
         c_only = (mode == "campus")
         sa, da = self._snap(pa[0], c_only)
         sb, db = self._snap(pb[0], c_only)

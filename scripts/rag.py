@@ -224,25 +224,36 @@ def cosine(a, b):
     dot = sum(x * y for x, y in zip(a, b))
     return dot  # 向量已归一化时即余弦
 
-# 查询扩展：口语 → 官方术语（弥合"大功率"对不上"违规电器/额定功率"的词汇鸿沟）
-_QUERY_EXPAND = [
-    ("大功率", "违规电器 额定功率 400W 宿管会 检查条例 电热毯 电煮锅"),
-    ("断电", "熄灯 供电 用电 宿舍管理"),
-    ("门禁", "关门 关门时间 宿舍 进出 晚归"),
-    ("断网", "校园网 网络 USSTroam 无线"),
-    ("断水", "供水 水电 宿舍"),
-    ("能不能用", "是否允许 违规 禁止"),
-    ("可以带", "是否允许 违规 禁止"),
-    ("多少钱", "收费 标准 费用 价格"),
-    ("几号", "日期 时间"),
-    ("几点关", "开放时间 结束 闭馆"),
-    ("怎么预约", "预约流程 预约方式 申请 系统"),
-    ("在哪", "位置 地点 地址 位于"),
-    ("怎么走", "路线 位置 交通"),
-    ("补办", "挂失 重新办理 流程"),
-    ("重修", "重修报名 选课 流程"),
-    ("挂科", "不及格 重修 补考"),
-]
+# ---------- 查询扩展（口语 → 官方术语） ----------
+# 规则**外置为数据文件** `data/query_expand.json`（2026-09-15）：改词不用动代码，
+# 也不必重建索引 —— 扩展只影响召回，不影响已建的 FTS/向量。
+# ⚠️ 规则顺序有意义（`expand_terms` 去重保序 + `search` 只取前 12 个），
+#    见该文件的 `_meta.order_matters`；新增一律追加到末尾。
+_QUERY_EXPAND_FILE = os.path.join(BASE, "..", "data", "query_expand.json")
+_expand_rules = None
+
+
+def load_expand_rules():
+    """读查询扩展规则（惰性 + 进程内缓存）。返回 [(src, [dst, ...]), ...]。
+
+    兜底策略：文件缺失 / 解析失败 → 只打警告，**不抛异常**。
+    检索本身照常工作，只是少了扩展召回这一路（宁可少召回，不要让整条问答挂掉）。
+    """
+    global _expand_rules
+    if _expand_rules is None:
+        rules = []
+        try:
+            with open(_QUERY_EXPAND_FILE, encoding="utf-8") as f:
+                raw = json.load(f)
+            for it in raw.get("rules", []):
+                src = str(it.get("q") or "").strip()
+                dst = [str(x).strip() for x in (it.get("expand") or []) if str(x).strip()]
+                if src and dst:
+                    rules.append((src, dst))
+        except Exception as e:
+            print(f"[rag] 查询扩展规则读取失败，本次不做扩展召回: {e!r}", file=sys.stderr)
+        _expand_rules = rules
+    return _expand_rules
 
 
 def expand_terms(query):
@@ -250,9 +261,9 @@ def expand_terms(query):
     if not query:
         return []
     terms = []
-    for src, dst in _QUERY_EXPAND:
+    for src, dst in load_expand_rules():
         if src in query:
-            terms.extend(dst.split())
+            terms.extend(dst)
     # 去重保序
     seen, out = set(), []
     for t in terms:

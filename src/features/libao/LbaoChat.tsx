@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
 import { currentWeekNo } from '@/lib/date';
 import { lbaoChat, lbaoHealth, type RagSource } from '@/lib/api';
+import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
 import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
 
@@ -118,7 +119,11 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  /** 发送提问；排程意图在本地处理，其余交给校园资料问答。 */
+  /** 发送提问；排程意图在本地处理，其余交给校园资料问答。
+   *
+   *  埋点（`@/lib/telemetry`）只记**数字与枚举**，且只落本机：
+   *  这里记得到的是「这一次排程/检索花了多久、成没成、召回了几条、哪条链路降级了」，
+   *  记不到的（也刻意不记）是用户问了什么 —— 守 NF-2「个人数据本地优先」。 */
   const send = async (raw?: string) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
@@ -132,6 +137,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     if (isRecommendIntent(q)) {
       // 既无画像也无课表 → 没有可排的输入。说清楚缺什么，不假装能排。
       if (!profile && schedule.courses.length === 0) {
+        track('degrade', { id: 'plan-no-input' });
         setMessages((current) => [...current, {
           role: 'lbao',
           text: '我还不了解你的作息偏好，也还没看到你的课表。完成画像或导入课表后，我就能按你的实际情况安排这一周。',
@@ -142,8 +148,10 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       }
 
       const weekNo = currentWeekNo(schedule.termStart);
+      const t0 = Date.now();
       try {
         const plan = await planWeekForChat(schedule, profile, weekNo);
+        track('plan_result', { ok: !!plan, ms: Date.now() - t0 });
         setMessages((current) => [...current, plan ? {
           role: 'lbao',
           text: `第 ${weekNo} 周我按你的课表排了一版，你懂我意思吧：`,
@@ -157,6 +165,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         }]);
       } catch {
         // 引擎异常 → 诚实说明。**绝不用模板兜底**，那正是我们要消灭的东西。
+        track('degrade', { id: 'plan-engine-error' });
         setMessages((current) => [...current, {
           role: 'lbao',
           text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
@@ -168,12 +177,16 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     }
 
     /** 问答意图经过后端检索；服务不可用时保留当前对话并给出恢复方式。 */
+    const t1 = Date.now();
     try {
       // 带上身份与档案：前者让后端记忆层生效，后者让回答建立在「你是谁」之上
       const response = await lbaoChat(q, identity, profileCtx);
+      // `n` = 召回到的资料来源条数：0 条就是「白问了一次」，是召回质量最直接的信号
+      track('search', { ok: true, ms: Date.now() - t1, n: response.sources?.length ?? 0 });
       setMessages((current) => [...current, { role: 'lbao', text: response.answer, sources: response.sources, mode: response.mode }]);
       setOnline(true);
     } catch {
+      track('degrade', { id: 'chat-offline' });
       setOnline(false);
       setMessages((current) => [
         ...current,
