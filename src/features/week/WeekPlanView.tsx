@@ -12,7 +12,7 @@
  *     → buildPhasesFromCalendar（这个阶段该多紧）
  *     → buildWeekPlan ×2（第一遍收集点对 → 后端实测转场 → 第二遍真结果）
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PlanIssue, Schedule, TimeBlock, WeekPlan } from '@/types';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { buildWeekPlan } from '@/lib/planner/schedule';
@@ -21,9 +21,13 @@ import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
 import { fetchWeather, weatherToTasks } from '@/features/weather/weather';
 import type { WeatherReport } from '@/features/weather/weather';
 import { WeatherStrip } from '@/features/weather/WeatherStrip';
+import {
+  findStatus, loadRecords, makeId, saveRecords, summarizeWeek, upsert,
+} from '@/features/behavior/behaviorLog';
+import type { BehaviorRecord, BehaviorStatus } from '@/features/behavior/behaviorLog';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm } from '@/constants/time';
-import { diffDays, todayISO } from '@/lib/date';
+import { addDays, diffDays, todayISO } from '@/lib/date';
 import { DEADLINES } from '@/data/usst';
 
 interface Props {
@@ -50,14 +54,23 @@ const ISSUE_STYLE = {
   info: 'bg-blue-50 border-blue-300 text-blue-800',
 } as const;
 
-function BlockCard({ block }: { block: TimeBlock }) {
+function BlockCard({ block, date, status, onMark }: {
+  block: TimeBlock;
+  /** 这个块所属的 ISO 日期 —— 行为记录按「块 + 日期」定位 */
+  date: string;
+  /** 已标记的执行结果；undefined = 还没标记 */
+  status?: BehaviorStatus;
+  onMark: (block: TimeBlock, date: string, status: BehaviorStatus) => void;
+}) {
   const style = KIND_STYLE[block.kind] ?? KIND_STYLE.blank;
   const t = block.transfer;
   // 校历事件展开出来的准备块（光电杯材料、四六级真题…）单独标出来 ——
   // 否则用户只看到「又一个活动块」，意识不到它和那个截止日有关
   const isEvent = Boolean(block.fromEventId);
+  // 标记过的块降一点视觉重量：一眼看出「这段已经处理过了」
+  const marked = status !== undefined;
   return (
-    <div className={`rounded-lg border-l-4 ${style.bg} px-2.5 py-2 ${isEvent ? 'ring-1 ring-purple-300' : ''}`}>
+    <div className={`rounded-lg border-l-4 ${style.bg} px-2.5 py-2 ${isEvent ? 'ring-1 ring-purple-300' : ''} ${marked ? 'opacity-85' : ''}`}>
       <div className="flex items-baseline justify-between gap-2">
         <span className={`text-[13px] font-semibold ${style.text}`}>
           {block.emoji ? `${block.emoji} ` : ''}{block.title}
@@ -85,6 +98,35 @@ function BlockCard({ block }: { block: TimeBlock }) {
       {block.reason && (
         <div className="mt-1 text-[11px] leading-snug text-ink-faint">💡 {block.reason}</div>
       )}
+
+      {/* 执行标记 —— 行为记录的唯一入口。
+          两个按钮而不是一个勾：「没做」同样是有效信息（连续跳过某个时段/地点，
+          下次排程就该改），只记「做了」等于丢掉一半信号。 */}
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onMark(block, date, 'done')}
+          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${
+            status === 'done'
+              ? 'bg-green-600 text-white'
+              : 'bg-white/70 text-ink-soft hover:bg-green-50 hover:text-green-700'
+          }`}
+        >
+          ✓ 做了
+        </button>
+        <button
+          type="button"
+          onClick={() => onMark(block, date, 'skipped')}
+          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${
+            status === 'skipped'
+              ? 'bg-red-500 text-white'
+              : 'bg-white/70 text-ink-soft hover:bg-red-50 hover:text-red-700'
+          }`}
+        >
+          ✗ 没做
+        </button>
+        {marked && <span className="text-[10px] text-ink-faint">已记录</span>}
+      </div>
     </div>
   );
 }
@@ -102,6 +144,40 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
     [schedule, persona],
   );
   const phase = phaseOfWeek(semester.plan, weekNo);
+
+  /** 执行记录（反馈闭环）—— 独立存储，不进 AppState，理由见 behaviorLog.ts */
+  const [records, setRecords] = useState<BehaviorRecord[]>([]);
+  useEffect(() => { setRecords(loadRecords()); }, []);
+
+  const progress = useMemo(() => summarizeWeek(records, weekNo), [records, weekNo]);
+
+  /** 本周的周一（ISO）—— 把「周次 + 星期几」还原成具体日期，行为记录按它定位 */
+  const weekMonday = useMemo(
+    () => addDays(schedule.termStart, (weekNo - 1) * 7),
+    [schedule.termStart, weekNo],
+  );
+  const dateOfDay = useCallback(
+    (dayOfWeek: number) => addDays(weekMonday, dayOfWeek - 1),
+    [weekMonday],
+  );
+
+  const mark = useCallback((block: TimeBlock, date: string, status: BehaviorStatus) => {
+    setRecords((prev) => {
+      const next = upsert(prev, {
+        id: makeId(block.id, date),
+        blockId: block.id,
+        date,
+        weekNo,
+        kind: block.kind,
+        title: block.title,
+        plannedMin: block.endMin - block.startMin,
+        status,
+        at: new Date().toISOString(),   // UI 层可以读时钟；纯函数模块不许（见 behaviorLog.ts）
+      });
+      saveRecords(next);
+      return next;
+    });
+  }, [weekNo]);
 
   // 天气与周次无关（都是「未来 7 天」），所以只拉一次；
   // 换周时靠下面的 filter（weatherToTasks 按 weekNo 过滤）而不是重拉。
@@ -214,6 +290,28 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
           所以提醒必须有一条独立于排程的路径，否则会在最需要时消失。 */}
       <WeatherStrip report={weather} weekNo={weekNo} termStart={schedule.termStart} />
 
+      {/* 执行情况 —— 反馈闭环里**用户能看见**的那一半。
+          另一半（把实际执行率喂回引擎、修正产能估计）要等 P1 的求解器落地；
+          但「看见」本身就有价值：用户第一次能看到自己的计划执行了多少。 */}
+      <div className="panel px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+          <span className="text-[12.5px] font-semibold text-ink">执行情况</span>
+          <span className="text-[11px] text-ink-faint">
+            {progress.rate === null
+              ? '还没标记过 —— 点每个块里的「做了 / 没做」'
+              : `完成 ${progress.done}/${progress.marked} · 实际投入 ${Math.round((progress.doneMin / 60) * 10) / 10}h`}
+          </span>
+        </div>
+        {progress.rate !== null && (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/5">
+            <div
+              className="h-full rounded-full bg-green-500"
+              style={{ width: `${Math.round(progress.rate * 100)}%` }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* 七天时间轴 */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {DAY_LABELS.map((name, idx) => {
@@ -237,7 +335,18 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
                     这一天没有安排
                   </div>
                 )}
-                {blocks.map((b) => <BlockCard key={b.id} block={b} />)}
+                {blocks.map((b) => {
+                  const date = dateOfDay(day);
+                  return (
+                    <BlockCard
+                      key={b.id}
+                      block={b}
+                      date={date}
+                      status={findStatus(records, b.id, date)}
+                      onMark={mark}
+                    />
+                  );
+                })}
               </div>
             </div>
           );
