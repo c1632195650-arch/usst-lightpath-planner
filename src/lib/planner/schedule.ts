@@ -509,6 +509,24 @@ export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult {
     );
   }
 
+  /* --- 6.9 id 唯一性自检 --- */
+  // 语义键 id 是 v2 的 `lockLevels` / `churn` 匹配「同一个块」的依据。
+  // 一旦重复，锁会作用于**错误的对象**（静默失效）—— 比抛错危险得多，所以这里直接断言。
+  // ⚠️ 刻意**不自动改名**：静默追加 `-2` 会让「同一个块」的身份漂移，同样破坏 id 的语义。
+  // 目前 `template` 分支用的是裸 `tpl.id`（无序号），如将来允许同模板一天排两次，这里会先报出来。
+  const idSeen = new Set<string>();
+  const idDup: string[] = [];
+  for (const b of allBlocks) {
+    if (idSeen.has(b.id)) idDup.push(b.id);
+    idSeen.add(b.id);
+  }
+  if (idDup.length) {
+    throw new Error(
+      `[schedule] blockId 重复：${[...new Set(idDup)].join(', ')}`
+      + ' —— 语义键冲突，请检查 newId 各调用点的 key 是否唯一',
+    );
+  }
+
   return {
     plan: {
       weekNo,

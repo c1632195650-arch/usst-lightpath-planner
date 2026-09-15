@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173",
     "test:ui": "node --import ./scripts/register-alias.mjs --test \"scripts/**/*.test.ts\"",
+    "test:engine": "node --import ./scripts/register-alias.mjs --test \"tests/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

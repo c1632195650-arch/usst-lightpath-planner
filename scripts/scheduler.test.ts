@@ -466,6 +466,20 @@ test('该周没课（考试周）也能排出合法计划', () => {
   assert.equal(plan.issues.filter((i) => i.level === 'error').length, 0);
 });
 
+test('blockId 全局唯一，且是「不含时间」的语义键', () => {
+  // v2 的 lockLevels / churn 靠 blockId 匹配「同一个块」；重复会让锁作用于错误对象。
+  // 格式为 w{周次}-d{星期}-{类型}-{语义键}，**不允许出现时间片段**（否则块一移动 id 就变）。
+  const plan = build({});
+  const ids = plan.blocks.map((b) => b.id);
+  const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
+  assert.equal(dup.length, 0, `blockId 应唯一，实际重复：${[...new Set(dup)].join(', ')}`);
+  assert.ok(ids.length > 0, '应有块可供检查');
+  for (const id of ids) {
+    assert.match(id, /^w\d+-d\d+-[a-z]+-.+$/, `id 应符合 w{n}-d{n}-{kind}-{key} 形式：${id}`);
+    assert.ok(!/-\d{3,4}-/.test(id), `id 不应含时间片段（分钟数）：${id}`);
+  }
+});
+
 test('stats 与实际块一致', () => {
   const plan = build();
   const sum = (kind) => plan.blocks.filter((b) => b.kind === kind)
