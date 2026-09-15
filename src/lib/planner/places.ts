@@ -161,22 +161,109 @@ export function placesFromCampusMap(map: CampusMapJson): Place[] {
 }
 
 /* ============================================================
- * 五、合并与冲突检测（数据治理）
+ * 五、来源 ③：校园教学/实验楼（**硬编码显式表**，规格书 §13.7 前置修复）
  * ========================================================== */
 
 /**
- * 合并地点表：以 `base` 为准，`overlay` 只**补缺**（新增地点 / 补空 hours），
+ * 校园教学/实验楼 —— 补齐「课程楼查不到校区」的缺口。
+ *
+ * **为什么必须单独列**（而不是靠上面 `placesFromTemplates()`）：
+ *   `templates.ts` 只收录「引擎会排进去的 POI」（食堂 / 自习点 / 运动 / 生活），
+ *   **课程楼不在其中** → 修复前 `campusOfPlace('国合楼')` 返回 `null`，
+ *   而 `schedule.ts` 的 `campusOfName('国合楼')` 返回 `JG334` —— **两套表打架**。
+ *   后果：`objective::placeMismatch` 会把「在卓越楼 / 国合楼上课」误判成跨校区而加罚。
+ *
+ * **数据来源**：`data/campus_map.json` 的 `landmarks` 中 `type === '教学楼'` 的**全部 26 条**
+ *   （每条都有**显式 `campus`**，不是推断）。本文件**明令不 import JSON**（Node 测试环境加载不了），
+ *   故此处为**硬编码快照**。
+ *
+ * **防漂移**：`tests/places-buildings.test.ts` 会读 `data/campus_map.json` 逐条比对，
+ *   断言本表与上游一致（含别名）—— 上游增删教学楼时该测试会红，提醒同步本表。
+ *
+ * @see 规格书 §13.7（前置缺陷）、§12.5.8（校区未知的全局口径）
+ */
+const CAMPUS_BUILDINGS: ReadonlyArray<{
+  name: string;
+  campus: '北校' | '南校' | '1100';
+  /** 别名（课表解析出来的 `place` 可能是别名，例如「第四教学楼」） */
+  alias?: string[];
+}> = [
+  // —— 北校区（军工路 516）——
+  { name: '第一教学楼', campus: '北校', alias: ['一教', '1教'] },
+  { name: '第三教学楼', campus: '北校', alias: ['三教', '3教', '新三教'] },
+  { name: '第五教学楼', campus: '北校', alias: ['五教', '5教'] },
+  { name: '综合楼', campus: '北校', alias: ['中德学院综合楼'] },
+  { name: '先进制造大楼', campus: '北校', alias: ['先进制造'] },
+  { name: '大礼堂', campus: '北校', alias: ['礼堂'] },
+  { name: '校史馆', campus: '北校', alias: ['校史馆（图文信息中心）'] },
+  { name: '中德学院', campus: '北校', alias: ['汉堡国际工程学院', '中德国际学院'] },
+  { name: '动力馆', campus: '北校', alias: ['能源与动力工程学院'] },
+  { name: '沪江美术馆', campus: '北校', alias: ['美术馆'] },
+  { name: '音乐堂', campus: '北校' },
+  { name: '创新实训中心', campus: '北校' },
+  { name: '基础实验中心', campus: '北校' },
+  { name: '实训中心', campus: '北校', alias: ['工程实训中心', '工程训练中心'] },
+  { name: '公共实验楼', campus: '北校', alias: ['物理实验中心', '公共实验中心'] },
+  // —— 南校区（军工路 334）——
+  { name: '逸兴楼', campus: '南校', alias: ['第四教学楼', '四教'] },
+  { name: '卓越楼', campus: '南校', alias: ['卓越工程研究生院'] },
+  { name: '国合楼', campus: '南校', alias: ['国际合作大楼'] },
+  { name: '理学院楼', campus: '南校', alias: ['理学院'] },
+  { name: '外语楼', campus: '南校', alias: ['外语学院'] },
+  { name: '微创楼', campus: '南校', alias: ['微创中心'] },
+  { name: '理科实验中心', campus: '南校', alias: ['理科实验楼'] },
+  { name: '中德学院实验中心', campus: '南校', alias: ['中德实验中心'] },
+  { name: '南校区科技大楼', campus: '南校' },
+  // —— 1100 基础学院 ——
+  { name: '申一教', campus: '1100', alias: ['申一', '1100一教'] },
+  { name: '申二教', campus: '1100', alias: ['申二楼', '1100二教'] },
+];
+
+/** 校园建筑（含别名）的显式 `Place[]`；`hours` 留空（建筑本身不限时） */
+export function placesFromBuildings(
+  buildings: ReadonlyArray<{ name: string; campus: '北校' | '南校' | '1100'; alias?: string[] }> = CAMPUS_BUILDINGS,
+): Place[] {
+  return buildings.map((b) => {
+    const place: Place = {
+      id: placeId(b.name),
+      name: b.name,
+      campus: campusFromLabel(b.campus),
+      hours: [],
+      category: 'building',
+    };
+    if (b.alias?.length) place.alias = [...b.alias];
+    return place;
+  });
+}
+
+/* ============================================================
+ * 六、合并与冲突检测（数据治理）
+ * ========================================================== */
+
+/**
+ * 合并地点表：以 `base` 为准，`overlay` 只**补缺**（新增地点 / 补空 hours / 补别名），
  * **绝不覆盖已有校区** —— 避免上游数据质量差异悄悄改变引擎行为。
+ *
+ * ⚠️ 2026-09-15 修正：`overlay` 的 **`alias` 取并集**（此前会整条丢弃）。
+ *    例：「第一教学楼 / 第三教学楼」既是模板库里的自习点、又是建筑表条目，
+ *    若丢弃 overlay 的别名，就会漏掉「一教 / 三教 / 1教 / 3教」这几种课表常见写法。
+ *    别名只是**查询键**，不携带校区语义，合并是安全的。
  */
 export function mergePlaces(base: Place[], overlay: Place[]): Place[] {
-  const byName = new Map<string, Place>(base.map((p) => [p.name, { ...p }]));
+  const byName = new Map<string, Place>(
+    base.map((p) => [p.name, p.alias?.length ? { ...p, alias: [...p.alias] } : { ...p }]),
+  );
   for (const o of overlay) {
     const b = byName.get(o.name);
     if (!b) {
-      byName.set(o.name, { ...o });
+      byName.set(o.name, o.alias?.length ? { ...o, alias: [...o.alias] } : { ...o });
       continue;
     }
     if (b.hours.length === 0 && o.hours.length) b.hours = o.hours;
+    if (!b.category && o.category) b.category = o.category;
+    if (o.alias?.length) {
+      b.alias = [...new Set([...(b.alias ?? []), ...o.alias])];
+    }
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh'));
 }
@@ -199,18 +286,23 @@ export function findPlaceConflicts(base: Place[], overlay: Place[]): PlaceConfli
 }
 
 /* ============================================================
- * 六、索引与查询（规格书 §9-T0.1 步骤 2）
+ * 七、索引与查询（规格书 §9-T0.1 步骤 2）
  * ========================================================== */
 
 /**
- * 建索引。**同时按 `id` 与 `name` 注册**，因此 `resolvePlace('第三教学楼')`
- * 与 `resolvePlace('poi-第三教学楼')` 都能命中（O(1)）。
+ * 建索引。**同时按 `id` / `name` / `alias` 注册**，因此
+ * `resolvePlace('逸兴楼')`、`resolvePlace('第四教学楼')`、`resolvePlace('poi-逸兴楼')`
+ * 都能命中（O(1)）。先到先得：同一 key 只保留首个注册者。
  */
 export function buildPlaceIndex(places: Place[]): Map<string, Place> {
   const m = new Map<string, Place>();
+  const put = (key: string, p: Place): void => {
+    if (!m.has(key)) m.set(key, p);
+  };
   for (const p of places) {
-    if (!m.has(p.id)) m.set(p.id, p);
-    if (!m.has(p.name)) m.set(p.name, p);
+    put(p.id, p);
+    put(p.name, p);
+    for (const a of p.alias ?? []) put(a, p);
   }
   return m;
 }
@@ -232,11 +324,20 @@ export function campusOfPlace(
 }
 
 /* ============================================================
- * 七、内置地点表
+ * 八、内置地点表
  * ========================================================== */
 
-/** 引擎内置地点表：由模块库抽取，覆盖所有会被排程的 POI */
-export const BUILTIN_PLACES: Place[] = placesFromTemplates(DEFAULT_TEMPLATES);
+/**
+ * 引擎内置地点表 = 模块库 POI **∪** 校园建筑（含别名）。
+ *
+ * ⚠️ 2026-09-15 修复（规格书 §13.7）：此前只有 `placesFromTemplates()`，
+ *    导致课程楼（卓越楼 / 国合楼 / …）查不到校区。现并入 `placesFromBuildings()`。
+ *    `mergePlaces` 以 base（模块库）为准，建筑表只**补缺**，不会覆盖既有校区。
+ */
+export const BUILTIN_PLACES: Place[] = mergePlaces(
+  placesFromTemplates(DEFAULT_TEMPLATES),
+  placesFromBuildings(),
+);
 
 /** 内置地点索引 */
 export const BUILTIN_PLACE_INDEX: Map<string, Place> = buildPlaceIndex(BUILTIN_PLACES);

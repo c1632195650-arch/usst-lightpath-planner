@@ -27,7 +27,8 @@
    "life": "生活",
    "sport": "运动",
    "transport": "交通"
-  }
+  },
+  "pinyin": "【拼音检索·2026-09-15】`pyf` / `pyi` / `pyt` 为**离线生成**的拼音索引（名字与各别名的全拼 / 首字母、类型拼音、口语同义词拼音；`|` 分隔），由 `scripts/build_pinyin_index.py` 产出。生成需 `pypinyin`，**运行时不需要任何依赖** —— 检索只是查字符串。匹配只做「整段相等」与「前缀」，不做子串（子串假命中太多）。"
  },
  "zones": {
   "北校区·西北角": "先进制造大楼、第五教学楼、七公寓、学生处/武装部/心理健康中心、体育活动中心、体育馆、材料学院、工程实训中心、光仪所、1906咖啡厅（体育活动中心西侧）",
@@ -99,7 +100,11 @@
     "酱鸭",
     "面食",
     "饮品"
-   ]
+   ],
+   "pyf": "diyishitang|yishitang|1shitang|yican",
+   "pyi": "dyst|yst|1st|yc",
+   "pyt": "shitang|st",
+   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|cf|zf|wf|cxc|jy|ms|yp"
   },
   {
    "id": "bakery",
@@ -141,7 +146,11 @@
     "甜点",
     "早点",
     "烘焙"
-   ]
+   ],
+   "pyf": "shanglihongbeifang|hongbeifang|mianbaofang|yishitanghongbeifang",
+   "pyi": "slhbf|hbf|mbf|ysthbf",
+   "pyt": "hongbeiyinpin|hbyp",
+   "pyg": "mianbao|dangao|tiandian|zaodian|hongbei|mb|dg|td|zd|hb"
   },
   {
    "id": "canteen2",
@@ -197,7 +206,11 @@
     "晚饭",
     "教工餐厅",
     "快餐"
-   ]
+   ],
+   "pyf": "diershitang|ershitang|2shitang|ercan|diershitangjiaogongshitang",
+   "pyi": "dest|est|2st|ec|destjgst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|jiaogongcanting|kuaican|cf|wf|jgct|kc"
   },
   {
    "id": "yue",
@@ -241,7 +254,11 @@
     "聚餐",
     "小炒",
     "二食堂二楼"
-   ]
+   ],
+   "pyf": "yuecanting|ershitangerlou|jiaoshicanting",
+   "pyi": "yct|estel|jsct",
+   "pyt": "shitang|st",
+   "pyg": "chifan|jucan|xiaochao|ershitangerlou|cf|jc|xc|estel"
   },
   {
    "id": "canteen5",
@@ -297,7 +314,11 @@
     "晚饭",
     "自选",
     "聚餐"
-   ]
+   ],
+   "pyf": "diwushitang|wushitang|5shitang|wucan",
+   "pyi": "dwst|wst|5st|wc",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|zixuan|jucan|cf|wf|zx|jc"
   },
   {
    "id": "mini",
@@ -342,7 +363,11 @@
     "小炒",
     "聚会",
     "点菜"
-   ]
+   ],
+   "pyf": "minicanting|minecanting",
+   "pyi": "mnct|minict",
+   "pyt": "canting|ct",
+   "pyg": "chifan|xiaochao|juhui|diancai|cf|xc|jh|dc"
   },
   {
    "id": "sicanting",
@@ -378,7 +403,11 @@
     "午饭",
     "晚饭",
     "南校吃饭"
-   ]
+   ],
+   "pyf": "sicanting|nanxiaoqusicanting",
+   "pyi": "sct|nxqsct",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|nanxiaochifan|cf|wf|nxcf"
   },
   {
    "id": "canteen4",
@@ -407,7 +436,11 @@
    "tags": [
     "吃饭",
     "南校吃饭"
-   ]
+   ],
+   "pyf": "disishitang|sishitang",
+   "pyi": "dsst|sst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|nanxiaochifan|cf|nxcf"
   },
   {
    "id": "qingzhen334",
@@ -440,7 +473,11 @@
     "清真",
     "穆斯林",
     "南校吃饭"
-   ]
+   ],
+   "pyf": "qingzhenshitang334|nanxiaoquqingzhenshitang|qingzhencanting",
+   "pyi": "qzst334|nxqqzst|qzct",
+   "pyt": "shitang|st",
+   "pyg": "chifan|qingzhen|musilin|nanxiaochifan|cf|qz|msl|nxcf"
   },
   {
    "id": "canteen6",
@@ -470,7 +507,11 @@
     "吃饭",
     "南校吃饭",
     "六食堂"
-   ]
+   ],
+   "pyf": "diliushitang|liushitang",
+   "pyi": "dlst|lst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|nanxiaochifan|liushitang|cf|nxcf|lst"
   },
   {
    "id": "minzu580",
@@ -506,7 +547,11 @@
     "清真",
     "穆斯林",
     "580"
-   ]
+   ],
+   "pyf": "minzucanting580hao|minzucanting|580qingzhen",
+   "pyi": "mzct580h|mzct|580qz",
+   "pyt": "shitang|st",
+   "pyg": "chifan|qingzhen|musilin|580|cf|qz|msl|580"
   },
   {
    "id": "nuanwu",
@@ -544,7 +589,11 @@
     "买东西",
     "泡面",
     "日用品"
-   ]
+   ],
+   "pyf": "nuanwuchaoshi|nuanwu|nuanwuaixinchaoshi|nuanwuaixinchaoshidongtang",
+   "pyi": "nwcs|nw|nwaxcs|nwaxcsdt",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|ms|mls|mdx|pm|ryp"
   },
   {
    "id": "nuanwu_fresh",
@@ -571,7 +620,11 @@
     "水果",
     "生鲜",
     "买水果"
-   ]
+   ],
+   "pyf": "nuanwuchaoshishengxiandian|nuanwushengxian",
+   "pyi": "nwcssxd|nwsx",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maicai|shuiguo|shengxian|maishuiguo|mc|sg|sx|msg"
   },
   {
    "id": "edu_market_s",
@@ -604,7 +657,11 @@
     "文具",
     "买水",
     "笔记本"
-   ]
+   ],
+   "pyf": "nanxiaoqujiaoyuchaoshi|334chaoshi|jiaoyuchaoshi",
+   "pyi": "nxqjycs|334cs|jycs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maiwenju|wenju|maishui|bijiben|mwj|wj|ms|bjb"
   },
   {
    "id": "edu_market_1100",
@@ -631,7 +688,11 @@
     "买文具",
     "文具",
     "基础学院"
-   ]
+   ],
+   "pyf": "1100jiaoyuchaoshi|jichuxueyuanchaoshi",
+   "pyi": "1100jycs|jcxycs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maiwenju|wenju|jichuxueyuan|mwj|wj|jcxy"
   },
   {
    "id": "cainiao",
@@ -662,7 +723,11 @@
     "快递",
     "拿包裹",
     "物流"
-   ]
+   ],
+   "pyf": "cainiaoyizhan|kuaidiyizhan|kuaididian",
+   "pyi": "cnyz|kdyz|kdd",
+   "pyt": "kuaidifuwu|kdfw",
+   "pyg": "qukuaidi|jikuaidi|kuaidi|nabaoguo|wuliu|qkd|jkd|kd|nbg|wl"
   },
   {
    "id": "print_hongta",
@@ -690,7 +755,11 @@
     "复印",
     "彩印",
     "论文装订"
-   ]
+   ],
+   "pyf": "hongtadayin|beixiaohongtadayin",
+   "pyi": "htdy|bxhtdy",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd"
   },
   {
    "id": "print_fuke",
@@ -716,7 +785,11 @@
     "打印",
     "复印",
     "格致堂"
-   ]
+   ],
+   "pyf": "fukedayin|gezhitangdayin",
+   "pyi": "fkdy|gztdy",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|gezhitang|dy|fy|gzt"
   },
   {
    "id": "print_south",
@@ -742,7 +815,11 @@
     "打印",
     "复印",
     "南校打印"
-   ]
+   ],
+   "pyf": "nanxiaoquhongtadayin|334dayindian",
+   "pyi": "nxqhtdy|334dyd",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|nanxiaodayin|dy|fy|nxdy"
   },
   {
    "id": "coffee1906",
@@ -774,7 +851,11 @@
     "奶茶",
     "喝咖啡",
     "自习"
-   ]
+   ],
+   "pyf": "1906kafeiting",
+   "pyi": "1906kft",
+   "pyt": "hongbeiyinpin|hbyp",
+   "pyg": "kafei|naicha|hekafei|zixi|kf|nc|hkf|zx"
   },
   {
    "id": "bath1",
@@ -802,7 +883,11 @@
     "淋浴",
     "热水",
     "浴室"
-   ]
+   ],
+   "pyf": "diyiyushi|beixiaoyushi|yushi",
+   "pyi": "dyys|bxys|ys",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xizao|linyu|reshui|yushi|xz|ly|rs|ys"
   },
   {
    "id": "bath_s",
@@ -831,7 +916,11 @@
     "洗澡",
     "淋浴",
     "南校洗澡"
-   ]
+   ],
+   "pyf": "gonggongyushinanxiaoqu|334yushi|yushi",
+   "pyi": "ggysnxq|334ys|ys",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz"
   },
   {
    "id": "atm_abc",
@@ -857,7 +946,11 @@
     "取款",
     "农行",
     "转账"
-   ]
+   ],
+   "pyf": "nongyeyinhangatm|qukuanji",
+   "pyi": "nyyhatm|qkj",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "quqian|atm|qukuan|nonghang|zhuanzhang|qq|atm|qk|nh|zz"
   },
   {
    "id": "clinic",
@@ -885,7 +978,11 @@
     "配药",
     "体检",
     "医务室"
-   ]
+   ],
+   "pyf": "xiaoyishiweishengke|xiaoyiyuan|weishengke",
+   "pyi": "xyswsk|xyy|wsk",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|yiwushi|kb|xyy|ky|py|tj|yws"
   },
   {
    "id": "pscenter",
@@ -910,7 +1007,11 @@
     "树洞",
     "倾诉",
     "心理辅导"
-   ]
+   ],
+   "pyf": "xinlijiankangzhongxin|xinlizhongxin",
+   "pyi": "xljkzx|xlzx",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xinlizixun|xinliyuyue|shudong|qingsu|xinlifudao|xlzx|xlyy|sd|qs|xlfd"
   },
   {
    "id": "familymart",
@@ -954,7 +1055,11 @@
     "早饭",
     "买零食",
     "24小时"
-   ]
+   ],
+   "pyf": "quanjiabianlidian|quanjia|quanjiachaoshi|quanjiabianliliansuochaoshi",
+   "pyi": "qjbld|qj|qjcs|qjbllscs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|ms|bld|ft|zf|mls|24xs"
   }
  ],
  "landmarks": [
@@ -978,7 +1083,11 @@
     "上课",
     "自习",
     "一教上课"
-   ]
+   ],
+   "pyf": "diyijiaoxuelou|yijiao|1jiao",
+   "pyi": "dyjxl|yj|1j",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|yijiaoshangke|sk|zx|yjsk"
   },
   {
    "id": "teach3",
@@ -1001,7 +1110,11 @@
     "上课",
     "自习",
     "三教上课"
-   ]
+   ],
+   "pyf": "disanjiaoxuelou|sanjiao|3jiao|xinsanjiao",
+   "pyi": "dsjxl|sj|3j|xsj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|sanjiaoshangke|sk|zx|sjsk"
   },
   {
    "id": "teach5",
@@ -1023,7 +1136,11 @@
     "上课",
     "自习",
     "五教上课"
-   ]
+   ],
+   "pyf": "diwujiaoxuelou|wujiao|5jiao",
+   "pyi": "dwjxl|wj|5j",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|wujiaoshangke|sk|zx|wjsk"
   },
   {
    "id": "yixing",
@@ -1044,7 +1161,11 @@
    "tags": [
     "上课",
     "四教上课"
-   ]
+   ],
+   "pyf": "yixinglou|disijiaoxuelou|sijiao",
+   "pyi": "yxl|dsjxl|sj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|sijiaoshangke|sk|sjsk"
   },
   {
    "id": "zonghe",
@@ -1066,7 +1187,11 @@
     "上课",
     "自习",
     "中德"
-   ]
+   ],
+   "pyf": "zonghelou|zhongdexueyuanzonghelou",
+   "pyi": "zhl|zdxyzhl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|zhongde|sk|zx|zd"
   },
   {
    "id": "zhuoyue",
@@ -1087,7 +1212,11 @@
     "上课",
     "自习",
     "研究生课"
-   ]
+   ],
+   "pyf": "zhuoyuelou|zhuoyuegongchengyanjiushengyuan",
+   "pyi": "zyl|zygcyjsy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|yanjiushengke|sk|zx|yjsk"
   },
   {
    "id": "guohe",
@@ -1108,7 +1237,11 @@
     "上课",
     "国际合作",
     "自习"
-   ]
+   ],
+   "pyf": "guohelou|guojihezuodalou",
+   "pyi": "ghl|gjhzdl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|guojihezuo|zixi|sk|gjhz|zx"
   },
   {
    "id": "shen1",
@@ -1129,7 +1262,11 @@
    "tags": [
     "上课",
     "基础学院"
-   ]
+   ],
+   "pyf": "shenyijiao|shenyi|1100yijiao",
+   "pyi": "syj|sy|1100yj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|jichuxueyuan|sk|jcxy"
   },
   {
    "id": "shen2",
@@ -1150,7 +1287,11 @@
    "tags": [
     "上课",
     "基础学院"
-   ]
+   ],
+   "pyf": "shenerjiao|shenerlou|1100erjiao",
+   "pyi": "sej|sel|1100ej",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|jichuxueyuan|sk|jcxy"
   },
   {
    "id": "guangdian",
@@ -1173,7 +1314,11 @@
     "光电学院",
     "辅导员",
     "办事"
-   ]
+   ],
+   "pyf": "guangdianlou|guangdiandalou|guangdianxinxiyujisuanjigongchengxueyuan",
+   "pyi": "gdl|gddl|gdxxyjsjgcxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|guangdianxueyuan|fudaoyuan|banshi|sk|gdxy|fdy|bs"
   },
   {
    "id": "jidian",
@@ -1193,7 +1338,11 @@
    "tags": [
     "上课",
     "机械学院"
-   ]
+   ],
+   "pyf": "jixielou|jixiegongchengxueyuan",
+   "pyi": "jxl|jxgcxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|jixiexueyuan|sk|jxxy"
   },
   {
    "id": "huanjian",
@@ -1213,7 +1362,11 @@
    "tags": [
     "上课",
     "环建学院"
-   ]
+   ],
+   "pyf": "huanjianlou|huanjingyujianzhuxueyuan",
+   "pyi": "hjl|hjyjzxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|huanjianxueyuan|sk|hjxy"
   },
   {
    "id": "glA",
@@ -1234,7 +1387,11 @@
    "tags": [
     "上课",
     "管院"
-   ]
+   ],
+   "pyf": "guanlixueyuandalou|guanlixueyuan|guanyuan",
+   "pyi": "glxydl|glxy|gy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|guanyuan|sk|gy"
   },
   {
    "id": "lib",
@@ -1265,7 +1422,11 @@
     "占座",
     "图文",
     "图书馆总馆"
-   ]
+   ],
+   "pyf": "tushuguantuwenxinxizhongxin|tushuguan|tuwenxinxizhongxin|tushuguanzongguan",
+   "pyi": "tsgtwxxzx|tsg|twxxzx|tsgzg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|xuexi|zhanzuo|tuwen|tushuguanzongguan|zx|js|ks|xx|zz|tw|tsgzg"
   },
   {
    "id": "zhanen_lib",
@@ -1293,7 +1454,11 @@
     "看书",
     "湛恩",
     "图书馆"
-   ]
+   ],
+   "pyf": "zhanenjiniantushuguan|zhanentushuguan|beixiaoqutushuguan",
+   "pyi": "zejntsg|zetsg|bxqtsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|zhanen|tushuguan|zx|js|ks|ze|tsg"
   },
   {
    "id": "old_lib",
@@ -1314,7 +1479,11 @@
     "自习",
     "考研自习",
     "图书馆"
-   ]
+   ],
+   "pyf": "laotushuguan",
+   "pyi": "ltsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|kaoyanzixi|tushuguan|zx|kyzx|tsg"
   },
   {
    "id": "lib334",
@@ -1338,7 +1507,11 @@
     "借书",
     "看书",
     "南校自习"
-   ]
+   ],
+   "pyf": "nanxiaoqutushuguan|334tushuguan",
+   "pyi": "nxqtsg|334tsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|nanxiaozixi|zx|js|ks|nxzx"
   },
   {
    "id": "lib1100",
@@ -1362,7 +1535,11 @@
     "自习",
     "看书",
     "基础学院"
-   ]
+   ],
+   "pyf": "1100tushuguan|jichuxueyuantushuguan",
+   "pyi": "1100tsg|jcxytsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|kanshu|jichuxueyuan|zx|ks|jcxy"
   },
   {
    "id": "ground",
@@ -1387,7 +1564,11 @@
     "夜跑",
     "体测",
     "校园跑"
-   ]
+   ],
+   "pyf": "yundongchang|caochang|dacaochang",
+   "pyi": "ydc|cc|dcc",
+   "pyt": "yundong|yd",
+   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp"
   },
   {
    "id": "gym",
@@ -1411,7 +1592,11 @@
     "篮球",
     "体育课",
     "健身房"
-   ]
+   ],
+   "pyf": "tiyuguantiyuhuodongzhongxin|tiyuguan|tiyuhuodongzhongxin",
+   "pyi": "tygtyhdzx|tyg|tyhdzx",
+   "pyt": "yundong|yd",
+   "pyg": "daqiu|yumaoqiu|lanqiu|tiyuke|jianshenfang|dq|ymq|lq|tyk|jsf"
   },
   {
    "id": "dorm1",
@@ -1432,7 +1617,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "diyixueshenggongyu|1gongyu|yigongyu",
+   "pyi": "dyxsgy|1gy|ygy",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm2",
@@ -1468,7 +1657,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "dierxueshenggongyu|2gongyu|ergongyu|dierxueshenggongyu1haolou|dierxueshenggongyu2haolou|dierxueshenggongyu3haolou",
+   "pyi": "dexsgy|2gy|egy|dexsgy1hl|dexsgy2hl|dexsgy3hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm3",
@@ -1492,7 +1685,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "disanxueshenggongyu|3gongyu|sangongyu|disanxueshenggongyu1haolou|disanxueshenggongyu2haolou|disanxueshenggongyu3haolou",
+   "pyi": "dsxsgy|3gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm4",
@@ -1517,7 +1714,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "disixueshenggongyu|4gongyu|sigongyu|disixueshenggongyu1haolou|disixueshenggongyu2haolou|disixueshenggongyu3haolou|disixueshenggongyu4haolou",
+   "pyi": "dsxsgy|4gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl|dsxsgy4hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm5n",
@@ -1549,7 +1750,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "diwuxueshenggongyu|5gongyu|wugongyu|wugongyu14haolou|diwuxueshenggongyu1haolou|diwuxueshenggongyu2haolou|diwuxueshenggongyu3haolou|diwuxueshenggongyu4haolou",
+   "pyi": "dwxsgy|5gy|wgy|wgy14hl|dwxsgy1hl|dwxsgy2hl|dwxsgy3hl|dwxsgy4hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm6",
@@ -1577,7 +1782,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "diliuxueshenggongyu|6gongyu|liugongyu|liugongyu13haolou",
+   "pyi": "dlxsgy|6gy|lgy|lgy13hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm9",
@@ -1597,7 +1806,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "dijiusushe|jiusushe",
+   "pyi": "djss|jss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "dorm10",
@@ -1617,7 +1830,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "dishisushe|shisushe",
+   "pyi": "dsss|sss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "star",
@@ -1637,7 +1854,11 @@
    "tags": [
     "打卡",
     "毛像"
-   ]
+   ],
+   "pyf": "maozhuxixiang|maoxiang",
+   "pyi": "mzxx|mx",
+   "pyt": "dibiao|db",
+   "pyg": "daka|maoxiang|dk|mx"
   },
   {
    "id": "siyan",
@@ -1655,7 +1876,11 @@
    "tags": [
     "打卡",
     "老建筑"
-   ]
+   ],
+   "pyf": "siyantang",
+   "pyi": "syt",
+   "pyt": "dibiao|db",
+   "pyg": "daka|laojianzhu|dk|ljz"
   },
   {
    "id": "gate516",
@@ -1679,7 +1904,11 @@
     "门口",
     "出门",
     "正门"
-   ]
+   ],
+   "pyf": "516haoxiaomen|zhengmen|benbuxiaomen",
+   "pyi": "516hxm|zm|bbxm",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|gongjiao|menkou|chumen|zhengmen|dc|gj|mk|cm|zm"
   },
   {
    "id": "gate470",
@@ -1700,7 +1929,11 @@
     "打车",
     "门口",
     "出门"
-   ]
+   ],
+   "pyf": "470haoxiaomen|470men",
+   "pyi": "470hxm|470m",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|dc|mk|cm"
   },
   {
    "id": "gate580",
@@ -1722,7 +1955,11 @@
     "门口",
     "出门",
     "580"
-   ]
+   ],
+   "pyf": "580haoxiaomen|580men",
+   "pyi": "580hxm|580m",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|580|dc|mk|cm|580"
   },
   {
    "id": "gate334",
@@ -1744,7 +1981,11 @@
     "门口",
     "出门",
     "南校门口"
-   ]
+   ],
+   "pyf": "334haoxiaomen|nanxiaoquxiaomen",
+   "pyi": "334hxm|nxqxm",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|nanxiaomenkou|dc|mk|cm|nxmk"
   },
   {
    "id": "bridge",
@@ -1772,7 +2013,11 @@
     "南北校区",
     "天桥",
     "通道"
-   ]
+   ],
+   "pyf": "haianlurenxingtianqiao|tianqiao|shishengzhuanyongtongdao|xintianqiao|haianlushishengzhuanyongtongdao|laotianqiao",
+   "pyi": "halrxtq|tq|sszytd|xtq|halsszytd|ltq",
+   "pyt": "dibiao|db",
+   "pyg": "guomalu|qunanxiao|nanbeixiaoqu|tianqiao|tongdao|gml|qnx|nbxq|tq|td"
   },
   {
    "name": "南校区第一宿舍",
@@ -1799,7 +2044,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudiyixiushe|nan1sushe|nanxiaoqu1sushe|nanyixiushe|nanyi",
+   "pyi": "nxqdyxs|n1ss|nxq1ss|nyxs|ny",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第二宿舍",
@@ -1825,7 +2074,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudiersushe|nan2sushe|nanxiaoqu2sushe|nanersushe|naner",
+   "pyi": "nxqdess|n2ss|nxq2ss|ness|ne",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第三宿舍",
@@ -1852,7 +2105,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudisansushe|nan3sushe|nanxiaoqu3sushe|nansansushe|nansan",
+   "pyi": "nxqdsss|n3ss|nxq3ss|nsss|ns",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第七宿舍",
@@ -1877,7 +2134,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudiqisushe|nan7sushe|nanqisushe|nanqi",
+   "pyi": "nxqdqss|n7ss|nqss|nq",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第八宿舍",
@@ -1900,7 +2161,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudibasushe|nan8sushe|nanbasushe|nanba",
+   "pyi": "nxqdbss|n8ss|nbss|nb",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第九宿舍",
@@ -1923,7 +2188,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudijiusushe|nan9sushe|nanjiusushe|nanjiu",
+   "pyi": "nxqdjss|n9ss|njss|nj",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第十宿舍",
@@ -1947,7 +2216,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudishisushe|nan10sushe|nanshisushe|nanshi",
+   "pyi": "nxqdsss|n10ss|nsss|ns",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "北校区第三宿舍",
@@ -1971,7 +2244,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "beixiaoqudisansushe|bei3sushe|3sushe|disansushesipeitang",
+   "pyi": "bxqdsss|b3ss|3ss|dsssspt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "北校区第四宿舍",
@@ -1995,7 +2272,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "beixiaoqudisisushe|bei4sushe|4sushe|disisushesiyitang",
+   "pyi": "bxqdsss|b4ss|4ss|dssssyt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "北校区第五宿舍",
@@ -2021,7 +2302,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "beixiaoqudiwusushe|bei5sushe|5sushe|diwusushehuaidetang",
+   "pyi": "bxqdwss|b5ss|5ss|dwsshdt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "北校区第七宿舍",
@@ -2045,7 +2330,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "beixiaoqudiqisushe|bei7sushe|7sushe|diqisushe",
+   "pyi": "bxqdqss|b7ss|7ss|dqss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "北校区第八宿舍",
@@ -2071,7 +2360,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "beixiaoqudibasushe|bei8sushe|8sushe|dibasushe",
+   "pyi": "bxqdbss|b8ss|8ss|dbss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "第十二宿舍",
@@ -2096,7 +2389,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "dishiersushe|12sushe|shiersushe",
+   "pyi": "dsess|12ss|sess",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "启明楼宿舍",
@@ -2119,7 +2416,11 @@
    "tags": [
     "回宿舍",
     "启明楼"
-   ]
+   ],
+   "pyf": "qiminglousushe|qiminglou",
+   "pyi": "qmlss|qml",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|qiminglou|hss|qml"
   },
   {
    "name": "留学生公寓",
@@ -2143,7 +2444,11 @@
     "回宿舍",
     "留学生",
     "国际学生"
-   ]
+   ],
+   "pyf": "liuxueshenggongyu|liuxueshenggongyu1haolou|liuxueshenggongyu2haolou|diliususheliuxueshenggongyufulaitang",
+   "pyi": "lxsgy|lxsgy1hl|lxsgy2hl|dlsslxsgyflt",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|liuxuesheng|guojixuesheng|hss|lxs|gjxs"
   },
   {
    "name": "藏书阁宿舍",
@@ -2164,7 +2469,11 @@
    "tags": [
     "回宿舍",
     "藏书阁"
-   ]
+   ],
+   "pyf": "cangshugesushe|cangshuge",
+   "pyi": "csgss|csg",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|cangshuge|hss|csg"
   },
   {
    "name": "南校区操场",
@@ -2190,7 +2499,11 @@
     "打球",
     "操场",
     "南校跑步"
-   ]
+   ],
+   "pyf": "nanxiaoqucaochang|nanxiaocaochang|nanxiaoqudacaochang",
+   "pyi": "nxqcc|nxcc|nxqdcc",
+   "pyt": "yundong|yd",
+   "pyg": "paobu|daqiu|caochang|nanxiaopaobu|pb|dq|cc|nxpb"
   },
   {
    "name": "南校区室内篮球场",
@@ -2212,7 +2525,11 @@
     "打球",
     "篮球",
     "室内"
-   ]
+   ],
+   "pyf": "nanxiaoqushineilanqiuchang|334lanqiuchang",
+   "pyi": "nxqsnlqc|334lqc",
+   "pyt": "yundong|yd",
+   "pyg": "daqiu|lanqiu|shinei|dq|lq|sn"
   },
   {
    "name": "教工食堂",
@@ -2234,7 +2551,11 @@
    "tags": [
     "吃饭",
     "教工"
-   ]
+   ],
+   "pyf": "jiaogongshitang|nanxiaoqujiaogongshitang",
+   "pyi": "jgst|nxqjgst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|jiaogong|cf|jg"
   },
   {
    "name": "先进制造大楼",
@@ -2256,7 +2577,11 @@
    "tags": [
     "上课",
     "先进制造"
-   ]
+   ],
+   "pyf": "xianjinzhizaodalou|xianjinzhizao",
+   "pyi": "xjzzdl|xjzz",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|xianjinzhizao|sk|xjzz"
   },
   {
    "name": "大礼堂",
@@ -2283,7 +2608,11 @@
     "开学典礼",
     "讲座",
     "晚会"
-   ]
+   ],
+   "pyf": "dalitang|litang",
+   "pyi": "dlt|lt",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "huodong|yanchu|kaixuedianli|jiangzuo|wanhui|hd|yc|kxdl|jz|wh"
   },
   {
    "name": "校史馆",
@@ -2308,7 +2637,11 @@
     "参观",
     "校史",
     "讲解"
-   ]
+   ],
+   "pyf": "xiaoshiguan|xiaoshiguantuwenxinxizhongxin",
+   "pyi": "xsg|xsgtwxxzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "canguan|xiaoshi|jiangjie|cg|xs|jj"
   },
   {
    "name": "水母楼",
@@ -2338,7 +2671,11 @@
     "财务处",
     "公共服务中心",
     "打印成绩单"
-   ]
+   ],
+   "pyf": "shuimulou|gonggongfuwuzhongxin|jiaowuchu|caiwuchu",
+   "pyi": "sml|ggfwzx|jwc|cwc",
+   "pyt": "fuwu|fw",
+   "pyg": "banshi|yizhanshi|jiaowuchu|caiwuchu|gonggongfuwuzhongxin|dayinchengjidan|bs|yzs|jwc|cwc|ggfwzx|dycjd"
   },
   {
    "name": "学生卡卡务中心",
@@ -2365,7 +2702,11 @@
     "充值",
     "挂失",
     "卡务中心"
-   ]
+   ],
+   "pyf": "xueshengkakawuzhongxin|kawuzhongxin|bubanxiaoyuanka",
+   "pyi": "xskkwzx|kwzx|bbxyk",
+   "pyt": "fuwu|fw",
+   "pyg": "buka|xiaoyuanka|chongzhi|guashi|kawuzhongxin|bk|xyk|cz|gs|kwzx"
   },
   {
    "name": "中德学院",
@@ -2388,7 +2729,11 @@
    "tags": [
     "上课",
     "中德"
-   ]
+   ],
+   "pyf": "zhongdexueyuan|hanbaoguojigongchengxueyuan|zhongdeguojixueyuan",
+   "pyi": "zdxy|hbgjgcxy|zdgjxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zhongde|sk|zd"
   },
   {
    "name": "动力馆",
@@ -2409,7 +2754,11 @@
    "tags": [
     "上课",
     "能动"
-   ]
+   ],
+   "pyf": "dongliguan|nengyuanyudongligongchengxueyuan",
+   "pyi": "dlg|nyydlgcxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|nengdong|sk|nd"
   },
   {
    "name": "沪江美术馆",
@@ -2431,7 +2780,11 @@
     "看展",
     "美术馆",
     "艺术"
-   ]
+   ],
+   "pyf": "hujiangmeishuguan|meishuguan",
+   "pyi": "hjmsg|msg",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "kanzhan|meishuguan|yishu|kz|msg|ys"
   },
   {
    "name": "音乐堂",
@@ -2452,7 +2805,11 @@
     "演出",
     "音乐会",
     "活动"
-   ]
+   ],
+   "pyf": "yinyuetang",
+   "pyi": "yyt",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "yanchu|yinyuehui|huodong|yc|yyh|hd"
   },
   {
    "name": "理学院楼",
@@ -2475,7 +2832,11 @@
    "tags": [
     "上课",
     "理学院"
-   ]
+   ],
+   "pyf": "lixueyuanlou|lixueyuan",
+   "pyi": "lxyl|lxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|lixueyuan|sk|lxy"
   },
   {
    "name": "外语楼",
@@ -2497,7 +2858,11 @@
    "tags": [
     "上课",
     "外语学院"
-   ]
+   ],
+   "pyf": "waiyulou|waiyuxueyuan",
+   "pyi": "wyl|wyxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|waiyuxueyuan|sk|wyxy"
   },
   {
    "name": "微创楼",
@@ -2518,7 +2883,11 @@
    "tags": [
     "上课",
     "微创"
-   ]
+   ],
+   "pyf": "weichuanglou|weichuangzhongxin",
+   "pyi": "wcl|wczx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|weichuang|sk|wc"
   },
   {
    "name": "理科实验中心",
@@ -2540,7 +2909,11 @@
     "做实验",
     "实验课",
     "理科实验"
-   ]
+   ],
+   "pyf": "likeshiyanzhongxin|likeshiyanlou",
+   "pyi": "lksyzx|lksyl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|likeshiyan|zsy|syk|lksy"
   },
   {
    "name": "中德学院实验中心",
@@ -2561,7 +2934,11 @@
    "tags": [
     "做实验",
     "实验课"
-   ]
+   ],
+   "pyf": "zhongdexueyuanshiyanzhongxin|zhongdeshiyanzhongxin",
+   "pyi": "zdxysyzx|zdsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|zsy|syk"
   },
   {
    "name": "朝花夕拾书店",
@@ -2585,7 +2962,11 @@
     "书店",
     "教材",
     "旧书"
-   ]
+   ],
+   "pyf": "chaohuaxishishudian|nanxiaoqushudian",
+   "pyi": "chxssd|nxqsd",
+   "pyt": "fuwu|fw",
+   "pyg": "maishu|shudian|jiaocai|jiushu|ms|sd|jc|js"
   },
   {
    "name": "南校区第四宿舍",
@@ -2607,7 +2988,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudisisushe|nan4sushe",
+   "pyi": "nxqdsss|n4ss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区第五宿舍",
@@ -2631,7 +3016,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqudiwusushe|nan5sushe|nanwusushe|nanwu",
+   "pyi": "nxqdwss|n5ss|nwss|nw",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "name": "南校区科技大楼",
@@ -2651,7 +3040,11 @@
    "emoji": "📚",
    "tags": [
     "上课"
-   ]
+   ],
+   "pyf": "nanxiaoqukejidalou",
+   "pyi": "nxqkjdl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|sk"
   },
   {
    "name": "南校区教工宿舍",
@@ -2675,7 +3068,11 @@
    "tags": [
     "教工宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanxiaoqujiaogongsushe|334jiaogongsushe|jiaogongsushe",
+   "pyi": "nxqjgss|334jgss|jgss",
+   "pyt": "sushe|ss",
+   "pyg": "jiaogongsushe|huisushe|jgss|hss"
   },
   {
    "id": "osm-001",
@@ -2693,7 +3090,11 @@
    "emoji": "🍜",
    "tags": [
     "吃饭"
-   ]
+   ],
+   "pyf": "yuandisishitang",
+   "pyi": "ydsst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|cf"
   },
   {
    "id": "osm-002",
@@ -2711,7 +3112,11 @@
    "emoji": "🏗️",
    "tags": [
     "研究所"
-   ]
+   ],
+   "pyf": "shanghaiguangxueyiqiyanjiusuo",
+   "pyi": "shgxyqyjs",
+   "pyt": "qita|qt",
+   "pyg": "yanjiusuo|yjs"
   },
   {
    "id": "osm-003",
@@ -2731,7 +3136,11 @@
     "继续教育",
     "成教",
     "专升本"
-   ]
+   ],
+   "pyf": "shanghailigongdaxuejixujiaoyuxueyuan",
+   "pyi": "shlgdxjxjyxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "jixujiaoyu|chengjiao|zhuanshengben|jxjy|cj|zsb"
   },
   {
    "id": "osm-004",
@@ -2750,7 +3159,11 @@
    "tags": [
     "上课",
     "仪表"
-   ]
+   ],
+   "pyf": "yibiaoerguan",
+   "pyi": "ybeg",
+   "pyt": "qita|qt",
+   "pyg": "shangke|yibiao|sk|yb"
   },
   {
    "id": "osm-005",
@@ -2770,7 +3183,11 @@
     "体育课",
     "体测",
     "体育部"
-   ]
+   ],
+   "pyf": "tiyubuaidemengtang",
+   "pyi": "tybadmt",
+   "pyt": "tiyusheshi|tyss",
+   "pyg": "tiyuke|tice|tiyubu|tyk|tc|tyb"
   },
   {
    "id": "osm-006",
@@ -2791,7 +3208,11 @@
     "办证",
     "保卫",
     "失物招领"
-   ]
+   ],
+   "pyf": "baoweichu",
+   "pyi": "bwc",
+   "pyt": "bangonglou|bgl",
+   "pyg": "baojing|banzheng|baowei|shiwuzhaoling|bj|bz|bw|swzl"
   },
   {
    "id": "osm-007",
@@ -2813,7 +3234,11 @@
     "校史",
     "打卡",
     "故居"
-   ]
+   ],
+   "pyf": "liuzhanenguju",
+   "pyi": "lzegj",
+   "pyt": "wenhuasheshi|whss",
+   "pyg": "canguan|xiaoshi|daka|guju|cg|xs|dk|gj"
   },
   {
    "id": "osm-008",
@@ -2832,7 +3257,11 @@
    "tags": [
     "创业",
     "孵化"
-   ]
+   ],
+   "pyf": "chuangyelou",
+   "pyi": "cyl",
+   "pyt": "qita|qt",
+   "pyg": "chuangye|fuhua|cy|fh"
   },
   {
    "id": "osm-009",
@@ -2851,7 +3280,11 @@
    "tags": [
     "设计",
     "实践"
-   ]
+   ],
+   "pyf": "chuangyishejishijianjidi",
+   "pyi": "cysjsjjd",
+   "pyt": "qita|qt",
+   "pyg": "sheji|shijian|sj"
   },
   {
    "id": "osm-010",
@@ -2870,7 +3303,11 @@
    "tags": [
     "实训",
     "创新"
-   ]
+   ],
+   "pyf": "chuangxinshixunzhongxin",
+   "pyi": "cxsxzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shixun|chuangxin|sx|cx"
   },
   {
    "id": "osm-011",
@@ -2889,7 +3326,11 @@
    "tags": [
     "上课",
     "能动"
-   ]
+   ],
+   "pyf": "donglierguan",
+   "pyi": "dleg",
+   "pyt": "qita|qt",
+   "pyg": "shangke|nengdong|sk|nd"
   },
   {
    "id": "osm-012",
@@ -2909,7 +3350,11 @@
     "勤工助学",
     "兼职",
     "助学"
-   ]
+   ],
+   "pyf": "qingongjianxuezhongxinhongta",
+   "pyi": "qgjxzxht",
+   "pyt": "bangonglou|bgl",
+   "pyg": "qingongzhuxue|jianzhi|zhuxue|qgzx|jz|zx"
   },
   {
    "id": "osm-013",
@@ -2928,7 +3373,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "beiouwenhuajiaoliuzhongxin",
+   "pyi": "bowhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-014",
@@ -2951,7 +3400,11 @@
     "校医院",
     "开药",
     "南校看病"
-   ]
+   ],
+   "pyf": "yiwushinanxiaoqu|yiwushi",
+   "pyi": "ywsnxq|yws",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|nanxiaokanbing|kb|xyy|ky|nxkb"
   },
   {
    "id": "osm-015",
@@ -2974,7 +3427,11 @@
     "校医院",
     "开药",
     "北校看病"
-   ]
+   ],
+   "pyf": "yiwushibeixiaoqu|yiwushi",
+   "pyi": "ywsbxq|yws",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|beixiaokanbing|kb|xyy|ky|bxkb"
   },
   {
    "id": "osm-023",
@@ -2995,7 +3452,11 @@
    "tags": [
     "宿舍",
     "回宿舍"
-   ]
+   ],
+   "pyf": "nanliusushe|nanliu",
+   "pyi": "nlss|nl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
   },
   {
    "id": "osm-025",
@@ -3015,7 +3476,11 @@
     "做实验",
     "实验课",
     "基础实验"
-   ]
+   ],
+   "pyf": "jichushiyanzhongxin",
+   "pyi": "jcsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|jichushiyan|zsy|syk|jcsy"
   },
   {
    "id": "osm-026",
@@ -3033,7 +3498,11 @@
    "emoji": "🛏️",
    "tags": [
     "回宿舍"
-   ]
+   ],
+   "pyf": "xuezigongyu",
+   "pyi": "xzgy",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|hss"
   },
   {
    "id": "osm-027",
@@ -3053,7 +3522,11 @@
     "社团",
     "活动",
     "大活"
-   ]
+   ],
+   "pyf": "xueshenghuodongzhongxin",
+   "pyi": "xshdzx",
+   "pyt": "qita|qt",
+   "pyg": "shetuan|huodong|dahuo|st|hd|dh"
   },
   {
    "id": "osm-028",
@@ -3076,7 +3549,11 @@
     "实训",
     "工程训练",
     "金工实习"
-   ]
+   ],
+   "pyf": "shixunzhongxin|gongchengshixunzhongxin|gongchengxunlianzhongxin",
+   "pyi": "sxzx|gcsxzx|gcxlzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shixun|gongchengxunlian|jingongshixi|sx|gcxl|jgsx"
   },
   {
    "id": "osm-029",
@@ -3096,7 +3573,11 @@
     "打球",
     "羽毛球",
     "南校"
-   ]
+   ],
+   "pyf": "shineitiyuguan",
+   "pyi": "sntyg",
+   "pyt": "tiyusheshi|tyss",
+   "pyg": "daqiu|yumaoqiu|nanxiao|dq|ymq|nx"
   },
   {
    "id": "osm-030",
@@ -3115,7 +3596,11 @@
    "tags": [
     "微创",
     "工程"
-   ]
+   ],
+   "pyf": "weichuanggongchengzhongxin",
+   "pyi": "wcgczx",
+   "pyt": "qita|qt",
+   "pyg": "weichuang|gongcheng|wc|gc"
   },
   {
    "id": "osm-031",
@@ -3134,7 +3619,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "deguowenhuajiaoliuzhongxin",
+   "pyi": "dgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-032",
@@ -3153,7 +3642,11 @@
    "tags": [
     "打卡",
     "老建筑"
-   ]
+   ],
+   "pyf": "sifutang",
+   "pyi": "sft",
+   "pyt": "wenhuasheshi|whss",
+   "pyg": "daka|laojianzhu|dk|ljz"
   },
   {
    "id": "osm-033",
@@ -3172,7 +3665,11 @@
    "tags": [
     "成教",
     "继续教育"
-   ]
+   ],
+   "pyf": "chengjiaolou",
+   "pyi": "cjl",
+   "pyt": "qita|qt",
+   "pyg": "chengjiao|jixujiaoyu|cj|jxjy"
   },
   {
    "id": "osm-034",
@@ -3193,7 +3690,11 @@
     "录取",
     "咨询",
     "报考"
-   ]
+   ],
+   "pyf": "zhaoshengban",
+   "pyi": "zsb",
+   "pyt": "bangonglou|bgl",
+   "pyg": "zhaosheng|luqu|zixun|baokao|zs|lq|zx|bk"
   },
   {
    "id": "osm-035",
@@ -3212,7 +3713,11 @@
    "tags": [
     "教工",
     "活动"
-   ]
+   ],
+   "pyf": "jiaogongzhijia",
+   "pyi": "jgzj",
+   "pyt": "bangonglou|bgl",
+   "pyg": "jiaogong|huodong|jg|hd"
   },
   {
    "id": "osm-036",
@@ -3231,7 +3736,11 @@
    "tags": [
     "专家楼",
     "回宿舍"
-   ]
+   ],
+   "pyf": "xinzhuanjialou",
+   "pyi": "xzjl",
+   "pyt": "sushe|ss",
+   "pyg": "zhuanjialou|huisushe|zjl|hss"
   },
   {
    "id": "osm-037",
@@ -3250,7 +3759,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "ribenwenhuajiaoliuzhongxin",
+   "pyi": "rbwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-038",
@@ -3269,7 +3782,11 @@
    "tags": [
     "上课",
     "材料学院"
-   ]
+   ],
+   "pyf": "cailiaokexueyugongchengxueyuan",
+   "pyi": "clkxygcxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "shangke|cailiaoxueyuan|sk|clxy"
   },
   {
    "id": "osm-039",
@@ -3288,7 +3805,11 @@
    "tags": [
     "校办",
     "校长"
-   ]
+   ],
+   "pyf": "xiaozhangbangongshi",
+   "pyi": "xzbgs",
+   "pyt": "bangonglou|bgl",
+   "pyg": "xiaoban|xiaozhang|xb|xz"
   },
   {
    "id": "osm-040",
@@ -3307,7 +3828,11 @@
    "tags": [
     "汽车",
     "试验"
-   ]
+   ],
+   "pyf": "qicheshiyanzhongxin",
+   "pyi": "qcsyzx",
+   "pyt": "qita|qt",
+   "pyg": "qiche|shiyan|qc|sy"
   },
   {
    "id": "osm-041",
@@ -3326,7 +3851,11 @@
    "tags": [
     "上课",
     "沪江学院"
-   ]
+   ],
+   "pyf": "hujiangxueyuan",
+   "pyi": "hjxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "shangke|hujiangxueyuan|sk|hjxy"
   },
   {
    "id": "osm-042",
@@ -3345,7 +3874,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "faguowenhuajiaoliuzhongxin",
+   "pyi": "fgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-043",
@@ -3364,7 +3897,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "aodaliyawenhuajiaoliuzhongxin",
+   "pyi": "adlywhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-044",
@@ -3382,7 +3919,11 @@
    "emoji": "🛏️",
    "tags": [
     "回宿舍"
-   ]
+   ],
+   "pyf": "xuandeju",
+   "pyi": "xdj",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|hss"
   },
   {
    "id": "osm-045",
@@ -3402,7 +3943,11 @@
     "研究生",
     "研招",
     "研工"
-   ]
+   ],
+   "pyf": "yanjiushengbu",
+   "pyi": "yjsb",
+   "pyt": "bangonglou|bgl",
+   "pyg": "yanjiusheng|yanzhao|yangong|yjs|yz|yg"
   },
   {
    "id": "osm-046",
@@ -3421,7 +3966,11 @@
    "tags": [
     "办公楼",
     "行政"
-   ]
+   ],
+   "pyf": "diyibangonglousileitang",
+   "pyi": "dybglslt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
   },
   {
    "id": "osm-047",
@@ -3440,7 +3989,11 @@
    "tags": [
     "办公楼",
     "行政"
-   ]
+   ],
+   "pyf": "dierbangonglousimengtang",
+   "pyi": "debglsmt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
   },
   {
    "id": "osm-048",
@@ -3459,7 +4012,11 @@
    "tags": [
     "办公楼",
     "行政"
-   ]
+   ],
+   "pyf": "diwubangonglou",
+   "pyi": "dwbgl",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
   },
   {
    "id": "osm-049",
@@ -3478,7 +4035,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "meiguowenhuajiaoliuzhongxin",
+   "pyi": "mgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-050",
@@ -3497,7 +4058,11 @@
    "tags": [
     "专家楼",
     "回宿舍"
-   ]
+   ],
+   "pyf": "laozhuanjialou",
+   "pyi": "lzjl",
+   "pyt": "sushe|ss",
+   "pyg": "zhuanjialou|huisushe|zjl|hss"
   },
   {
    "id": "osm-051",
@@ -3516,7 +4081,11 @@
    "tags": [
     "老年",
     "活动室"
-   ]
+   ],
+   "pyf": "laonianhuodongshi",
+   "pyi": "lnhds",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "laonian|huodongshi|ln|hds"
   },
   {
    "id": "osm-052",
@@ -3535,7 +4104,11 @@
    "tags": [
     "国际交流",
     "交流中心"
-   ]
+   ],
+   "pyf": "yingguowenhuajiaoliuzhongxin",
+   "pyi": "ygwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
   },
   {
    "id": "osm-053",
@@ -3558,7 +4131,11 @@
     "盖章",
     "证明",
     "行政"
-   ]
+   ],
+   "pyf": "xingzhengfuwuzhongxingezhitang",
+   "pyi": "xzfwzxgzt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "banshi|yizhanshi|gaizhang|zhengming|xingzheng|bs|yzs|gz|zm|xz"
   },
   {
    "id": "osm-054",
@@ -3576,7 +4153,11 @@
    "emoji": "🏗️",
    "tags": [
     "实验室"
-   ]
+   ],
+   "pyf": "gaodishiyanshi",
+   "pyi": "gdsys",
+   "pyt": "qita|qt",
+   "pyg": "shiyanshi|sys"
   },
   {
    "id": "dorm7",
@@ -3599,7 +4180,11 @@
     "回宿舍",
     "580",
     "校门旁"
-   ]
+   ],
+   "pyf": "qigongyu|7gongyu|diqigongyu",
+   "pyi": "qgy|7gy|dqgy",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|580|xiaomenpang|hss|580|xmp"
   },
   {
    "name": "公共实验楼",
@@ -3626,7 +4211,11 @@
     "做实验",
     "物理实验",
     "实验课"
-   ]
+   ],
+   "pyf": "gonggongshiyanlou|wulishiyanzhongxin|gonggongshiyanzhongxin",
+   "pyi": "ggsyl|wlsyzx|ggsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|wulishiyan|shiyanke|zsy|wlsy|syk"
   }
  ],
  "roads": [

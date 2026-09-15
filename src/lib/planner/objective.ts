@@ -11,8 +11,10 @@
  *    `DEADLINES` 由**调用方注入**（不 import mock 数据模块），保持可测与可替换。
  *    锁与 churn 的工具函数在 `model.ts`（P1 的 evaluate 会消费它们）。
  */
-import type { Course } from '@/types';
-import type { Commit } from './model.ts';
+import type { CampusId, Course, PhasePolicy, TimeBlock, WeekPlan } from '@/types';
+import type { Commit, LockLevel, Place, Weights } from './model.ts';
+import { churnCost, churnMinutes, resolveLockLevel } from './model.ts';
+import { BUILTIN_PLACE_INDEX, campusOfPlace } from './places.ts';
 
 const DAY_MS = 86_400_000;
 
@@ -200,4 +202,294 @@ export function boostsByWeek(boosts: DeadlineBoost[]): Map<number, DeadlineBoost
     m.set(b.weekNo, list);
   }
   return m;
+}
+
+/* ============================================================
+ * 四、目标函数装配（规格书 §5.3 产能 / §5.4 切换成本 / §5.5 装配 / §5.6 交期违约）
+ *
+ * 设计要点：
+ *   · **纯函数**：不读时钟、不用随机、不发请求；时间基准与策略全部由 `EvalContext` 注入。
+ *   · **分项即贡献**：`CostBreakdown` 的 7 个字段**都已乘过权重**，
+ *     故「7 项之和 === total」是恒等式（验收断言，见规格书 §9-T1.2）。
+ *     未加权的原始量另放 `raw`，供 diagnostics / explain 使用。
+ *   · **§12.5.8 全局口径**：校区查不出来（`campusOfPlace` 返回 `null`）时
+ *     **既不排除也不惩罚** —— 见 `placeMismatch` 与 `dayCampusOf` 的实现。
+ * ========================================================== */
+
+/** 一天的时间窗缺省（与 `PlanRequest.dayStart/dayEnd` 默认一致） */
+const DAY_START_DEFAULT = 7 * 60;   // 07:00
+const DAY_END_DEFAULT = 23 * 60;    // 23:00
+
+/** 目标函数分项 —— **每一项都已乘权重**，因此 7 项之和恒等于 `total` */
+export interface CostBreakdown {
+  studyShortfall: number;
+  blankDeficit: number;
+  switchCost: number;
+  transferRisk: number;
+  dueOverdue: number;
+  churn: number;
+  placeMismatch: number;
+  /** === 上列 7 项之和（构造上保证，无浮点误差） */
+  total: number;
+  /** 未加权的原始量（诊断/解释用，不参与 total） */
+  raw: {
+    studyMin: number;
+    targetStudyMin: number;
+    blankMin: number;
+    requiredBlankMin: number;
+    /** Σ overdue(commit) 的原始单位数（§5.6 的 10/5/0 之和） */
+    overdueUnits: number;
+    /** churn 的未加权分钟数（`churnMinutes` 口径） */
+    churnMin: number;
+    /** 被判为地点错配的块数 */
+    mismatchedBlocks: number;
+    /** 因「校区未知」而**未**计入惩罚的块数（观察用，恒不产生 cost） */
+    unknownCampusBlocks: number;
+  };
+}
+
+/** `evaluate()` 的输入上下文（除计划本身以外的一切） */
+export interface EvalContext {
+  weekNo: number;
+  policy: PhasePolicy;
+  weights: Weights;
+  /** 需要考核交期的提交项；缺省不产生 `dueOverdue` */
+  commits?: Commit[];
+  /** 地点索引；缺省用内置表 */
+  places?: Map<string, Place>;
+  dayStartMin?: number;
+  dayEndMin?: number;
+  /** 上一版计划：给了才启用 churn（最小扰动） */
+  previousPlan?: WeekPlan;
+  /** 锁级别覆盖：blockId → LockLevel */
+  lockLevels?: Record<string, LockLevel>;
+}
+
+/** 一个块是否「硬」（不可移动）：显式锁 `hard`，或来源为课程 */
+export function isHardBlock(
+  block: TimeBlock,
+  lockLevels: Record<string, LockLevel> = {},
+): boolean {
+  return resolveLockLevel(block, lockLevels) === 'hard';
+}
+
+/** 认知主体键：优先 `courseId`，退回标题 */
+function subjectKey(b: TimeBlock): string {
+  return b.courseId ?? b.title;
+}
+
+/** 「学习族」：认知切换只在学习类块之间计价（避免误伤三餐，规格书 §5.4 说明） */
+function isStudyFamily(b: TimeBlock): boolean {
+  return b.kind === 'study' || b.kind === 'course';
+}
+
+/**
+ * 通勤风险惩罚（规格书 §5.4）。
+ * 只依赖时间算术，不需要路网 —— 同地点 0；会迟到 10；偏紧 3；正常 1。
+ */
+export function transferPenalty(prev: TimeBlock, next: TimeBlock): number {
+  if ((prev.place ?? '') === (next.place ?? '')) return 0;
+  const slackMin = next.startMin - prev.endMin;
+  if (slackMin < 0) return 10;
+  if (slackMin < 5) return 3;
+  return 1;
+}
+
+/** 多数票校区；**投不出票（全为未知）→ null**（§12.5.8：不猜、不罚） */
+function majorityCampus(
+  blocks: TimeBlock[],
+  index: Map<string, Place>,
+): CampusId | null {
+  const tally = new Map<CampusId, number>();
+  for (const b of blocks) {
+    if (!b.place) continue;
+    const c = campusOfPlace(b.place, index);
+    if (c == null) continue; // 未知校区不投票
+    tally.set(c, (tally.get(c) ?? 0) + 1);
+  }
+  let best: CampusId | null = null;
+  let bestN = 0;
+  for (const [c, n] of tally) {
+    if (n > bestN || (n === bestN && best != null && c < best)) {
+      best = c;
+      bestN = n;
+    }
+  }
+  return best;
+}
+
+/**
+ * 每天的主校区：优先进当天的**课程块**（教室唯一确定校区），
+ * 推不出时退回当天全部有地点的块。**推不出 → null**（该天不参与 placeMismatch）。
+ */
+export function dayCampusOf(
+  plan: WeekPlan,
+  index: Map<string, Place> = BUILTIN_PLACE_INDEX,
+): Map<number, CampusId | null> {
+  const out = new Map<number, CampusId | null>();
+  const days = new Set(plan.blocks.map((b) => b.dayOfWeek));
+  for (const day of days) {
+    const blocks = plan.blocks.filter((b) => b.dayOfWeek === day);
+    const campus = majorityCampus(blocks.filter((b) => b.kind === 'course'), index)
+      ?? majorityCampus(blocks, index);
+    out.set(day, campus);
+  }
+  return out;
+}
+
+/** 该提交项是否已排入本计划（P1 启发式：按 block id 的语义键匹配） */
+function blockOfCommit(plan: WeekPlan, commitId: string): TimeBlock | undefined {
+  return plan.blocks.find(
+    (b) => b.id.endsWith(`-${commitId}`) || b.id.includes(`-${commitId}-`),
+  );
+}
+
+/**
+ * 交期违约惩罚（规格书 §5.6）：
+ *   · 未排入且交期已过 → `10 + 逾期天数`
+ *   · 已排入但在交期之后 → `5`
+ *   · 已排入且未逾期 / 未排入但还没到期 → `0`
+ */
+export function commitOverdue(
+  commit: Commit,
+  plan: WeekPlan,
+  weekNo: number,
+): number {
+  if (!commit.dueAt) return 0;
+  const dueOffset = (commit.dueAt.weekNo - weekNo) * 7 + (commit.dueAt.dayOfWeek - 1);
+  const block = blockOfCommit(plan, commit.id);
+  if (!block) return dueOffset < 0 ? 10 + -dueOffset : 0;
+  return block.dayOfWeek - 1 > dueOffset ? 5 : 0;
+}
+
+/**
+ * 装配目标函数（规格书 §5.5）。**纯函数**，同输入必同输出。
+ *
+ * ```
+ * total =  w.studyShortfall · max(0, targetStudy − actualStudy)
+ *        + w.blankDeficit   · max(0, requiredBlank − actualBlank)
+ *        + Σ switchCost(相邻软块对)
+ *        + Σ transferRisk(所有相邻块对，含硬块)
+ *        + w.dueOverdue     · Σ overdue(commit)
+ *        + churn            (已含 w.churn × lockFactor)
+ *        + w.placeMismatch  · #跨校区块
+ * ```
+ */
+export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
+  const w = ctx.weights;
+  const lockLevels = ctx.lockLevels ?? {};
+  const index = ctx.places ?? BUILTIN_PLACE_INDEX;
+  const dayStart = ctx.dayStartMin ?? DAY_START_DEFAULT;
+  const dayEnd = ctx.dayEndMin ?? DAY_END_DEFAULT;
+  const { policy } = ctx;
+
+  // —— 按天分组并按时间排序（相邻对判定用）——
+  const byDay = new Map<number, TimeBlock[]>();
+  for (const b of plan.blocks) {
+    const list = byDay.get(b.dayOfWeek);
+    if (list) list.push(b); else byDay.set(b.dayOfWeek, [b]);
+  }
+  for (const list of byDay.values()) {
+    list.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin || a.id.localeCompare(b.id));
+  }
+
+  const countableDays: number[] = [1, 2, 3, 4, 5];
+  if (policy.weekendWork) countableDays.push(6, 7);
+  const countable = new Set(countableDays);
+
+  // —— ① 自习缺口 ——
+  const studyMin = plan.blocks
+    .filter((b) => b.kind === 'study')
+    .reduce((s, b) => s + (b.endMin - b.startMin), 0);
+  const targetStudyMin = policy.dailyStudyMin * countableDays.length;
+  const studyShortfallRaw = Math.max(0, targetStudyMin - studyMin);
+
+  // —— ② 留白缺口 ——
+  const freeTotal = countableDays.length * (dayEnd - dayStart);
+  const busy = plan.blocks
+    .filter((b) => countable.has(b.dayOfWeek))
+    .reduce((s, b) => s + (b.endMin - b.startMin), 0);
+  const blankMin = Math.max(0, freeTotal - busy);
+  const requiredBlankMin = Math.round(freeTotal * policy.blankRatio);
+  const blankDeficitRaw = Math.max(0, requiredBlankMin - blankMin);
+
+  // —— ③ 切换成本 + ④ 通勤风险 ——
+  let switchCost = 0;
+  let transferRisk = 0;
+  for (const list of byDay.values()) {
+    for (let i = 1; i < list.length; i += 1) {
+      const prev = list[i - 1];
+      const next = list[i];
+      const placeChanged = (prev.place ?? '') !== (next.place ?? '');
+      const bothSoft = !isHardBlock(prev, lockLevels) && !isHardBlock(next, lockLevels);
+      if (bothSoft) {
+        let c = 0;
+        if (isStudyFamily(prev) && isStudyFamily(next) && subjectKey(prev) !== subjectKey(next)) {
+          c += w.switchCost;
+        }
+        if (placeChanged) c += w.switchCost * 0.5;
+        switchCost += c;
+      }
+      transferRisk += w.transferRisk * transferPenalty(prev, next);
+    }
+  }
+
+  // —— ⑤ 交期违约 ——
+  let overdueUnits = 0;
+  for (const c of ctx.commits ?? []) overdueUnits += commitOverdue(c, plan, ctx.weekNo);
+
+  // —— ⑥ churn（最小扰动；已含 w.churn 与 lockFactor）——
+  const churn = ctx.previousPlan ? churnCost(ctx.previousPlan, plan, lockLevels, w) : 0;
+
+  // —— ⑦ 地点错配（§12.5.8：校区未知不罚）——
+  const dayCampus = dayCampusOf(plan, index);
+  let mismatchedBlocks = 0;
+  let unknownCampusBlocks = 0;
+  for (const b of plan.blocks) {
+    if (!b.place) continue;
+    const c = campusOfPlace(b.place, index);
+    if (c == null) { unknownCampusBlocks += 1; continue; }   // ← 未知：不罚
+    const main = dayCampus.get(b.dayOfWeek) ?? null;
+    if (main == null) continue;                              // ← 当天主校区未知：不罚
+    if (c !== main) mismatchedBlocks += 1;
+  }
+
+  // —— 分项（已乘权重）与 total：total 由分项相加得到，保证「分项之和 === total」——
+  const a = w.studyShortfall * studyShortfallRaw;
+  const b2 = w.blankDeficit * blankDeficitRaw;
+  const d = transferRisk;
+  const e = w.dueOverdue * overdueUnits;
+  const g = w.placeMismatch * mismatchedBlocks;
+  const c2 = switchCost;
+  const f = churn;
+  const total = a + b2 + c2 + d + e + f + g;
+
+  return {
+    studyShortfall: a,
+    blankDeficit: b2,
+    switchCost: c2,
+    transferRisk: d,
+    dueOverdue: e,
+    churn: f,
+    placeMismatch: g,
+    total,
+    raw: {
+      studyMin,
+      targetStudyMin,
+      blankMin,
+      requiredBlankMin,
+      overdueUnits,
+      churnMin: ctx.previousPlan ? churnMinutes(ctx.previousPlan, plan) : 0,
+      mismatchedBlocks,
+      unknownCampusBlocks,
+    },
+  };
+}
+
+/**
+ * 增量目标差（improve 的接受准则用）：`evaluate(to) − evaluate(from)`。
+ * 负值 = 变好。`ctx.previousPlan` 对两者一致，因此 churn 项衡量的是「相对同一基线」。
+ */
+export function evaluateDelta(from: WeekPlan, to: WeekPlan, ctx: EvalContext): number {
+  return evaluate(to, ctx).total - evaluate(from, ctx).total;
 }
