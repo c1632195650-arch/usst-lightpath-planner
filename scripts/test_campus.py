@@ -16,7 +16,7 @@
   北校区 = 军工路 516 号（主校区）   南校区 = 军工路 334 号
   两者合称「本部」，由海安路人行天桥连接。
 """
-import os, sys, json
+import os, sys, json, re
 
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -116,6 +116,54 @@ CROSS = [
     ("第一教学楼", "第二食堂", False, 0, 0),
     ("申一教", "第一教学楼", True, None, None),   # 1100↔本部：跨区但无通行分钟（不参与本部排程）
 ]
+
+# ==================== 2026-09-15 新增（知识层 / 就近推荐 / 坐标不外泄）====================
+
+# 口语同义词（tags 层）：官方名与别名都命中不了时，靠这层让「说人话」也能查到。
+# 期望值 = 检索首位。tags 由**本项目自行整理**（未采用任何第三方站点词表）。
+TAGS = [
+    ("图文", "图书馆（图文信息中心）"),
+    ("占座", "图书馆（图文信息中心）"),
+    ("取快递", "菜鸟驿站"),
+    ("寄快递", "菜鸟驿站"),
+    ("看病", "校医室（卫生科）"),
+    ("取钱", "农业银行ATM"),
+    ("大活", "学生活动中心"),
+    ("水母楼", "水母楼"),
+    ("打印成绩单", "水母楼"),
+    ("补办校园卡", "学生卡卡务中心"),
+    ("心理咨询", "心理健康中心"),
+    ("金工实习", "实训中心"),
+    ("体测", "运动场"),
+    ("洗澡", "第一浴室"),
+    ("咖啡", "1906咖啡厅"),
+    ("吃饭", "第一食堂"),
+]
+
+# 泛类别词（打印/食堂…）刻意**不塞进 tags**，由 type 承担 —— 首位必须落在对应类别里
+TAG_KINDS = [
+    ("打印", {"打印"}),
+    ("吃饭", {"食堂", "餐厅", "烘焙/饮品"}),
+]
+
+# 营业时间：把字符串变成「此刻开不开」的可判断事实。
+# 模糊表述（「常规饭点」「长时（以现场为准）」）一律返回 open=None —— 不猜。
+OPENNESS = [
+    ("第一食堂", "2026-09-15 12:10", True),      # 周二午餐时段
+    ("第一食堂", "2026-09-19 12:10", False),     # 周六休息（closed 字段）
+    ("第一食堂", "2026-09-15 23:30", False),     # 收档后（应给出下一个时段）
+    ("图书馆（图文信息中心）", "2026-09-15 12:10", True),
+    ("全家便利店", "2026-09-15 23:30", True),     # 24 小时店
+    ("校医室（卫生科）", "2026-09-15 12:10", None),   # 无 hours → 如实未知
+    ("思餐厅", "2026-09-15 12:10", None),        # 「常规饭点」= 模糊表述，不猜
+]
+
+# 可步行分组：本部 = 北校(516) + 南校(334) + 580；1100 / 复兴路 为独立分组。
+# 独立校区的地点**不得**出现在本部的就近推荐里。
+_WALK_GROUPS = {"北校": "本部", "南校": "本部", "580": "本部", "连接": "本部"}
+
+# 坐标字段名（任何对外接口的响应体都不许出现）
+_COORD_KEYS = re.compile(r'"(lat|lon|lng|latitude|longitude|coord|coordinates)"\s*:', re.I)
 
 
 def main():
@@ -273,6 +321,100 @@ def main():
             fails.append("「580号校门→第一教学楼」应识别出走校外更快")
         extra = f"（省 {c['diff_minutes']:.1f} 分）" if (c and c.get("outdoor_better")) else ""
         print(f"  {'✅' if good else '❌'} 识别「走校外更快」：580号校门 → 第一教学楼{extra}")
+
+    print()
+    print("=" * 72)
+    print("H 组 · 口语同义词检索（tags 层 · 说人话也能查到）")
+    print("=" * 72)
+    for q, exp in TAGS:
+        res = campus.search_pois(q, limit=3)
+        got = res[0]["name"] if res else None
+        good = got == exp
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"搜「{q}」首位应为 {exp}，实际 {got}")
+        print(f"  {'✅' if good else '❌'} 搜「{q}」→ {got}")
+
+    print()
+    print("=" * 72)
+    print("H2 组 · 泛类别词由 type 承担（不塞进 tags）")
+    print("=" * 72)
+    for q, kinds in TAG_KINDS:
+        res = campus.search_pois(q, limit=5)
+        good = bool(res) and res[0]["type"] in kinds
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"搜「{q}」首位 type 应为 {kinds}，实际 {res[0]['type'] if res else None}")
+        print(f"  {'✅' if good else '❌'} 搜「{q}」首位 type = {res[0]['type'] if res else '∅'}")
+
+    print()
+    print("=" * 72)
+    print("I 组 · 营业时间可判断性（模糊表述一律不猜）")
+    print("=" * 72)
+    for name, at, exp in OPENNESS:
+        p = campus.find_poi(name)
+        st = campus.open_now(p, at) if p else {}
+        got = st.get("open")
+        good = (p is not None) and (got == exp)
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"open_now({name}, {at}) 期望 open={exp}，实际 {got}")
+        tag = {True: "开放", False: "不开放", None: "未知(不猜)"}.get(got, "?")
+        print(f"  {'✅' if good else '❌'} {name} @ {at[11:]} → {tag} ｜ {st.get('reason', '')}")
+
+    print()
+    print("=" * 72)
+    print("J 组 · 就近推荐（按步行分钟 · 校区隔离 · 不报假精度）")
+    print("=" * 72)
+
+    def _check_j(label, good, detail=""):
+        nonlocal ok, fail
+        ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
+        if not good:
+            fails.append(f"J 组：{label}（{detail}）")
+        print(f"  {'✅' if good else '❌'} {label}" + (f" ｜ {detail}" if detail else ""))
+
+    near = campus.nearby_by_walk("第三教学楼", limit=8)
+    ms = [x["minutes"] for x in near.get("results", [])]
+    _check_j("按步行分钟升序", bool(ms) and ms == sorted(ms), str(ms))
+
+    bad = [x["name"] for x in near.get("results", [])
+           if _WALK_GROUPS.get(x.get("campus"), x.get("campus")) not in ("本部", None)]
+    _check_j("不推荐独立校区（1100/复兴路）的地点", not bad, str(bad))
+
+    _check_j("推荐结果不含经纬度字段",
+             not _COORD_KEYS.search(json.dumps(near, ensure_ascii=False)))
+
+    r1100 = campus.nearby_by_walk("申一教", limit=3)
+    _check_j("1100 起点如实返回不可定位（不编造）", r1100["walkable"] is False,
+             str(r1100.get("reason"))[:34])
+
+    _check_j("跨分组 route 返回 None（三教 → 1100教育超市）",
+             campus.route("第三教学楼", "1100教育超市") is None)
+    _check_j("跨分组 route 返回 None（申一教 → 申二教）",
+             campus.route("申一教", "申二教") is None)
+
+    r7 = campus.nearby_by_walk("七公寓", limit=6)
+    _check_j("results 中不出现 null 分钟（不谎报 0.0）",
+             bool(r7.get("results")) and all(x["minutes"] is not None for x in r7["results"]))
+    _check_j("位置未细化的地点保留在 unrefined（不丢答案）",
+             any(x["name"] == "民族餐厅（580号）" for x in r7.get("unrefined", [])))
+    _check_j("unrefined 不占用 limit 名额", len(r7.get("results", [])) <= 6)
+
+    rf = campus.nearby_by_walk("第三教学楼", limit=5, types=["食堂"])
+    _check_j("type=食堂 过滤后结果全为食堂",
+             bool(rf.get("results")) and all(x["type"] == "食堂" for x in rf["results"]),
+             str([x["type"] for x in rf.get("results", [])]))
+
+    print()
+    print("=" * 72)
+    print("K 组 · 对外投影不泄露坐标（决策 D4）")
+    print("=" * 72)
+    proj = json.dumps(campus.search_pois("吃饭", limit=5), ensure_ascii=False)
+    _check_j("search_pois 对外投影无坐标字段", not _COORD_KEYS.search(proj))
+    p1 = campus.find_poi("第一食堂") or {}
+    _check_j("campus_map 本身不落坐标",
+             not any(k in p1 for k in ("lat", "lon", "lng", "coord", "coordinates")))
 
     total = ok + fail
     print("=" * 72)

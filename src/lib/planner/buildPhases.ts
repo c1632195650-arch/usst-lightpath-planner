@@ -44,12 +44,17 @@ const PHASE_NAME: Record<PhaseKind, string> = {
   exam: '考试周',
 };
 
-/** 自习偏好 → 校园 POI（名字取自 campus_map.json，可直接喂给 route()） */
+/**
+ * 自习偏好 → 校园 POI **池**（名字取自 campus_map.json，可直接喂给 route()）。
+ *
+ * 为什么是「池」而不是单值：单值时引擎永远取第一个，于是「说喜欢图书馆」
+ * 就天天同一个图书馆 —— 可生活不是一成不变的。给池子后引擎按天轮换。
+ */
 const STUDY_PLACES: Record<string, string[]> = {
-  library: ['图书馆（图文信息中心）'],
+  library: ['图书馆（图文信息中心）', '湛恩纪念图书馆', '老图书馆'],
   classroom: ['第三教学楼', '第一教学楼'],
-  dorm: ['第二学生公寓', '第三学生公寓'],
-  cafe: ['1906咖啡厅'],
+  dorm: ['第二学生公寓'],
+  cafe: ['1906咖啡厅', '图书馆（图文信息中心）'],
 };
 
 const DEFAULT_STUDY_PLACES = ['图书馆（图文信息中心）', '第三教学楼'];
@@ -107,11 +112,17 @@ function applyPersona(kind: PhaseKind, base: PhasePolicy, persona: PersonaProfil
     reasons.push(`韧性偏低（${axes.RES}），多留一点缓冲，避免连续受挫`);
   }
 
-  // 自习偏好 → 地点候选（直接映射到校园 POI）
+  // 自习偏好 → 地点池（多值：引擎会按天轮换，不再永远是同一个）
   const place = scenarios.study_place;
   policy.studyPlaces = STUDY_PLACES[place] ?? DEFAULT_STUDY_PLACES;
   if (STUDY_PLACES[place]) {
-    reasons.push(`自习偏好是「${place === 'library' ? '图书馆' : place === 'classroom' ? '空教室' : place === 'dorm' ? '宿舍' : '咖啡馆'}」，默认地点按它来`);
+    const label = place === 'library' ? '图书馆' : place === 'classroom' ? '空教室' : place === 'dorm' ? '宿舍' : '咖啡馆';
+    const pool = STUDY_PLACES[place];
+    const alt = pool.slice(1);
+    reasons.push(
+      `自习偏好是「${label}」，首选 ${pool[0]}`
+      + (alt.length ? `，备选 ${alt.join('、')} —— 会轮着来，不总待一处` : ''),
+    );
   }
   return { policy, reasons };
 }

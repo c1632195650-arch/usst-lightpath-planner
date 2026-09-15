@@ -44,6 +44,9 @@ yarn-error.log*
 # 曾两次把工作脚本本身提交进仓库（fdbd825、3d3f11d）。
 _*
 
+# CY 的个人课表（含课程与教师信息，属个人信息，不进公开仓库）
+public/my_schedule.json
+
 # 数据采集过程日志（过程产物，不进仓库）
 data/*_log.txt
 

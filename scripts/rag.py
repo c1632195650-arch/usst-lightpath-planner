@@ -41,6 +41,27 @@ def seg(text):
         return ""
     return " ".join(jieba.cut(text))
 
+# FTS5 查询串里允许保留的 token 内容：中文、字母、数字。
+# 其余字符（`-`、`？`、`·` 等）既无检索价值，又会构成**空 phrase** 让 FTS5 直接报语法错。
+_TOK_KEEP = re.compile(r"[0-9A-Za-z\u4e00-\u9fff]")
+
+def fts_query(query):
+    """jieba 分词 → FTS5 安全查询串。
+
+    每个 token 单独加双引号（单 token phrase 等价于 token 匹配，AND 语义不变），
+    并丢掉纯标点 token。**不要退回 `" ".join(jieba.cut(q))`**：
+    `jieba.cut("2026-2027学年校历")` 会把 `-` 切成独立 token，
+    FTS5 于是报 `no such column: 2027`；该异常被调用处的 except 吞掉后，
+    BM25 的 0.4 权重会**静默归零**，整个检索退化成纯向量。
+    """
+    parts = []
+    for t in jieba.cut(query):
+        t = t.strip()
+        if not t or not _TOK_KEEP.search(t):
+            continue
+        parts.append('"' + t.replace('"', '""') + '"')
+    return " ".join(parts)
+
 # ---------- 向量嵌入 ----------
 EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
 QUERY_PREFIX = "为这个句子生成表示以用于检索相关文章："
@@ -203,25 +224,36 @@ def cosine(a, b):
     dot = sum(x * y for x, y in zip(a, b))
     return dot  # 向量已归一化时即余弦
 
-# 查询扩展：口语 → 官方术语（弥合"大功率"对不上"违规电器/额定功率"的词汇鸿沟）
-_QUERY_EXPAND = [
-    ("大功率", "违规电器 额定功率 400W 宿管会 检查条例 电热毯 电煮锅"),
-    ("断电", "熄灯 供电 用电 宿舍管理"),
-    ("门禁", "关门 关门时间 宿舍 进出 晚归"),
-    ("断网", "校园网 网络 USSTroam 无线"),
-    ("断水", "供水 水电 宿舍"),
-    ("能不能用", "是否允许 违规 禁止"),
-    ("可以带", "是否允许 违规 禁止"),
-    ("多少钱", "收费 标准 费用 价格"),
-    ("几号", "日期 时间"),
-    ("几点关", "开放时间 结束 闭馆"),
-    ("怎么预约", "预约流程 预约方式 申请 系统"),
-    ("在哪", "位置 地点 地址 位于"),
-    ("怎么走", "路线 位置 交通"),
-    ("补办", "挂失 重新办理 流程"),
-    ("重修", "重修报名 选课 流程"),
-    ("挂科", "不及格 重修 补考"),
-]
+# ---------- 查询扩展（口语 → 官方术语） ----------
+# 规则**外置为数据文件** `data/query_expand.json`（2026-09-15）：改词不用动代码，
+# 也不必重建索引 —— 扩展只影响召回，不影响已建的 FTS/向量。
+# ⚠️ 规则顺序有意义（`expand_terms` 去重保序 + `search` 只取前 12 个），
+#    见该文件的 `_meta.order_matters`；新增一律追加到末尾。
+_QUERY_EXPAND_FILE = os.path.join(BASE, "..", "data", "query_expand.json")
+_expand_rules = None
+
+
+def load_expand_rules():
+    """读查询扩展规则（惰性 + 进程内缓存）。返回 [(src, [dst, ...]), ...]。
+
+    兜底策略：文件缺失 / 解析失败 → 只打警告，**不抛异常**。
+    检索本身照常工作，只是少了扩展召回这一路（宁可少召回，不要让整条问答挂掉）。
+    """
+    global _expand_rules
+    if _expand_rules is None:
+        rules = []
+        try:
+            with open(_QUERY_EXPAND_FILE, encoding="utf-8") as f:
+                raw = json.load(f)
+            for it in raw.get("rules", []):
+                src = str(it.get("q") or "").strip()
+                dst = [str(x).strip() for x in (it.get("expand") or []) if str(x).strip()]
+                if src and dst:
+                    rules.append((src, dst))
+        except Exception as e:
+            print(f"[rag] 查询扩展规则读取失败，本次不做扩展召回: {e!r}", file=sys.stderr)
+        _expand_rules = rules
+    return _expand_rules
 
 
 def expand_terms(query):
@@ -229,9 +261,9 @@ def expand_terms(query):
     if not query:
         return []
     terms = []
-    for src, dst in _QUERY_EXPAND:
+    for src, dst in load_expand_rules():
         if src in query:
-            terms.extend(dst.split())
+            terms.extend(dst)
     # 去重保序
     seen, out = set(), []
     for t in terms:
@@ -241,18 +273,64 @@ def expand_terms(query):
     return out
 
 
+# ---------- 给 LLM 的正文片段 ----------
+# 预算受 SNIPPET_MAX 限制；server/app.py 的 sources 投影也按 400 截断，改这里要同步。
+SNIPPET_MAX = 400     # 片段总长上限（与 server/app.py 的 [:400] 一致）
+SNIPPET_STAR = 240    # 「★核心速查」块的保留量
+SNIPPET_SIM = 150     # 最相似块的补充量
+STAR_LEAD = 60        # ★ 之前多留一点，免得把「【核心速查·××】」小节标题切掉
+
+def pick_snippet(conn, aid, full_text, chunk_cos):
+    """挑出送给 LLM 的正文片段。规则全部来自实测，不是直觉：
+
+    1. **首块含「★」→ 以该块为主**。项目约定把高价值数值前置成「★核心速查」块，
+       关键日期/数值就落在那里。实测：问「今年什么时候放寒假？」，校历文章检索排第 1，
+       但按余弦选中的是**课表时段块**；含「★ 寒假开始：2027年1月25日」的首块以
+       0.045 的余弦差落选 → 模型只看到课表，于是诚实拒答「没找到确切日期」。
+       全库 461 篇有向量块的文章里**只有 16 篇（3.5%）首块带 ★**，故这条规则作用面精确。
+    2. **其余文章保持原行为（余弦最相似块）**。
+       ⚠️ 曾试过「所有文章一律首块优先」，实测**回归 5/12**：96.5% 的首块是样板开场白
+       （学生手册的欢迎辞、通知的「根据…要求」），会把命中答案的块挤掉 ——
+       例如「怎么申请助学贷款」原块含「国家助学贷款」，换首块后只剩「亲爱的新同学：金秋九月…」。
+    3. **没有向量块的文章 → 退回全文开头**。旧实现此处返回空串，既是「上下文为空」的来源，
+       也是下游 500 的根因。
+    """
+    cands = conn.execute(
+        "SELECT id, chunk_text FROM chunks WHERE article_id=? ORDER BY id", (aid,)
+    ).fetchall()
+    if not cands:
+        return (full_text or "").strip()[:SNIPPET_MAX]
+
+    head_id, head_raw = cands[0]          # id 升序 = 文内顺序，首个即文章开头
+    head_txt = (head_raw or "").strip()
+    sim_id, sim_raw = max(cands, key=lambda c: chunk_cos.get(c[0], 0.0))
+    sim_txt = (sim_raw or "").strip()
+
+    star = head_txt.find("★")
+    if star < 0:
+        # 非 ★ 文章：与旧实现**逐字节一致**（sim_txt 已 strip，此处不再二次 strip，
+        # 免得把切片正好落在第 400 位的空格也吃掉 —— 那会让"零回归"对不上账）
+        return sim_txt[:SNIPPET_MAX] or head_txt[:SNIPPET_MAX]
+
+    start = max(0, star - STAR_LEAD)
+    parts = [head_txt[start:start + SNIPPET_STAR]]
+    if sim_id != head_id:
+        parts.append(sim_txt[:SNIPPET_SIM])
+    return "\n…\n".join(p for p in parts if p).strip()[:SNIPPET_MAX]
+
 def search(query, k=5, top_fts=20, top_vec=20):
     conn = sqlite3.connect(DB_PATH)
 
     # 1) FTS5 关键词（原查询，AND 语义，保证精确性）
     fts_hits = {}
     try:
-        q = " ".join(jieba.cut(query))
-        for r in conn.execute(
-            "SELECT rowid, bm25(articles_fts) AS score FROM articles_fts "
-            "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
-        ):
-            fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
+        q = fts_query(query)
+        if q:
+            for r in conn.execute(
+                "SELECT rowid, bm25(articles_fts) AS score FROM articles_fts "
+                "WHERE articles_fts MATCH ? ORDER BY score LIMIT ?", (q, top_fts)
+            ):
+                fts_hits[r[0]] = -r[1]  # bm25 越小越相关，取负转正
     except Exception as e:
         print(f"[rag] FTS5 原查询检索失败（降级为仅向量）: {e!r}", file=sys.stderr)
 
@@ -279,11 +357,13 @@ def search(query, k=5, top_fts=20, top_vec=20):
         qv = qv / qn  # 显式归一化，不假定模型输出已归一化
     vec_rows = conn.execute("SELECT id, article_id, vec FROM chunks").fetchall()
     vec_hits = {}
+    chunk_cos = {}   # cid -> 余弦。**全量**保留供挑分块用（vec_hits 只有全局 top20，不够）
     if vec_rows:
         ids = np.array([r[0] for r in vec_rows])
         aids = np.array([r[1] for r in vec_rows])
         mat = np.frombuffer(b"".join(r[2] for r in vec_rows), dtype=np.float32).reshape(len(vec_rows), -1)
         sims = mat @ qv
+        chunk_cos = {int(ids[i]): float(sims[i]) for i in range(len(ids))}
         for i in np.argsort(-sims)[:top_vec]:
             vec_hits[int(ids[i])] = (int(aids[i]), float(sims[i]))
 
@@ -334,19 +414,11 @@ def search(query, k=5, top_fts=20, top_vec=20):
             "COALESCE(resolved_url, source_url) FROM articles WHERE id=?", (aid,)
         ).fetchone()
         if r:
-            # 最相关分块（比文章开头更贴题，作为给 LLM 的 snippet）
-            best_txt = ""
-            if aid in best_chunk:
-                c = conn.execute(
-                    "SELECT chunk_text FROM chunks WHERE id=?", (best_chunk[aid][0],)
-                ).fetchone()
-                if c:
-                    best_txt = (c[0] or "").strip()
             out.append({
                 "id": r[0], "account": r[1], "title": r[2], "pub_time": r[3],
                 "score": round(score, 4),
                 "raw_vec": round(vec_article.get(aid, 0.0), 4),
-                "snippet": best_txt[:400],
+                "snippet": pick_snippet(conn, aid, r[4], chunk_cos),
                 "full_text": (r[4] or "")[:300],
                 "url": r[5] or "",
             })
