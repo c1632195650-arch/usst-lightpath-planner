@@ -165,6 +165,34 @@ _WALK_GROUPS = {"北校": "本部", "南校": "本部", "580": "本部", "连接
 # 坐标字段名（任何对外接口的响应体都不许出现）
 _COORD_KEYS = re.compile(r'"(lat|lon|lng|latitude|longitude|coord|coordinates)"\s*:', re.I)
 
+# ---- 拼音检索（索引由 scripts/build_pinyin_index.py 离线生成，运行时零依赖）----
+# 期望值 = 检索首位。分值分层：名字拼音 68 > 口语词拼音 62 > 类型拼音 48。
+PINYIN = [
+    ("tushuguan", "图书馆（图文信息中心）"),   # 全拼整段相等
+    ("sanjiao", "第三教学楼"),                # 别名『三教』的全拼（**不是**靠子串命中主名）
+    ("shuimulou", "水母楼"),
+    ("diyishitang", "第一食堂"),
+    ("cainiaoyizhan", "菜鸟驿站"),
+    ("tsg", "图书馆（图文信息中心）"),          # 首字母缩写
+    ("dahuo", "学生活动中心"),                # 口语同义词（tags）的拼音
+    ("qukuaidi", "菜鸟驿站"),
+    ("quqian", "农业银行ATM"),
+]
+# 前缀（拼音还没打完）—— 最常见的输入中间态
+PINYIN_PREFIX = [
+    ("tushu", "图书馆（图文信息中心）"),
+    ("cainiao", "菜鸟驿站"),
+]
+# 类别词拼音 → 结果必须落在对应类别里
+PINYIN_KINDS = [
+    ("shitang", {"食堂", "餐厅"}),
+    ("jiaoxuelou", {"教学楼"}),
+    ("zixidian", {"自习点"}),
+]
+# 噪声守卫：1 个字符、或者根本不存在 → 必须**一条都不返回**。
+# 「a」「y」曾顺着拉丁字母别名 Familymart 命中『全家』（单字符不该匹配任何东西）。
+PINYIN_NOISE = ["a", "y", "d", "1", "zzzz", "qqq"]
+
 
 def main():
     ok = fail = 0
@@ -371,7 +399,7 @@ def main():
         nonlocal ok, fail
         ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
         if not good:
-            fails.append(f"J 组：{label}（{detail}）")
+            fails.append(f"{label}（{detail}）")
         print(f"  {'✅' if good else '❌'} {label}" + (f" ｜ {detail}" if detail else ""))
 
     near = campus.nearby_by_walk("第三教学楼", limit=8)
@@ -415,6 +443,32 @@ def main():
     p1 = campus.find_poi("第一食堂") or {}
     _check_j("campus_map 本身不落坐标",
              not any(k in p1 for k in ("lat", "lon", "lng", "coord", "coordinates")))
+
+    print()
+    print("=" * 72)
+    print("L 组 · 拼音检索（离线索引 · 运行时零依赖）")
+    print("=" * 72)
+    for q, exp in PINYIN:
+        res = campus.search_pois(q, limit=3)
+        got = res[0]["name"] if res else None
+        _check_j(f"拼音「{q}」→ {got}", got == exp, "" if got == exp else f"期望 {exp}")
+
+    for q, exp in PINYIN_PREFIX:
+        res = campus.search_pois(q, limit=3)
+        got = res[0]["name"] if res else None
+        _check_j(f"拼音前缀「{q}」→ {got}", got == exp, "" if got == exp else f"期望 {exp}")
+
+    for q, kinds in PINYIN_KINDS:
+        res = campus.search_pois(q, limit=5)
+        good = bool(res) and all(r["type"] in kinds for r in res)
+        _check_j(f"类别拼音「{q}」全落在 {kinds}", good,
+                 str([r["type"] for r in res]))
+
+    bad = [q for q in PINYIN_NOISE if campus.search_pois(q, limit=3)]
+    _check_j("单字符/无匹配拼音不返回任何结果（噪声守卫）", not bad, str(bad))
+
+    _check_j("拼音检索结果同样不含经纬度字段",
+             not _COORD_KEYS.search(json.dumps(campus.search_pois("tushuguan", limit=3), ensure_ascii=False)))
 
     total = ok + fail
     print("=" * 72)

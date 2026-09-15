@@ -14,3 +14,9 @@ fastembed          # bge-small-zh-v1.5 CPU/ONNX；首次建索引会下载模型
 
 # ---- 数据采集 (scripts/collector.py 等) ----
 beautifulsoup4
+
+# ---- 数据生成（**可选**，运行时不需要）----
+# pypinyin 只在「重新生成拼音索引」时用到：python scripts/build_pinyin_index.py
+# 生成结果已作为纯数据写进 data/campus_map.json（pyf/pyi/pyt/pyg 字段），
+# 所以**部署与运行后端都不需要装它**。
+pypinyin
