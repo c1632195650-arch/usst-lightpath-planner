@@ -3,7 +3,7 @@
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
 > **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-15。
-> **状态**：Draft v1.4 —— **P0 已完成并推送**（`feat/planner-v2-p0` @ `53d1d62`，PR #2 → `dev`）。**CY 的 P0 线已就绪**：`feat/events-and-diversity` @ `4e6fa0b`（父提交 = `22bdee88`，已完成 rebase、已推远端），内含 D-5 语义键 id 与 `studyCandidates` 冲突解。**PR #3 已开**（`refs/pull/3/head`），但 base 实为 `feat/planner-v2-p0`（栈式 PR），须在 PR #2 合入后改为 `dev` —— **P1 的合入前置仅剩「B review + 合入」一步**（见 §12.5.3）。
+> **状态**：Draft v1.7 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复 + 旧测试修复）**已推远端**（`feat/planner-v2-p1` @ `0aef2f4`，见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。**PR #2 的红灯已修并已推**（`feat/planner-v2-p0` @ `95532c1`）。
 > **与 `docs/engine-plan.md` 的关系**：4 处分歧已全部裁决（§12.3）；CY 的最终裁决与契约边界见 **§12.5**。
 > **契约裁决已闭环**：§12.5.1（5 项落 `types.ts`）。P1 开工方式与边界见 §13。
 > **读者**：协作者 B（本仓库 `src/lib/`、`src/features/week/` 负责人）、CY（`src/types.ts` 契约层负责人）、后续接手的 Agent。
@@ -406,6 +406,8 @@ export interface PlanResult {
 
 ### 4.5 对外入口（唯一）
 
+#### 4.5.1 新引擎入口
+
 ```ts
 // planner/index.ts
 export function planWeekV2(req: PlanRequest): PlanResult;
@@ -413,6 +415,51 @@ export function planWeekV2(req: PlanRequest): PlanResult;
 // 兼容旧调用（内部转调 planWeekV2，config.solver='greedy'）
 export function buildWeekPlan(input: BuildWeekPlanInput): BuildWeekPlanResult;
 ```
+
+#### 4.5.2 `planWeek` —— 两遍法的公共函数（**CY 请求 ②**，P1 落地）
+
+**问题**：两遍法（pass1 构造 → 建 `TransferProvider` → pass2 重构造）在原计划里要在**三处各写一遍**：
+`features/week/WeekPlanView.tsx`（PR #3，254 行）、`features/libao/weekPlanForChat.ts`（PR #4）、
+以及 B 即将写的 `index.ts`。同一套编排写三份 → 之后任何一处调整（缓存策略、超时、失败降级）都要改三遍，
+且三份极易漂移。
+
+**裁决（采纳 CY 建议）**：抽成**一个公共函数**，落 `src/lib/planner/planWeek.ts`（**B 的地盘**，
+与 `src/lib/planner/**` 其它文件同属 B，见 §7.2-3）；`index.ts::planWeekV2` 内部调它。
+
+```ts
+// planner/planWeek.ts —— 两遍法的唯一编排点
+export async function planWeek(req: PlanRequest): Promise<PlanResult>;
+```
+
+- 签名收 `PlanRequest`、返回 `PlanResult`，与 `planWeekV2` **同形** → 消费方只换 import，不改调用点逻辑。
+- `TransferProvider` 的构建（`await buildTransferProvider(pass1.plan.blocks)`）**只在此处出现一次**。
+- ⚠️ **可测性硬约束**：`planner/transfer.ts` 依赖 `lib/api.ts`（用了 `import.meta.env`）→ **Node 单测里加载不了**。
+  故 `planWeek` **必须支持注入 provider 桩**（`req.transfer?`），把「两遍法编排」与「网络取数」解耦；
+  这是它能进 `tests/` 门禁的前提（见 §7.3）。
+- **时序（与 UI 的关系）**：`WeekPlanView.tsx`（PR #3）与 `weekPlanForChat.ts`（PR #4）**在 P1 仍用各自的两遍法**，
+  P1 合入后由 CY 一次性改调 `planWeek` → **P1 不动 UI**（§4.5.3 / §12.5.6）。故 §4.5.1 的 `planWeekV2` 仍是
+  PR 校验入口，`planWeek` 是本条**新增**，不替换既有导出。
+
+#### 4.5.3 `schedule.ts` 保留为对外稳定入口（**CY 请求 ①**）
+
+`src/lib/planner/schedule.ts` 是**旧引擎 + 现有测试的唯一依赖面**。P1 期间**只允许「内部重写 + 对外原样」**，
+**不得**改动其对外导出名、参数或返回形状。
+
+**实况核对（ref，2026-09-15）**：`schedule.ts` 与 `buildPhases.ts` 是**两个**稳定面，
+CY 口述清单里的四项**并不全在 `schedule.ts`**：
+
+| 导出 | 真实定义处 | 真实消费方 | P1 处置 |
+|---|---|---|---|
+| `buildWeekPlan` | `schedule.ts:295` | PR #3 的 `WeekPlanView.tsx`（**不在本分支**） | 保留；内部转调 `planWeekV2`（`config.solver='greedy'`） |
+| `campusOfName` | `schedule.ts:85` | `scripts/scheduler.test.ts:13-15` | **保留原样**（`places.ts` 显式地点表已是真源，此函数是其兼容壳） |
+| `activeInWeek` / `effectiveCourses` / `effectiveSlots` / `slotsOn` / `describeDay` | `schedule.ts` | `scripts/scheduler.test.ts:13-15` | **保留原样** |
+| `buildPhasesFromCalendar` / `phaseOfWeek` / `buildPhases` | **`buildPhases.ts:255 / 269 / 149`**（**不在 `schedule.ts`**） | `scripts/buildPhases.test.ts:8-10` | **原地保留**；是否由 `schedule.ts` 再 re-export 属可选便利项，**不做也不破坏契约** |
+
+- 判据：**改对外签名 = 破坏契约**；`scripts/**` 既有测试的 import 语句必须**零改动**。
+- 新增能力（`planWeekV2` / `planWeek` / `improve` / `construct`）**只从各自模块导出**，
+  **不塞进 `schedule.ts`**（避免它从「稳定入口」退化成杂物间）。
+- 本分支现状：`grep -rn "planner/schedule"` 在 `src/` 下**无外部调用点**（消费方都在 PR #3/#4 上）
+  → P1 期间改 `schedule.ts` 的内部实现，对本分支**零风险**，风险面全在合入后的 PR #3/#4。
 
 ### 4.6 目标函数接口
 
@@ -529,10 +576,12 @@ total =   w.studyShortfall * max(0, targetStudy - actualStudy)
         + Σ transferRisk(所有相邻块对，含硬块)      # 硬块通勤风险不可容忍 → 权重极大
         + w.dueOverdue     * Σ overdue(commit)       # 见 §5.6
         + w.churn          * diffMin(previousPlan, plan) * lockFactor
-        + w.placeMismatch  * Σ(跨校区或未登记地点的块数)
+        + w.placeMismatch  * Σ(跨校区块数)          # 校区未知(null)不计，见 §12.5.8
 ```
 
 `lockFactor`：`hard` 块参与 diff 时权重 ×100（等价于禁止移动）；`soft` 块 ×1；`free` 块 ×0。
+
+**`placeMismatch` 计数口径（§12.5.8 全局口径的落地）**：只统计「**已解析出校区**（`campusOfPlace(...) != null`）且与当天主校区不一致」的块。`null`（未登记地点）**既不加罚也不排除**。当天主校区推不出时，该天所有块一律不计。
 
 ### 5.6 交期违约惩罚
 
@@ -541,7 +590,16 @@ overdue(commit) =
     若未排入且 dueAt 已过（相对 weekNo）        → 10 + daysOverdue
     若排入但在 dueAt 之后                       → 5
     若排入且在 dueAt 之前                        → 0
+
+daysOverdue = max(0, −dueOffset)            # 逾期日历天数
+dueOffset   = (dueAt.weekNo − weekNo) * 7 + (dueAt.dayOfWeek − 1)
 ```
+
+**时间基准**：以**当前周（`weekNo`）的周一**为原点，与 §5.2 `urgency()` 的 `daysLeft` **同源**（两者都乘 7 加 `dayOfWeek − 1`），确保「紧迫度」与「违约天数」口径一致。`dueAt.dayOfWeek` 为 1-based（周一 = 1）。
+
+**例**：`weekNo = 1`、`dueAt = { weekNo: 0, dayOfWeek: 3 }` → `dueOffset = (0 − 1) * 7 + 2 = −5` → 逾期 5 天 → `overdue = 15`。
+
+⚠️ 交期只精确到「天」，**不使用 `dueAt.min`** 做违约判定（`min` 仅供同日内排序参考）。
 
 ### 5.7 改进阶段的邻域算子
 
@@ -554,6 +612,19 @@ overdue(commit) =
 | `reschedule-place` | 换提交项的地点/时段窗 | 满足依赖与交期 |
 
 **邻域生成策略**：每轮随机选一个算子 + 一个非锁定块（种子固定则完全确定）。接受准则默认 **First-Improvement 纯爬山**（保证确定性）；配置 `acceptWorse: true` 时启用模拟退火（仍需注入种子）。
+
+> ⚠️ **A5 实现时发现的完备性缺口（2026-09-15，T1.3）**：§5.5 的目标函数**没有**「单块时长上限」与「提交项窗口违约」两项，
+> 因此纯爬山（只接受 `total` 下降的移动）**永远不会触发**下面两个方向 —— 它们本质是**可行性修补**，不是降本动作：
+>
+> | 方向 | 何时才有效 |
+> |---|---|
+> | `resplit` 的**拆分**方向 | 仅当「超长块」被计入目标（或作为硬约束由 `construct` 直接保证） |
+> | `reschedule-place` 的**窗口**方向 | 仅当「窗口违约」被计入目标 |
+>
+> **P1 结论：不改目标函数**（改它会动 AC-3 与 golden 基准，需与 CY 对齐）。
+> 落地口径：`improve` **照常实现这两个算子**（候选仍会生成，一旦目标日后补项即刻生效），
+> 但**不假设它们必然被选中**；「块不超上限」由 `construct` 的构造规则保证。
+> 该缺口记入 §13.8 待办，P2 若引入「时长/窗口」项再回填。
 
 ### 5.8 增量重排（P2）
 
@@ -709,6 +780,30 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.*"
 | **课程楼缺口（P1 前置）** | `data/campus_map.json` landmarks（`卓越楼` / `国合楼` 具显式 `campus`） | ⚠️ `BUILTIN_PLACES` **只从模块库抽**，查不到课程楼 → `campusOfPlace('国合楼') = null`，与 `campusOfName = JG334` 打架。**必须在 A3 前修，见 §13.7** |
 | 营业时段 | `templates.ts` 的 `windows` | 南校食堂标「（估）」需核实 |
 | 节次表 | `constants/time.ts` | 与项目记忆有冲突，以 time.ts 为准，待回教务复核 |
+
+### 7.5 验证纪律：**干净检出必须通过**（**CY 请求 ③**，本节为硬纪律）
+
+> ⚠️ **一条不许打折的纪律**：任何「已验证通过」的结论，**必须能在干净检出（clean checkout）上复现**，
+> **不允许只在本机 worktree 上成立**。违反者的 PR 描述里**不得写「已验证」**。
+
+由来（真实踩过的坑）：B 的测试钩子一度放在仓库外 `_devtools/` 并写死工作区绝对路径 —— 本机跑绿，
+换台机器 clone 下来**必然跑不起来**；`docs/` 副本也出现过「以为同步了、其实没落盘」的情况。
+这类「在我这儿是绿的」是协作里最贵的假信号。
+
+**具体条款**：
+
+1. **门禁结论必须在干净树上重跑**：`npm run typecheck` 与测试命令，结论以**全新 clone**（或 `git stash -u`
+   后的干净工作区）为准，不以「当前有未提交改动的工作区」为准。
+2. **跑测试需要的一切必须入仓**：钩子、别名映射、夹具、脚本 —— 只要**跑测试会用到**，就必须提交进仓库
+   （见 §7.3：钩子入 `tests/`；`tests/p0-check.ts` 已由仓库外 `_devtools/` 迁入）。
+   `_devtools/` 只放**一次性**辅助脚本，**不得成为测试的运行时依赖**。
+3. **路径一律由「文件自身位置」推导**（`import.meta.url` / `__dirname` / `BASH_SOURCE`），
+   **禁止写死工作区绝对路径**；`tests/alias-hook.mjs` 已是此写法（`@/` → `<repo>/src/*.ts`）。
+4. **不得假设 `node` 在 `PATH` 上**（本机事实，见 §7.1：唯一的 node 在 WorkBuddy 私有目录）。
+   文档与脚本给出的跑法要么用绝对路径，要么先 `export PATH` —— 否则「照文档跑」的人第一步就卡死。
+5. **门禁口径**：本机沙箱跑 `npm run build` 会撞「每轮删 50 文件」守卫 → **门禁以 `npm run typecheck` 为准**（§7.1）。
+6. **跨文件一致性**：规格书母本（工作区 `排程引擎-v2-技术规格书.md`）与仓库副本 `docs/scheduler-v2-spec.md`
+   必须**逐字节一致**（提交前 `diff -q` 校验），且**改母本后必须同步**，否则以本机为真、以仓库为假。
 | 交期 | `data/usst.ts` 的 `DEADLINES[]`、`Course.examDate` | **已存在，待接入** |
 | 学期校历 | `constants/term.ts` 的 `TERM_CALENDAR` | 每学年需补一条；**含 `phases` / `holidays`（假期与考试周边界），直接复用，勿另开通道**（2026-09-15 更正） |
 
@@ -936,7 +1031,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| `types.ts` 契约需变更 | 阻塞 | **已裁决（§12.5.1）**：仅 4 项进契约层，其余留 `model.ts`；T1.0 一次性完成，之后 P1 不再动契约 |
+| `types.ts` 契约需变更 | 阻塞 | **已裁决（§12.5.1）**：仅 5 项进契约层，其余留 `model.ts`；T1.0 一次性完成，之后 P1 不再动契约 |
 | improve 耗时不达标 | 体验 | 先纯爬山小规模验证；必要时降 `maxIterations` / 用 `budgetMs` 硬截断 |
 | 权重难调 | 结果偏差 | 提供 `DEFAULT_WEIGHTS` + 单测固定若干场景做回归；权重变更有快照 |
 | 数据质量（校区/时段） | 结果不可信 | P0 数据治理先行；`verified:false` 降权 + 标注 |
@@ -956,6 +1051,9 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | v1.2 | 2026-09-15 | 吸收 CY 最终裁决（§12.5）：① §3.3 明确 `LockLevel` 落 `types.ts` 且仅允许 `model.ts → types.ts` 单向依赖；② §4.1 拆分契约层/引擎侧并新增 `PlanIssueCode`；③ §4.4 拆分 `RollingState`（引擎）与 `PlanPersistState`（持久化），`PlanResult` 新增 `variants` / `blockCandidates` 占位；④ §6.2 裁决 `cost`/`churnMin` 放 `diagnostics` 不动 `stats`；⑤ **§6.4 修正 block id 规则为语义键（去时间）**；⑥ §7.3 测试钩子入仓、明令禁用 `tsx`；⑦ §7.2 补合入顺序；⑧ §12.2 四问全部标注「已裁决」 |
 | v1.3 | 2026-09-15 | 按 CY 分支 `4e6fa0b` 实况校正：① §12.5.1 契约项 **4 → 5**（补 `TimeBlock.fromEventId?`，并说明「撤回 `model.ts`」技术上不可行）；② §12.5.3 合入顺序改为**实况状态表**（①②③ 已完成/作废，关键路径 = B review）；③ §12.5.4 记录 `studyCandidates` **实际合并口径**（`campusOfPlace` + `null` 保守保留）并采纳；④ §12.5.6 **D-4 结案**（`WeekPlanView` 留用、P1 不动 UI）；⑤ §7.3 钩子确定在 `scripts/`（不搬家、不重复造）；⑥ §9 T1.0 按达成项修正；⑦ **新增 §13 P1 开工方案**（可立即启动项 / 需同步项 / 约束 / 产出） |
 | v1.4 | 2026-09-15 | 吸收 CY《P1-答复B的第三轮》并**修正 v1.3 的两处自相矛盾**：① §12.5.4 **删掉文中残留的 `t.campus ?? 'any'` 式子**（`sameCampus` → CY 实装的 `inCampus`，彻底不用 `t.campus`）——v1.3 的代码块与紧随其后的「以 CY 版为准」互相矛盾；② §7.3 / §13.1-A2 / §13.4-R2 测试钩子**改回 `tests/register.mjs`**（v1.3 定在 `scripts/` 是误判：CY 明确其 `scripts/` 两钩子为临时、待删；B 已有 `_devtools/` 两份可直接迁入）；③ 新增 **§12.5.8**：把「校区未知(`null`)不罚不排」从 `studyCandidates` 局部口径**升格为全局口径**（`objective::placeMismatch` 同受约束）；④ §12.5.4 补录 CY 的**课程楼论据**与「`null` 取保留」的决定性理由；⑤ **新增 §13.7 前置缺陷**：`BUILTIN_PLACES` 只从模板抽、不含课程楼 → `campusOfPlace('国合楼')=null` 而 `campusOfName=JG334`，须在 A3 前修；⑥ §12.5.3 更新 PR #3 实况（已开、base 为 `feat/planner-v2-p0`）；⑦ §12.4 补「旧测试零处硬编码 block id」的核对结论 |
+| v1.5 | 2026-09-15 | **A3/A5 实现时发现的残留矛盾、未定义项与完备性缺口，逐条消除**：① §5.6 **`daysOverdue` 由「未定义」改为显式定义**（`max(0, −dueOffset)`，原点 = 当前周周一，与 §5.2 `urgency()` **同源**），并补示例与「不使用 `dueAt.min`」的说明；② §5.5 目标函数里 `placeMismatch` 的 `Σ(跨校区或未登记地点的块数)` **改为 `Σ(跨校区块数)`** —— 原文与 §12.5.8（`null` 不罚）**直接冲突**，并补「计数口径」段；③ §4.2 `Weights.placeMismatch` 与 `dueOverdue` 两处注释同步修正；④ §12.1 风险表「仅 **4** 项进契约层」订正为 **5**（v1.3 已改 4→5，此处遗漏）；⑤ §5.7 新增说明 + **新增 §13.8**：`resplit` 的拆分方向与 `reschedule-place` 的窗口方向**不被目标函数驱动**（§5.5 无时长/窗口项）→ P1 照常实现但不假设被选中，「块不超上限」由 `construct` 保证；⑥ §13.7 补「**已修**」状态表（含 ref）与 §12.5.8 兜底关系；⑦ **新增 §13.9**：B 侧求解器链执行进度（A2/A3/A4/A5 + 门禁现状）|
+| v1.6 | 2026-09-15 | **吸收 CY 的 P1 三请求 + 补验证纪律**：① **§4.5 重写**为 4.5.1/4.5.2/4.5.3 —— 新增 **`planWeek.ts`「两遍法唯一编排点」（请求 ②）**，并写明它**必须支持注入 provider 桩**（`planner/transfer.ts` 依赖 `lib/api.ts`，Node 里加载不了，不注入就进不了 `tests/`）；**`schedule.ts` 稳定入口（请求 ①）** 改为**实况表**（ref：`buildWeekPlan`= `schedule.ts:295`、`campusOfName` = `schedule.ts:85`；而 `buildPhasesFromCalendar` / `phaseOfWeek` 实为 **`buildPhases.ts:255/269`**，消费方分别是 `scripts/scheduler.test.ts:13-15` 与 `scripts/buildPhases.test.ts:8-10`）；② **新增 §7.5「干净检出必须通过」（请求 ③，定为硬纪律）**，含 6 条可执行条款；③ §12.5.3 订正 **PR #4 远端 head `a6038e5` → `eb79b6a`**（`git ls-remote` 复核），并新增「远端实况快照」段（含三条未跟踪分支的说明）；④ 头部状态行同步 v1.6；⑤ §13.9 补 B 侧**提交/推送状态**（9 提交 / 19 文件 +2984−24、四道门禁实跑结果）；⑥ **新发现并记录 PR #2 的红灯**：`31ddeb6` 的 `scripts/scheduler.test.ts:309` 断言 `campusOfName('第三教学楼')==='JG516'`，与 P0 后的 `null` 语义冲突（该函数自 P0 起未改动 → 断言必失败），修复在 `5a75357`，处置见 §12.5.3 / §13.9 |
+| v1.7 | 2026-09-15 | **P1 求解器重构落地并全绿**（新增 §13.10「落地实况」）：① 新增 `construct.ts`（T1.1，旧 7 步搬迁 + **语义键 id**）、`explain.ts`（T1.5）、`solver.ts` + `index.ts`（T1.4）、`planWeek.ts`（§4.5.2 两遍法）、`campusLookup.ts`（断环用）；② `schedule.ts` 改**门面**（对外形状一字未改，`buildWeekPlan` 转调 `construct`）；③ `model.ts` 加 `PlanRequest.tasks?` / `PlanResult.variants?` / `PlanVariant` / §6.4 的 `blockId()` 与 `isSemanticBlockId()`；④ `tests/` 新增 4 个文件 30 条（construct / solver / explain / planweek），**golden 快照已拍**（5 场景）；⑤ 门禁：typecheck 绿、`tests/**` **67-67**、`scripts/**` 48-48、`p0-check` 26-26、`golden-compare` **5/5**（⓪+AC-1+2+3）；⑥ **两处偏差已记账**：golden 快照提前拍摄（依据 `git diff 31ddeb6 HEAD -- src/lib/planner/schedule.ts` 为空）、T1.0 契约层未应用（补丁 `_devtools/t1.0-contract-patch.md`，等 CY 合入）；⑦ 记入**变异测试**证明验收有牙齿（`SOFT_BUFFER_MIN` 5→6 → ⓪/AC-2 精确报 776→775）；⑧ §13.6 改为逐项兑现表 |
 
 ### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
@@ -1044,7 +1142,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 
 > ⚠️ **易错点**：`PlanPersistState.rolling` 不能省。若只存 `locks` + `churnMin`，「变化三 · 一周很累下一周自动松一点」在 P2 会**没有数据载体**。
 
-#### 12.5.3 合入顺序（含 2026-09-15 16:46 实况更新）
+#### 12.5.3 合入顺序（含 2026-09-15 18:15 实况更新 · 经 GitHub API 核对）
 
 **原定顺序 —— 实际执行状态：**
 
@@ -1052,10 +1150,32 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 |---|---|---|
 | ① | CY `rebase` 到 `22bdee88` | ✅ **已完成**（`4e6fa0b` 的父提交即 `22bdee8`） |
 | ② | CY 撤回 `types.ts` 的 `TimeBlock.fromEventId` → 改 `model.ts` | ❌ **作废**（技术不可行，见 §12.5.1 修正说明）；`fromEventId` 保留在 `types.ts` |
-| ③ | CY 提 PR 到 `dev`（`feat/events-and-diversity`） | ⚠️ **已推送且已开 PR #3**（远端 `4e6fa0b`），但 **base 实为 `feat/planner-v2-p0` 而非 `dev`**（栈式 PR）。→ 须先合 PR #2，再改 PR #3 的 base 为 `dev`（此时 merge-base 回到 `22bdee88`，diff 收敛为「仅本分支改动」）；**反序会把 P0 一并带进 `dev`，使 PR #2 变空** |
-| ④ | **PR #2 合入 `dev`**（`feat/planner-v2-p0` @ `53d1d62`，含 P0 + 规格书） | ⬜ 待合。B 自有线；本 PR 由 CY review（`docs/` 属其地盘） |
-| ⑤ | **PR #3 改 base 为 `dev` → B review → 合入** | ⬜ **当前关键路径**。改 base 必须在 ④ 之后（否则 diff 会含 P0） |
+| ③ | CY 提 PR 到 `dev`（`feat/events-and-diversity`） | ✅ **PR #3 已开，且 base 已改为 `dev`**（head = `1691420d`，`mergeable_state=clean`）。原「base 为 `feat/planner-v2-p0`」的记载**已作废** |
+| ④ | **PR #2 合入 `dev`**（`feat/planner-v2-p0` @ **`31ddeb6`**，含 P0 + 规格书 v1.4） | ⬜ 待合。B 自有线；本 PR 由 CY review（`docs/` 属其地盘） |
+| ⑤ | **PR #3 rebase 到合入后的 `dev` → B review → 合入** | ⬜ **当前关键路径**。⚠️ 有 add/add 冲突，见下 |
 | ⑥ | B 基于合并后版本抽 `construct`（T1.1）+ 拍 golden baseline（**只拍一次**） | ⬜ 待 ⑤ |
+| ⑦ | **PR #4**（`feat/libao-wiring`，梨宝接线）合入 | ⬜ 依赖 ⑤；**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（`git ls-remote` 复核）。其 `weekPlanForChat.ts` 与 PR #3 的 `WeekPlanView.tsx` 是**同一套两遍法编排**，待切到 `planWeek`（§4.5.2） |
+
+> ⚠️ **新增发现的合并冲突（2026-09-15 18:15 核对，实况）**：`dev` 上**还没有** `docs/scheduler-v2-spec.md`，
+> 而 **PR #2 与 PR #3 都把它记为 `added`** → **谁第二个合入谁就撞 add/add 冲突**。
+> **处置**：合完 PR #2 后，CY rebase PR #3 时如遇该文件冲突 → **取 `dev` 版本**（该副本是 B 的产物，当前 v1.5；
+> 不要把它带回你的分支，也不必在 PR #3 里重复携带）。
+
+> ⚠️ **`dev` 未含 P0 的副作用（别误读）**：因 `dev` 仍停在 `cb3f39e`，**PR #3 的 diff 目前把 P0 的三个新文件
+> （`model.ts` / `objective.ts` / `places.ts`）显示为 `added`** —— 这是 base 分离造成的假象，**不是 CY 的改动**；
+> 合完 PR #2 后 diff 会自动收敛为「仅本分支改动」。
+
+> 📌 **远端实况快照（2026-09-15，`git ls-remote --heads origin`）**：`main` = `cb3f39e`；`dev` = `1ddf03a`；
+> `feat/planner-v2-p0` = `95532c1`（= PR #2 head，含 campusOfName 测试修复）；`feat/events-and-diversity` = `1691420d`（PR #3）；
+> `feat/libao-wiring` = `eb79b6a`（PR #4）；`feat/planner-v2-p1` = `0aef2f4`（**B 侧已推，PR 未开**，见 §13.9）。
+> 另有三条**不在本规格书跟踪范围**的远端分支：`feat/weather`、`feat/ui-refresh`、`docs/project-core`
+> —— 与 P1 无依赖关系，review 时**别误当成 P1 的前置**。
+
+> ⚠️ **PR #2 的红灯已修并已推（B 已核，2026-09-15）**：`31ddeb6` 曾带着 `scripts/scheduler.test.ts:309`
+> 的旧断言 `campusOfName('第三教学楼') === 'JG516'`，而 P0 已把该函数改为「命中失败返回 `null`」
+> （`schedule.ts:85-92`，自 P0 起未改动）→ **该断言在 `31ddeb6` 上必然失败**。
+> 现已随 `feat/planner-v2-p0` @ **`95532c1`** 修复并推送（第 312 行改为断言 `null`）→ **PR #2 应为绿**。
+> 详见 §13.9。
 
 **CY 分支已完成的内容（B review 时核对）**：
 
@@ -1247,17 +1367,19 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 
 ### 13.6 预期产出（P1 完成定义）
 
-**代码**（`src/lib/planner/`）：
+**代码**（`src/lib/planner/`）—— ✅ **全部已落地**，逐项实况见 **§13.10**：
 
 | 文件 | 状态 | 验收 |
 |---|---|---|
-| `objective.ts` | 扩展 `evaluate` / `evaluateDelta` | AC-3：`cost_v2 <= cost_greedy`（全部 golden） |
-| `improve.ts` | 新增 | AC-6：确定性；`cost` 单调不增 |
-| `construct.ts` | 新增（从 `schedule.ts` 抽出） | AC-2：**块内容**逐块一致（id 不比）；id 匹配 `^w\d+-d\d+-\w+-.+$` |
-| `solver.ts` + `index.ts` | 新增 | AC-1：`hardViolations === 0` |
-| `explain.ts` | 新增 | AC-4/QL-2：100% 软块有非空 `reason` |
+| `objective.ts` | ✅ 扩展 `evaluate` / `evaluateDelta` | AC-3：`cost_v2 <= cost_greedy`（全部 golden）→ **PASS** |
+| `improve.ts` | ✅ 新增 | AC-6：确定性；`cost` 单调不增 → **PASS** |
+| `construct.ts` | ✅ 新增（从 `schedule.ts` 抽出） | AC-2：**块内容**逐块一致（id 不比）；id 匹配 `^w\d+-d\d+-\w+-.+$` → **PASS** |
+| `solver.ts` + `index.ts` | ✅ 新增 | AC-1：`hardViolations === 0` → **PASS** |
+| `explain.ts` | ✅ 新增 | AC-4/QL-2：100% 软块有非空 `reason` → **PASS** |
+| `planWeek.ts` | ✅ 新增（§4.5.2） | 两遍法可注入 provider 桩、取数失败降级单遍 → **PASS** |
 
-**契约**（一次性）：`types.ts` 5 项 + `AppState.planState` + storage v3→v4。
+**契约**（一次性）：`types.ts` 5 项 + `AppState.planState` + storage v3→v4 —— ⬜ **未应用**（§9-T1.0 前置要求等 CY 合入），
+补丁见 **`_devtools/t1.0-contract-patch.md`**；引擎侧已向前兼容（`LockLevel` 只经 `model.ts` re-export）。
 
 **测试**：`tests/`（引擎测试 + golden 快照 + 指标脚本）；`npm run typecheck` 绿；CY 侧 `scripts/` 既有测试全绿。
 
@@ -1304,6 +1426,155 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 
 **排期**：列为 **A3 的前置**（写 `objective::placeMismatch` 之前完成），属「求解器链」，**不等 CY 合入**。
 
+**✅ 已修（2026-09-15，B 侧，附 ref）**：
+
+| 动作 | ref |
+|---|---|
+| 新增 `CAMPUS_BUILDINGS`（26 栋 `type='教学楼'`，含别名如 `逸兴楼 → 第四教学楼`）与 `placesFromBuildings()`（**硬编码，不 import JSON**） | `src/lib/planner/places.ts` |
+| `BUILTIN_PLACES` 改为 **模板 ∪ 课程楼** 的并集 | `src/lib/planner/places.ts`（原 `placesFromTemplates(DEFAULT_TEMPLATES)`） |
+| 修 `mergePlaces` 丢弃 overlay `alias` / `category` 的缺陷（这才是「第一/第三教学楼查不到别名」的真因） | `src/lib/planner/places.ts` |
+| 新增单测 6 条：含「两套表不打架（`campusOfName` 认得的楼，`campusOfPlace` 必须同校区）」与「硬编码表 == campus_map.json（防漂移）」 | `tests/places-buildings.test.ts` |
+
+→ `campusOfPlace('国合楼')` 现为 `JG334`，与 `campusOfName` 一致；§12.5.8 的「不罚」仍作为兜底口径保留。
+
+### 13.8 ⚠️ 完备性缺口：两个「修补型」算子方向不被目标函数驱动（T1.3 记录）
+
+**背景**：`improve` 的接受准则只认 `total` 下降（First-Improvement 纯爬山）。而 §5.5 的目标函数**不含**：
+
+1. **单块时长上限**（`policy.maxBlockMin`）→ `resplit` 的**拆分**方向永远不会被选中；
+2. **提交项窗口违约**（`Commit.window`）→ `reschedule-place` 的**窗口**方向永远不会被选中。
+
+**判定与处置（P1 不改目标函数）**：
+
+| 项 | 决定 |
+|---|---|
+| 是否立刻补进目标函数 | ❌ 不改 —— 会动 §5.5 与 AC-3，并让已拍/待拍的 golden 基准失去可比性，属**跨人契约面**改动 |
+| 算子是否照常实现 | ✅ 照常实现（候选仍生成；目标日后补项即刻生效，无需改算子） |
+| 「块不超上限」由谁保证 | `construct` 的构造规则（T1.1）；`improve` 不承担该职责 |
+| 何时回填 | P2 —— 若引入「时长 / 窗口」项，再让这两个方向生效 |
+
+**为何不视为缺陷（只是不含）**：P1 的目标是「**构造等价 + 目标更优**」。两个修补方向即使空转，
+也不影响 `cost` 单调不增与 AC-1/2/3；唯一代价是**邻域完备性**，记为 P2 待办。
+
+### 13.9 B 侧执行进度（求解器链，2026-09-15）
+
+> 按 §13.1 的「可立即启动」清单推进；**全部与 CY 的合入互不阻塞**。
+
+| 序 | 任务 | 状态 | 产物 / 验证 |
+|---|---|---|---|
+| A2 | `tests/` 骨架与钩子 | ✅ | `tests/register.mjs` · `tests/alias-hook.mjs`（位置无关）· `tests/README.md` · `tests/golden/` |
+| — | §13.7 课程楼修复 | ✅ | 见 §13.7「已修」表 |
+| A3 | `objective::evaluate` / `evaluateDelta` | ✅ | `src/lib/planner/objective.ts`；单测 `tests/objective-evaluate.test.ts` |
+| A4 | golden 工具（拍摄器/对比器/指标） | ✅ **工具就绪，未拍摄**（按 §9-T1.6 等合入后一次拍） | `tests/golden-lib.ts` · `golden-inputs.ts` · `golden-snapshot.ts` · `golden-compare.ts`；自检 `tests/golden-lib.test.ts` |
+| A5 | `improve.ts` 五算子 + 纯爬山 | ✅ | `src/lib/planner/improve.ts`；单测 `tests/improve.test.ts` |
+
+**门禁现状**：`npm run typecheck` 绿；`node --import ./tests/register.mjs --test "tests/**/*.test.ts"` 全绿。
+**顺带修正（A3 实现时发现）**：§5.5 原文 `Σ(跨校区或未登记地点的块数)` 与 §12.5.8 直接冲突、§5.6 `daysOverdue` 未定义 —— 见 §12.1 v1.5。
+
+**提交状态（2026-09-15 复核，`git ls-remote` + `git log` 实读）**：`feat/planner-v2-p1` **已推远端**，远端 head = **`0aef2f4`**；`31ddeb6` 之上共 **9 条提交**（按序）：
+
+1. `cf8aad4` `chore(spec): v1.5 —— 显式化 daysOverdue、消除 §5.5↔§12.5.8 冲突、补 §13.8/§13.9`
+2. `0100188` `test(engine): A2 —— tests/ 钩子与目录约定`
+3. `3f58b6d` `fix(planner): §13.7 课程楼入内置地点表 + mergePlaces 合并 alias`
+4. `0eaa3cf` `feat(planner): A3 —— objective::evaluate / evaluateDelta`
+5. `c23fb9f` `test(engine): A4 —— golden 工具`
+6. `f7e60e2` `feat(planner): A5 —— improve 五算子 + First-Improvement 纯爬山`
+7. `31f79c9` `test(engine): P0 验收脚本入仓 —— _devtools/p0-check.ts → tests/p0-check.ts`
+8. `5a75357` `fix(test): campusOfName 测试跟随 P0 的行为变化`（`scripts/scheduler.test.ts` +4/−1）
+9. `0aef2f4` `docs(scheduler): 同步规格书 v1.6 —— 母本 ↔ 仓库副本逐字节一致`（**= 远端 head**）
+
+规模：**19 文件 +2984 / −24**（`git diff --shortstat 31ddeb6 0aef2f4`）；`tests/` 全部 13 个文件均已入仓（`git ls-files tests/`）。
+
+> ⚠️ **并发会话的重复产物（别再推）**：本地另有一条 `2ecd68a`（父提交同为 `5a75357`，**tree 与 `0aef2f4` 完全相同** ——
+> 即同一份 v1.6 文档被两条线各提交了一次）。它**未推远端**、也无 ref 指向，属垃圾对象，**不再推送**。
+> 本工作区**同时有多个会话在动同一仓库**（一天内撞过两次），动 git 前先看**母本 mtime + `git status`**。
+
+**门禁（2026-09-15 实跑，绝对路径 node）**：
+
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 类型检查 | `node ./node_modules/typescript/bin/tsc --noEmit` | ✅ 绿 |
+| P0 验收 | `node --import ./tests/register.mjs tests/p0-check.ts` | ✅ **26 通过 / 0 失败** |
+| 引擎单测 | `node --import ./tests/register.mjs --test "tests/**/*.test.ts"` | ✅ **37 通过 / 0 失败** |
+| **CY 侧旧测试** | `node --import ./tests/register.mjs --test "scripts/scheduler.test.ts" "scripts/buildPhases.test.ts"` | ✅ **48 通过 / 0 失败**（修复后） |
+
+- ✅ **PR #2 的红灯已修并已推（本条原记为「待 CY 拍」，已闭环）**：`feat/planner-v2-p0` 的远端 head 已由
+  `31ddeb6` 前进到 **`95532c1`**（= `31ddeb6` + 该测试修复；`git show 95532c1:scripts/scheduler.test.ts`
+  第 312 行已是 `assert.equal(campusOfName('第三教学楼'), null)`）→ **PR #2 现在应为绿**。
+  **背景留档**：`31ddeb6` 版 `scripts/scheduler.test.ts:309` 断言 `=== 'JG516'`，与 P0 之后 `campusOfName`
+  返回 `null`（`schedule.ts:85-92`，该文件自 P0 起**未被改动**）**直接冲突** → 该断言必然失败。修复见 `5a75357` / `95532c1`。
+- ⚠️ **`5a75357` 改的是 CY 地盘**（`scripts/scheduler.test.ts`，见 §2 所有权表）→ **贴 PR 时必须在描述里点名**，
+  否则会被当成未经沟通的越界改动。（CY 侧已在同一分支用 `95532c1` 做过同样修复，等于默认接受。）
+- ✅ **本文件已推**（远端 `feat/planner-v2-p1` @ `2ab1fbd`，2026-09-15 复核）。P1 实现本身的实况见 **§13.10**。
+- ⚠️ **踩坑记录（并入 §7.5 纪律）**：WorkBuddy 沙箱里跑 git **写不进嵌套 ref**（`refs/heads/feat/...`）——
+  只要 git 执行一次 ref 写入（`commit` / `reset` / `branch`），`.git/refs/heads/feat/` 整个目录当场被抹掉，
+  分支立刻变 unborn、`git log` 报 "does not have any commits yet"；已实测复现两次。
+  **兜底**：`push-p1.sh` 第 0 步按 reflog 自动恢复（取「最后一条非 `commit (initial)` 的 new-sha」）。
+  → **凡涉及 ref 写入的 git 操作，一律在本机自带终端执行。**
+- ⚠️ **越界改动提示**：`5a75357` 改的 `scripts/scheduler.test.ts` 属 **CY 地盘**（§2 所有权表）
+  → 贴 PR 时**必须在描述里点名**，否则会被当成未经沟通的越界改动。
+
 ---
 
-*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `53d1d62`，PR #2）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）。*
+### 13.10 P1 求解器重构：落地实况（2026-09-15 晚，**已实现并全绿**）
+
+> 本节是 §13.6「P1 完成定义」的**逐项兑现账**。凡标 ✅ 的都有实跑命令与结果（见「验收实跑」）。
+
+**新增 / 改动文件**（全部在 `src/lib/planner/`，属 B 地盘）：
+
+| 文件 | 对应任务 | 状态 | 说明 |
+|---|---|---|---|
+| `campusLookup.ts` | （新增，断环用） | ✅ | `campusOfName` / `campusFallbackTransfer` / `TransferInfo` / `TransferProvider` 下沉到此。**为什么**：`construct.ts` 要用 `campusOfName`，而 `schedule.ts` 要用 `construct.ts`，不沉底就成环 |
+| `construct.ts` | **T1.1** | ✅ | 旧 7 步原样搬迁 + **语义键 id**（§6.4）+ 提交项（pinned / window / deps） |
+| `explain.ts` | **T1.5** | ✅ | reason / notes / issues 的唯一生成处；`ensureReasons` 机械保证 QL-2 |
+| `solver.ts` | **T1.4** | ✅ | `normalize → construct → improve → explain → assemble`；硬约束计数、诊断、滚动状态、环依赖降级 |
+| `index.ts` | **T1.4** | ✅ | `planWeekV2(req)` + 兼容 re-export + 诊断辅助 |
+| `planWeek.ts` | **§4.5.2（CY 请求 ②）** | ✅ | 两遍法唯一编排点；**不静态 import `transfer.ts`**（动态 import + 注入桩） |
+| `schedule.ts` | **§4.5.3（CY 请求 ①）** | ✅ | 改为门面：对外导出名/参数/返回形状**一字未改**，全部 re-export；`buildWeekPlan` 转调 `construct` |
+| `model.ts` | §4.4 / §6.4 | ✅ | `PlanRequest.tasks?`（旧 UI 兼容）、`PlanResult.variants?` / `PlanVariant`、`blockId()` / `isSemanticBlockId()` |
+
+**测试**（`tests/`，新增 4 个文件 + 30 条）：`construct.test.ts`（AC-2/AC-6/AC-9 + id 规则）、`solver.test.ts`（AC-1/AC-3/AC-5 + 诊断恒等式 + 环依赖）、`explain.test.ts`（QL-2 + 文案 + issues 分级）、`planweek.test.ts`（两遍法 + 降级）。
+**golden baseline**：`tests/golden/week-*.json` **已拍**（5 个场景，baseline cost 76.3 / 75.8 / 96.3 / 72.3 / 72.8）。
+
+**验收实跑（2026-09-15，绝对路径 node）**：
+
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 类型检查 | `node ./node_modules/typescript/bin/tsc --noEmit` | ✅ 绿 |
+| 引擎测试 | `node --import ./tests/register.mjs --test "tests/**/*.test.ts"` | ✅ **67 通过 / 0 失败**（P0 时代 37 → 67） |
+| CY 侧旧测试 | `node --import ./tests/register.mjs --test "scripts/scheduler.test.ts" "scripts/buildPhases.test.ts"` | ✅ **48 通过 / 0 失败** |
+| P0 验收 | `node --import ./tests/register.mjs tests/p0-check.ts` | ✅ **26 通过 / 0 失败** |
+| **Golden 对照** | `node --import ./tests/register.mjs tests/golden-compare.ts` | ✅ **5/5**（⓪基线 + AC-1 + AC-2 + AC-3 全 PASS） |
+
+**AC 逐条兑现**：
+
+| AC | 结论 | 依据 |
+|---|---|---|
+| AC-1 硬约束零违反 | ✅ | golden 5/5 `hardViolations = 0`；`solver.test.ts` 全语料断言 |
+| AC-2 构造等价 | ✅ | `construct.test.ts` + `golden-compare` 的「AC-2 构造」列 |
+| AC-3 目标更优 | ✅ | `cost_v2 <= cost_baseline`（golden）＋ 分项之和 ≡ total（恒等式单测） |
+| AC-4 交期生效 | ✅ | `urgency` / `sortKey`（P0 已实现）+ `construct` 的 EDF 择序（commits 路径） |
+| AC-5 锁生效 | ✅ | `solver.test.ts`：greedy vs lns，`hard` 块坐标逐一比对不变 |
+| AC-6 确定性 | ✅ | `stablePlanJson` 两次运行逐字节相同（construct 与 solver 各一条） |
+| AC-9 依赖满足 | ✅ | `construct.test.ts`：后驱 `startMin >= 前驱 endMin`，理由含「要等」 |
+| QL-2 可解释 | ✅ | `reasonCoverage().total === withReason`（全语料） |
+| AC-7 / AC-10 | ⏭ P2 | 增量最小扰动 / 两趟收敛（§5.8 / §5.9） |
+
+**⚠️ 两处偏差（已记账，必须让 CY 知道）**：
+
+1. **golden 快照提前拍摄**。§9-T1.6 / §13.2-B3 要求「CY 分支合入后、于唯一基准上只拍一次」。
+   本次提前拍的**依据**：`git diff 31ddeb6 HEAD -- src/lib/planner/schedule.ts` **为空** ——
+   即「合并后的基准」与「当前基准」在构造行为上尚无任何可观测差异。
+   **处置**：合入后若 `schedule.ts` 确有变化，**必须 `--force` 重拍一次**并同步 AC-2（重拍有代价，故显式记账）。
+2. **T1.0 契约层未应用**。§9-T1.0 前置 + §13.2-B1 要求等 CY 合入（他也在改 `types.ts`）。
+   补丁已备好：**`_devtools/t1.0-contract-patch.md`**（可直接套用，含 `PlanPersistState` 的
+   「结构化声明 + 编译期相等断言」解法，绕开 §3.3「禁止反向依赖」）。
+   **引擎侧已向前兼容**：所有模块只从 `model.ts` 取 `LockLevel`，T1.0 落地时 `model.ts` 改 re-export 即可，**零改新代码**。
+
+**验收「有牙齿」的证明（变异测试）**：把 `construct.ts` 的 `SOFT_BUFFER_MIN` 由 `5` 改成 `6`（只差 1 分钟），
+实测 `week-04-typical` 的 **⓪基线 与 AC-2 双双 FAIL**，并精确报出 `"startMin": 776 → 775`；改完已还原。
+→ 说明「全绿」不是「永远绿」，**旧引擎的一分钟漂移都会被抓住**。
+
+---
+
+*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `31ddeb6` = PR #2 head，base=`dev`）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**。*

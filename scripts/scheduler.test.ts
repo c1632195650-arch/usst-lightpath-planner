@@ -330,6 +330,10 @@ test('campusOfName 能识别主要跨区地标（认不出返回 null，不再�
   assert.equal(campusOfName('国合楼'), 'JG334');
   assert.equal(campusOfName('思餐厅'), 'JG334');
   assert.equal(campusOfName('卓越楼'), 'JG334');
+  // ⚠️「第三教学楼」不在 CAMPUS_KEYWORDS 里：它此前是靠「未命中 → 默认 JG516」蒙对的，
+  //    P0 起改为不猜（命中失败返回 null）。它的校区识别已由显式地点表接管 ——
+  //    campusOfPlace('第三教学楼') === 'JG516'，见 tests/places-buildings.test.ts。
+  assert.equal(campusOfName('第三教学楼'), null);
   assert.equal(campusOfName('申一教'), 'JG1100');
   // ⚠️ v2 P0 的行为变更：关键字认不出的**不再默认北校**，返回 null 交给调用方。
   //    「第三教学楼」在关键字表里没有条目 → null（改用下面的 campusOfPlace）
@@ -346,9 +350,10 @@ test('campusOfPlace 用显式地点表判校区，覆盖关键字认不出的 PO
   assert.equal(campusOfPlace('思餐厅'), 'JG334');
   assert.equal(campusOfPlace('某个不存在的地方'), null);
 
-  // 两张表**互补**：显式地点表由模块库抽取，暂不含课程楼（国合楼/卓越楼只在关键字表里）。
-  // 见 PR 说明「placesFromTemplates 建议补课程楼」。
-  assert.equal(campusOfPlace('国合楼'), null);
+  // 两张表**已对齐**：P1 的 §13.7 把课程楼补进了内置地点表（含 alias），
+  // 所以「显式地点表认不出课程楼」这个缺口已经闭合 —— 本条断言随之更新。
+  // 另见 tests/places-buildings.test.ts 的「关键字表每个 kw 都能被 campusOfPlace 解析」。
+  assert.equal(campusOfPlace('国合楼'), 'JG334');
   assert.equal(campusOfName('国合楼'), 'JG334');
 });
 
