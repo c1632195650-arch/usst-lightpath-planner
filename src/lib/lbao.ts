@@ -2,6 +2,7 @@ import type { LifeMode, PersonaProfile, Schedule } from '@/types';
 import { AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { ACTIVITY_TYPES, DINING_SPOTS, LIFE_MODES, STUDY_SPOTS } from '@/data/usst';
 import { WEEKDAY_CN, weekdayOf } from '@/lib/date';
+import { MEAL_BLOCKS, PERIOD_START } from '@/constants/time';
 
 export interface LbaoBlock {
   icon: string;
@@ -44,12 +45,23 @@ function axisReason(p: PersonaProfile, key: keyof typeof AXIS_META): string {
   return `${m.label} ${level}（${Math.round(v)}）`;
 }
 
+/**
+ * ⏰ 这里的 `time` 分两类，不能混为一谈：
+ *   - **课程块**的时间必须是**真实节次时间**（取自 `constants/time.ts` 的官方课时表）；
+ *     写死一个 08:00 会让「这不是我的课表」成为用户第一眼看到的东西。
+ *   - **用餐 / 自习 / 活动 / 留白**是**建议时段**，本来就不对应课表上的某一节，
+ *     但也不该是随手敲的魔法数字 —— 尽量从课时表与 `MEAL_BLOCKS` 推导。
+ */
+
+/** 晚自习建议起点：官方课时表第 11 节（晚课第一节 18:00），晚饭之后、晚课之前 */
+const EVENING_STUDY_START = PERIOD_START[11] ?? '18:00';
+
 /** 某天该吃什么（结合就餐半径 + 探索度） */
 function mealFor(p: PersonaProfile): LbaoBlock {
   const far = p.scenarios.meal_radius === 'far' || p.axes.EXP >= 60;
   const spot = far ? DINING_SPOTS[1] : DINING_SPOTS[0];
   return {
-    icon: '🍜', time: '11:45', kind: 'meal',
+    icon: '🍜', time: MEAL_BLOCKS.lunch.start, kind: 'meal',
     title: `午餐 · ${spot.name}`,
     note: far ? '你愿意为好吃的多走几步，去窗口多的那家逛一逛' : '40 分钟速战，就近出餐快的那家最稳',
   };
@@ -59,7 +71,7 @@ function studyFor(p: PersonaProfile, courseName?: string): LbaoBlock {
   const place = SCENARIO_META.study_place.values[p.scenarios.study_place] ?? '图书馆';
   const spot = STUDY_SPOTS.find((s) => s.name.includes(place === '图书馆' ? '图书馆' : place === '宿舍' ? '宿舍' : place === '咖啡馆' ? '咖啡馆' : '空教室')) ?? STUDY_SPOTS[2];
   return {
-    icon: '📖', time: '19:00', kind: 'study',
+    icon: '📖', time: EVENING_STUDY_START, kind: 'study',
     title: courseName ? `复习 / 作业 · ${courseName}` : '自习 · 自由安排',
     note: `你的自习偏好是「${place}」，建议去 ${spot.name}`,
   };
@@ -118,13 +130,18 @@ export function lbaoRecommend(
     const todaysCourses = schedule.courses.filter((c) => c.slots.some((s) => s.dayOfWeek === courseDay));
     const blocks: LbaoBlock[] = [];
 
-    // 上午课程
+    // 当天的课 —— 时间取**真实节次**（官方课时表），不再写死 08:00。
+    // 「这不是我的课表」是用户最容易一眼识破的假，也是本路线唯一必须消灭的东西。
     if (todaysCourses.length > 0) {
       const c = todaysCourses[0];
+      const slot = c.slots
+        .filter((s) => s.dayOfWeek === courseDay)
+        .sort((a, b) => a.startPeriod - b.startPeriod)[0];
+      const start = slot ? PERIOD_START[slot.startPeriod] : undefined;
       blocks.push({
-        icon: '🏫', time: '08:00', kind: 'course',
+        icon: '🏫', time: start ?? '08:00', kind: 'course',
         title: `上课 · ${c.name}`,
-        note: `${c.building || ''}${c.room ? ' ' + c.room : ''} · ${todaysCourses.length} 门课`,
+        note: `${c.building || ''}${c.room ? ' ' + c.room : ''} · 共 ${todaysCourses.length} 门课`.trim(),
       });
     }
 

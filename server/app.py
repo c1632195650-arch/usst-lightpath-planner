@@ -114,9 +114,13 @@ ROUTE_RULES = {
 
 # ---------- 脱敏 ----------
 _SENSITIVE = [
-    (r"1[3-9]\d{9}", "[手机号]"),
-    (r"20\d{11}", "[学号]"),
-    (r"\b\d{6,12}\b", "[编号]"),
+    # ⚠️ 边界不能用 `\b`：Python re 在 Unicode 模式下把中文也当作 \w，
+    #    于是「学号20231234567」这种**中文紧邻数字**的写法两侧都不构成单词边界，
+    #    整条规则静默失效（实测：手机号能脱敏，紧跟中文的学号漏掉）。
+    #    改用「前后不是数字」的环视 —— 这才是原本想表达的边界，且不依赖 \w 的语义。
+    (r"(?<!\d)1[3-9]\d{9}(?!\d)", "[手机号]"),
+    (r"(?<!\d)20\d{11}(?!\d)", "[学号]"),
+    (r"(?<!\d)\d{6,12}(?!\d)", "[编号]"),
     (r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[邮箱]"),
 ]
 
@@ -168,7 +172,7 @@ def route_query(q, results):
     return "llm", top_raw, intent
 
 # ---------- LLM ----------
-def llm_answer(question, sources, route, mem_ctx="", space_ctx=""):
+def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx=""):
     if not LLM_API_KEY:
         return None
     ctx = ""
@@ -178,6 +182,13 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx=""):
             for i, s in enumerate(sources)
         )
     blocks = []
+    if profile_ctx:
+        # 「你是谁」是背景，排在记忆与检索之前 —— 先立人，再谈事。
+        # 必须显式禁止复述：否则模型会把一串轴值原样念出来，像在念体检报告。
+        blocks.append(
+            "【用户档案】这位同学的真实情况如下。回答时请结合 TA 的课表、作息偏好与所处学期阶段，"
+            "但不要机械复述档案条目，也不要主动提及档案的存在。\n" + profile_ctx
+        )
     if mem_ctx:
         blocks.append(mem_ctx)
     blocks.append("【校园资讯】\n" + (ctx or "（本轮没有检索到相关资讯）"))
@@ -224,6 +235,10 @@ class ChatReq(BaseModel):
     q: str = Field(max_length=500)   # 防超长输入打爆 token；超长返回 422
     session_id: str = "default"
     user_id: str = "anon"
+    # 用户档案摘要（画像轴值 + 课表概览 + 学期阶段），由前端 features/libao 侧生成。
+    # 这里不设 max_length：它是内部通道，超长直接截断比返回 422 更不容易把对话打断
+    # （截断与脱敏在 api_chat 里做）。
+    profile_ctx: str = ""
     k: int = 4
 
 @app.get("/api/health")
@@ -298,6 +313,10 @@ def api_chat(body: ChatReq):
     if not q:
         return {"answer": "你想问梨宝什么呢？", "route": "empty", "sources": []}
 
+    # 用户档案：再兜一层脱敏（前端已过滤一轮），并截断防 prompt 膨胀。
+    # 注意档案里**不该**出现学号/姓名/手机号，但信任边界不能靠前端单方面保证。
+    profile_ctx = desensitize((body.profile_ctx or "").strip())[:1200]
+
     # 1) 检索（拿 raw_vec 作为边界信号）
     results = rag.search(q, max(1, min(body.k, 6)))
     sources = [{
@@ -331,8 +350,8 @@ def api_chat(body: ChatReq):
         print("[memory] 读取失败：", e)
         mem_ctx = ""
 
-    # 5) 生成答案
-    answer = llm_answer(q, sources, route, mem_ctx, space_ctx)
+    # 5) 生成答案（profile_ctx 让「你是谁」参与生成，而不只是一个匿名提问者）
+    answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
     mode = "llm" if answer else "extractive"
     if not answer:
         answer = extractive_answer(sources, route)
@@ -350,6 +369,8 @@ def api_chat(body: ChatReq):
         "sources": sources,
         "used_space": bool(space_ctx),
         "used_memory": bool(mem_ctx),
+        # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
+        "used_profile": bool(profile_ctx),
     }
 
 class ResetReq(BaseModel):
