@@ -3,7 +3,7 @@
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
 > **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-15。
-> **状态**：Draft v1.6 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复）**已全部提交**（见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。
+> **状态**：Draft v1.6 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复 + 旧测试修复）**已推远端**（`feat/planner-v2-p1` @ `0aef2f4`，见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。**PR #2 的红灯已修并已推**（`feat/planner-v2-p0` @ `95532c1`）。
 > **与 `docs/engine-plan.md` 的关系**：4 处分歧已全部裁决（§12.3）；CY 的最终裁决与契约边界见 **§12.5**。
 > **契约裁决已闭环**：§12.5.1（5 项落 `types.ts`）。P1 开工方式与边界见 §13。
 > **读者**：协作者 B（本仓库 `src/lib/`、`src/features/week/` 负责人）、CY（`src/types.ts` 契约层负责人）、后续接手的 Agent。
@@ -1052,7 +1052,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | v1.3 | 2026-09-15 | 按 CY 分支 `4e6fa0b` 实况校正：① §12.5.1 契约项 **4 → 5**（补 `TimeBlock.fromEventId?`，并说明「撤回 `model.ts`」技术上不可行）；② §12.5.3 合入顺序改为**实况状态表**（①②③ 已完成/作废，关键路径 = B review）；③ §12.5.4 记录 `studyCandidates` **实际合并口径**（`campusOfPlace` + `null` 保守保留）并采纳；④ §12.5.6 **D-4 结案**（`WeekPlanView` 留用、P1 不动 UI）；⑤ §7.3 钩子确定在 `scripts/`（不搬家、不重复造）；⑥ §9 T1.0 按达成项修正；⑦ **新增 §13 P1 开工方案**（可立即启动项 / 需同步项 / 约束 / 产出） |
 | v1.4 | 2026-09-15 | 吸收 CY《P1-答复B的第三轮》并**修正 v1.3 的两处自相矛盾**：① §12.5.4 **删掉文中残留的 `t.campus ?? 'any'` 式子**（`sameCampus` → CY 实装的 `inCampus`，彻底不用 `t.campus`）——v1.3 的代码块与紧随其后的「以 CY 版为准」互相矛盾；② §7.3 / §13.1-A2 / §13.4-R2 测试钩子**改回 `tests/register.mjs`**（v1.3 定在 `scripts/` 是误判：CY 明确其 `scripts/` 两钩子为临时、待删；B 已有 `_devtools/` 两份可直接迁入）；③ 新增 **§12.5.8**：把「校区未知(`null`)不罚不排」从 `studyCandidates` 局部口径**升格为全局口径**（`objective::placeMismatch` 同受约束）；④ §12.5.4 补录 CY 的**课程楼论据**与「`null` 取保留」的决定性理由；⑤ **新增 §13.7 前置缺陷**：`BUILTIN_PLACES` 只从模板抽、不含课程楼 → `campusOfPlace('国合楼')=null` 而 `campusOfName=JG334`，须在 A3 前修；⑥ §12.5.3 更新 PR #3 实况（已开、base 为 `feat/planner-v2-p0`）；⑦ §12.4 补「旧测试零处硬编码 block id」的核对结论 |
 | v1.5 | 2026-09-15 | **A3/A5 实现时发现的残留矛盾、未定义项与完备性缺口，逐条消除**：① §5.6 **`daysOverdue` 由「未定义」改为显式定义**（`max(0, −dueOffset)`，原点 = 当前周周一，与 §5.2 `urgency()` **同源**），并补示例与「不使用 `dueAt.min`」的说明；② §5.5 目标函数里 `placeMismatch` 的 `Σ(跨校区或未登记地点的块数)` **改为 `Σ(跨校区块数)`** —— 原文与 §12.5.8（`null` 不罚）**直接冲突**，并补「计数口径」段；③ §4.2 `Weights.placeMismatch` 与 `dueOverdue` 两处注释同步修正；④ §12.1 风险表「仅 **4** 项进契约层」订正为 **5**（v1.3 已改 4→5，此处遗漏）；⑤ §5.7 新增说明 + **新增 §13.8**：`resplit` 的拆分方向与 `reschedule-place` 的窗口方向**不被目标函数驱动**（§5.5 无时长/窗口项）→ P1 照常实现但不假设被选中，「块不超上限」由 `construct` 保证；⑥ §13.7 补「**已修**」状态表（含 ref）与 §12.5.8 兜底关系；⑦ **新增 §13.9**：B 侧求解器链执行进度（A2/A3/A4/A5 + 门禁现状）|
-| v1.6 | 2026-09-15 | **吸收 CY 的 P1 三请求 + 补验证纪律**：① **§4.5 重写**为 4.5.1/4.5.2/4.5.3 —— 新增 **`planWeek.ts`「两遍法唯一编排点」（请求 ②）**，并写明它**必须支持注入 provider 桩**（`planner/transfer.ts` 依赖 `lib/api.ts`，Node 里加载不了，不注入就进不了 `tests/`）；**`schedule.ts` 稳定入口（请求 ①）** 改为**实况表**（ref：`buildWeekPlan`= `schedule.ts:295`、`campusOfName` = `schedule.ts:85`；而 `buildPhasesFromCalendar` / `phaseOfWeek` 实为 **`buildPhases.ts:255/269`**，消费方分别是 `scripts/scheduler.test.ts:13-15` 与 `scripts/buildPhases.test.ts:8-10`）；② **新增 §7.5「干净检出必须通过」（请求 ③，定为硬纪律）**，含 6 条可执行条款；③ §12.5.3 订正 **PR #4 远端 head `a6038e5` → `eb79b6a`**（`git ls-remote` 复核），并新增「远端实况快照」段（含三条未跟踪分支的说明）；④ 头部状态行同步 v1.6；⑤ §13.9 补 B 侧**提交/推送状态** |
+| v1.6 | 2026-09-15 | **吸收 CY 的 P1 三请求 + 补验证纪律**：① **§4.5 重写**为 4.5.1/4.5.2/4.5.3 —— 新增 **`planWeek.ts`「两遍法唯一编排点」（请求 ②）**，并写明它**必须支持注入 provider 桩**（`planner/transfer.ts` 依赖 `lib/api.ts`，Node 里加载不了，不注入就进不了 `tests/`）；**`schedule.ts` 稳定入口（请求 ①）** 改为**实况表**（ref：`buildWeekPlan`= `schedule.ts:295`、`campusOfName` = `schedule.ts:85`；而 `buildPhasesFromCalendar` / `phaseOfWeek` 实为 **`buildPhases.ts:255/269`**，消费方分别是 `scripts/scheduler.test.ts:13-15` 与 `scripts/buildPhases.test.ts:8-10`）；② **新增 §7.5「干净检出必须通过」（请求 ③，定为硬纪律）**，含 6 条可执行条款；③ §12.5.3 订正 **PR #4 远端 head `a6038e5` → `eb79b6a`**（`git ls-remote` 复核），并新增「远端实况快照」段（含三条未跟踪分支的说明）；④ 头部状态行同步 v1.6；⑤ §13.9 补 B 侧**提交/推送状态**（9 提交 / 19 文件 +2984−24、四道门禁实跑结果）；⑥ **新发现并记录 PR #2 的红灯**：`31ddeb6` 的 `scripts/scheduler.test.ts:309` 断言 `campusOfName('第三教学楼')==='JG516'`，与 P0 后的 `null` 语义冲突（该函数自 P0 起未改动 → 断言必失败），修复在 `5a75357`，处置见 §12.5.3 / §13.9 |
 
 ### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
@@ -1165,10 +1165,16 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 > 合完 PR #2 后 diff 会自动收敛为「仅本分支改动」。
 
 > 📌 **远端实况快照（2026-09-15，`git ls-remote --heads origin`）**：`main` = `cb3f39e`；`dev` = `1ddf03a`；
-> `feat/planner-v2-p0` = `31ddeb6`（= PR #2 head）；`feat/events-and-diversity` = `1691420d`（PR #3）；
-> `feat/libao-wiring` = `eb79b6a`（PR #4）；`feat/planner-v2-p1` **尚未推远端**（B 侧本地已完成 7 条提交，见 §13.9）。
+> `feat/planner-v2-p0` = `95532c1`（= PR #2 head，含 campusOfName 测试修复）；`feat/events-and-diversity` = `1691420d`（PR #3）；
+> `feat/libao-wiring` = `eb79b6a`（PR #4）；`feat/planner-v2-p1` = `0aef2f4`（**B 侧已推，PR 未开**，见 §13.9）。
 > 另有三条**不在本规格书跟踪范围**的远端分支：`feat/weather`、`feat/ui-refresh`、`docs/project-core`
 > —— 与 P1 无依赖关系，review 时**别误当成 P1 的前置**。
+
+> ⚠️ **PR #2 的红灯已修并已推（B 已核，2026-09-15）**：`31ddeb6` 曾带着 `scripts/scheduler.test.ts:309`
+> 的旧断言 `campusOfName('第三教学楼') === 'JG516'`，而 P0 已把该函数改为「命中失败返回 `null`」
+> （`schedule.ts:85-92`，自 P0 起未改动）→ **该断言在 `31ddeb6` 上必然失败**。
+> 现已随 `feat/planner-v2-p0` @ **`95532c1`** 修复并推送（第 312 行改为断言 `null`）→ **PR #2 应为绿**。
+> 详见 §13.9。
 
 **CY 分支已完成的内容（B review 时核对）**：
 
@@ -1462,24 +1468,51 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 **门禁现状**：`npm run typecheck` 绿；`node --import ./tests/register.mjs --test "tests/**/*.test.ts"` 全绿。
 **顺带修正（A3 实现时发现）**：§5.5 原文 `Σ(跨校区或未登记地点的块数)` 与 §12.5.8 直接冲突、§5.6 `daysOverdue` 未定义 —— 见 §12.1 v1.5。
 
-**提交状态（2026-09-15 复核，`git log --oneline` 实读）**：`feat/planner-v2-p1` 本地共 **7 条提交**，基于 `31ddeb6`，工作树干净：
+**提交状态（2026-09-15 复核，`git ls-remote` + `git log` 实读）**：`feat/planner-v2-p1` **已推远端**，远端 head = **`0aef2f4`**；`31ddeb6` 之上共 **9 条提交**（按序）：
 
-1. `cf8aad4` `chore(spec): v1.5 —— 显式化 daysOverdue、消除 §5.5↔§12.5.8 冲突、补 §13.8/§13.9`（94 行）
+1. `cf8aad4` `chore(spec): v1.5 —— 显式化 daysOverdue、消除 §5.5↔§12.5.8 冲突、补 §13.8/§13.9`
 2. `0100188` `test(engine): A2 —— tests/ 钩子与目录约定`
 3. `3f58b6d` `fix(planner): §13.7 课程楼入内置地点表 + mergePlaces 合并 alias`
 4. `0eaa3cf` `feat(planner): A3 —— objective::evaluate / evaluateDelta`
 5. `c23fb9f` `test(engine): A4 —— golden 工具`
 6. `f7e60e2` `feat(planner): A5 —— improve 五算子 + First-Improvement 纯爬山`
 7. `31f79c9` `test(engine): P0 验收脚本入仓 —— _devtools/p0-check.ts → tests/p0-check.ts`
+8. `5a75357` `fix(test): campusOfName 测试跟随 P0 的行为变化`（`scripts/scheduler.test.ts` +4/−1）
+9. `0aef2f4` `docs(scheduler): 同步规格书 v1.6 —— 母本 ↔ 仓库副本逐字节一致`（**= 远端 head**）
 
-合计 **18 文件 +2882 / −22**（`git diff --stat 31ddeb6..HEAD`）；`tests/` 全部 13 个文件均已入仓（`git ls-files tests/`）。
+规模：**19 文件 +2984 / −24**（`git diff --shortstat 31ddeb6 0aef2f4`）；`tests/` 全部 13 个文件均已入仓（`git ls-files tests/`）。
 
-- ⬜ **推送未完成**：`git ls-remote` 查无 `refs/heads/feat/planner-v2-p1`，本地也无上游（`@{u}` 未设）。
-  → 在本机 Git Bash 执行 `bash "C:/Users/xulan/WorkBuddy/上理生活助手/_devtools/push-p1.sh"`，
-  或直接 `git push -u origin feat/planner-v2-p1`，然后开 PR（**base 选 `dev`**）。
-- ⚠️ **踩坑记录（并入 §7.5 纪律）**：WorkBuddy 沙箱里跑 git **写不进嵌套 ref**（`refs/heads/feat/...`），
-  表现为「提交像是成功、分支 ref 却被抹掉，后续提交退化成孤儿初始提交」。
-  → **凡涉及分支 ref 的 git 操作（commit/push/branch/reset），一律在本机自带终端执行。**
+> ⚠️ **并发会话的重复产物（别再推）**：本地另有一条 `2ecd68a`（父提交同为 `5a75357`，**tree 与 `0aef2f4` 完全相同** ——
+> 即同一份 v1.6 文档被两条线各提交了一次）。它**未推远端**、也无 ref 指向，属垃圾对象，**不再推送**。
+> 本工作区**同时有多个会话在动同一仓库**（一天内撞过两次），动 git 前先看**母本 mtime + `git status`**。
+
+**门禁（2026-09-15 实跑，绝对路径 node）**：
+
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 类型检查 | `node ./node_modules/typescript/bin/tsc --noEmit` | ✅ 绿 |
+| P0 验收 | `node --import ./tests/register.mjs tests/p0-check.ts` | ✅ **26 通过 / 0 失败** |
+| 引擎单测 | `node --import ./tests/register.mjs --test "tests/**/*.test.ts"` | ✅ **37 通过 / 0 失败** |
+| **CY 侧旧测试** | `node --import ./tests/register.mjs --test "scripts/scheduler.test.ts" "scripts/buildPhases.test.ts"` | ✅ **48 通过 / 0 失败**（修复后） |
+
+- ✅ **PR #2 的红灯已修并已推（本条原记为「待 CY 拍」，已闭环）**：`feat/planner-v2-p0` 的远端 head 已由
+  `31ddeb6` 前进到 **`95532c1`**（= `31ddeb6` + 该测试修复；`git show 95532c1:scripts/scheduler.test.ts`
+  第 312 行已是 `assert.equal(campusOfName('第三教学楼'), null)`）→ **PR #2 现在应为绿**。
+  **背景留档**：`31ddeb6` 版 `scripts/scheduler.test.ts:309` 断言 `=== 'JG516'`，与 P0 之后 `campusOfName`
+  返回 `null`（`schedule.ts:85-92`，该文件自 P0 起**未被改动**）**直接冲突** → 该断言必然失败。修复见 `5a75357` / `95532c1`。
+- ⚠️ **`5a75357` 改的是 CY 地盘**（`scripts/scheduler.test.ts`，见 §2 所有权表）→ **贴 PR 时必须在描述里点名**，
+  否则会被当成未经沟通的越界改动。（CY 侧已在同一分支用 `95532c1` 做过同样修复，等于默认接受。）
+- ⬜ **还差一条提交**：本文件在工作区已推进到比已推版本更新的一版（新增 §13.9 提交/门禁实况、§12.5.3 的 PR #2 留档、
+  变更记录 v1.6 第 ⑥ 项），`docs/scheduler-v2-spec.md` 已同步但**未提交**。
+  → 执行 `bash "C:/Users/xulan/WorkBuddy/上理生活助手/_devtools/push-p1.sh"`：第 0 步先按 **远端 head** 恢复分支 ref，
+  gates 过后在 `0aef2f4` 之上补一条「规格书补遗」提交并推（**base 仍需选 `dev`** 开 PR）。
+- ⚠️ **踩坑记录（并入 §7.5 纪律）**：WorkBuddy 沙箱里跑 git **写不进嵌套 ref**（`refs/heads/feat/...`）——
+  只要 git 执行一次 ref 写入（`commit` / `reset` / `branch`），`.git/refs/heads/feat/` 整个目录当场被抹掉，
+  分支立刻变 unborn、`git log` 报 "does not have any commits yet"；已实测复现两次。
+  **兜底**：`push-p1.sh` 第 0 步按 reflog 自动恢复（取「最后一条非 `commit (initial)` 的 new-sha」）。
+  → **凡涉及 ref 写入的 git 操作，一律在本机自带终端执行。**
+- ⚠️ **越界改动提示**：`5a75357` 改的 `scripts/scheduler.test.ts` 属 **CY 地盘**（§2 所有权表）
+  → 贴 PR 时**必须在描述里点名**，否则会被当成未经沟通的越界改动。
 
 ---
 
