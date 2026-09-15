@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import type { WeekPlan } from '@/types';
 import { buildGoldenInput, goldenInputByName, transferProviderOf } from './golden-inputs.ts';
 import { defaultEvalContext, diffJson, hardViolations, normalizePlan, planMetrics } from './golden-lib.ts';
-import { buildWeekPlan } from '@/lib/planner/schedule.ts';
+import { buildWeekPlan, toPlanRequest } from '@/lib/planner/schedule.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GOLDEN_DIR = join(HERE, 'golden');
@@ -44,14 +44,33 @@ interface Row {
   detail: string[];
 }
 
-async function loadPlanWeekV2(): Promise<{ fn: PlanWeekV2 | null; reason: string }> {
+interface NewEngine {
+  planWeekV2: PlanWeekV2 | null;
+  construct: PlanWeekV2 | null;
+  reason: string;
+}
+
+/**
+ * 载入新引擎。
+ *
+ * ⚠️ AC-2 的比对对象是 **`construct`**（构造阶段），不是 `planWeekV2`：
+ *    规格书 §9-T1.1 的原话是「`construct` 输出的块集合与旧引擎逐块一致」，
+ *    而 `planWeekV2` 多了 improve（允许把块挪到更优位置，AC-3 正是为此）。
+ *    拿迭代后的计划去断言「逐块一致」会变成「improve 必须什么都不做」——那是错误的口径。
+ *    取不到 `construct` 时退回 `planWeekV2` 并**在报告里注明**。
+ */
+async function loadNewEngine(): Promise<NewEngine> {
   try {
     const mod = (await import(/* @vite-ignore */ PLANNER_ENTRY)) as Record<string, unknown>;
-    const fn = mod.planWeekV2;
-    if (typeof fn === 'function') return { fn: fn as PlanWeekV2, reason: '' };
-    return { fn: null, reason: `${PLANNER_ENTRY} 未导出 planWeekV2` };
+    const v2 = typeof mod.planWeekV2 === 'function' ? (mod.planWeekV2 as PlanWeekV2) : null;
+    const cst = typeof mod.construct === 'function' ? (mod.construct as PlanWeekV2) : null;
+    if (!v2 && !cst) return { planWeekV2: null, construct: null, reason: `${PLANNER_ENTRY} 未导出 planWeekV2 / construct` };
+    return { planWeekV2: v2, construct: cst, reason: '' };
   } catch (e) {
-    return { fn: null, reason: `${PLANNER_ENTRY} 尚不存在（T1.4 未落地）：${(e as Error).message.split('\n')[0]}` };
+    return {
+      planWeekV2: null, construct: null,
+      reason: `${PLANNER_ENTRY} 尚不存在（T1.4 未落地）：${(e as Error).message.split('\n')[0]}`,
+    };
   }
 }
 
@@ -81,9 +100,10 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const { fn: planWeekV2, reason } = await loadPlanWeekV2();
-  if (!planWeekV2) {
-    console.log(`⚠ 新引擎不可用 → AC-1/2/3 记为 SKIP。原因：${reason}`);
+  const eng = await loadNewEngine();
+  const planWeekV2 = eng.planWeekV2;
+  if (!planWeekV2 && !eng.construct) {
+    console.log(`⚠ 新引擎不可用 → AC-1/2/3 记为 SKIP。原因：${eng.reason}`);
     console.log('  （这不算失败：P1 尚在实现中，本文件先做「基线可复现」这一项。）\n');
   }
 
@@ -115,7 +135,35 @@ async function main(): Promise<number> {
     const ctx = defaultEvalContext(g.weekNo, g.policy);
     const baseMetrics = planMetrics(baseToday, ctx);
 
-    // ①②③ 新引擎对照
+    // ② AC-2 构造等价 —— 对象是 `construct`（T1.1）
+    const ac2Fn = eng.construct ?? planWeekV2;
+    if (ac2Fn) {
+      try {
+        const built = eng.construct
+          ? ac2Fn(toPlanRequest(buildGoldenInput(g)))
+          : ac2Fn({
+            schedule: g.schedule, weekNo: g.weekNo, policy: g.policy,
+            scenarios: g.scenarios, tasks: g.tasks ?? [], transfer: transferProviderOf(g),
+          });
+        const builtPlan = extractPlan(built);
+        if (!builtPlan) {
+          row.ac2 = 'FAIL';
+          row.detail.push('AC-2 拿不到计划对象（返回值既不是 WeekPlan 也不是 {plan}）');
+        } else {
+          const d2 = diffJson(snap.blocks, normalizePlan(builtPlan));
+          row.ac2 = d2 ? 'FAIL' : 'PASS';
+          if (d2) row.detail.push(`AC-2 构造不等价：\n${d2}`);
+          if (!eng.construct) {
+            row.detail.push('（注意：本环境取不到 `construct`，AC-2 退回用 planWeekV2 比对 —— 口径偏严）');
+          }
+        }
+      } catch (e) {
+        row.ac2 = 'FAIL';
+        row.detail.push(`AC-2 抛错：${(e as Error).message}`);
+      }
+    }
+
+    // ①③ AC-1 / AC-3 —— 对象是迭代后的计划（`planWeekV2`）
     if (planWeekV2) {
       let newPlan: WeekPlan | null = null;
       try {
@@ -128,18 +176,12 @@ async function main(): Promise<number> {
           transfer: transferProviderOf(g),
         }));
       } catch (e) {
-        row.ac2 = 'FAIL';
         row.ac1 = 'FAIL';
         row.ac3 = 'FAIL';
         row.detail.push(`新引擎抛错：${(e as Error).message}`);
       }
 
       if (newPlan) {
-        // AC-2
-        const d2 = diffJson(snap.blocks, normalizePlan(newPlan));
-        row.ac2 = d2 ? 'FAIL' : 'PASS';
-        if (d2) row.detail.push(`AC-2 构造不等价：\n${d2}`);
-
         // AC-1
         const hv = hardViolations(newPlan);
         row.ac1 = hv.total === 0 ? 'PASS' : 'FAIL';
@@ -161,7 +203,7 @@ async function main(): Promise<number> {
   }
 
   // —— 报告 ——
-  console.log(`${pad('快照', 24)} ${pad('⓪基线', 8)} ${pad('AC-2等价', 9)} ${pad('AC-1硬约束', 11)} AC-3预算`);
+  console.log(`${pad('快照', 24)} ${pad('⓪基线', 8)} ${pad('AC-2构造', 9)} ${pad('AC-1硬约束', 11)} AC-3预算`);
   console.log('-'.repeat(70));
   for (const r of rows) {
     console.log(`${pad(r.name, 24)} ${pad(r.baseline, 8)} ${pad(r.ac2, 9)} ${pad(r.ac1, 11)} ${r.ac3}`);
@@ -169,7 +211,7 @@ async function main(): Promise<number> {
   }
   console.log('-'.repeat(70));
 
-  if (planWeekV2) {
+  if (planWeekV2 || eng.construct) {
     console.log(failed === 0
       ? `✓ 全部通过（${rows.length} 个快照）`
       : `✗ ${failed}/${rows.length} 个快照未通过`);
