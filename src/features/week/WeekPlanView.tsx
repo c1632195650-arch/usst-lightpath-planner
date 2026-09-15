@@ -18,6 +18,9 @@ import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases'
 import { buildWeekPlan } from '@/lib/planner/schedule';
 import { buildTransferProvider } from '@/lib/planner/transfer';
 import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
+import { fetchWeather, weatherToTasks } from '@/features/weather/weather';
+import type { WeatherReport } from '@/features/weather/weather';
+import { WeatherStrip } from '@/features/weather/WeatherStrip';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm } from '@/constants/time';
 import { diffDays, todayISO } from '@/lib/date';
@@ -91,12 +94,22 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendOk, setBackendOk] = useState(true);
+  /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
+  const [weather, setWeather] = useState<WeatherReport | null>(null);
 
   const semester = useMemo(
     () => buildPhasesFromCalendar(schedule, persona, TERM_CALENDAR['2026-2027-1']),
     [schedule, persona],
   );
   const phase = phaseOfWeek(semester.plan, weekNo);
+
+  // 天气与周次无关（都是「未来 7 天」），所以只拉一次；
+  // 换周时靠下面的 filter（weatherToTasks 按 weekNo 过滤）而不是重拉。
+  useEffect(() => {
+    let cancelled = false;
+    fetchWeather(7).then((r) => { if (!cancelled) setWeather(r); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,11 +120,16 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
         // 校历事件 → 本周准备块（光电杯材料 / 四六级真题 / 期中复习…）。
         // 这一步就是「把截止日变成日程」：事件不再只是旁边一个倒计时数字。
         const eventTasks = expandDeadlines(DEADLINES, schedule.termStart, schedule.totalWeeks);
+        // 天气 → 当天提醒块（带伞 / 防暑 / 保暖 / 防风）。
+        // 与事件走**同一条 tasks 通道**，引擎完全不知道有「天气」这回事。
+        // 差别在权重：天气块优先级只有 45–55（事件准备块是 88），
+        // 挤不进日程也没关系 —— 提醒还有天气条那条独立路径。
+        const tasks = [...eventTasks, ...weatherToTasks(weather, schedule.termStart, weekNo)];
         // 第一遍：收集需要问路的点对（此时用兜底转场）
         const pass1 = buildWeekPlan({
           schedule, weekNo, policy: phase.policy,
           scenarios: persona?.scenarios ?? null,
-          tasks: eventTasks,
+          tasks,
         });
         // 后端实测转场 → 第二遍才是给用户看的结果
         const cache = await buildTransferProvider(pass1.plan.blocks);
@@ -119,7 +137,7 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
         const pass2 = buildWeekPlan({
           schedule, weekNo, policy: phase.policy,
           scenarios: persona?.scenarios ?? null,
-          tasks: eventTasks,
+          tasks,
           transfer: cache.provider,
         });
         if (!cancelled) { setPlan(pass2.plan); setNotes(pass2.notes); }
@@ -128,7 +146,7 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [schedule, weekNo, phase, persona]);
+  }, [schedule, weekNo, phase, persona, weather]);
 
   if (loading) {
     return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;
@@ -190,6 +208,11 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
           </ul>
         </div>
       )}
+
+      {/* 本周天气 —— 天气的**第一落点**。
+          排程块（weatherToTasks）优先级低、日程满时本就该被挤掉，
+          所以提醒必须有一条独立于排程的路径，否则会在最需要时消失。 */}
+      <WeatherStrip report={weather} weekNo={weekNo} termStart={schedule.termStart} />
 
       {/* 七天时间轴 */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

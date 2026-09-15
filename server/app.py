@@ -19,6 +19,7 @@
   POST /api/memory/reset  {session_id, user_id}
   GET  /api/route?from=&to=&mode=         两点步行路径（排程引擎的转场时间）
   POST /api/route/batch  {pairs:[[a,b],...]}  批量问路
+  GET  /api/weather?days=7                未来天气（Open-Meteo · 分时段摘要）
 """
 import os, re, sys, io, json
 try:
@@ -231,6 +232,163 @@ def health():
     return {"ok": True, "llm": bool(LLM_API_KEY),
             "model": LLM_MODEL if LLM_API_KEY else None,
             "thresholds": {"raw_high": RAW_HIGH, "raw_low": RAW_LOW}}
+
+# ---------- 天气（Open-Meteo · 免 Key · 免注册） ----------
+# 数据源取舍与「高德要 Key 有配额所以弃用」同源：排程要天天问天气，
+# 只有免费且无需注册才可能长期跑下去。
+#
+# 坐标默认取**主校区（军工路 516 号）**，值来自 data/osm/key_points.json 的实测校门坐标。
+# 刻意不用「上海市中心」那个点 —— 那会让「上海天气」和「学校天气」差出一个区。
+WEATHER_LAT = float(os.environ.get("WEATHER_LAT", "31.292147"))
+WEATHER_LON = float(os.environ.get("WEATHER_LON", "121.547838"))
+WEATHER_TTL = int(os.environ.get("WEATHER_TTL_SEC", "1800"))   # 缓存 30 分钟
+
+# WMO 天气码 → 中文。只列实际会遇到的；**未知码如实返回「未知」，不猜**。
+_WMO_CN = {
+    0: "晴", 1: "晴间多云", 2: "多云", 3: "阴",
+    45: "雾", 48: "雾凇",
+    51: "毛毛雨", 53: "小雨", 55: "中雨", 56: "冻雨", 57: "冻雨",
+    61: "小雨", 63: "中雨", 65: "大雨", 66: "冻雨", 67: "冻雨",
+    71: "小雪", 73: "中雪", 75: "大雪", 77: "雪粒",
+    80: "阵雨", 81: "强阵雨", 82: "暴雨",
+    85: "阵雪", 86: "强阵雪",
+    95: "雷阵雨", 96: "雷阵雨伴冰雹", 99: "强雷阵雨伴冰雹",
+}
+
+_weather_cache: dict = {}
+
+
+def _num(v, nd=None):
+    """宽松数值转换：拿不到就返回 None（让前端少一个数字，而不是多一个 0）。"""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return round(f, nd) if nd is not None else int(round(f))
+
+
+def _wmo_text(code) -> str:
+    try:
+        return _WMO_CN.get(int(code), "未知")
+    except (TypeError, ValueError):
+        return "未知"
+
+
+def _bucket(hour: int) -> str:
+    """一天三段 —— 与作息真正相关的三段（上午 / 下午 / 晚间）。"""
+    if 6 <= hour < 12:
+        return "am"
+    if 12 <= hour < 18:
+        return "pm"
+    if 18 <= hour < 23:
+        return "night"
+    return ""
+
+
+@app.get("/api/weather")
+def api_weather(days: int = Query(7, ge=1, le=16)):
+    """未来若干天天气，含**分时段**（上午 / 下午 / 晚间）摘要。
+
+    只返回数据、不返回建议 —— 「下雨该不该把跑步改到室内」是产品策略，
+    归前端 `features/weather/`，那里才可测试、可调整。
+
+    数据源不可用时返回 `ok: false` 而**不是 5xx**：天气是可选增强，
+    拉不到就不显示，不该把整个周计划页拖成报错。
+    """
+    import time as _time
+    from collections import defaultdict
+
+    cached = _weather_cache.get(days)
+    if cached and _time.time() - cached["at"] < WEATHER_TTL:
+        return {**cached["payload"], "cached": True}
+
+    try:
+        import requests
+        r = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": WEATHER_LAT,
+                "longitude": WEATHER_LON,
+                "daily": ("weather_code,temperature_2m_max,temperature_2m_min,"
+                          "precipitation_probability_max,precipitation_sum,wind_speed_10m_max"),
+                "hourly": "temperature_2m,precipitation_probability,weather_code",
+                "timezone": "Asia/Shanghai",
+                "forecast_days": days,
+            },
+            timeout=12,
+        )
+        r.raise_for_status()
+        raw = r.json()
+    except Exception as e:
+        print("[WEATHER] 拉取失败：", e)
+        return {"ok": False, "error": str(e), "days": []}
+
+    # 小时级 → 三段聚合。每段取**最坏的降水概率**与温度极值：
+    # 用户关心的是「这段时间会不会淋到」，平均值会把一场阵雨抹平。
+    buckets: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    hourly = raw.get("hourly") or {}
+    h_time = hourly.get("time") or []
+    for i, ts in enumerate(h_time):
+        try:
+            date, hh = ts.split("T")
+            hour = int(hh.split(":")[0])
+        except (ValueError, IndexError):
+            continue
+        b = _bucket(hour)
+        if not b:
+            continue
+        for src, dst in (("precipitation_probability", "rainProb"),
+                         ("temperature_2m", "temp"),
+                         ("weather_code", "code")):
+            arr = hourly.get(src) or []
+            if i < len(arr) and arr[i] is not None:
+                buckets[date][b][dst].append(arr[i])
+
+    daily = raw.get("daily") or {}
+    out = []
+    for i, date in enumerate(daily.get("time") or []):
+        def _at(key):
+            arr = daily.get(key) or []
+            return arr[i] if i < len(arr) else None
+
+        periods = {}
+        for b in ("am", "pm", "night"):
+            src = buckets.get(date, {}).get(b) or {}
+            if not src:
+                continue
+            codes = src.get("code") or [0]
+            temps = src.get("temp") or []
+            rains = src.get("rainProb") or []
+            periods[b] = {
+                "code": _num(codes[0]) or 0,
+                "text": _wmo_text(codes[0]),
+                "rainProb": _num(max(rains)) or 0,
+                "tMax": _num(max(temps), 1) if temps else None,
+                "tMin": _num(min(temps), 1) if temps else None,
+            }
+
+        out.append({
+            "date": date,
+            "code": _num(_at("weather_code")) or 0,
+            "text": _wmo_text(_at("weather_code")),
+            "tMax": _num(_at("temperature_2m_max"), 1),
+            "tMin": _num(_at("temperature_2m_min"), 1),
+            "rainProb": _num(_at("precipitation_probability_max")) or 0,
+            "rainMm": _num(_at("precipitation_sum"), 1),
+            "windMax": _num(_at("wind_speed_10m_max"), 1),
+            "periods": periods,
+        })
+
+    payload = {
+        "ok": True,
+        "place": "军工路 516 号（主校区）",
+        "lat": WEATHER_LAT, "lon": WEATHER_LON,
+        "source": "open-meteo",
+        "days": out,
+    }
+    _weather_cache[days] = {"at": _time.time(), "payload": payload}
+    return {**payload, "cached": False}
+
 
 @app.get("/api/search")
 def api_search(q: str, k: int = 5):
