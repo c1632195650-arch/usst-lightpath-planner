@@ -162,7 +162,24 @@ LIBAO_BASE=http://127.0.0.1:8010 LIBAO_USER=u-debug LIBAO_SESSION=s-debug \
 
 ### 改完检索层后必须做的三件事
 
-1. `python scripts/test_campus.py` —— 校园图谱 / 就近推荐（117 项）
+1. `python scripts/test_campus.py` —— 校园图谱 / 就近推荐（145 项，M 组 = 品牌反向索引与存在性）
 2. `python scripts/test_libao.py` —— 45 轮真实对话回归
 3. 重启后端 —— `rag.py` / `campus.py` / `app.py` 的改动**不会**热更新
+
+### 事实正确性怎么测（2026-09-16 起）
+
+手写测试问不完、也判不了「答案是不是事实」。用**事实探针**：知识库自己出题
+（图谱 147 地点 + 语料 ★ 速查块）、自己当裁判（对库规则判分，可复现）：
+
+```bash
+python scripts/fact_probe.py                 # 全量约 55 问 / 2 分钟（需活后端）
+python scripts/fact_probe.py --gate          # CI 门禁：存在性维度出幻觉 → exit 1
+python scripts/fact_probe.py --kinds 存在性·品牌   # 只回归麦当劳这类案例
+npm run probe:fact                           # 等价于第一条
+```
+
+它抓四类错：**否定幻觉**（库里有却说没有，最危险）/ 伪造幻觉 / 拒答 / 措辞翻转。
+背景：「学校有没有麦当劳」曾答「没有」，但事实在 `第二食堂.features` 里——
+存在性问法不在意图关键词表 → 图谱没注入。修复 = `campus.py` 的品牌反向索引
+（`_brand_index`，实体命中优先、关键词兜底）+ `space_context` 的存在性事实块。
 

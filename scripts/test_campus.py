@@ -470,6 +470,48 @@ def main():
     _check_j("拼音检索结果同样不含经纬度字段",
              not _COORD_KEYS.search(json.dumps(campus.search_pois("tushuguan", limit=3), ensure_ascii=False)))
 
+    print()
+    print("=" * 72)
+    print("M 组 · 品牌反向索引与存在性注入（2026-09-16 麦当劳修复）")
+    print("=" * 72)
+
+    # 意图判定：存在性问法不再依赖关键词表 —— 实体/品牌命中即算意图
+    _check_j("「学校有没有麦当劳」触发空间意图（实体优先）",
+             campus.has_space_intent("学校有没有麦当劳"))
+    _check_j("「学校里有麦当劳吗？」触发空间意图（措辞翻转）",
+             campus.has_space_intent("学校里有麦当劳吗？"))
+
+    # 品牌反向索引：features/note 里的品牌词要能映射回 POI
+    mcd = [p["name"] for p in campus.brand_pois("学校有没有麦当劳")]
+    _check_j("「麦当劳」反查 → 第二食堂", "第二食堂" in mcd, str(mcd))
+    fam = [p["name"] for p in campus.brand_pois("学校有没有全家")]
+    _check_j("「全家」反查 → 全家便利店（品牌短名→POI全名）",
+             fam and fam[0] == "全家便利店", str(fam))
+    _check_j("「瑞幸/星巴克/肯德基」不在索引（真没有，负样本不误报）",
+             not campus.brand_pois("学校有没有瑞幸")
+             and not campus.brand_pois("学校有没有星巴克")
+             and not campus.brand_pois("咱们学校有肯德基吗"))
+    _check_j("否定语境不入索引（「非全家」不算全家）",
+             not any(p["name"] == "南校区教育超市"
+                     for p in campus.brand_pois("全家")))
+
+    # 空间上下文：存在性事实块必须注入，且钉死「有 + 位置 + 证据」
+    ctx = campus.space_context("学校有没有麦当劳")
+    _check_j("space_context 注入存在性事实块", "存在性事实" in ctx)
+    _check_j("存在性块含位置与营业时间证据",
+             "第二食堂" in ctx and "6:30-22:00" in ctx, ctx[:60])
+    _check_j("match_pois 纯净性保持（不带品牌层，排程/课表链路零变化）",
+             not campus.match_pois("学校有没有麦当劳"))
+
+    # search_pois：/api/poi 品牌前置 + 原排序补位 + 投影仍无坐标
+    sr = campus.search_pois("麦当劳", limit=3)
+    _check_j("search_pois「麦当劳」第 1 位是第二食堂",
+             bool(sr) and sr[0]["name"] == "第二食堂", str([x["name"] for x in sr]))
+    _check_j("search_pois 原检索行为不变（「吃饭」仍以食堂开头）",
+             campus.search_pois("吃饭", limit=3)[0]["type"] == "食堂")
+    _check_j("品牌检索投影无坐标字段",
+             not _COORD_KEYS.search(json.dumps(sr, ensure_ascii=False)))
+
     total = ok + fail
     print("=" * 72)
     print(f"汇总：{ok}/{total} 通过（{ok/total*100:.1f}%）")
