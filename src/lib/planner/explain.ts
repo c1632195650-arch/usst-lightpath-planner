@@ -97,6 +97,7 @@ export function issueCourseConflict(
   dayName: string, a: TimeBlock, b: TimeBlock,
 ): PlanIssue {
   return {
+    code: 'time-conflict',
     level: 'error',
     blockId: b.id,
     message: `${dayName}「${a.title}」与「${b.title}」时间冲突`,
@@ -106,6 +107,7 @@ export function issueCourseConflict(
 /** 课程没地点 → 转场算不出来（旧问题 #17：**不按 0 分钟糊过去**） */
 export function issueCourseNoPlace(dayName: string, courseName: string): PlanIssue {
   return {
+    code: 'course-no-place',
     level: 'info',
     message: `「${courseName}」还没有上课地点，${dayName}的转场时间无法计算（记得补上）`,
   };
@@ -113,12 +115,14 @@ export function issueCourseNoPlace(dayName: string, courseName: string): PlanIss
 
 /** 某一餐没排上 */
 export function issueMealSkipped(dayName: string, reason: string): PlanIssue {
-  return { level: 'info', message: `${dayName}：${reason}` };
+  return {
+    code: 'meal-skipped', level: 'info', message: `${dayName}：${reason}` };
 }
 
 /** 本周自习没达标 */
 export function issueStudyShortfall(studyMin: number, wantMin: number): PlanIssue {
   return {
+    code: 'study-shortfall',
     level: 'info',
     message: `本周自习 ${humanizeMinutes(studyMin)}，低于目标 ${humanizeMinutes(wantMin)}`
       + '（课太满或留白比例偏高，可以把「留白」调低一点）',
@@ -128,6 +132,7 @@ export function issueStudyShortfall(studyMin: number, wantMin: number): PlanIssu
 /** 有环节缺地点 → 该段转场是盲区（汇总成一条，不逐对刷屏） */
 export function issueTransferMissingPlace(dayName: string, names: string[]): PlanIssue {
   return {
+    code: 'transfer-no-place',
     level: 'info',
     message: `${dayName}：有环节缺地点（${names.join('、')}），这几段转场时间算不出来，别按「刚好来得及」安排`,
   };
@@ -138,6 +143,7 @@ export function issueTransferLate(
   dayName: string, prev: TimeBlock, next: TimeBlock, minutes: number, gap: number, slackMin: number,
 ): PlanIssue {
   return {
+    code: 'transfer-late',
     level: 'error',
     blockId: next.id,
     message: `${dayName}：${prev.title} → ${next.title} 要走 ${Math.round(minutes)} 分钟，`
@@ -150,10 +156,26 @@ export function issueTransferTight(
   dayName: string, prev: TimeBlock, next: TimeBlock, minutes: number, slackMin: number,
 ): PlanIssue {
   return {
+    code: 'transfer-tight',
     level: 'warn',
     blockId: next.id,
     message: `${dayName}：${prev.title} → ${next.title} 走 ${Math.round(minutes)} 分钟，`
       + `只剩 ${slackMin} 分钟余量，偏紧`,
+  };
+}
+
+/**
+ * 用户锁定的块没能回到原位（与新课或新安排冲突）。
+ *
+ * ⚠️ 这条**必须存在**：锁的语义是「你确认过的安排不会被跑掉」，
+ *    一旦跑不掉（比如那天新加了一门课），必须**如实告诉用户**，
+ *    绝不能悄悄把它挪走 —— 那正是「不让用户花心思纠错」的反面。
+ */
+export function issueLockConflict(dayName: string, title: string, reason: string): PlanIssue {
+  return {
+    level: 'warn',
+    code: 'lock-conflict',
+    message: `${dayName}：你锁定的「${title}」没能放回原位（${reason}），本次按重新安排处理 —— 解开锁定或调整该天的其他安排都可以`,
   };
 }
 

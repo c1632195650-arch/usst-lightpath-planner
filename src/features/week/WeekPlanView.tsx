@@ -32,6 +32,9 @@ import {
   findStatus, loadRecords, makeId, saveRecords, summarizeWeek, upsert,
 } from '@/features/behavior/behaviorLog';
 import type { BehaviorRecord, BehaviorStatus } from '@/features/behavior/behaviorLog';
+import {
+  isLocked, lockCount, lockedPlacementsOf, lockLevelsOf, withLock, withoutLock,
+} from '@/features/plan/planLock';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm } from '@/constants/time';
 import { addDays, diffDays, todayISO } from '@/lib/date';
@@ -41,6 +44,9 @@ interface Props {
   schedule: Schedule;
   weekNo: number;
   persona: import('@/types').PersonaProfile | null;
+  /** 排程持久化状态（锁 / 扰动）—— 由 App 持有，本组件只读+回写 */
+  planState: import('@/types').PlanPersistState | null;
+  onPlanStateChange: (next: import('@/types').PlanPersistState) => void;
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -61,13 +67,16 @@ const ISSUE_STYLE = {
   info: 'bg-blue-50 border-blue-300 text-blue-800',
 } as const;
 
-function BlockCard({ block, date, status, onMark }: {
+function BlockCard({ block, date, status, locked, onMark, onToggleLock }: {
   block: TimeBlock;
   /** 这个块所属的 ISO 日期 —— 行为记录按「块 + 日期」定位 */
   date: string;
   /** 已标记的执行结果；undefined = 还没标记 */
   status?: BehaviorStatus;
+  /** 用户已把这块「定住」 */
+  locked: boolean;
   onMark: (block: TimeBlock, date: string, status: BehaviorStatus) => void;
+  onToggleLock: (block: TimeBlock) => void;
 }) {
   const style = KIND_STYLE[block.kind] ?? KIND_STYLE.blank;
   const t = block.transfer;
@@ -80,12 +89,18 @@ function BlockCard({ block, date, status, onMark }: {
     <div className={`rounded-lg border-l-4 ${style.bg} px-2.5 py-2 ${isEvent ? 'ring-1 ring-purple-300' : ''} ${marked ? 'opacity-85' : ''}`}>
       <div className="flex items-baseline justify-between gap-2">
         <span className={`text-[13px] font-semibold ${style.text}`}>
+          {locked && <span title="已定住：重排时不动">🔒 </span>}
           {block.emoji ? `${block.emoji} ` : ''}{block.title}
         </span>
         <span className="shrink-0 font-mono text-[11px] text-ink-faint">
           {toHHmm(block.startMin)}–{toHHmm(block.endMin)}
         </span>
       </div>
+      {locked && (
+        <div className="mt-1 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          已定住 · 重排时不会挪动
+        </div>
+      )}
       {isEvent && (
         <div className="mt-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-800">
           校历事件 · 提前准备
@@ -132,13 +147,27 @@ function BlockCard({ block, date, status, onMark }: {
         >
           ✗ 没做
         </button>
+        {/* 「定住」—— 把这块从「引擎可动的软块」变成「用户确认过的硬块」。
+            与执行标记并列：一个是「事后我做了没」，一个是「事前别动它」。 */}
+        <button
+          type="button"
+          onClick={() => onToggleLock(block)}
+          title={locked ? '解除锁定，允许重排时挪动' : '定住：以后重排都保持这个时间与地点'}
+          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${
+            locked
+              ? 'bg-slate-800 text-white'
+              : 'bg-white/70 text-ink-soft hover:bg-slate-100'
+          }`}
+        >
+          {locked ? '🔒 已定住' : '🔓 定住'}
+        </button>
         {marked && <span className="text-[10px] text-ink-faint">已记录</span>}
       </div>
     </div>
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,6 +221,21 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
     });
   }, [weekNo]);
 
+  /**
+   * 定住 / 解除。
+   *
+   * 锁有两半状态（级别 + 位置快照），必须一起写、一起删 ——
+   * 只写一半会出现「显示已定住但块照样跑」或「块被钉住但用户没锁它」。
+   * 具体收在 `features/plan/planLock.ts` 里，这里只负责调用与回写。
+   */
+  const toggleLock = useCallback((block: TimeBlock) => {
+    const now = new Date().toISOString();
+    const next = isLocked(planState, block.id)
+      ? withoutLock(planState, block.id, now)
+      : withLock(planState, block, 'hard', now);
+    onPlanStateChange(next);
+  }, [planState, onPlanStateChange]);
+
   // 天气与周次无关（都是「未来 7 天」），所以只拉一次；
   // 换周时靠下面的 filter（weatherToTasks 按 weekNo 过滤）而不是重拉。
   useEffect(() => {
@@ -218,11 +262,19 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
         // `features/libao/weekPlanForChat.ts` 各写了一份，是同一套逻辑的两个副本。
         // 我们只注入「转场怎么取」：浏览器里 = 调后端批量问路（拿不到就退回估算）。
         const result = await planWeek(
-          toPlanRequest({
-            schedule, weekNo, policy: phase.policy,
-            scenarios: persona?.scenarios ?? null,
-            tasks,
-          }),
+          {
+            ...toPlanRequest({
+              schedule, weekNo, policy: phase.policy,
+              scenarios: persona?.scenarios ?? null,
+              tasks,
+            }),
+            // 锁的两半都要传：
+            //   · lockLevels     → improve 不主动移动 hard 块、churn 按锁加权
+            //   · lockedPlacements → solver 在构造之后把 hard 块**写回原位**
+            // 少了后者，construct 从头排一遍就会把块挪走，锁变成装饰。
+            lockLevels: lockLevelsOf(planState),
+            lockedPlacements: lockedPlacementsOf(planState),
+          },
           {
             transferFactory: async (blocks) => {
               const cache = await buildTransferProvider(blocks);
@@ -242,7 +294,8 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [schedule, weekNo, phase, persona, weather]);
+    // planState 在依赖里：点了「定住」要立刻按新锁重排，而不是等下次刷新
+  }, [schedule, weekNo, phase, persona, weather, planState]);
 
   if (loading) {
     return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;
@@ -281,6 +334,14 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
             {' · '}质量分 {Math.round(diag.cost.total)}
             {' · '}{diag.iterations} 次迭代
             {' · '}{Math.round(diag.elapsedMs)} ms
+            {lockCount(planState) > 0 && <>{' · '}已定住 {lockCount(planState)} 块</>}
+            {diag.churnMin > 0 && <>{' · '}本次挪动 {diag.churnMin} 分钟</>}
+          </div>
+        )}
+        {/* 锁太多会挤掉引擎的自由度 —— 与其让用户自己发现排不出来，不如先说一句 */}
+        {lockCount(planState) >= 6 && (
+          <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
+            已经定住 {lockCount(planState)} 块了 —— 定住的越多，引擎能腾挪的空间越小，排出来可能比较勉强
           </div>
         )}
         {!backendOk && (
@@ -373,7 +434,9 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
                       block={b}
                       date={date}
                       status={findStatus(records, b.id, date)}
+                      locked={isLocked(planState, b.id)}
                       onMark={mark}
+                      onToggleLock={toggleLock}
                     />
                   );
                 })}
