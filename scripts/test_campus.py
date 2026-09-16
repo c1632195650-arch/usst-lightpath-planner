@@ -154,7 +154,13 @@ OPENNESS = [
     ("第一食堂", "2026-09-15 23:30", False),     # 收档后（应给出下一个时段）
     ("图书馆（图文信息中心）", "2026-09-15 12:10", True),
     ("全家便利店", "2026-09-15 23:30", True),     # 24 小时店
-    ("校医室（卫生科）", "2026-09-15 12:10", None),   # 无 hours → 如实未知
+    # 2026-09-16 起：卫生科补上官方门诊时间（此前无 hours，只能如实答「未知」）
+    ("校医室（卫生科）", "2026-09-15 12:10", True),    # 周二：门诊（周一至周五）8:00-18:00
+    ("校医室（卫生科）", "2026-09-19 12:10", False),   # 周六 12:10：只有 9:00-11:30 / 13:00-15:00
+    ("校医室（卫生科）", "2026-09-19 10:00", True),    # 周六上午：落在双休日时段里
+    # 标签里带星期的时段，2026-09-16 起才真正生效（此前 open_now 忽略标签里的星期 → 周六晚错答「开着」）
+    ("1100图书馆", "2026-09-19 20:00", False),    # 周六 16:45 就关
+    ("1100图书馆", "2026-09-16 20:00", True),     # 周三开到 21:45
     ("思餐厅", "2026-09-15 12:10", None),        # 「常规饭点」= 模糊表述，不猜
 ]
 
@@ -572,6 +578,103 @@ def main():
     # 7) 对外投影依然无坐标
     _check_j("1100 路线结果不含经纬度字段",
              not _COORD_KEYS.search(json.dumps(campus.route("申一教", "1100图书馆"), ensure_ascii=False)))
+
+    print("=" * 72)
+    print("O 组 · 重复条目合并 / 泛类别词 / OSM relation（2026-09-16 三轮评估落地）")
+    print("=" * 72)
+
+    m_all = campus.load_map()
+    allp = m_all["pois"] + m_all["landmarks"]
+    names = [p["name"] for p in allp]
+
+    # 1) 合并掉两条重复后 147 → 145
+    _check_j("图谱条目数 = 145（147 − 图书馆重复 − 卫生科重复）",
+             len(allp) == 145, f"实际 {len(allp)}")
+    _check_j("主名唯一（无同名重复条目）", len(names) == len(set(names)),
+             f"{len(names)} → {len(set(names))}")
+
+    # 2) 图书馆：『图文信息中心』与『湛恩纪念图书馆』是同一栋楼
+    #    （校图书馆《历史沿革》：2007 年图书馆迁至图文信息中心；主馆即湛恩纪念图书馆）
+    _check_j("find_poi(湛恩纪念图书馆) → 图书馆（图文信息中心）",
+             (campus.find_poi("湛恩纪念图书馆") or {}).get("name") == "图书馆（图文信息中心）")
+    _check_j("search_pois(湛恩纪念图书馆) 首位正确",
+             bool(campus.search_pois("湛恩纪念图书馆", limit=3))
+             and campus.search_pois("湛恩纪念图书馆", limit=3)[0]["name"] == "图书馆（图文信息中心）")
+    # ↑ 下面两条是给 Ray 的 planner 兜底：templates.ts 的 place='湛恩纪念图书馆'
+    #   与 golden 快照里的同名地点，合并后**必须仍然可解析、可寻路**。
+    _check_j("network 别名解析：湛恩纪念图书馆 → 图书馆（图文信息中心）",
+             campus.network().resolve("湛恩纪念图书馆") == "图书馆（图文信息中心）")
+    _check_j("route(湛恩纪念图书馆 → 第五食堂) 仍可算（不打断 planner 模板）",
+             bool(campus.route("湛恩纪念图书馆", "第五食堂")))
+    _check_j("search_pois(tsg) 仍指图书馆（合并后拼音别名未乱）",
+             bool(campus.search_pois("tsg", limit=1))
+             and campus.search_pois("tsg", limit=1)[0]["name"] == "图书馆（图文信息中心）")
+
+    # 3) 卫生科：北校只有一处（后勤管理处《校内就医》只列 516 / 1100 / 复兴路）
+    _check_j("find_poi(医务室) → 校医室（卫生科）",
+             (campus.find_poi("医务室") or {}).get("name") == "校医室（卫生科）")
+    _check_j("find_poi(医务室（北校区）) 落到合并后的主条目",
+             (campus.find_poi("医务室（北校区）") or {}).get("name") == "校医室（卫生科）")
+    _check_j("南校那处不再占用『医务室』这个泛称",
+             (campus.find_poi("医务室（334）") or {}).get("name") == "医务室（南校区）")
+    _check_j("route(医务室 → 第三教学楼) 可算（重锚后仍属北校）",
+             bool(campus.route("医务室", "第三教学楼")))
+    _check_j("卫生科补上官方门诊时间（原为无 hours，属 P0 数据缺口）",
+             bool((campus.find_poi("校医室（卫生科）") or {}).get("hours")),
+             str((campus.find_poi("校医室（卫生科）") or {}).get("hours"))[:40])
+
+    # 4) 定位来源不再是弱锚（R2 发现这两条曾与对方塌缩到同一点）
+    net_o = campus.network()
+    for n in ("图书馆（图文信息中心）", "校医室（卫生科）"):
+        _check_j(f"{n} 定位来源为 osm（真实几何，非 zone/near_landmark 弱锚）",
+                 net_o.poi.get(n, (None, ""))[1] == "osm",
+                 f"实际 {net_o.poi.get(n, (None, ''))[1]}")
+
+    # 5) OSM relation（multipolygon）：此前只读 node/way，整类建筑漏掉
+    _check_j("OSM 建筑索引 ≥ 150（已含 relation 拼面的建筑）",
+             len(net_o.bld) >= 150, f"实际 {len(net_o.bld)}")
+    _check_j("relation 摘到的『湛恩纪念图书馆』进了建筑索引",
+             bool(net_o.bld.get("湛恩纪念图书馆")))
+    _check_j("非建筑 relation 未被误收（杨浦区边界 / 公交线 / 上理小区）",
+             not any(k in net_o.bld for k in ("杨浦区", "上海公交6路", "上理小区", "复兴岛运河")))
+
+    # 6) 泛类别词由 type 承担（守住 H2 组原则：类别词**不塞 tags**）
+    for q, types in (("教室", {"教学楼", "学院楼"}), ("住宿", {"宿舍"}),
+                     ("用餐", {"食堂", "餐厅", "烘焙/饮品"})):
+        r = campus.search_pois(q, limit=1)
+        _check_j(f"search_pois({q}) 首位落在对应 type 类里",
+                 bool(r) and r[0]["type"] in types,
+                 f"{r[0]['name']}/{r[0]['type']}" if r else "无结果")
+    leaked = [p["name"] for p in allp if {"教室", "住宿", "用餐"} & set(p.get("tags") or [])]
+    _check_j("泛类别词没有被塞进 tags（H2 组原则）", not leaked, "、".join(leaked))
+
+    # 6b) 泛类别词的**拼音**独立成 pyk 档（54），必须压过「名字拼音前缀」（52）
+    #     —— 「教室」「教师」同音：输入 jiaoshi 时『阅餐厅』(别名『教师餐厅』→
+    #     jiaoshicanting) 曾靠前缀档把教学楼挤下去。规则：打全了的类别词 > 没打完的名字前缀。
+    for q, types in (("jiaoshi", {"教学楼", "学院楼"}), ("gongyu", {"宿舍"}),
+                     ("zhusu", {"宿舍"}), ("yongcan", {"食堂", "餐厅", "烘焙/饮品"})):
+        r = campus.search_pois(q, limit=1)
+        _check_j(f"search_pois({q}) 首位落在对应 type 类里（pyk 档＞名字前缀档）",
+                 bool(r) and r[0]["type"] in types,
+                 f"{r[0]['name']}/{r[0]['type']}" if r else "无结果")
+    _check_j("search_pois(jiaoshi) 首位不是『阅餐厅』（同音假前缀已消除）",
+             bool(campus.search_pois("jiaoshi", limit=1))
+             and campus.search_pois("jiaoshi", limit=1)[0]["name"] != "阅餐厅")
+    # pyk 只收全拼、不收首字母 —— `js` 这种两位缩写会大面积假命中。
+    pyk_segs = [s for p in allp for s in (p.get("pyk") or "").split("|") if s]
+    _check_j("pyk 只含全拼（无 2 字母缩写，防大面积假命中）",
+             bool(pyk_segs) and all(len(s) >= 4 for s in pyk_segs),
+             f"{len(pyk_segs)} 段，最短 {min((len(s) for s in pyk_segs), default=0)}")
+    # pyk 由 _TYPE_WORDS 反向展开：表里每个 type 至少有一条落在数据上（防词表漂移）
+    covered = {p["type"] for p in allp if p.get("pyk")}
+    want_types = {t for types in campus._TYPE_WORDS.values() for t in types}
+    _check_j("_TYPE_WORDS 里的每个 type 都有条目带 pyk（词表未漂移）",
+             want_types <= covered, f"缺 {sorted(want_types - covered)}")
+
+    # 7) 合并后的两条对外投影仍无坐标
+    for n in ("图书馆（图文信息中心）", "校医室（卫生科）"):
+        _check_j(f"{n} 检索投影无坐标字段",
+                 not _COORD_KEYS.search(json.dumps(campus.search_pois(n, limit=1), ensure_ascii=False)))
 
     total = ok + fail
     print("=" * 72)

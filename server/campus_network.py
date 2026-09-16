@@ -131,7 +131,7 @@ class Network:
         adj, bld, street_edges, node_poi = {}, {}, set(), {}
         for fn in OSM_FILES:
             root = ET.parse(os.path.join(OSM_DIR, fn)).getroot()
-            nodes, node_named = {}, {}
+            nodes, node_named, way_pts = {}, {}, {}
             for el in root:
                 if el.tag != "node":
                     continue
@@ -150,6 +150,7 @@ class Network:
                 pts = [nodes[r] for r in (nd.get("ref") for nd in el.findall("nd")) if r in nodes]
                 if not pts:
                     continue
+                way_pts[el.get("id")] = pts      # 供下方 relation 拼面用（relation 只带 way 引用）
                 name = tags.get("name")
                 if "building" in tags and name:
                     c = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
@@ -170,6 +171,40 @@ class Network:
                         adj.setdefault(b, []).append((a, d * pen))
                         if is_street:
                             street_edges.add(frozenset((a, b)))
+
+            # ③ 关系（multipolygon 建筑）—— 此前**整类被忽略**（只读 node 与 way）。
+            #    OSM 里相当多的校园建筑是「若干个 way 拼成一个面」，用 relation 表达：
+            #    实测被漏掉的有湛恩纪念图书馆、综合楼 A–D 座、管理学院、教育超市、
+            #    第一食堂、第九/第十/第十二宿舍、会议中心、现代化教学中心…
+            #    后果不只是少几个锚点：**图书馆被迫退到 zone 质心这种弱锚**，
+            #    与「图书馆（图文信息中心）」塌缩到同一个点（2026-09-16 评估发现）。
+            #    质心取成员 way 的全部节点均值 —— 这些楼都是规整矩形，够用。
+            #    只收带 building / building:part 的关系，把杨浦区边界、公交线路、
+            #    河道、landuse（上理小区/时运苑）这类非建筑关系挡在索引之外。
+            #    ⚠️ 追加在 way **之后**：同名时 `_pick` 取首个校区相符的候选，
+            #    所以 way 的既有锚点逐字节不变，这里是纯加法。
+            for el in root:
+                if el.tag != "relation":
+                    continue
+                tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
+                if tags.get("type") != "multipolygon":
+                    continue
+                if "building" not in tags and "building:part" not in tags:
+                    continue
+                name = tags.get("name")
+                if not name:
+                    continue
+                pts = []
+                for mb in el.findall("member"):
+                    if mb.get("type") == "way":
+                        pts.extend(way_pts.get(mb.get("ref"), []))
+                if not pts:
+                    continue
+                c = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+                for key in {name.strip(), norm(name)}:
+                    if key:
+                        bld.setdefault(key, []).append(c)
+
         self.adj, self.bld, self.street_edges, self.node_poi = adj, bld, street_edges, node_poi
         # 与至少一条步道相连的节点（用于「仅校内」模式下的吸附与寻路）
         self.campus_nodes = {

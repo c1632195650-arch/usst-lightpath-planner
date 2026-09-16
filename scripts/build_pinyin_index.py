@@ -6,6 +6,8 @@
     pyf  全拼（音调略去、只留字母数字）—— 名字与各别名各一段
     pyi  首字母（声母缩写）            —— 名字与各别名各一段
     pyt  类型的拼音（全拼 + 首字母两段）—— 让「shitang」能列食堂、「sushe」能列宿舍
+    pyk  泛类别词（口语说法）的全拼      —— 「jiaoshi」→ 教学楼、「gongyu」→ 宿舍、「yongcan」→ 食堂
+                                        （词表见 server/campus.py 的 _TYPE_WORDS，**只取全拼**）
     pyg  口语同义词（tags）的拼音      —— 让「dahuo」能查到学生活动中心、「chifan」能列食堂
 
 例：`图书馆（图文信息中心）`
@@ -13,6 +15,15 @@
     pyi = "tsg|tsg|twxxzx|tsgz"
 
 > `pyt` / `pyg` 的分值刻意低于名字与别名 —— 类别词与口语词是「浏览」，具体名字才是「找那一个」。
+
+> 为什么 `pyk` 要与 `pyt` 分开（2026-09-16）
+> ------------------------------------------
+> 「教室」和「教师」拼音都是 `jiaoshi`。此前泛类别词拼音被并进 `pyt`（48 分），
+> 于是输入 `jiaoshi` 时，『阅餐厅』（别名『教师餐厅』→ `jiaoshicanting`）靠
+> **名字前缀档（52 分）**把『第一教学楼』（类别词档 48 分）压了下去。
+> 拆出独立档位后，规则变得可陈述：**打全了的类别词 > 没打完的名字前缀**
+> —— 前者是「我要这一类」，后者是「某处名字的中间态」，类别词该赢。
+> （`pyk` 只收全拼、不收首字母：`js` 这种两位缩写会大面积假命中。）
 
 ## 为什么做成「生成一次、把结果存成数据」
 
@@ -46,11 +57,21 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAP_PATH = os.path.join(HERE, "..", "data", "campus_map.json")
 
+# 泛类别词的口语说法（「教室」「住宿」「用餐」…）由 server/campus.py 的 _TYPE_WORDS 定义，
+# 那里是唯一来源 —— 这里 import 过来复用，**不另抄一份**（抄了必然漂移）。
+# campus.py 只依赖 os/json/re，import 它没有副作用，也不会引入运行时依赖。
+sys.path.insert(0, os.path.join(HERE, "..", "server"))
+try:
+    from campus import _TYPE_WORDS
+except Exception:          # 退路：类型拼音只含 type 本身，不因此中断整个生成流程
+    _TYPE_WORDS = {}
+
 _CJK = re.compile(r"[\u4e00-\u9fff]")
 _KEEP = re.compile(r"[^a-z0-9]")
 
-NOTE = ("【拼音检索·2026-09-15】`pyf` / `pyi` / `pyt` 为**离线生成**的拼音索引"
-        "（名字与各别名的全拼 / 首字母、类型拼音、口语同义词拼音；`|` 分隔），由 `scripts/build_pinyin_index.py` 产出。"
+NOTE = ("【拼音检索·2026-09-16】`pyf` / `pyi` / `pyt` / `pyk` / `pyg` 为**离线生成**的拼音索引"
+        "（名字与各别名的全拼 / 首字母、类型拼音、泛类别词拼音、口语同义词拼音；`|` 分隔），"
+        "由 `scripts/build_pinyin_index.py` 产出。"
         "生成需 `pypinyin`，**运行时不需要任何依赖** —— 检索只是查字符串。"
         "匹配只做「整段相等」与「前缀」，不做子串（子串假命中太多）。")
 
@@ -92,14 +113,19 @@ def main():
     items = m["pois"] + m["landmarks"]
 
     have, missing = 0, []
+    n_pyk = 0
     for p in items:
         if p.get("pyf") and p.get("pyi") and p.get("pyt") and p.get("pyg"):
             have += 1
         else:
             missing.append(p["name"])
+        if p.get("pyk"):
+            n_pyk += 1
 
     if args.check:
         print(f"已生成拼音：{have}/{len(items)}")
+        # pyk（泛类别词）天然只覆盖几十个条目 —— 不是缺漏，只报数不报警。
+        print(f"其中带泛类别词拼音(pyk)：{n_pyk}")
         if missing:
             print("缺：", "、".join(missing[:12]), ("…" if len(missing) > 12 else ""))
         return 0
@@ -118,7 +144,21 @@ def main():
         # 类型拼音：让「shitang」「sushe」「zixidian」这类**类别词**也能用拼音搜到。
         # 只有约 20 个不同取值，数据量可忽略。
         tf, ti = to_pinyin(pypinyin, p.get("type", ""))
-        p["pyt"] = "|".join([x for x in (tf, ti) if x])
+        p["pyt"] = "|".join(x for x in (tf, ti) if x)
+        # 泛类别词的**口语说法拼音**单独成档：「jiaoshi」→ 教学楼、「gongyu」→ 宿舍、
+        # 「yongcan」→ 食堂。与 tags 侧的「说人话」是同一件事，只是发生在英文输入法场景下。
+        # ⚠️ 不并进 pyt：并进去就会被『教师餐厅』(jiaoshicanting) 的**名字前缀**压过
+        #    —— 「教室」「教师」同音，详见本文件顶部说明。
+        kfulls = []
+        for w, types in _TYPE_WORDS.items():
+            if p.get("type") in types:
+                f_, _i = to_pinyin(pypinyin, w)
+                if f_ and f_ not in kfulls:
+                    kfulls.append(f_)
+        # 空值不写字段 —— 避免给 145 个条目都挂一个 `"pyk": ""`（数据噪声）
+        p.pop("pyk", None)
+        if kfulls:
+            p["pyk"] = "|".join(kfulls)
         # 口语同义词（tags）的拼音：让「dahuo」→ 学生活动中心、「chifan」→ 食堂。
         # 这是「说人话」在**拼音输入**侧的延伸 —— 学生用英文输入法时同样该查得到。
         gfulls, ginis = [], []
@@ -131,7 +171,7 @@ def main():
         p["pyg"] = "|".join(gfulls + ginis)
 
     m["_meta"]["pinyin"] = NOTE
-    m["_meta"]["updated"] = "2026-09-15"
+    m["_meta"]["updated"] = "2026-09-16"
 
     with open(MAP_PATH, "w", encoding="utf-8") as f:
         json.dump(m, f, ensure_ascii=False, indent=1)
@@ -147,7 +187,7 @@ def main():
         for p in items:
             if p["name"] == want:
                 print(f"     {p['name']:<22} pyf={p['pyf'][:64]}")
-                print(f"     {'':<22} pyi={p['pyi']}   pyt={p['pyt']}")
+                print(f"     {'':<22} pyi={p['pyi']}   pyt={p['pyt']}   pyk={p.get('pyk','')}")
                 print(f"     {'':<22} pyg={p['pyg'][:72]}")
     return 0
 
