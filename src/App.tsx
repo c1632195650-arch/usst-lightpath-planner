@@ -251,6 +251,8 @@ export default function App() {
                 schedule={schedule}
                 weekNo={weekNo}
                 persona={state.persona}
+                planState={state.planState}
+                onPlanStateChange={(ps) => patchState({ planState: ps })}
               />
             ) : (
               <WeekView
