@@ -158,6 +158,18 @@ function pickDuration(durations: number[], availableMin: number): number | null 
   return usable.length ? usable[usable.length - 1] : null;
 }
 
+/**
+ * 把数组从 offset 处轮转（确定性：同一 offset 必得同一顺序，**不引入随机数**）。
+ *
+ * 用途：自习点轮换。不轮转时「喜欢图书馆」会被理解成「每次都去同一个图书馆」，
+ * 引擎按固定顺序取候选 → 整周每个自习块都落在同一个点。真实的人不会这样。
+ */
+function rotateFrom<T>(arr: T[], offset: number): T[] {
+  if (arr.length <= 1) return arr;
+  const k = ((offset % arr.length) + arr.length) % arr.length;
+  return [...arr.slice(k), ...arr.slice(0, k)];
+}
+
 function sortBlocks(blocks: TimeBlock[]): TimeBlock[] {
   return [...blocks].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin);
 }
@@ -380,7 +392,13 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     totalFree += freeTotal;
     // 留白是「下限」：至少留下 blankRatio 的空档不被占用
     const usable = Math.max(0, freeTotal - Math.round(freeTotal * policy.blankRatio));
-    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4));
+    // 事件准备块（有截止日期）是硬需求：单独留出预算，不与日常活动抢额度。
+    // 「光电杯明天截止」比「今天少自习一小时」严重得多 —— 少了这一项，
+    // 日程一满，备考/交材料的块会被日常活动预算静默挤掉，用户完全看不出来。
+    const essentialMin = floatingTasks
+      .filter((t) => t.essential && taskActive(t) && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .reduce((n, t) => n + (t.durationMin ?? 60), 0);
+    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4)) + essentialMin;
 
     /* --- 6.4b 提交项填充（EDF × urgency 择序，贪心填空档）--- */
     const commitBlocks = placeCommits({
@@ -700,7 +718,7 @@ function studyCandidates(
   policy: PhasePolicy,
   dayCampus: string,
   templates: ActivityTemplate[],
-): ActivityTemplate[] {
+): { preferred: ActivityTemplate[]; fallback: ActivityTemplate[] } {
   const wanted = policy.studyPlaces.map((p, i) => {
     const hit = templates.find((t) => t.place === p && t.category === 'study');
     if (hit) return hit;
@@ -721,14 +739,15 @@ function studyCandidates(
       verified: true,
     };
   });
-  // 补充候选：同校区的其它自习点。
+  // 补充候选：同校区的其它自习点。**只作兜底，不参与轮换** ——
+  // 见 fillStudy 的 rotated()：轮换只在画像给的偏好池内做。
   // 校区来自**显式地点表**（旧实现靠 campusOfName 关键字猜 + 默认北校）——行为等价但不再猜
-  const extra = templates.filter(
+  const fallback = templates.filter(
     (t) => t.category === 'study'
       && campusOfPlace(t.place ?? '') === dayCampus
       && !wanted.some((w) => w.place === t.place),
   );
-  return [...wanted, ...extra];
+  return { preferred: wanted, fallback };
 }
 
 function fillStudy(args: {
@@ -751,15 +770,25 @@ function fillStudy(args: {
   if (isWeekend && !policy.weekendWork) return []; // 这个阶段不占周末
   if (budget < MIN_CHUNK) return [];
 
-  const cands = studyCandidates(policy, dayCampus, templates);
+  const { preferred, fallback } = studyCandidates(policy, dayCampus, templates);
   const blocks: TimeBlock[] = [];
   let remaining = budget;
+
+  /**
+   * 轮换**只在画像偏好池内**做 —— 兜底点（同校区其它自习点）接在**队尾**，
+   * 不参与轮换，所以「说喜欢图书馆」的人不会因为轮换被轮到宿舍去。
+   *
+   * 偏移随「星期几 + 今天第几块」平移，是确定性的（不用随机数，测试可复现）。
+   * 不轮换时 `studyPlaces` 的顺序固定 → 整周每个自习块都落在池首那一个点。
+   */
+  const rotated = () => [...rotateFrom(preferred, day + blocks.length), ...fallback];
 
   // 每次都重新算空档：放完一块后布局变了，下一块的走路时间也要跟着重算
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
+    const cands = rotated();
 
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);

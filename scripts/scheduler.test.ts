@@ -266,6 +266,22 @@ test('自习地点在画像给的池子里轮换，而不是永远同一个', ()
   );
 });
 
+test('自习点轮换：候选点开放时段一致时，仍应随天换点', () => {
+  // 为什么这条不能靠上面那条代替：上面那条在**没有轮换逻辑**时也会通过。
+  // 因为各点开放时段不同（湛恩 7:00 / 图文 8:00 / 老馆 6:00），
+  // `openAt` 本身就会让 07:00 的块去湛恩、08:05 的块去图文 ——
+  // 那是「可用性造成的差异」，不是「轮换造成的」。
+  // 两个教学楼的空教室 windows 为空（`openAt` 恒为真），可用性再也解释不了差异。
+  // 此时若地点仍然单一，就一定是没有轮换。
+  const pool = ['第三教学楼', '第一教学楼'];
+  const plan = build({ policy: policy({ studyPlaces: pool }) });
+  const study = plan.blocks.filter((b) => b.kind === 'study');
+  assert.ok(study.length >= 4, `应排出足够多自习块才能谈轮换，实际 ${study.length}`);
+
+  const places = new Set(study.map((b) => b.place ?? ''));
+  assert.ok(places.size >= 2, `自习点应随天轮换，实际只用了：${[...places].join(' / ')}`);
+});
+
 /* ---------------- 六、转场（本项目的差异化所在） ---------------- */
 
 test('转场时间与余量被标注到后一个块上', () => {
@@ -499,4 +515,4 @@ test('slotsOn 只返回当天的课，且按时间升序', () => {
   assert.deepEqual(mon.map((s) => s.course.id), ['c1', 'c2']);
   assert.ok(mon[0].startMin < mon[1].startMin);
   assert.equal(mon[1].periodLabel, '3-5节');
-});
+});
