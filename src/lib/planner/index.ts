@@ -31,7 +31,8 @@ export { construct } from './construct.ts';
 export type { ConstructCtx, ConstructResult } from './construct.ts';
 
 /* —— 诊断与确定性辅助 —— */
-export { countHardViolations, stablePlanJson, nextRollingFrom, findDepsCycle } from './solver.ts';
+export { countHardViolations, stablePlanJson, nextRollingFrom, findDepsCycle, applyLockedPlacements, reattachTransfers } from './solver.ts';
+export type { LockApplyResult } from './solver.ts';
 
 /* —— 类型再导出，方便消费方只 import 一个入口 —— */
 export type {

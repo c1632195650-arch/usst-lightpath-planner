@@ -57,6 +57,24 @@ export function migrate(raw: unknown): AppState {
   if (next.semesterPlan === undefined) next.semesterPlan = null;
   if (next.planState === undefined) next.planState = null;
 
+  /*
+   * `planState` 内部再兜一层。
+   * 它是 v4 新增的嵌套对象，而**嵌套对象里的新字段是 `{...default}` 补不到的**
+   * —— 老数据里 `planState` 已存在、只是缺 `lockedPlacements`，展开后仍是 undefined，
+   * 之后引擎读 `Object.keys(undefined)` 直接炸。这类「深层缺键」是最容易漏的迁移坑。
+   */
+  if (next.planState !== null && typeof next.planState === 'object') {
+    const ps = next.planState;
+    const isPlainObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v);
+    if (!isPlainObject(ps.locks)) ps.locks = {};
+    if (!isPlainObject(ps.lockedPlacements)) ps.lockedPlacements = {};
+    if (!isPlainObject(ps.rolling) && ps.rolling !== null) ps.rolling = null;
+    if (typeof ps.churnMin !== 'number' || !Number.isFinite(ps.churnMin)) ps.churnMin = 0;
+    if (typeof ps.updatedAt !== 'string') ps.updatedAt = '';
+    if (typeof ps.version !== 'number') ps.version = 1;
+    if (ps.lastPlanWeek === undefined) ps.lastPlanWeek = null;
+  }
+
   return next;
 }
 

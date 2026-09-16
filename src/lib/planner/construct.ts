@@ -41,7 +41,8 @@ import {
  * ========================================================== */
 
 const DAY_ORDER: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 7];
-const DAY_NAME: Record<number, string> = {
+/** 星期几的中文名（`solver` 重挂转场时也要用，故导出） */
+export const DAY_NAME: Record<number, string> = {
   1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日',
 };
 
@@ -950,7 +951,7 @@ function placeCommits(args: {
  * ⚠️ 只对**硬约束**报警：课程 / 用餐 / 用户锁定的块迟到了才是真问题；
  * 自习与活动块（引擎自己排的软块）晚几分钟无所谓，刷一屏警告只会让人无视警告。
  */
-function attachTransfers(
+export function attachTransfers(
   dayBlocks: TimeBlock[],
   transfer: TransferProvider,
   dayName: string,

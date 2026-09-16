@@ -19,7 +19,7 @@
  *   · 本文件内所有函数都是**确定性**的（同输入同输出）。
  */
 import type {
-  BlockKind, CampusId, DayOfWeek, LockLevel, PhasePolicy, RollingState,
+  BlockKind, CampusId, DayOfWeek, LockLevel, LockedPlacement, PhasePolicy, RollingState,
   Schedule, TimeBlock, WeekPlan, PersonaProfile, ScenarioFields,
 } from '@/types';
 // ⚠️ 依赖下沉：`campusLookup.ts` 不依赖任何 planner 模块，故此处不会成环
@@ -238,6 +238,15 @@ export interface PlanRequest {
   previousPlan?: WeekPlan;
   /** 锁级别覆盖：blockId -> LockLevel */
   lockLevels?: Record<string, LockLevel>;
+  /**
+   * 被锁块的位置快照 —— `solver` 在构造之后据此把 hard 块**写回原位**。
+   *
+   * 为什么必须显式传：`construct` 不读 `lockLevels`（它每步都从头排），
+   * `improve` 只保证「不主动移动 hard 块」。两者叠加的结果是 ——
+   * **块一旦被构造阶段排到别处，就没人把它带回来**。
+   * 少了这个字段，`lockLevels` 只是半个功能（UI 显示「已定住」但块照样跑）。
+   */
+  lockedPlacements?: Record<string, LockedPlacement>;
   /** 当前分钟；给定则只排 [fromNow, dayEnd] */
   fromNow?: number;
   /** 上一周传来的滚动状态 */

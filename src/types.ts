@@ -250,7 +250,8 @@ export type PlanIssueCode =
   | 'study-shortfall'     // 自习总量低于阶段目标
   | 'transfer-late'       // 转场时间不够，会迟到
   | 'transfer-tight'      // 转场余量偏紧
-  | 'transfer-no-place';  // 有环节缺地点，转场时间算不出来
+  | 'transfer-no-place'   // 有环节缺地点，转场时间算不出来
+  | 'lock-conflict';      // 用户锁定的块没能回到原位（与新课/新安排冲突）
 
 /** 转场提示：由 route() 实测标注，通用日历给不出这个 */
 export interface TransferHint {
@@ -353,10 +354,36 @@ export interface PlanPersistState {
   locks: Record<string, LockLevel>;
   /** 累计扰动分钟数，用于「最小扰动」目标 */
   churnMin: number;
+  /**
+   * 被锁块的位置快照 —— **只存被锁的块，不是整周计划**。
+   *
+   * 为什么必须有它：`construct` 每一步都从头排，**完全不读 `lockLevels`**；
+   * `improve` 只是「不主动移动 hard 块」。所以只把锁级别传进去，
+   * 块一旦被构造阶段排到别处，就**没有任何机制把它带回来** —— 锁会变成假功能。
+   * 位置快照让 `solver` 在构造之后能把 hard 块写回原位。
+   *
+   * 之所以不违反「不存整周计划」：这里只有用户**显式锁定**的那几块，
+   * 且不含 reason / transfer 等派生字段，体量很小（通常个位数条）。
+   */
+  lockedPlacements: Record<string, LockedPlacement>;
   /** ISO 时间戳，用于判断状态新鲜度 */
   updatedAt: string;
   /** 跨周负荷；null = 尚未积累 */
   rolling: RollingState | null;
+}
+
+/** 被锁块的最小位置快照（重排时用来把块写回原位） */
+export interface LockedPlacement {
+  dayOfWeek: number;
+  startMin: number;
+  endMin: number;
+  place?: string;
+  room?: string;
+  /**
+   * 块名 —— 只为「没能放回原位」时能指名道姓地告诉用户是哪一块。
+   * 没有它，冲突提示只能报 id（`w4-d1-study-study-lib-2`），用户看不懂。
+   */
+  title?: string;
 }
 
 /* ============================================================
