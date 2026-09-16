@@ -41,6 +41,12 @@ from pydantic import BaseModel, Field
 import rag
 import campus
 import memory
+# 三级梯子的后两级（2026-09-16）：
+#   direct = L0 模板直答（存在性/位置/营业时间，0 次 LLM）
+#   agent  = L2 托底（库外流量交给 LLM 自查一轮，必要时才联网）
+import direct
+import agent
+import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
@@ -539,7 +545,7 @@ def api_route_batch(body: RouteBatchReq):
 
 
 def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
-                space_ctx, mem_ctx, profile_ctx, mode, answer, ms):
+                space_ctx, mem_ctx, profile_ctx, mode, answer, ms, tools=None):
     """把一轮对话的关键中间量压成**一行**日志（仅在 LIBAO_DEBUG 打开时调用）。
 
     它存在的原因：响应体里的 route / top_raw_vec / sources 分数其实一直都有，
@@ -564,7 +570,9 @@ def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
             f"[chat {rid}] q={q[:36]!r} route={route} intent={intent} "
             f"top_raw={top_raw:.3f} k={n_results} src3=[{top}] "
             f"space={int(bool(space_ctx))} mem={int(bool(mem_ctx))} "
-            f"prof={int(bool(profile_ctx))} mode={mode} ans_len={len(answer)} ms={int(ms)}",
+            f"prof={int(bool(profile_ctx))} mode={mode} "
+            f"tools=[{','.join(tools or []) or '-'}] "
+            f"ans_len={len(answer)} ms={int(ms)}",
             flush=True,
         )
     except Exception as e:      # 日志绝不能把正常对话搞挂
@@ -622,11 +630,40 @@ def api_chat(body: ChatReq):
         print("[memory] 读取失败：", e)
         mem_ctx = ""
 
-    # 5) 生成答案（profile_ctx 让「你是谁」参与生成，而不只是一个匿名提问者）
-    answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
-    mode = "llm" if answer else "extractive"
-    if not answer:
-        answer = extractive_answer(sources, route)
+    # 5) 生成答案 —— 三层梯子（2026-09-16 落地，钱花在刀刃上）：
+    #    L0 template  存在性/位置/营业时间 + 实体命中 → 图谱拼答案，**0 次 LLM**
+    #    L1 快路径    grounded / hybrid → 现有「检索 + 一次生成」
+    #    L2 托底      route=="llm"（规则判定库外）→ agent 自查一轮（图谱/资讯库/联网）
+    #                 失败则回退旧行为，行为不比改动前更差
+    # 注意：`route` 字段语义**保持不变**（仍是规则路由的判定结果，供回归断言与调试对齐），
+    #       新行为只体现在 `mode`（template / llm / extractive）与新增的 `tools` 上。
+    tools_used = []
+    da = None
+    try:
+        da = direct.try_direct(q)
+    except Exception as e:
+        print("[direct] 异常：", e)
+    if da:
+        answer, mode = da["answer"], "template"
+        # 模板答完全取自结构化图谱，不引用资讯库 → 置空 sources，避免前端显示"假来源"
+        sources = []
+    elif route == "llm":
+        ag = agent.run_agent(q, LIBAO_PERSONA, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                             mem_ctx=mem_ctx, profile_ctx=profile_ctx,
+                             web_ok=websearch.enabled())
+        if ag and ag.get("answer"):
+            answer, mode = ag["answer"], "llm"
+            tools_used = ag.get("tools") or []
+        else:
+            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+            mode = "llm" if answer else "extractive"
+            if not answer:
+                answer = extractive_answer(sources, route)
+    else:
+        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+        mode = "llm" if answer else "extractive"
+        if not answer:
+            answer = extractive_answer(sources, route)
 
     # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
     try:
@@ -639,7 +676,8 @@ def api_chat(body: ChatReq):
     elapsed_ms = (time.perf_counter() - _t0) * 1000
     if LIBAO_DEBUG:
         _chat_trace(rid, q, route, intent, top_raw, len(results), sources,
-                    space_ctx, mem_ctx, profile_ctx, mode, answer, elapsed_ms)
+                    space_ctx, mem_ctx, profile_ctx, mode, answer, elapsed_ms,
+                    tools=tools_used)
 
     return {
         "answer": answer, "mode": mode, "route": route,
@@ -649,6 +687,9 @@ def api_chat(body: ChatReq):
         "used_memory": bool(mem_ctx),
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
+        # 托底层用了哪些工具（search_kb / search_pois / web_search）——
+        # 空数组 = L0 模板或 L1 快路径，未进入 agent
+        "tools": tools_used,
         # 纯附加字段（不破坏既有契约）：给前端调试抽屉与日志做对齐用
         "request_id": rid, "elapsed_ms": round(elapsed_ms),
     }

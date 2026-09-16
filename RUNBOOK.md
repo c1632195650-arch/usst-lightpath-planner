@@ -163,8 +163,29 @@ LIBAO_BASE=http://127.0.0.1:8010 LIBAO_USER=u-debug LIBAO_SESSION=s-debug \
 ### 改完检索层后必须做的三件事
 
 1. `python scripts/test_campus.py` —— 校园图谱 / 就近推荐（145 项，M 组 = 品牌反向索引与存在性）
-2. `python scripts/test_libao.py` —— 45 轮真实对话回归
-3. 重启后端 —— `rag.py` / `campus.py` / `app.py` 的改动**不会**热更新
+2. `python scripts/test_libao.py` —— 45 轮真实对话回归（模板层改动另跑 `scripts/test_direct.py`，17 项，不用起后端）
+3. 重启后端 —— `rag.py` / `campus.py` / `app.py` / `direct.py` / `agent.py` 的改动**不会**热更新
+
+### 回答链路：三层梯子（2026-09-16 起）
+
+```
+用户提问
+  ↓ ① 检索 + 规则路由（route_query，raw_vec 阈值 0.68/0.56）
+  ├─ L0 template  存在性/位置/营业时间 + 实体命中 → server/direct.py 图谱拼答案（0 次 LLM，~400ms）
+  ├─ L1 快路径    grounded / hybrid → 检索 + 一次 LLM 生成（旧行为，未变）
+  └─ L2 agent     route=="llm"（规则判库外）→ server/agent.py 自查一轮
+                  工具：search_pois（图谱）> search_kb（资讯库）> web_search（联网）
+                  最多 3 轮；失败自动回退 L1 旧行为
+```
+
+- **`route` 字段语义不变**（仍是规则路由的判定结果，回归断言依赖它）；
+  新行为只看 `mode`（`template` / `llm` / `extractive`）与新增字段 `tools`。
+- **联网三道锁**（写死在 `agent.py` 的 System 里）：优先级锁（图谱 > 资讯库 > 常识 > 联网）、
+  标注锁（引用网络内容必须说「网上说法、仅供参考」，禁止说成官方规定）、
+  冲突锁（联网与库/图谱矛盾时以库为准）。
+- **联网开关**：`LIBAO_WEBSEARCH=0` 关闭（演示/断网时用）。有 `TAVILY_API_KEY` 走 Tavily，
+  没有则抓 cn.bing.com（免 Key、国内直连）。
+- 调试：trace 行里的 `mode=` 与 `tools=[...]` 直接告诉你这轮走了哪一级、调了哪些工具。
 
 ### 事实正确性怎么测（2026-09-16 起）
 
@@ -181,5 +202,6 @@ npm run probe:fact                           # 等价于第一条
 它抓四类错：**否定幻觉**（库里有却说没有，最危险）/ 伪造幻觉 / 拒答 / 措辞翻转。
 背景：「学校有没有麦当劳」曾答「没有」，但事实在 `第二食堂.features` 里——
 存在性问法不在意图关键词表 → 图谱没注入。修复 = `campus.py` 的品牌反向索引
-（`_brand_index`，实体命中优先、关键词兜底）+ `space_context` 的存在性事实块。
+（`_brand_index`，实体命中优先、关键词兜底）+ `space_context` 的存在性事实块；
+L0 模板层落地后，这类问题**连 LLM 都不走了**。
 

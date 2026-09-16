@@ -11,6 +11,7 @@
     "test:ui": "node --import ./scripts/register-alias.mjs --test \"scripts/**/*.test.ts\"",
     "test:engine": "node --import ./scripts/register-alias.mjs --test \"tests/**/*.test.ts\"",
     "test:libao": "python scripts/test_libao.py",
+    "test:direct": "python scripts/test_direct.py",
     "eval:libao": "python scripts/libao_eval.py",
     "probe:fact": "python scripts/fact_probe.py",
     "typecheck": "tsc --noEmit"
