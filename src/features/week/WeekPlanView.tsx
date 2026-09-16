@@ -1,7 +1,7 @@
 /**
  * WeekPlanView —— 周计划时间轴（只读「感受测试」版）
  * ============================================================
- * 消费 buildWeekPlan 的产物：一天一列时间轴，块上直接标
+ * 消费 `planWeek()` 的产物：一天一列时间轴，块上直接标
  * 「几分钟走到下一件事」，问题清单和「为什么这么排」都能看到。
  *
  * 这是排程引擎的第一个 UI 出口 —— 先让 CY **看**排得对不对，
@@ -10,12 +10,19 @@
  * 数据流（App → 本组件）：
  *   schedule + weekNo + persona
  *     → buildPhasesFromCalendar（这个阶段该多紧）
- *     → buildWeekPlan ×2（第一遍收集点对 → 后端实测转场 → 第二遍真结果）
+ *     → planWeek()（两遍法编排：第一遍收集点对 → 后端实测转场 → 第二遍真结果）
+ *
+ * ⚠️ 两遍法**不在本组件里手写**。编排已抽到 `planner/planWeek.ts`（唯一编排点），
+ *    本组件只负责注入「怎么取转场」（浏览器里 = 调后端 route）和一个失败提示。
+ *    原先是本组件与 `features/libao/weekPlanForChat.ts` 各写一份 —— 同一套编排
+ *    写两份，任何一处调整都要改两遍，且必然漂移。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PlanIssue, Schedule, TimeBlock, WeekPlan } from '@/types';
+import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
-import { buildWeekPlan } from '@/lib/planner/schedule';
+import { toPlanRequest } from '@/lib/planner/schedule';
+import { planWeek } from '@/lib/planner/planWeek';
 import { buildTransferProvider } from '@/lib/planner/transfer';
 import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
 import { fetchWeather, weatherToTasks } from '@/features/weather/weather';
@@ -136,6 +143,12 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendOk, setBackendOk] = useState(true);
+  /**
+   * 求解器诊断（规格书 §4.4）—— 排得「好不好」的量化凭据。
+   * 以前只有「有没有冲突」这一个二值信号，现在能说出硬约束违反数、
+   * 加权质量分（越低越好）和耗时。这是答辩时「算法依据」的答案。
+   */
+  const [diag, setDiag] = useState<Diagnostics | null>(null);
   /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
   const [weather, setWeather] = useState<WeatherReport | null>(null);
 
@@ -201,22 +214,29 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
         // 差别在权重：天气块优先级只有 45–55（事件准备块是 88），
         // 挤不进日程也没关系 —— 提醒还有天气条那条独立路径。
         const tasks = [...eventTasks, ...weatherToTasks(weather, schedule.termStart, weekNo)];
-        // 第一遍：收集需要问路的点对（此时用兜底转场）
-        const pass1 = buildWeekPlan({
-          schedule, weekNo, policy: phase.policy,
-          scenarios: persona?.scenarios ?? null,
-          tasks,
-        });
-        // 后端实测转场 → 第二遍才是给用户看的结果
-        const cache = await buildTransferProvider(pass1.plan.blocks);
-        setBackendOk(cache.size() > 0);
-        const pass2 = buildWeekPlan({
-          schedule, weekNo, policy: phase.policy,
-          scenarios: persona?.scenarios ?? null,
-          tasks,
-          transfer: cache.provider,
-        });
-        if (!cancelled) { setPlan(pass2.plan); setNotes(pass2.notes); }
+        // 两遍法编排交给公共入口 `planWeek()` —— 原先这一段在本组件和
+        // `features/libao/weekPlanForChat.ts` 各写了一份，是同一套逻辑的两个副本。
+        // 我们只注入「转场怎么取」：浏览器里 = 调后端批量问路（拿不到就退回估算）。
+        const result = await planWeek(
+          toPlanRequest({
+            schedule, weekNo, policy: phase.policy,
+            scenarios: persona?.scenarios ?? null,
+            tasks,
+          }),
+          {
+            transferFactory: async (blocks) => {
+              const cache = await buildTransferProvider(blocks);
+              // 后端一条都没问到 → 转场全是估算值，页面要如实提示
+              if (!cancelled) setBackendOk(cache.size() > 0);
+              return cache.provider;
+            },
+          },
+        );
+        if (!cancelled) {
+          setPlan(result.plan);
+          setNotes(result.notes);
+          setDiag(result.diagnostics);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -253,6 +273,16 @@ export function WeekPlanView({ schedule, weekNo, persona }: Props) {
             <li key={i} className="text-[11.5px] leading-relaxed text-ink-faint">· {r}</li>
           ))}
         </ul>
+        {/* 求解器诊断：排得「好不好」的量化凭据。
+            刻意不用绿色高亮 —— 它是给人核对的事实，不是「成功了」的庆祝。 */}
+        {diag && (
+          <div className="mt-2 border-t border-ink/10 pt-1.5 font-mono text-[11px] text-ink-faint">
+            {diag.hardViolations === 0 ? '硬约束违反 0' : `⚠ 硬约束违反 ${diag.hardViolations}`}
+            {' · '}质量分 {Math.round(diag.cost.total)}
+            {' · '}{diag.iterations} 次迭代
+            {' · '}{Math.round(diag.elapsedMs)} ms
+          </div>
+        )}
         {!backendOk && (
           <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
             后端未连通，转场时间是估算值 —— 跑 <code className="font-mono">python server/app.py</code> 后刷新

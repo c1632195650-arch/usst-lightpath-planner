@@ -103,7 +103,7 @@ function restFor(p: PersonaProfile): LbaoBlock {
  * @deprecated 已被排程引擎取代 —— 本函数只做**规则模板**（时间来自官方课时表常量，
  *   但没有真实转场时间、没有校历事件、没有问题清单），因此它与周计划页会给出
  *   两套口径不同的答案（"双轨"）。
- *   梨宝对话侧已并轨真引擎：见 `features/libao/weekPlanForChat.ts` → `buildWeekPlan`。
+ *   梨宝对话侧已并轨真引擎：见 `features/libao/weekPlanForChat.ts` → `planWeek()`。
  *   现存调用点只剩 `features/week/WeekView.tsx:53`（属 B 的目录），清理需与 B 确认；
  *   新代码请勿再使用本函数。
  *
