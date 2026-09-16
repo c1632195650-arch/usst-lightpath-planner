@@ -276,6 +276,12 @@ _SCORE_FRAG_IN = 58
 #    52  拼音全拼前缀            → 「tushu」→ 图书馆（拼音还没打完，最常见的输入中间态）
 #    44  拼音首字母前缀          → 「tsgx」→ 图书馆（图文信息中心）
 _SCORE_PY_PRE = 52
+#    54  泛类别词拼音整段相等       → 「jiaoshi」→ 教学楼、「gongyu」→ 宿舍、「yongcan」→ 食堂。
+#                                  ⚠️ 必须**高于名字拼音前缀（52）**：「教室」与「教师」同音，
+#                                  输入 jiaoshi 时『阅餐厅』（别名『教师餐厅』→ jiaoshicanting）
+#                                  会靠「名字还没打完」的前缀档压过教学楼。规则一句话：
+#                                  **打全了的类别词 > 没打完的名字前缀**（前者是"我要这一类"）。
+_SCORE_PYK_EQ = 54
 #    48  类型拼音整段相等        → 「shitang」→ 所有食堂、「sushe」→ 所有宿舍…
 #    42  口语同义词拼音前缀      → 「qukua」→ 取快递 → 菜鸟驿站
 #    38  类型拼音前缀
@@ -287,13 +293,28 @@ _SCORE_TYPE_EQ = 50
 _SCORE_WEAK = 44
 _CAP = 8          # 长度加成上限：够区分「打印」和「南校区红塔打印」，又不至于碾压档位
 
+# 泛类别词的口语说法 → type（**守住 H2 组的原则：类别词由 type 承担，不塞进 tags**）。
+# 缺口来源：2026-09-16 对第三方词表做的检索评估 —— 「教室」「住宿」「用餐」这三个词
+# 在本项目只能靠 type **精确相等**命中，而 type 字段写的是「教学楼」「宿舍」「食堂」，
+# 口语说法对不上，于是整类召回为空。这里补一层「说法 → 类」的映射：
+#   · 中文侧走 type 档（50）——**不动 tags、不新增中文档位**，与「食堂」的既有行为一致；
+#   · 拼音侧由 `scripts/build_pinyin_index.py` 反向展开成 `pyk` 字段（54 档），
+#     供「jiaoshi」「gongyu」「yongcan」这类英文输入法场景使用。
+# 这张表是**唯一来源**：两个 Python 文件都从这里读，不各抄一份。
+_TYPE_WORDS = {
+    "教室": {"教学楼", "学院楼"},
+    "住宿": {"宿舍"},
+    "公寓": {"宿舍"},          # 与「住宿」同义，二者都收 —— pinyin 侧要覆盖 gongyu
+    "用餐": {"食堂", "餐厅", "烘焙/饮品"},
+}
+
 # 纯字母数字（允许空格/中横线/下划线分隔）→ 视为「拼音输入」。
 # 之所以要求**整串**都是字母数字：混了中文的查询（「tushuguan在哪」）走中文那几档更准。
 _ASCII_ALNUM = _re.compile(r"^[a-z0-9]+$")
 
 
 def _score_pinyin(p, q):
-    """拼音匹配打分。`pyf` / `pyi` / `pyt` / `pyg` 由 `scripts/build_pinyin_index.py` 离线生成。
+    """拼音匹配打分。`pyf` / `pyi` / `pyt` / `pyk` / `pyg` 由 `scripts/build_pinyin_index.py` 离线生成。
 
     **只做「整段相等」与「前缀」，不做子串** —— 这是刻意的：
     `disanjiaoxuelou` 里确实含 `sanjiao`（那正是别名『三教』，命中是对的），
@@ -301,8 +322,10 @@ def _score_pinyin(p, q):
     前缀则正好对应「拼音还没打完」这个真实场景（tushu → 图书馆）。
 
     四档分值刻意分层，对应中文化那几档的语义：
-        名字/别名拼音 > 口语同义词拼音 > 类型拼音
-    —— 「找一个具体的地方」永远优先于「浏览某一类」。
+        名字/别名拼音 > 泛类别词拼音 > 口语同义词拼音 > 类型拼音
+    —— 「找一个具体的地方」永远优先于「浏览某一类」；
+    而泛类别词（pyk）之所以压在类型拼音（pyt）之上，是因为它是**打全了的**类别说法
+    （jiaoshi/gongyu），比"列一类"的 type 名更接近用户真实输入；详见 pyk 档注释。
     """
     best = 0
     for f in (p.get("pyf") or "").split("|"):
@@ -320,6 +343,11 @@ def _score_pinyin(p, q):
             best = max(best, _SCORE_PYI_EQ)
         elif len(q) >= 3 and i.startswith(q):
             best = max(best, _SCORE_PYI_PRE)
+    # 泛类别词拼音（「教室」「住宿」「用餐」…）：**打全了的类别词**。
+    # 只做整段相等 —— 前缀会让 `jiaoshicanting` 反过来命中 jiaoshi 这一档，自相矛盾。
+    for k in (p.get("pyk") or "").split("|"):
+        if k and k == q:
+            best = max(best, _SCORE_PYK_EQ)
     # 口语同义词（tags）的拼音
     for g in (p.get("pyg") or "").split("|"):
         if len(g) < 2:
@@ -369,8 +397,10 @@ def _score_poi(p, query, want_type=False):
     q_py = _re.sub(r"[\s\-_]+", "", q.lower())
     if len(q_py) >= 2 and _ASCII_ALNUM.match(q_py):
         best = max(best, _score_pinyin(p, q_py))
-    if want_type and p.get("type") and p["type"] == q:
-        best = max(best, _SCORE_TYPE_EQ)
+    if want_type and p.get("type"):
+        t = p["type"]
+        if t == q or (q in _TYPE_WORDS and t in _TYPE_WORDS[q]):
+            best = max(best, _SCORE_TYPE_EQ)
     return best
 
 
@@ -458,12 +488,54 @@ def _to_min(h, m):
     return int(h) * 60 + int(m)
 
 
+# 时段标签里的「限定星期」—— 写法如「周日至周五」「周六」「双休日及节假日」。
+# ⚠️ 为什么必需：1100 图书馆的 hours 写作「周日至周五 8:00-21:45、周六 8:00-16:45」，
+# 早先 open_now **忽略标签里的星期**，于是周六 20:00 也会答「开着」（周六 16:45 就关了）
+# —— 一个可复现的**错答案**，与「宁可说未知，也不给假结论」相冲突。
+_DAY_TOKEN = _re.compile(r"周[一二三四五六日天]|双休日|周末|节假日|工作日")
+_DAY_RANGE = _re.compile(r"(周[一二三四五六日天])\s*(?:至|到|~|-|—)\s*(周[一二三四五六日天])")
+_WEEKEND_CN = {"周六", "周日"}
+_WEEKDAY_CN_SET = {"周一", "周二", "周三", "周四", "周五"}
+
+
+def _label_days(label):
+    """时段标签限定的星期集合；返回 **None = 不限**（每天都适用）。
+
+    「双休日 / 周末 / 节假日」一律按周末处理 —— 法定节假日无法从日期算出，
+    这里**有意取近似且偏保守**：宁可把节假日当周末（少答一次「开着」），
+    也不要在节假日答「开着」。无星期字样的标签（如「全天」「急诊值班」）不受限。
+    """
+    s = str(label or "")
+    if not s:
+        return None
+    days = set()
+    # 先把「周X 至 周Y」整段抠掉，避免它被当成两个孤立的星期
+    rest = _DAY_RANGE.sub("", s)
+    for a, b in _DAY_RANGE.findall(s):
+        i, j = _WEEKDAY_CN.index(a), _WEEKDAY_CN.index(b)
+        for k in range(8):                      # 按周循环，最多走满一圈
+            days.add(_WEEKDAY_CN[(i + k) % 7])
+            if (i + k) % 7 == j:
+                break
+    for t in _DAY_TOKEN.findall(rest):
+        t = "周日" if t in ("周天", "周日") else t
+        if t in ("周六", "周日") or t in _WEEKDAY_CN_SET:
+            days.add(t)                       # 单个具体星期：只算那一天
+        elif t in ("双休日", "周末", "节假日"):
+            days |= _WEEKEND_CN
+        elif t == "工作日":
+            days |= _WEEKDAY_CN_SET
+    return days or None
+
+
 def open_now(p, at=None):
     """判断某地点此刻是否开放。返回 dict；**无法判断时如实返回 open=None**。
 
     只解析得出 `H:MM-H:MM` 的时段；『常规饭点』『长时（以现场为准）』这类
     模糊表述**不猜**（宁可返回未知，也不给一个假结论 —— 与 §「诚实兜底」同一条原则）。
     `closed` 里含当天星期几时直接判为关闭（如第一食堂『周六休息』）。
+    `hours` 的**标签**里若带星期（『周日至周五』『周六』『双休日及节假日』），
+    只在当天命中时才计入 —— 见 `_label_days`。
     """
     hours = p.get("hours") or {}
     now = at or _dt.datetime.now()
@@ -482,6 +554,9 @@ def open_now(p, at=None):
 
     best = None
     for label, spec in hours.items():
+        days = _label_days(label)
+        if days is not None and today not in days:
+            continue                            # 该时段今天不适用（周末/工作日限定）
         for m in _TIME_RANGE.finditer(str(spec)):
             h1, m1, h2, m2 = (int(x) for x in m.groups())
             s, e = _to_min(h1, m1), _to_min(h2, m2)
