@@ -1,5 +1,5 @@
 {
- "ts": "20260918-014740",
+ "ts": "20260918-020933",
  "metrics": {
   "l0_all_pass": 1.0,
   "n": 50,
@@ -14,6 +14,6 @@
   "obs_cap_docs": 8,
   "forbidden_hits": 0,
   "forbidden": [],
-  "sec": 12.2
+  "sec": 16.9
  }
 }

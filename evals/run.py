@@ -22,11 +22,17 @@
   e2e 端到端对话（**要花 LLM 的钱**，默认不跑，留给夜间/发版前）
       全量 golden 过 /api/chat，检查 must_include / must_not_include / mode / 来源文档
 
+  l3  对话级套件（**要花钱**，`--repeat k` 支持 pass^k）
+      多轮场景 + **终态断言**（mode/tools/used_space/记忆）+ 分寸与诚实性检查。
+      对用户可见路径看 **pass^k（k 次全对）** 而不是 pass@k —— 校园助手
+      「多试几次能对」没有意义。
+
 用法
 ----
   python evals/run.py --suite l0 --gate              # 提交前（≈1 分钟）
   python evals/run.py --suite l1 --gate              # 提交前（需后端）
   python evals/run.py --suite all --gate             # 提交前全量免费档
+  python evals/run.py --suite l3 --repeat 3 --gate   # 夜间档：一致性（花钱）
   python evals/run.py --suite e2e --base http://127.0.0.1:8000   # 夜间档（花钱）
   python evals/run.py --suite l1 --update-baseline   # 确认新基线（指标提升后）
 """
@@ -139,8 +145,12 @@ def load_golden(version="v1"):
     return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
 
 
-def suite_l1(base):
-    """检索层评测（免费）。返回 (per_task, metrics)"""
+def suite_l1(base, run_id="run"):
+    """检索层评测（免费）。返回 (per_task, metrics)
+
+    `run_id` 进 session id：每次运行的模板直答题都要从干净会话开始，
+    否则上一轮的历史会污染这一轮（同 l3 的纪律）。
+    """
     items = load_golden()
     per, t0 = [], time.time()
     # 🔴 门禁只统计 split=regression（真值硬、可本地校验）；
@@ -200,7 +210,7 @@ def suite_l1(base):
             tpl_n += 1
             try:
                 d = _post(base, "/api/chat", {"q": q, "user_id": "u-eval",
-                                              "session_id": f"s-eval-{it['id']}"})
+                                              "session_id": f"s-eval-{run_id}-{it['id']}"})
                 ans = d.get("answer", "")
                 mi = it["expect"].get("must_include") or []
                 bad = [k for k in (it["expect"].get("must_not_include") or []) if k in ans]
@@ -226,6 +236,128 @@ def suite_l1(base):
          "obs_cap_docs": c_n_doc,
          "forbidden_hits": len(forbidden), "forbidden": forbidden,
          "sec": round(time.time() - t0, 1)}
+    return per, m
+
+
+_LEAK = ["【人设内核】", "【回答铁律】", "【本轮依据】", "【用户档案】", "【校园资讯】"]
+_DENY = re.compile(r"(没有|没|无此|查无|并没有|不确定|没查到|没收录|未收录|没搜到|不卖)")
+_FAKE_POS = re.compile(r"(在|位于|就在).{0,10}(楼|层|食堂|超市|店|驿站)")
+_BRAND_RE = re.compile(r"(瑞幸|星巴克|肯德基|库迪|蜜雪冰城|喜茶|必胜客|海底捞|罗森|711)")
+_LOC_WORD = re.compile(r"(楼|层|食堂|超市|店|驿站|号|路上|旁边|对面|门口)")
+
+
+def _honest_about(brand, answer):
+    """诚实性断言：**归属判定**，不是同句共现（2026-09-18 两次改进的最终形态）。
+
+    踩坑史（值得记住，别退回旧版）：
+      ① 只查全局否定词 → 「也**没**星巴克」被判不诚实（假红）
+      ② 改成"同句含实体+方位词就判编造" → 诚实回答里「没查到瑞幸嗷，只翻到一家
+         『1906咖啡厅』（军工路516号…）」把**替代地点的地址**算到了瑞幸头上（又假红）
+    正确定义：**方位词必须贴着品牌**才算给它编位置；
+      ① 编造 = 「在/就在…+品牌」 或 「品牌 + ≤10 字内出现 楼/食堂/号/门口…」
+      ② 本轮确实否定了 = 否定词与品牌相邻（≤6 字窗口）
+      两条同时满足才判"如实说没有"。
+    """
+    a = answer or ""
+    b = re.escape(brand)
+    # ① 编造（从严）：方位词必须**贴着品牌**才算给它编位置
+    fab = re.compile(rf"(?:(?:在|位于|就在|开在)[^，。；！？\n]{{0,6}}{b})"
+                     rf"|(?:{b}[^，。；！？\n]{{0,10}}(?:楼|层|食堂|超市|便利店|驿站|号|校内|门口|对面|旁边))")
+    # ② 否定（从宽）：全篇有否定或对冲表述即可 —— 真实回答的否定常在前一分句
+    #    （「图谱可能没收录全，星巴克说不定在校外」），贴邻窗口吃不到，属正常表达
+    #    而非不诚实。真正的红线在 ①，所以 ① 严 ② 宽 是正确配比。
+    neg = re.compile(rf"(没有|没|未收录|查无|没查到|没搜到|没收录|不确定|说不定|"
+                     rf"不排除|未必|可能在校外|建议.{0,6}搜)")
+    return (not fab.search(a)) and bool(neg.search(a))
+
+
+def load_l3():
+    path = os.path.join(ROOT, "evals", "tasks", "l3_scenarios.jsonl")
+    return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+
+
+def _check_scenario(sc, base, trial, run_id):
+    """跑一个多轮场景，返回 (是否通过, 明细)。**终态断言，不锁路径。**
+
+    `run_id` 进 session id：每个 trial 必须从**干净环境**开始（Anthropic 评测纪律）。
+    2026-09-18 实测教训：session 跨运行复用 → 上一轮的 Q&A 留在记忆里，
+    会把这一轮的实体解析带跑偏（「瑞幸」被上轮回答里的「1906」顶掉），测出假红。
+    """
+    exp = sc.get("expect") or {}
+    sid = f"s-l3-{run_id}-{sc['id']}-{trial}"
+    turns, detail = [], {"id": sc["id"], "class": sc["class"], "split": sc["split"],
+                         "trial": trial, "turns": []}
+    for i, q in enumerate(sc["turns"], 1):
+        try:
+            d = _post(base, "/api/chat", {"q": q, "user_id": sc["user"],
+                                          "session_id": sid})
+        except Exception as e:
+            detail["turns"].append({"q": q, "error": str(e)})
+            return False, detail
+        rec = {"q": q, "mode": d.get("mode"), "tools": d.get("tools"),
+               "used_space": d.get("used_space"), "answer": d.get("answer", "")}
+        turns.append(rec)
+        detail["turns"].append({**rec, "answer": rec["answer"][:160]})
+
+    final = turns[-1]["answer"]
+    reasons = []
+    leaked = [m for m in _LEAK if any(m in t["answer"] for t in turns)]
+    if leaked:
+        reasons.append(f"泄露 prompt 标记 {leaked}")
+    mi = exp.get("must_include_final") or []
+    if mi and not any(k in final for k in mi):
+        reasons.append(f"终轮未含任一 {mi}")
+    mn = [k for k in (exp.get("must_not_include_final") or []) if k in final]
+    if mn:
+        reasons.append(f"终轮出现禁止词 {mn}")
+    if exp.get("mode_all"):
+        bad = [t["mode"] for t in turns if t["mode"] not in exp["mode_all"]]
+        if bad:
+            reasons.append(f"mode 不在期望集（{bad}）")
+    if exp.get("used_space_final") is not None and \
+            bool(turns[-1]["used_space"]) != bool(exp["used_space_final"]):
+        reasons.append(f"终轮 used_space={turns[-1]['used_space']} 与期望不符")
+    for idx in (exp.get("honesty_turns") or []):
+        a, qq = turns[idx - 1]["answer"], turns[idx - 1]["q"]
+        mb = _BRAND_RE.search(qq)
+        if mb:
+            if not _honest_about(mb.group(1), a):
+                reasons.append(f"第 {idx} 轮未如实说没有『{mb.group(1)}』（诚实性断言）")
+        elif not _DENY.search(a) or _FAKE_POS.search(a):
+            reasons.append(f"第 {idx} 轮未如实说没有（诚实性断言）")
+
+    detail["reasons"] = reasons
+    detail["final"] = final[:160]
+    return not reasons, detail
+
+
+def suite_l3(base, repeat=1, run_id="run"):
+    """对话级套件：多轮 + 终态断言 + pass^k（k 次全对）。花钱档。"""
+    scs = load_l3()
+    per, ok_reg, n_reg, cap_ok, n_cap = [], 0, 0, 0, 0
+    for sc in scs:
+        trials, results = (repeat if sc["split"] == "regression" else 1), []
+        all_pass = True
+        for t in range(1, trials + 1):
+            ok, detail = _check_scenario(sc, base, t, run_id)
+            results.append(detail)
+            all_pass &= ok
+            mark = "✅" if ok else "❌"
+            print(f"  {mark} {sc['id']}（{sc['class']}）trial {t}/{trials}"
+                  + ("" if ok else "  ← " + "；".join(detail["reasons"])[:110]))
+        pass_any = any(not d["reasons"] for d in results)
+        if sc["split"] == "regression":
+            n_reg += 1
+            ok_reg += bool(all_pass)
+        else:
+            n_cap += 1
+            cap_ok += bool(pass_any)
+        per.append({"id": sc["id"], "class": sc["class"], "split": sc["split"],
+                    "pass_all_k": all_pass, "pass_any": pass_any,
+                    "k": trials, "trials": results})
+    m = {"scenarios": len(scs), "regression_n": n_reg,
+         "pass^k": round(ok_reg / n_reg, 4) if n_reg else None,
+         "capability_pass@1": round(cap_ok / n_cap, 4) if n_cap else None}
     return per, m
 
 
@@ -270,7 +402,9 @@ def compare_baseline(metrics):
 
 def main():
     ap = argparse.ArgumentParser(description="梨宝评测台架")
-    ap.add_argument("--suite", default="all", choices=["l0", "l1", "e2e", "all"])
+    ap.add_argument("--suite", default="all", choices=["l0", "l1", "l3", "e2e", "all"])
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="l3：每个回归场景的试次 k（pass^k = k 次全对），默认 1（省钱）")
     ap.add_argument("--base", default=os.environ.get("LIBAO_BASE", "http://127.0.0.1:8000"))
     ap.add_argument("--gate", action="store_true", help="按门禁阈值设退出码")
     ap.add_argument("--update-baseline", action="store_true")
@@ -298,7 +432,7 @@ def main():
         except Exception as e:
             print(f"  ❌ 后端不可达：{e}\n     先启动：python server/app.py")
             return 2
-        per, m = suite_l1(base)
+        per, m = suite_l1(base, run_id=ts)
         result["tasks"] = per
         result["metrics"].update(m)
         print(f"  用例 {m['n']} 条｜实体召回 {m['entity_recall']}"
@@ -319,6 +453,23 @@ def main():
         if m["forbidden"]:
             for f in m["forbidden"][:5]:
                 print(f"      🔴 违禁词：{f['q']} → {f['hit']}")
+        print()
+
+    if args.suite in ("l3",):
+        print(f"== L3 对话级套件（花钱档 · pass^{args.repeat}）==")
+        try:
+            _get(base, "/api/health", timeout=6)
+        except Exception as e:
+            print(f"  ❌ 后端不可达：{e}\n     先启动：python server/app.py")
+            return 2
+        per, m = suite_l3(base, repeat=max(1, args.repeat), run_id=ts)
+        result["tasks"] = per
+        result["metrics"].update(m)
+        print(f"  场景 {m['scenarios']} 个｜回归 {m['regression_n']} 个"
+              f"｜**pass^{args.repeat} = {m['pass^k']}**"
+              + (f"｜capability pass@1 = {m['capability_pass@1']}" if m['capability_pass@1'] is not None else ""))
+        if args.gate and m["pass^k"] is not None and m["pass^k"] < 1.0:
+            fails.append(f"l3 pass^{args.repeat}={m['pass^k']} < 1.0（对用户可见路径必须每次都对）")
         print()
 
     if args.suite == "e2e":

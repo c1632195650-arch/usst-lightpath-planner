@@ -30,7 +30,7 @@ def check(label, got, exp_in, ans=""):
     good = got in exp_in
     ok, fail = (ok + 1, fail) if good else (ok, fail + 1)
     if not good:
-        fails.append(f"{label}：期望 {'/'.join(exp_in)}，实际 {got}")
+        fails.append(f"{label}：期望 {'/'.join(str(e) for e in exp_in)}，实际 {got}")
     print(f"  {'✅' if good else '❌'} {label} → {got}" + (f" ｜ {ans[:36]}" if not good else ""))
 
 
@@ -91,6 +91,32 @@ check("数值事实答错判错（反向验证）",
                        "寒假好像是 2 月中旬开始吧，具体记不清了。")[0],
       ("错",))
 
+# ---- 诚实性断言本身也要回归（2026-09-18 L3 首跑踩到） ----
+# 旧版只查全局否定词 → 把「咱上理图谱里也没星巴克诶」误判成不诚实（假红）。
+print("\n== L3 诚实性断言（按实体逐句判）==")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evals"))
+import run as evalrun  # noqa: E402
+
+check("「也没星巴克」+ 替代地点 → 判诚实",
+      evalrun._honest_about("星巴克",
+                            "咱上理图谱里也没星巴克诶。咖啡只有 1906咖啡厅（军工路516号）。"),
+      (True,))
+check("给不存在实体编位置 → 判不诚实（反向验证）",
+      evalrun._honest_about("星巴克", "星巴克就在第五食堂二楼嗷。"), (False,))
+check("含糊不表态 → 判不诚实",
+      evalrun._honest_about("星巴克", "这个梨宝也不太清楚呢。"), (False,))
+# 真实回答回填（2026-09-18 L3 第三次运行的实际答案，曾把替代地点的地址误算到品牌头上）
+check("否定 + 替代地点带地址 → 判诚实（真实回答回填）",
+      evalrun._honest_about(
+          "瑞幸",
+          "害，梨宝掐指一算——咱上理图谱里没查到瑞幸嗷，只翻到一家「1906咖啡厅」"
+          "（军工路516号北校区西北角，10:00-21:30），想喝咖啡可以去那儿续命。"),
+      (True,))
+check("「星巴克说不定在校外周边」不算编造（真实回答回填）",
+      evalrun._honest_about("星巴克", "图谱可能没收录全，星巴克说不定在校外周边。"), (True,))
+check("品牌后紧跟方位词仍判编造（反向验证）",
+      evalrun._honest_about("瑞幸", "梨宝查到瑞幸在第五食堂二楼，早上七点就开门。"), (False,))
+
 print("\n" + "=" * 60)
 print(f"汇总：{ok}/{ok + fail} 通过（{ok / (ok + fail) * 100:.1f}%）")
 if fails:
@@ -98,7 +124,7 @@ if fails:
     for f in fails:
         print("  ❌", f)
 else:
-    print("全部通过 ✅（含 3 条反向验证）")
+    print("全部通过 ✅（含 5 条反向验证）")
 print("=" * 60)
 sys.exit(0 if not fails else 1)
 

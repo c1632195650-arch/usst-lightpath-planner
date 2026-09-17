@@ -71,6 +71,34 @@ print("\n== 边界 · 长句不拦（多跳问题交给 agent）==")
 long_q = "我上午在三教上课中午想去二食堂吃饭但下午还要赶去南校区开会，学校有没有第二食堂来着"
 check("超长句返回 None", direct.try_direct(long_q) is None)
 
+# ---- 2026-09-18 评测（L3 对话级套件）抓到的两个真问题，固化为回归 ----
+print("\n== 多轮指代 · 追问句无实体时借用上下文（评测抓到）==")
+d_ctx = direct.try_direct("那它几点开门", context="学校有没有麦当劳")
+check("「那它几点开门」借上文实体仍走模板", bool(d_ctx) and d_ctx["entity"] == "第二食堂",
+      str(d_ctx)[:70] if d_ctx else "None（会掉回 LLM 白花钱）")
+check("借上下文时 kind 判为 hours", bool(d_ctx) and d_ctx["kind"] == "hours")
+check("无上下文时同一追问不命中（不得凭空猜实体）",
+      direct.try_direct("那它几点开门") is None)
+
+# ---- 2026-09-18 第二例（评测抓到，且是本轮改动自己引入的）：上下文劫持 ----
+print("\n== 上下文劫持守卫（跨轮实体不得顶掉当前问题）==")
+HISTORY = "用户：学校有没有瑞幸\n梨宝：咱上理咖啡只有 1906咖啡厅（军工路516号北校区西北角）"
+check("「学校有没有瑞幸」不被上文里的 1906 劫持",
+      direct.try_direct("学校有没有瑞幸", context=HISTORY) is None,
+      "当前句无指代词 → 禁止借上下文实体")
+LONG_ANAPH = "那它这个食堂到底几点钟开门营业呢请问"      # 18 字，超 _ANAPHORA 的长度护栏
+check("长追问不借实体（>14 字护栏生效）",
+      direct.try_direct(LONG_ANAPH, context="学校有没有麦当劳") is None,
+      f"「{LONG_ANAPH}」共 {len(LONG_ANAPH)} 字，应放行走正常链路")
+check("裸「那麦当劳呢」放行（语义不明，不猜）",
+      direct.try_direct("那麦当劳呢", context=HISTORY) is None,
+      "「X呢」可能是问营业时间也可能是闲聊，三类问法都不匹配 → 交正常链路")
+
+print("\n== 推荐类问法必须放行（评测抓到：曾被 `有…吗` 误拦致答非所问）==")
+for q in ["三教附近有啥近的食堂吗", "学校附近有没有麦当劳", "二食堂附近有啥好吃的吗"]:
+    check(f"放行「{q}」", direct.try_direct(q) is None,
+          "含附近/有啥 → 属于就近推荐，模板只答单个地点会答非所问")
+
 print("\n" + "=" * 60)
 print(f"汇总：{ok}/{ok + fail} 通过（{ok / (ok + fail) * 100:.1f}%）")
 if fails:

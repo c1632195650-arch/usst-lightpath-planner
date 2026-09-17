@@ -20,6 +20,10 @@
     "eval:l1": "python evals/run.py --suite l1",
     "eval:gate": "python evals/run.py --suite all --gate",
     "eval:all": "python evals/run.py --suite all",
+    "eval:l3": "python evals/run.py --suite l3",
+    "eval:report": "python evals/report.py",
+    "eval:judge": "python evals/judge.py --selftest",
+    "eval:calibrate": "python evals/calibrate.py",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

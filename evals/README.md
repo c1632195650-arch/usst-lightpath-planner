@@ -28,11 +28,11 @@
 
 | 层 | 内容 | 判分 | 状态 |
 |---|---|---|---|
-| L0 确定性单测（**双端**） | 图谱/拼音/路网/排程/模板直答（后端）+ UI/引擎/类型（前端） | 代码断言，0 成本 | ✅ 已接入 `--suite l0` |
-| L1 检索评测 | 实体召回、文档 recall@5 / MRR、模板直答正确性 | 代码断言，0 成本 | ✅ 已接入 `--suite l1` |
-| L2 生成评测 | 忠实度 / 相关性 / 完整性 | LLM 裁判 | 🟡 rubric 已固化，接口待接（P1） |
-| L3 对话级评测 | 多轮、工具选择、记忆、人设与分寸 | 终态+轨迹+rubric | 🟡 现有 `test_libao.py` 作为雏形 |
-| L4 线上监控 | 真实流量漂移 | 采样 1~5% 过裁判 | ⬜ P2 |
+| L0 确定性单测（**双端**） | 图谱/拼音/路网/排程/模板直答（后端）+ UI/引擎/类型（前端）+ 判分器回归 | 代码断言，0 成本 | ✅ `--suite l0` |
+| L1 检索评测 | 实体召回、文档 recall@5 / MRR、模板直答正确性 | 代码断言，0 成本 | ✅ `--suite l1` |
+| L2 生成评测 | 忠实度 / 相关性 / 完整性 / 分寸 | LLM 裁判 | 🟡 适配器与 rubric 就位（`judge.py`，默认免费档），待人工标注校准 |
+| L3 对话级评测 | 多轮、指代、终态（mode/tools/used_space）、诚实性、分寸 | 终态断言 + pass^k | ✅ `--suite l3`（花钱档，5 场景） |
+| L4 线上监控 | 真实流量漂移 | 采样过裁判 | 🟡 trace 已落 JSONL + `report.py` 出趋势；采样调用待接 |
 
 ## Golden Set 怎么来的（三段式）
 
@@ -68,24 +68,59 @@ gen_silver.py          curate.py              人工（P1）
 ```bash
 python evals/gen_silver.py                 # ① 生成 silver 候选
 python evals/curate.py                     # ② 校验 → golden_v1.jsonl
-python evals/run.py --suite all --gate      # ③ 提交前：双端 L0 + L1（0 成本，≈1 分钟）
+python evals/run.py --suite all --gate      # ③ 提交前：双端 L0 + L1（0 成本，≈25 秒）
 python evals/run.py --suite l1 --update-baseline   # 指标提升后确认新基线
-python evals/run.py --suite e2e --base http://127.0.0.1:8000   # 夜间档（花 LLM 的钱）
+python evals/run.py --suite l3 --repeat 3 --gate   # 夜间档：对话级 pass^3（花钱）
+python evals/run.py --suite e2e --base http://127.0.0.1:8000   # 夜间档（花钱）
+python evals/judge.py --selftest            # 裁判自检（不发请求）
+python evals/calibrate.py --init            # 生成 20 条待人工标注 → 填 human 字段
+python evals/calibrate.py --provider ollama # 校准（一致率 >70%、ρ>0.75 才可进 CI）
+python evals/report.py                      # 趋势报告（门禁指标 + 流量分位数）
 ```
 
-npm 别名：`npm run eval:l0` / `eval:l1` / `eval:gate` / `eval:all`
+npm 别名：`eval:l0` / `eval:l1` / `eval:l3` / `eval:gate` / `eval:all` / `eval:silver` / `eval:curate` / `eval:judge` / `eval:calibrate` / `eval:report`
+
+### 裁判（L2/L4）怎么开
+
+默认 `--provider none`：**一分钱不花**，只跑通管线。要真判分时二选一：
+
+| provider | 成本 | 前置 |
+|---|---|---|
+| `ollama` | 免费 | 自行安装 Ollama（默认 `qwen2.5:7b-instruct`） |
+| `deepseek` | 付费 | 复用 `server/.env` 的 Key；受 `JUDGE_MAX_CALLS`（默认 30）硬上限保护 |
+
+**未通过校准前不许把裁判接进 CI** —— 校准结论不允许靠 <10 条样本得出。
+
+## P1 实测抓到的四个真问题（评测的价值就在这）
+
+| # | 现象 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | 「学校里有**图书馆（图文信息中心）**吗」白花钱走 LLM | 触发词窗口 `有.{0,8}吗` 太窄，官方长名匹配不到 | 放宽到 `{0,14}`（test_direct 固化） |
+| 2 | 「三教**附近有啥**近的食堂吗」被模板拦下 → 只答单个地点，**答非所问** | `有…吗` 把就近推荐误判成存在性 | `_BLOCK` 增加 `附近/周边/最近/哪个/哪家/有啥` |
+| 3 | 「那它几点开门」掉出 L0 白花钱 | 追问句本身没有实体 | 允许**借上文实体**（三道闸门：本句无实体 + 有指代词 + ≤14 字） |
+| 4 | 「学校有没有瑞幸」被答成 **1906 咖啡厅** | 借上文实体时吃到了**梨宝自己上一轮回答**里的实体（上下文劫持） | ①`_ANAPHORA` 收窄 ②L3/L1 的 `session_id` 加运行号（每个 trial 干净环境） |
+
+**断言本身也迭代了三次**（都是被假红逼出来的，值得记住）：
+诚实性判定从「全局否定词」→「同句含实体+方位词」→ **「方位词必须贴着品牌才算编造」**。
+中间两次都把诚实回答误判成不诚实（「也没星巴克」、「没查到瑞幸嗷，只翻到一家『1906咖啡厅』（军工路516号…）」——
+后者把替代地点的地址算到了品牌头上）。结论：**编造判定从严（贴邻归属），否定判定从宽（全篇）**。
 
 ## 目录
 
 ```
 evals/
 ├── gen_silver.py     silver 生成器（知识库自己出题）
-├── curate.py         策展器（回源校验 + 分层配额 + 版本化）
-├── run.py            台架（L0/L1/e2e，门禁与基线对比）
-├── silver/           候选（append-only，每次生成带日期）
+├── curate.py         策展器（回源校验 + 双配额 + 版本化）
+├── run.py            台架（l0 / l1 / l3 / e2e，门禁与基线对比、pass^k）
+├── judge.py          裁判适配器（none 免费档 / ollama / deepseek，零依赖）
+├── calibrate.py      裁判校准（一致率、Spearman ρ、样本不足拒绝下结论）
+├── report.py         趋势报告（门禁指标趋势 + 流量分位数与成本估算）
+├── test_judge_rules.py  判分器回归（14 例，含 5 条反向验证）
+├── silver/           候选（append-only，gitignore）
 ├── golden/           golden_v1.jsonl ← CI 依赖的唯一数据集
-├── judges/           裁判纪律 + rubric（P1 接模型）
-└── runs/             每次运行的 metrics 与逐题明细 + baseline.json
+├── tasks/            l3_scenarios.jsonl（对话级场景）
+├── judges/           裁判纪律 + rubric + labels.jsonl（人工标注）
+└── runs/             门禁明细与基线（baseline.json 进仓库）＋ trace_*.jsonl（gitignore）
 ```
 
 ## 与既有脚本的关系（不重复造）
@@ -98,9 +133,9 @@ evals/
 | `scripts/test_libao.py` | L3 对话套件雏形，P1 升级为「终态断言 + pass^k」 |
 | `LIBAO_DEBUG` trace | Transcript 标准格式，P2 落 JSONL 供 L4 采样 |
 
-## 下一步（P1）
+## 下一步（P2）
 
-1. 接 DeepEval（Apache-2.0，pytest 原生）把所有 L0 套件包成 `pytest evals/`
-2. `run.py --suite e2e --judge local`：本地 Ollama 裁判 + 20 条人工标注做校准（一致率 >70%、ρ>0.75 方可进 CI）
-3. L3 加终态断言与用户模拟器（多轮追问、对抗输入）
-4. trace 落 JSONL（含 tokens/成本），出周报
+1. `run.py --suite e2e --judge local`：把裁判接进夜间档（先装 Ollama 或接受付费），并用 `calibrate.py` 的 20 条人工标注过校准
+2. L4 采样：从 `trace_*.jsonl` 按 1~5% 抽流量过裁判，点踩/追问信号回填 golden（**每个真实 bug 当天变一条 task**）
+3. 能力题毕业机制：`pass^k=1` 且稳定的 capability 场景移进 regression 并长期门禁
+4. 延迟/成本门禁：把 P95 与单次成本纳入 `run.py` 的阈值比较（report.py 已有数据）

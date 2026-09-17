@@ -1,0 +1,20 @@
+{"id": "brand_absent-171", "metric": "tone_safety", "q": "学校有没有瑞幸", "payload": {"question": "学校有没有瑞幸", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "brand_absent-173", "metric": "tone_safety", "q": "学校有没有肯德基", "payload": {"question": "学校有没有肯德基", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "brand_absent-175", "metric": "tone_safety", "q": "学校有没有蜜雪冰城", "payload": {"question": "学校有没有蜜雪冰城", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "brand_absent-177", "metric": "tone_safety", "q": "学校有没有必胜客", "payload": {"question": "学校有没有必胜客", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "brand_absent-179", "metric": "tone_safety", "q": "学校有没有罗森", "payload": {"question": "学校有没有罗森", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "kb_topic-186", "metric": "tone_safety", "q": "四六级相关的事怎么弄？", "payload": {"question": "四六级相关的事怎么弄？", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "kb_topic-192", "metric": "tone_safety", "q": "心理咨询相关的事怎么弄？", "payload": {"question": "心理咨询相关的事怎么弄？", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "kb_topic-199", "metric": "tone_safety", "q": "宿舍消防相关的事怎么弄？", "payload": {"question": "宿舍消防相关的事怎么弄？", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "kb_topic-205", "metric": "tone_safety", "q": "就业报告相关的事怎么弄？", "payload": {"question": "就业报告相关的事怎么弄？", "answer": "", "evidence": [], "reference": ""}, "human": null, "hint": "填 0/1（是否合规）"}
+{"id": "poi_exist-001", "metric": "faithfulness", "q": "学校有没有第一食堂", "payload": {"question": "学校有没有第一食堂", "answer": "", "evidence": ["第一食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_exist-030", "metric": "faithfulness", "q": "学校有没有逸兴楼", "payload": {"question": "学校有没有逸兴楼", "answer": "", "evidence": ["逸兴楼"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_exist-059", "metric": "faithfulness", "q": "学校有没有580号校门", "payload": {"question": "学校有没有580号校门", "answer": "", "evidence": ["580号校门"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_exist-089", "metric": "faithfulness", "q": "学校有没有音乐堂", "payload": {"question": "学校有没有音乐堂", "answer": "", "evidence": ["音乐堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_exist-118", "metric": "faithfulness", "q": "学校有没有学生活动中心", "payload": {"question": "学校有没有学生活动中心", "answer": "", "evidence": ["学生活动中心"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_where-154", "metric": "faithfulness", "q": "第二食堂在哪", "payload": {"question": "第二食堂在哪", "answer": "", "evidence": ["第二食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_flip-148", "metric": "faithfulness", "q": "学校里有第二食堂吗", "payload": {"question": "学校里有第二食堂吗", "answer": "", "evidence": ["第二食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_flip-150", "metric": "faithfulness", "q": "学校里有1906咖啡厅吗", "payload": {"question": "学校里有1906咖啡厅吗", "answer": "", "evidence": ["1906咖啡厅"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_flip-152", "metric": "faithfulness", "q": "学校里有第五食堂吗", "payload": {"question": "学校里有第五食堂吗", "answer": "", "evidence": ["第五食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_hours-162", "metric": "faithfulness", "q": "第一食堂几点开门", "payload": {"question": "第一食堂几点开门", "answer": "", "evidence": ["第一食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}
+{"id": "poi_hours-164", "metric": "faithfulness", "q": "第五食堂几点开门", "payload": {"question": "第五食堂几点开门", "answer": "", "evidence": ["第五食堂"], "reference": ""}, "human": null, "hint": "填 1-5 分（忠实度）"}

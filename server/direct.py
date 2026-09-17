@@ -28,7 +28,10 @@ _TRIG_HOURS = re.compile(r"(几点开|几点关|几点闭|开门|关门|还开|�
 # 需要延展的问法：一旦出现就放弃模板 —— 这类问题模板答不好，RAG/agent 才有价值
 _BLOCK = re.compile(
     r"(怎么|为什么|如何|为啥|好吃|好喝|推荐|建议|怎么样|好不好|办|预约|申请|报名|"
-    r"缴费|多少钱|费用|收费|价格|取消|退|能不能|可以吗|需不需要|要不要|值得|哪个好|对比)"
+    r"缴费|多少钱|费用|收费|价格|取消|退|能不能|可以吗|需不需要|要不要|值得|哪个好|对比|"
+    # 2026-09-18 评测抓到的真问题：「三教附近**有啥**近的食堂吗」被 `有…吗` 误判成存在性，
+    # 模板只答了单个地点 → 答非所问（比多花钱更糟）。推荐/就近类问法必须放行。
+    r"附近|周边|最近|哪个|哪家|有啥|多远|几条)"
 )
 
 # 超过这个长度基本是多跳/描述型提问（"我上午在三教上课中午想去二食堂吃饭但下午还要去南校…"），
@@ -97,8 +100,21 @@ def _render(q, p, kind):
     return "\n".join(lines)
 
 
-def try_direct(q):
-    """命中 → {"answer","kind","entity"}；不命中 / 任何异常 → None（绝不影响主链路）。"""
+# 多轮指代（允许借上下文实体的唯一情形）：
+# 2026-09-18 评测抓到一次**劫持**——「学校有没有瑞幸」被上一轮回答里的「1906咖啡厅」
+# 顶掉了实体，答成 1906 的模板。所以借实体必须同时满足：
+#   ① 当前句**不含**自己的实体（上面已判）② 当前句是短追问且有指代词 ③ 长度 ≤ 14
+_ANAPHORA = re.compile(r"(它|这个|那个|那家|这家|那儿|这里|呢[？?]?$|^那)")
+
+
+def try_direct(q, context=""):
+    """命中 → {"answer","kind","entity"}；不命中 / 任何异常 → None（绝不影响主链路）。
+
+    `context`：最近几轮的对话原话。**多轮指代**（"那它几点开门"）本身不含实体，
+    借上一轮的实体仍可走 L0 模板（0 次 LLM）。但借实体是**高危操作**：
+    上下文里同时有"用户问的"和"梨宝答的"，后者会把当前问题带跑偏，故设三道闸门
+    （见 `_ANAPHORA`）。触发词与 `_BLOCK` 永远只看当前句。
+    """
     q = (q or "").strip()
     if not q or len(q) > _MAX_LEN:
         return None
@@ -107,10 +123,12 @@ def try_direct(q):
         return None
     try:
         ents = campus.match_entities(q)
+        if not ents and context and len(q) <= 14 and _ANAPHORA.search(q):
+            ents = campus.match_entities(context)
         if not ents:
             return None
         p = ents[0]
-        ans = _render(q, p, kind)
+        ans = _render((q + " " + (context or "")).strip(), p, kind)
     except Exception as e:
         print("[direct] 模板直答失败，回退正常链路：", e)
         return None
