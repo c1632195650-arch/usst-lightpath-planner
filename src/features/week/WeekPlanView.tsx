@@ -35,9 +35,15 @@ import type { BehaviorRecord, BehaviorStatus } from '@/features/behavior/behavio
 import {
   isLocked, lockCount, lockedPlacementsOf, lockLevelsOf, withLock, withoutLock,
 } from '@/features/plan/planLock';
+import {
+  isSettledWeek, mergeWeekRolling, rollingBaseFor, rollingForPlan, rollingSummary,
+  withWeekRolling,
+} from '@/features/plan/rollingState';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm } from '@/constants/time';
-import { addDays, diffDays, todayISO } from '@/lib/date';
+import {
+  addDays, currentWeekNo, diffDays, mondayOfWeekNo, todayISO, WEEKDAY_CN, weekDates,
+} from '@/lib/date';
 import { DEADLINES } from '@/data/usst';
 
 interface Props {
@@ -178,6 +184,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 加权质量分（越低越好）和耗时。这是答辩时「算法依据」的答案。
    */
   const [diag, setDiag] = useState<Diagnostics | null>(null);
+  /**
+   * 引擎刚产出的**原始**滚动状态（其 `loadByDow` = 本周计划的逐日负荷）。
+   * 它还不是持久化的那份 —— 必须先经「实际优先、计划兜底」的沉淀（见下面的 effect）。
+   */
+  const [engineRollingOut, setEngineRollingOut] = useState<import('@/types').RollingState | null>(null);
+  /** 上周执行情况的一句话总结；没有反馈时为 null（不假装有数据） */
+  const [rollingNote, setRollingNote] = useState<string | null>(null);
   /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
   const [weather, setWeather] = useState<WeatherReport | null>(null);
 
@@ -274,6 +287,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // 少了后者，construct 从头排一遍就会把块挪走，锁变成装饰。
             lockLevels: lockLevelsOf(planState),
             lockedPlacements: lockedPlacementsOf(planState),
+            // 跨周滚动：把「上一周及更早的实际负荷」喂进引擎，让它决定这周松一点还是照常。
+            // `rollingForPlan` 只在知识截止周**早于**本周时才返回 —— 这是挡住自指的唯一防线
+            // （本周自己排出来的值回头影响本周的排法，会形成「越排越空」的正反馈）。
+            rolling: rollingForPlan(planState, weekNo),
           },
           {
             transferFactory: async (blocks) => {
@@ -288,6 +305,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           setPlan(result.plan);
           setNotes(result.notes);
           setDiag(result.diagnostics);
+          setEngineRollingOut(result.nextRolling);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -296,6 +314,45 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     return () => { cancelled = true; };
     // planState 在依赖里：点了「定住」要立刻按新锁重排，而不是等下次刷新
   }, [schedule, weekNo, phase, persona, weather, planState]);
+
+  /**
+   * 把这一周的经验沉淀进 `planState.rolling` —— 「跨周滚动」的入口。
+   *
+   * 负荷来源按已定的规则：**实际优先、计划兜底**（某天有反馈就用实际完成分钟，
+   * 没反馈就退回当天计划值 —— 没数据 ≠ 没做，记 0 会让引擎以为你闲着）。
+   *
+   * ⚠️ 为什么必须放在**独立 effect** 里，而不是在重排里顺手写回：
+   *   重排 effect 的依赖里已经有 `planState`（点锁要立刻重排）。若在重排里写状态，
+   *   就会「写状态 → 依赖变化 → 重排 → 再写」形成死循环。
+   *   这里还叠了一道「值没变就别写」的守卫：只有当沉淀结果真的变化
+   *   （换周、或用户新标记了执行）时才回写。
+   *
+   * ⚠️ 基线用 `rollingBaseFor()` 而不是 `planState.rolling`：用户会在同一周里反复标记，
+   *   同一周内任意次重算都必须从同一个起点出发，否则点两次「没做」负荷会被算两遍。
+   */
+  useEffect(() => {
+    if (!plan || !engineRollingOut) return;
+    // 未来的周只消费、不沉淀：那一周还没发生，把它的计划值当观测会让目标一路走低
+    if (!isSettledWeek(weekNo, currentWeekNo(schedule.termStart))) return;
+    const base = rollingBaseFor(planState, weekNo);
+    const merged = mergeWeekRolling({
+      engine: engineRollingOut,
+      base,
+      records,
+      weekDates: weekDates(mondayOfWeekNo(schedule.termStart, weekNo)),
+      weekNo,
+    });
+
+    const stored = planState?.rolling ?? null;
+    const same = stored != null
+      && stored.throughWeek === weekNo
+      && JSON.stringify(stored.recentLoad) === JSON.stringify(merged.rolling.recentLoad)
+      && JSON.stringify(stored.feasibleByDow ?? []) === JSON.stringify(merged.rolling.feasibleByDow ?? []);
+    if (same) return; // 已经沉淀过同一份结果，不必再写（这一步就是防死循环的那道闸）
+
+    onPlanStateChange(withWeekRolling(planState, merged, base, weekNo, new Date().toISOString()));
+    setRollingNote(rollingSummary(merged));
+  }, [plan, engineRollingOut, records, weekNo, planState, onPlanStateChange, schedule.termStart]);
 
   if (loading) {
     return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;
@@ -315,7 +372,12 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
           <span className="text-[12px] text-ink-soft">
-            每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
+            每天自习目标 {phase.policy.dailyStudyMin} 分
+            {/* 自适应把目标调低了就显示成「120 → 96 分」，不能只写基准值假装没变过 */}
+            {diag?.fatigue && diag.fatigue.factor < 1 && (
+              <> → {Math.round(phase.policy.dailyStudyMin * diag.fatigue.factor)} 分</>
+            )}
+            {' · '}单块 ≤{phase.policy.maxBlockMin} 分 ·
             留白 {Math.round(phase.policy.blankRatio * 100)}% ·
             晚间{phase.policy.eveningAllowed ? '可用' : '不排'} ·
             周末{phase.policy.weekendWork ? '排' : '不排'}
@@ -326,6 +388,29 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             <li key={i} className="text-[11.5px] leading-relaxed text-ink-faint">· {r}</li>
           ))}
         </ul>
+        {/* 跨周自适应：引擎「记得你上周怎么过的」。
+            没有滚动数据时整块不出现 —— 拿不准的事就不说，别编一句话麻痹用户。 */}
+        {(diag?.fatigue || rollingNote) && (
+          <div className="mt-2 rounded-md bg-sky-50 px-2.5 py-1.5 text-[11.5px] leading-relaxed text-sky-900">
+            {diag?.fatigue && (
+              <div>
+                跨周自适应：最近工作日日均占用约{' '}
+                {((diag.fatigue.observedDailyMin ?? 0) / 60).toFixed(1)} 小时
+                {diag.fatigue.factor < 1
+                  ? `，偏高 → 本周自习目标下调到 ${Math.round(phase.policy.dailyStudyMin * diag.fatigue.factor)} 分钟`
+                  : '，负荷正常 → 本周未做调整'}
+                {diag.fatigue.softenedDays.length > 0 && (
+                  <>；{diag.fatigue.softenedDays.map((d) => WEEKDAY_CN[d % 7]).join('、')} 的自习最近总没做，这几天少排一点</>
+                )}
+              </div>
+            )}
+            {rollingNote ? (
+              <div>你的执行记录：{rollingNote}</div>
+            ) : (
+              <div>还没有执行记录 —— 在块上点「做了 / 没做」，下周的排法就会跟着变</div>
+            )}
+          </div>
+        )}
         {/* 求解器诊断：排得「好不好」的量化凭据。
             刻意不用绿色高亮 —— 它是给人核对的事实，不是「成功了」的庆祝。 */}
         {diag && (
