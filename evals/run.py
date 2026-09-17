@@ -509,15 +509,19 @@ def main():
             fails.append(f"l3 pass^{args.repeat}={m['pass^k']} < 1.0（对用户可见路径必须每次都对）")
         print()
 
-    if args.suite == "engine":
+    if args.suite in ("engine", "all"):
         print("== 引擎独立验收（CY 侧口径 · 0 成本 · 需 node）==")
         tasks, m, rc, sec = suite_engine()
         result["tasks"] = tasks
         result["metrics"].update(m)
         v = m.get("engine_violations")
+        slow = sum(1 for t in (tasks or []) if (t.get("metrics") or {}).get("slow"))
+        m["engine_slow_scenarios"] = slow
         print(f"  不变量违反 {v}｜硬约束 issues {m.get('engine_hard_issues')}"
               f"｜转场 {m.get('engine_transfers_seen')}（紧 {m.get('engine_tight_transfers')}）"
-              f"｜确定性 {m.get('engine_determinism')}｜{sec}s")
+              f"｜确定性 {m.get('engine_determinism')}｜p95 超基线 50%+ 的场景 {slow}｜{sec}s")
+        if slow:
+            print(f"     ⚠️ 引擎变慢：{slow} 个场景 p95 高于基线 50%（噪声大，定论看 p50 或 --runs 9）")
         if rc != 0 or (v or 0) > 0:
             fails.append(f"引擎不变量违反 {v} 处（rc={rc}）")
         print()

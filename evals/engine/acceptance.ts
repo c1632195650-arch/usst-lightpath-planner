@@ -197,6 +197,8 @@ async function runVariant(spec: AnyRec, variant: string) {
       issues: issuesOf(plan),
       ms: { p50: +p(0.5).toFixed(2), p95: +p(0.95).toFixed(2), max: +Math.max(...times).toFixed(2) },
       determinism: deterministic,
+      // 相对基线是否明显变慢（供 run.py --suite engine 报警；噪声大故阈值取 1.5×）
+      slow: false,
     },
   };
 }
@@ -269,7 +271,11 @@ if (existsSync(BASELINE)) {
     const p95o = o.ms?.p95;
     const p95n = m.ms?.p95;
     if (typeof p95o === 'number' && typeof p95n === 'number') {
-      bits.push(`p95 ${p95o}→${p95n}ms${p95n > p95o * 1.5 ? '  ⚠️ 慢 50%+（默认 3 轮，噪声大；定论请用 --runs 9）' : ''}`);
+      const slowed = p95n > p95o * 1.5;
+      if (slowed) {
+        (m as any).slow = true;   // 让 run.py 能数出「变慢的场景数」
+        bits.push(`p95 ${p95o}→${p95n}ms  ⚠️ 慢 50%+（噪声大；定论请用 --runs 9）`);
+      }
     }
     if (bits.length) {
       console.log(`  ${name}：${bits.join('｜')}`);

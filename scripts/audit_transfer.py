@@ -25,6 +25,7 @@
 """
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -51,6 +52,53 @@ CHECKLIST = [
     ("第一教学楼 → 第三教学楼（清单说最常见课间转场）",
      ("第一教学楼", "第三教学楼"), "第一教学楼"),
 ]
+
+
+
+def hav(a, b):
+    """两点球面距离（米）—— 用**直线距离**当第三方判决：
+    真实路径必然 ≥ 直线，所以「直线/真值分钟」若已超过人类步行上限，
+    就**铁定**是真值偏短（不需要额外米数证据）。"""
+    R = 6371000.0
+    p1, p2 = math.radians(a[0]), math.radians(b[0])
+    dp, dl = p2 - p1, math.radians(b[1] - a[1])
+    return 2 * R * math.asin(math.sqrt(
+        math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2))
+
+
+def anchor_of(net, name):
+    """POI 锚点坐标（含别名回退）。返回 (lat, lon) 或 None。"""
+    v = net.poi.get(name)
+    if v:
+        return v[0]
+    canon = (getattr(net, "alias_map", None) or {}).get(name)
+    if canon and net.poi.get(canon):
+        return net.poi[canon][0]
+    for k in net.poi:
+        if name in k:
+            return net.poi[k][0]
+    return None
+
+
+def bridge_status(net, key_points):
+    """跨区通道（海安路人行天桥）是否接入路网：找锚点最近的路网节点。"""
+    pt = None
+    if isinstance(key_points, dict):
+        for k, v in key_points.items():
+            if "桥" in str(k):
+                pt = tuple(v) if isinstance(v, (list, tuple)) else None
+                break
+        if pt is None:
+            pts = key_points.get("points") if isinstance(key_points.get("points"), dict) else None
+            if pts:
+                for k, v in pts.items():
+                    if "桥" in str(k):
+                        pt = tuple(v); break
+    if not pt or not getattr(net, "adj", None):
+        return None
+    near = min(((hav(pt, n), n) for n in net.adj))[0]
+    return {"point": pt, "nearest_node_m": round(near, 1),
+            "connected": near <= 50}
 
 
 def norm(f, t):
@@ -127,6 +175,15 @@ def main():
     print(f"\n== D 定位精度与桥接碎片 ==")
     print(f"  桥接碎片 {len(bridged)} 处（缺口米数, 碎片节点数）：{bridged}")
     print("  说明：桥接边按直线 ×1.2 估算 —— 这些区的对是精度最差来源（既有结论，非本轮新增）")
+    kp = {}
+    try:
+        kp = json.load(open(os.path.join(ROOT, "data", "osm", "key_points.json"), encoding="utf-8"))
+    except Exception:
+        pass
+    bs = bridge_status(net, kp) if net else None
+    if bs:
+        print(f"  跨区通道（海安路人行天桥）：最近路网节点 {bs['nearest_node_m']}m → "
+              f"{'✅ 已接入路网' if bs['connected'] else '❌ 未接入'}")
     weak = [c for c in conflicts if not c["reliable"]]
     print(f"  内部矛盾里 {len(weak)} 对的端点靠弱锚兜底（reliable=False）")
 
@@ -137,7 +194,7 @@ def main():
     #    不是 8 条独立的真值错误），再对**有米数**的条目逐条定夺；
     #    没有米数的一律标 `needs_check`，**不武断**（第一版直接判"真值偏短"，
     #    但「二公寓→菜鸟驿站」实际是驿站就在二公寓旁、2min 合理 —— 是路网绕了）。
-    SPEED_FAST = 150          # m/min，超过这个速度按「走不到」处理
+    SPEED_FAST = 120          # m/min（≈2.0 m/s，快走上界；超过即"走不到"）
     DETOUR = 1.4              # 路网米数 / 真值米数 ≥ 此值 → 路网绕路
     n_route_longer = sum(1 for c in conflicts if c["delta"] > 0)
     n_truth_longer = sum(1 for c in conflicts if c["delta"] < 0)
@@ -150,8 +207,12 @@ def main():
                            else "方向不一致（更像逐条数据问题）"))
         print(f"  方向：路网偏长 {n_route_longer} 条 / 真值偏长 {n_truth_longer} 条 → {direction}"
               f"（平均偏差 {pct:.0f}%）")
-        print(f"  含义：引擎拿到的是**偏保守的转场**（预留偏多）→ 计划会偏松，不会迟到；"
-              f"根因候选：桥接边 ×1.2、校园捷径缺失、天桥未连通")
+        print(f"  含义：引擎拿到的是**偏保守的转场**（预留偏多）→ 计划会偏松，不会迟到")
+        # 根因已由本轮诊断**收窄并否证了一条**：D 节确认天桥已接入路网（7.2m），
+        # 所以不是"桥没连"；真正的候选只剩校园步道缺失 + 端点锚点精度。
+        print("  根因（2026-09-18 诊断后）：①校园内部步道在 OSM 里缺失/碎片化"
+              "（最大绕路比见下）②端点锚点多为 near_landmark（中等精度）③桥接边 ×1.2\n"
+              "  ⚠️ 已否证：~~天桥未连通~~（D 节：最近路网节点 7.2m，已接入）")
 
     triage = {"route_detour": [], "truth_suspect": [], "needs_check": []}
     for c in conflicts:
@@ -159,8 +220,17 @@ def main():
         meters = r.get("meters") or 0
         note_m = re.search(r"(\d{2,4})\s*米", c.get("note") or "")
         truth_m = int(note_m.group(1)) if note_m else None
-        item = {**c, "route_meters": round(meters), "truth_meters": truth_m}
-        if truth_m:
+        ca, cb = anchor_of(campus.network(), c["from"]), anchor_of(campus.network(), c["to"])
+        straight = round(hav(ca, cb)) if (ca and cb) else None
+        item = {**c, "route_meters": round(meters), "truth_meters": truth_m,
+                "straight_m": straight}
+        if straight and straight / c["truth_min"] > SPEED_FAST:
+            # 铁证：路径不可能短于直线 → 真值分钟必定偏短
+            item["verdict"] = (f"真值偏短 **或** 锚点异常（直线 {straight}m / "
+                              f"{c['truth_min']}min = {round(straight / c['truth_min'])} m/min "
+                              f"超步行上限；两者都说明**这条数据有问题，需人工**）")
+            triage["truth_suspect"].append(item)
+        elif truth_m:
             ratio = meters / truth_m
             if ratio >= DETOUR:
                 item["verdict"] = f"路网绕路（{round(meters)}m / 真值 {truth_m}m = {ratio:.2f}×）"
@@ -172,8 +242,16 @@ def main():
                 item["verdict"] = "两值皆可（路径选择差异）"
                 triage["needs_check"].append(item)
         else:
-            item["verdict"] = ("无真值米数，无法定夺：真值偏短 or 路网绕路"
-                               f"（隐含速度 {round(meters / c['truth_min'])} m/min）")
+            extra = ""
+            if straight:
+                extra = f"｜直线 {straight}m（绕路比 {meters / straight:.2f}×）"
+                if meters / straight >= 2.0:
+                    item["verdict"] = (f"路网绕路（{round(meters)}m / 直线 {straight}m = "
+                                       f"{meters / straight:.2f}×，校园近路缺失）")
+                    triage["route_detour"].append(item)
+                    continue
+            item["verdict"] = (f"无真值米数，无法定夺（隐含速度 "
+                               f"{round(meters / c['truth_min'])} m/min{extra}）")
             triage["needs_check"].append(item)
     print(f"  🔎 路网绕路 {len(triage['route_detour'])} 条（有真值米数可比）"
           f"｜⚠️ 真值偏短 {len(triage['truth_suspect'])} 条"
@@ -211,7 +289,7 @@ def main():
         "walk_minutes": len(wm), "verified": len(verified), "est": len(est),
         "checked_pairs": checked, "skipped_pairs": skipped,
         "conflicts": conflicts, "asymmetries": asym,
-        "bridged_fragments": bridged,
+        "bridged_fragments": bridged, "bridge": bs,
         "triage": triage,
         "checklist_closed": [l for l, _ in closed], "checklist_open": still_open,
         "doc_drift": drift,

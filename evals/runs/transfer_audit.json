@@ -117,6 +117,14 @@
    2
   ]
  ],
+ "bridge": {
+  "point": [
+   31.292162,
+   121.552023
+  ],
+  "nearest_node_m": 7.2,
+  "connected": true
+ },
  "triage": {
   "route_detour": [
    {
@@ -129,6 +137,7 @@
     "delta": 3.9,
     "note": "高德导航实测：288米 / 4分钟，途经『上过街天桥』（海安路师生专用通道）",
     "truth_meters": 288,
+    "straight_m": 312,
     "verdict": "路网绕路（595m / 真值 288m = 2.07×）"
    },
    {
@@ -141,70 +150,8 @@
     "delta": 2.5,
     "note": "高德导航实测：451米 / 6分钟（向东北，途经研究生院·工会·第一食堂一带）",
     "truth_meters": 451,
+    "straight_m": 330,
     "verdict": "路网绕路（638m / 真值 451m = 1.42×）"
-   }
-  ],
-  "truth_suspect": [],
-  "needs_check": [
-   {
-    "from": "逸兴楼（四教）",
-    "to": "南校区操场",
-    "truth_min": 1,
-    "route_min": 5.0,
-    "route_meters": 371,
-    "reliable": true,
-    "delta": 4.0,
-    "note": "沿南校操场走到底",
-    "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 371 m/min）"
-   },
-   {
-    "from": "二公寓",
-    "to": "菜鸟驿站",
-    "truth_min": 2,
-    "route_min": 5.7,
-    "route_meters": 430,
-    "reliable": true,
-    "delta": 3.7,
-    "note": "",
-    "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 215 m/min）"
-   },
-   {
-    "from": "逸兴楼（四教）",
-    "to": "思餐厅",
-    "truth_min": 4,
-    "route_min": 7.7,
-    "route_meters": 576,
-    "reliable": true,
-    "delta": 3.7,
-    "note": "est：南校区内",
-    "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 144 m/min）"
-   },
-   {
-    "from": "全家便利店",
-    "to": "运动场",
-    "truth_min": 1,
-    "route_min": 3.8,
-    "route_meters": 281,
-    "reliable": true,
-    "delta": 2.8,
-    "note": "跑道围栏外",
-    "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 281 m/min）"
-   },
-   {
-    "from": "第三教学楼",
-    "to": "光电楼",
-    "truth_min": 4,
-    "route_min": 6.5,
-    "route_meters": 489,
-    "reliable": true,
-    "delta": 2.5,
-    "note": "est：同在中北部",
-    "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 122 m/min）"
    },
    {
     "from": "第五学生公寓",
@@ -216,7 +163,77 @@
     "delta": 2.5,
     "note": "宿舍指南：周边有教育超市",
     "truth_meters": null,
-    "verdict": "无真值米数，无法定夺：真值偏短 or 路网绕路（隐含速度 168 m/min）"
+    "straight_m": 53,
+    "verdict": "路网绕路（337m / 直线 53m = 6.35×，校园近路缺失）"
+   }
+  ],
+  "truth_suspect": [
+   {
+    "from": "二公寓",
+    "to": "菜鸟驿站",
+    "truth_min": 2,
+    "route_min": 5.7,
+    "route_meters": 430,
+    "reliable": true,
+    "delta": 3.7,
+    "note": "",
+    "truth_meters": null,
+    "straight_m": 289,
+    "verdict": "真值偏短 **或** 锚点异常（直线 289m / 2min = 144 m/min 超步行上限；两者都说明**这条数据有问题，需人工**）"
+   },
+   {
+    "from": "全家便利店",
+    "to": "运动场",
+    "truth_min": 1,
+    "route_min": 3.8,
+    "route_meters": 281,
+    "reliable": true,
+    "delta": 2.8,
+    "note": "跑道围栏外",
+    "truth_meters": null,
+    "straight_m": 147,
+    "verdict": "真值偏短 **或** 锚点异常（直线 147m / 1min = 147 m/min 超步行上限；两者都说明**这条数据有问题，需人工**）"
+   }
+  ],
+  "needs_check": [
+   {
+    "from": "逸兴楼（四教）",
+    "to": "南校区操场",
+    "truth_min": 1,
+    "route_min": 5.0,
+    "route_meters": 371,
+    "reliable": true,
+    "delta": 4.0,
+    "note": "沿南校操场走到底",
+    "truth_meters": null,
+    "straight_m": null,
+    "verdict": "无真值米数，无法定夺（隐含速度 371 m/min）"
+   },
+   {
+    "from": "逸兴楼（四教）",
+    "to": "思餐厅",
+    "truth_min": 4,
+    "route_min": 7.7,
+    "route_meters": 576,
+    "reliable": true,
+    "delta": 3.7,
+    "note": "est：南校区内",
+    "truth_meters": null,
+    "straight_m": null,
+    "verdict": "无真值米数，无法定夺（隐含速度 144 m/min）"
+   },
+   {
+    "from": "第三教学楼",
+    "to": "光电楼",
+    "truth_min": 4,
+    "route_min": 6.5,
+    "route_meters": 489,
+    "reliable": true,
+    "delta": 2.5,
+    "note": "est：同在中北部",
+    "truth_meters": null,
+    "straight_m": 275,
+    "verdict": "无真值米数，无法定夺（隐含速度 122 m/min｜直线 275m（绕路比 1.78×））"
    }
   ]
  },
