@@ -1,0 +1,427 @@
+{
+ "topology": {
+  "nodes": 1712,
+  "edges_undirected": 2750,
+  "components": 6,
+  "largest_component": 1634,
+  "largest_component_share": 0.9544,
+  "isolated_nodes": 0,
+  "dangling_nodes": 103,
+  "self_loops": 0,
+  "zero_length_edges": 0,
+  "parallel_edge_pairs": 0,
+  "one_way_stored_edges": 0,
+  "bbox_km": [
+   2.831,
+   1.81
+  ],
+  "bbox_area_km2": 5.1238,
+  "bbox_caveat": "bbox 含校园外围城市道路（军工路等），密度类指标因此被稀释"
+ },
+ "shape": {
+  "link_node_ratio": 1.606,
+  "mean_degree": 3.213,
+  "intersections_deg3plus": 543,
+  "intersection_density_per_km2": 106.0,
+  "edge_length_median_m": 18.44
+ },
+ "orientation": {
+  "entropy_norm_0to1": 0.9632,
+  "top_axis_deg": 55.0,
+  "top_axis_share": 0.1342,
+  "top2_axes_deg": [
+   55.0,
+   145.0
+  ],
+  "top2_axis_share": 0.232,
+  "histogram": [
+   107,
+   72,
+   75,
+   79,
+   218,
+   369,
+   167,
+   146,
+   170,
+   126,
+   79,
+   88,
+   124,
+   208,
+   269,
+   158,
+   141,
+   154
+  ],
+  "note": "熵越低越规整；主峰近似 = 该片区街道主走向。这是形状指标，不判好坏"
+ },
+ "circuity": {
+  "pairs_used": 1866,
+  "median": 1.528,
+  "p90": 2.201,
+  "p99": 3.671,
+  "share_over_2": 0.1501,
+  "by_distance_band": {
+   "0.03–0.2 km": {
+    "n": 377,
+    "median": 1.706
+   },
+   "0.2–0.5 km": {
+    "n": 863,
+    "median": 1.538
+   },
+   "0.5–1 km": {
+    "n": 624,
+    "median": 1.464
+   },
+   ">1 km": {
+    "n": 2,
+    "median": 1.516
+   }
+  },
+  "note": "比值随距离下降是正常的（短距离的接入段占比高）"
+ },
+ "anchors": {
+  "total_poi": 146,
+  "strong": 117,
+  "strong_share": 0.8014,
+  "by_source": {
+   "osm": 112,
+   "near_landmark": 12,
+   "zone": 8,
+   "walk_minutes": 6,
+   "keypoint": 5,
+   "approx": 2,
+   "roads": 1
+  },
+  "unlocated": []
+ },
+ "ledger": {
+  "bridge_edges_offcampus": 5,
+  "bridged_fragments": 5,
+  "bridge_gaps_m": [
+   50,
+   22,
+   21,
+   17,
+   14
+  ],
+  "area_polys": 4,
+  "area_chord_edges": 889,
+  "skipped_car_tunnels": 2,
+  "osm_buildings_indexed": 155
+ },
+ "anchor_collapse": {
+  "groups": 17,
+  "suspect_groups": 8,
+  "detail": [
+   {
+    "coord": [
+     31.29378,
+     121.55145
+    ],
+    "members": [
+     "第一教学楼",
+     "第二学生公寓",
+     "老图书馆",
+     "藏书阁宿舍"
+    ],
+    "sources": {
+     "第一教学楼": "osm",
+     "第二学生公寓": "near_landmark",
+     "老图书馆": "walk_minutes",
+     "藏书阁宿舍": "near_landmark"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "第二学生公寓",
+     "老图书馆",
+     "藏书阁宿舍"
+    ]
+   },
+   {
+    "coord": [
+     31.29669,
+     121.55286
+    ],
+    "members": [
+     "上理烘焙坊",
+     "咪昵餐厅",
+     "第一食堂"
+    ],
+    "sources": {
+     "上理烘焙坊": "osm",
+     "咪昵餐厅": "walk_minutes",
+     "第一食堂": "osm"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "咪昵餐厅"
+    ]
+   },
+   {
+    "coord": [
+     31.29565,
+     121.55151
+    ],
+    "members": [
+     "第二食堂",
+     "红塔打印",
+     "阅餐厅"
+    ],
+    "sources": {
+     "第二食堂": "osm",
+     "红塔打印": "walk_minutes",
+     "阅餐厅": "osm"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "红塔打印"
+    ]
+   },
+   {
+    "coord": [
+     31.29283,
+     121.54681
+    ],
+    "members": [
+     "580号校门",
+     "七公寓",
+     "民族餐厅（580号）"
+    ],
+    "sources": {
+     "580号校门": "keypoint",
+     "七公寓": "approx",
+     "民族餐厅（580号）": "zone"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "七公寓",
+     "民族餐厅（580号）"
+    ]
+   },
+   {
+    "coord": [
+     31.29354,
+     121.54709
+    ],
+    "members": [
+     "1906咖啡厅",
+     "心理健康中心",
+     "第五教学楼"
+    ],
+    "sources": {
+     "1906咖啡厅": "zone",
+     "心理健康中心": "zone",
+     "第五教学楼": "zone"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "1906咖啡厅",
+     "心理健康中心",
+     "第五教学楼"
+    ]
+   },
+   {
+    "coord": [
+     31.29152,
+     121.54997
+    ],
+    "members": [
+     "动力二馆",
+     "菜鸟驿站"
+    ],
+    "sources": {
+     "动力二馆": "osm",
+     "菜鸟驿站": "near_landmark"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "菜鸟驿站"
+    ]
+   },
+   {
+    "coord": [
+     31.29596,
+     121.55201
+    ],
+    "members": [
+     "学生活动中心",
+     "思晏堂"
+    ],
+    "sources": {
+     "学生活动中心": "osm",
+     "思晏堂": "roads"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "思晏堂"
+    ]
+   },
+   {
+    "coord": [
+     31.29432,
+     121.5514
+    ],
+    "members": [
+     "傅科打印",
+     "毛主席像"
+    ],
+    "sources": {
+     "傅科打印": "zone",
+     "毛主席像": "zone"
+    },
+    "suspect": true,
+    "suspect_members": [
+     "傅科打印",
+     "毛主席像"
+    ]
+   },
+   {
+    "coord": [
+     31.30141,
+     121.5437
+    ],
+    "members": [
+     "1100图书馆",
+     "第四食堂"
+    ],
+    "sources": {
+     "1100图书馆": "osm",
+     "第四食堂": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.29616,
+     121.55182
+    ],
+    "members": [
+     "暖屋超市",
+     "暖屋超市生鲜店"
+    ],
+    "sources": {
+     "暖屋超市": "osm",
+     "暖屋超市生鲜店": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.2883,
+     121.55395
+    ],
+    "members": [
+     "中德学院实验中心",
+     "逸兴楼"
+    ],
+    "sources": {
+     "中德学院实验中心": "osm",
+     "逸兴楼": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.28925,
+     121.55368
+    ],
+    "members": [
+     "南校区图书馆",
+     "管理学院大楼"
+    ],
+    "sources": {
+     "南校区图书馆": "osm",
+     "管理学院大楼": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.29732,
+     121.55006
+    ],
+    "members": [
+     "图书馆（图文信息中心）",
+     "校史馆"
+    ],
+    "sources": {
+     "图书馆（图文信息中心）": "osm",
+     "校史馆": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.29326,
+     121.55363
+    ],
+    "members": [
+     "南校区室内篮球场",
+     "室内体育馆"
+    ],
+    "sources": {
+     "南校区室内篮球场": "osm",
+     "室内体育馆": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.295,
+     121.55239
+    ],
+    "members": [
+     "学生卡卡务中心",
+     "行政服务中心 (格致堂)"
+    ],
+    "sources": {
+     "学生卡卡务中心": "osm",
+     "行政服务中心 (格致堂)": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.29321,
+     121.55073
+    ],
+    "members": [
+     "沪江美术馆",
+     "音乐堂"
+    ],
+    "sources": {
+     "沪江美术馆": "osm",
+     "音乐堂": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   },
+   {
+    "coord": [
+     31.28887,
+     121.55441
+    ],
+    "members": [
+     "微创工程中心",
+     "微创楼"
+    ],
+    "sources": {
+     "微创工程中心": "osm",
+     "微创楼": "osm"
+    },
+    "suspect": false,
+    "suspect_members": []
+   }
+  ]
+ }
+}

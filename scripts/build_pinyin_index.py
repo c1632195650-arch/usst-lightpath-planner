@@ -171,7 +171,7 @@ def main():
         p["pyg"] = "|".join(gfulls + ginis)
 
     m["_meta"]["pinyin"] = NOTE
-    m["_meta"]["updated"] = "2026-09-16"
+    m["_meta"]["updated"] = "2026-09-18"
 
     with open(MAP_PATH, "w", encoding="utf-8") as f:
         json.dump(m, f, ensure_ascii=False, indent=1)

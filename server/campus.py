@@ -391,7 +391,10 @@ def _score_poi(p, query, want_type=False):
                 continue
             if t == q:
                 best = max(best, _SCORE_TAG_EQ)
-            elif q in t or t in q:
+            # 与上面的「名字片段」档同一条理由：**单字符必须被挡掉**。
+            # 此前这一档漏了长度守卫 —— 任何含数字/字母的标签都会被单个字符假命中
+            # （实测：标签『1100吃饭』让查询 `1` 命中『第四食堂』）。
+            elif len(q) >= 2 and (q in t or t in q):
                 best = max(best, _SCORE_WEAK + min(len(t), _CAP))
     # 拼音：仅在**整串都是字母数字**时才走（含中文的查询交给中文那几档，更准）
     q_py = _re.sub(r"[\s\-_]+", "", q.lower())
@@ -930,11 +933,14 @@ def network():
     return _network or None
 
 
-def route(a, b, mode="fastest"):
+def route(a, b, mode="fastest", with_path=False):
     """任意两点步行路径。返回 {'meters','minutes','reliable',...} 或 None。
 
     mode='fastest'（默认）—— 含校外城市道路（军工路等），即「实地怎么走最快」；
     mode='campus'        —— 只走校内步道，用于对比纯校内绕行要多花多少时间。
+
+    with_path=True 时额外返回 `polyline`（含经纬度的节点序列）—— **仅供内部**
+    计算与可视化（GPS 轨迹比对），**不得**经任何对外接口返回（合规红线）。
 
     路网来自 OSM（© OpenStreetMap contributors，ODbL 1.0）；
     每端仍优先采用 walk_minutes 里的实测值（见 campus_network 的定位优先级）。
@@ -942,7 +948,7 @@ def route(a, b, mode="fastest"):
     net = network()
     if not net:
         return None
-    return net.route(a, b, mode)
+    return net.route(a, b, mode, with_path=with_path)
 
 
 def compare_paths(a, b):
