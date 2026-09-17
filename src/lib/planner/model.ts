@@ -263,6 +263,22 @@ export interface Diagnostics {
   hardViolations: number;
   /** 与上一版计划的差异分钟数 */
   churnMin: number;
+  /**
+   * 跨周自适应（疲劳 / 逐日可行性）。**没有滚动数据时为 `undefined`** ——
+   * 这保证「无自适应」与「自适应无效果」在诊断上可区分，而不是都表现为 1.0。
+   */
+  fatigue?: {
+    /** 全局疲劳系数（0.75–1） */
+    factor: number;
+    /** 阶段策略给的基准目标（分钟） */
+    baseDailyMin: number;
+    /** 用于算疲劳的工作日日均占用（分钟）；无数据 null */
+    observedDailyMin: number | null;
+    /** 整周自习目标（=∑ 逐日有效目标，分钟） */
+    weeklyTargetMin: number;
+    /** 因可行性被下调的日子（1..7） */
+    softenedDays: number[];
+  };
 }
 
 export interface PlanResult {
