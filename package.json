@@ -23,6 +23,7 @@
     "eval:l3": "python evals/run.py --suite l3",
     "eval:engine": "python evals/run.py --suite engine",
     "audit:transfer": "python scripts/audit_transfer.py",
+    "verify:remote": "python scripts/verify_remote.py",
     "eval:report": "python evals/report.py",
     "eval:judge": "python evals/judge.py --selftest",
     "eval:calibrate": "python evals/calibrate.py",

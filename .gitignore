@@ -16,6 +16,9 @@ dist-ssr/
 .env.local
 .env.*.local
 
+# 远程验收循环的干净检出目录（临时产物，可重建）
+_eng_check/
+
 # 评测系统：数据集进仓库（golden 是 CI 唯一依赖），
 # 中间产物与运行记录不进（可复现，别把仓库撑大）
 evals/silver/*.jsonl

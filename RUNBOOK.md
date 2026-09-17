@@ -187,6 +187,27 @@ LIBAO_BASE=http://127.0.0.1:8010 LIBAO_USER=u-debug LIBAO_SESSION=s-debug \
   没有则抓 cn.bing.com（免 Key、国内直连）。
 - 调试：trace 行里的 `mode=` 与 `tools=[...]` 直接告诉你这轮走了哪一级、调了哪些工具。
 
+### 与队友协作：一条命令的验收循环（2026-09-18 起）
+
+队友（B）推引擎改动后，**不要拿本地工作区验**（本地磁盘常年滞后），走这一条：
+
+```bash
+npm run verify:remote              # 只验收
+python scripts/verify_remote.py --push   # 验收全绿才推 beta
+```
+
+它做四件事：① 取 dev/beta 最新 SHA ② `git merge-tree --write-tree` **看退出码**判冲突
+（有冲突就停下报文件，不自动决策）③ 干净检出到 `_beta2/_eng_check/`（`git archive` 远程产物）
+④ 双口径验收：B 自己的 `test:engine` / `test:ui` + **CY 侧独立口径** `evals/engine/acceptance.ts`。
+
+三条踩过的坑（别再踩）：
+- **检出目录必须放在带 `node_modules` 的目录内部** —— Node 的 ESM 解析会向上逐级找依赖；
+  本环境禁止从脚本里调系统 shell 建 junction，硬建会失败，症状是
+  `Cannot find package 'react'`（看着像产品失败，其实是环境失败）。
+- 不进仓库的「补给」要显式带过去：`server/.env`、`public/my_schedule.json`
+  —— 漏了后者会让测试数从 145 掉到 137 并报 1 个失败。
+- 验收只看**通过与否**不看结论口径：B 的套件绿 ≠ 不变量没破，两个都要跑。
+
 ### 事实正确性怎么测（2026-09-16 起）
 
 手写测试问不完、也判不了「答案是不是事实」。用**事实探针**：知识库自己出题
