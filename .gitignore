@@ -20,6 +20,7 @@ dist-ssr/
 # 中间产物与运行记录不进（可复现，别把仓库撑大）
 evals/silver/*.jsonl
 evals/runs/run_*.json
+evals/runs/engine_[0-9]*.json
 
 # 编辑器
 .vscode/*

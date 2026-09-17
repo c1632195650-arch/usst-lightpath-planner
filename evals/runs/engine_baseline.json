@@ -1,0 +1,342 @@
+{
+ "ts": "2026-09-17T18:25:32.575Z",
+ "perScenario": {
+  "week-04-typical[as-is]": {
+   "blocks": 43,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4320,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.43,
+    "p95": 2.06,
+    "max": 2.06
+   },
+   "determinism": true
+  },
+  "week-04-typical[campus]": {
+   "blocks": 43,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4320,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.21,
+    "p95": 0.47,
+    "max": 0.47
+   },
+   "determinism": true
+  },
+  "week-04-typical[transfers]": {
+   "blocks": 41,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 30,
+   "tightTransfers": 0,
+   "maxTransferMin": 7,
+   "transferCoverage": 1,
+   "studyMin": 600,
+   "blankMin": 2850,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 7.71,
+    "p95": 11.93,
+    "max": 11.93
+   },
+   "determinism": true
+  },
+  "week-06-practice[as-is]": {
+   "blocks": 43,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4160,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.2,
+    "p95": 0.27,
+    "max": 0.27
+   },
+   "determinism": true
+  },
+  "week-06-practice[campus]": {
+   "blocks": 43,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4160,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.17,
+    "p95": 0.17,
+    "max": 0.17
+   },
+   "determinism": true
+  },
+  "week-06-practice[transfers]": {
+   "blocks": 41,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 29,
+   "tightTransfers": 0,
+   "maxTransferMin": 7,
+   "transferCoverage": 1,
+   "studyMin": 600,
+   "blankMin": 2690,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 6.55,
+    "p95": 7.02,
+    "max": 7.02
+   },
+   "determinism": true
+  },
+  "week-12-crosscampus[as-is]": {
+   "blocks": 49,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4040,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.23,
+    "p95": 0.35,
+    "max": 0.35
+   },
+   "determinism": true
+  },
+  "week-12-crosscampus[campus]": {
+   "blocks": 49,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4040,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 0.17,
+    "p95": 0.32,
+    "max": 0.32
+   },
+   "determinism": true
+  },
+  "week-12-crosscampus[transfers]": {
+   "blocks": 49,
+   "courseBlocks": 5,
+   "daysCovered": 7,
+   "transfers": 40,
+   "tightTransfers": 0,
+   "maxTransferMin": 7,
+   "transferCoverage": 1,
+   "studyMin": 600,
+   "blankMin": 2590,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 2
+   },
+   "ms": {
+    "p50": 9.32,
+    "p95": 10.88,
+    "max": 10.88
+   },
+   "determinism": true
+  },
+  "week-19-exam[as-is]": {
+   "blocks": 38,
+   "courseBlocks": 0,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4790,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 0
+   },
+   "ms": {
+    "p50": 0.12,
+    "p95": 0.14,
+    "max": 0.14
+   },
+   "determinism": true
+  },
+  "week-19-exam[campus]": {
+   "blocks": 38,
+   "courseBlocks": 0,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4790,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 0
+   },
+   "ms": {
+    "p50": 0.11,
+    "p95": 0.12,
+    "max": 0.12
+   },
+   "determinism": true
+  },
+  "week-19-exam[transfers]": {
+   "blocks": 38,
+   "courseBlocks": 0,
+   "daysCovered": 7,
+   "transfers": 31,
+   "tightTransfers": 0,
+   "maxTransferMin": 7,
+   "transferCoverage": 1,
+   "studyMin": 600,
+   "blankMin": 3250,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 0
+   },
+   "ms": {
+    "p50": 5.44,
+    "p95": 5.58,
+    "max": 5.58
+   },
+   "determinism": true
+  },
+  "week-04-usertasks[as-is]": {
+   "blocks": 45,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4125,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 8
+   },
+   "ms": {
+    "p50": 0.22,
+    "p95": 0.61,
+    "max": 0.61
+   },
+   "determinism": true
+  },
+  "week-04-usertasks[campus]": {
+   "blocks": 45,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 0,
+   "tightTransfers": 0,
+   "maxTransferMin": 0,
+   "transferCoverage": null,
+   "studyMin": 600,
+   "blankMin": 4125,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 8
+   },
+   "ms": {
+    "p50": 0.14,
+    "p95": 0.19,
+    "max": 0.19
+   },
+   "determinism": true
+  },
+  "week-04-usertasks[transfers]": {
+   "blocks": 45,
+   "courseBlocks": 4,
+   "daysCovered": 7,
+   "transfers": 25,
+   "tightTransfers": 0,
+   "maxTransferMin": 7,
+   "transferCoverage": 1,
+   "studyMin": 600,
+   "blankMin": 2625,
+   "issues": {
+    "error": 0,
+    "warn": 0,
+    "info": 8
+   },
+   "ms": {
+    "p50": 5.7,
+    "p95": 6.42,
+    "max": 6.42
+   },
+   "determinism": true
+  }
+ },
+ "totals": {
+  "violations": 0,
+  "hardIssues": 0,
+  "tightTransfers": 0,
+  "transfersSeen": 155,
+  "determinism": true
+ }
+}

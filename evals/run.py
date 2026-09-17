@@ -361,6 +361,37 @@ def suite_l3(base, repeat=1, run_id="run"):
     return per, m
 
 
+def suite_engine(runs=5):
+    """排程引擎独立验收（CY 侧，不依赖 B 自己的测试通过与否）。
+
+    为什么单独一层：引擎的实现归 B，**验收不该也交出去** —— `evals/engine/acceptance.ts`
+    用自己的尺子查不变量（几何/不重叠/课程不漏/转场合规/确定性），
+    只借 B 的冻结语料与引擎入口。B 每次「优化」推过来，跑这一条就能回答
+    「有没有变快、有没有排崩、转场还对不对」。
+    """
+    out = os.path.join(RUNS_DIR, f"engine_{time.strftime('%H%M%S')}.json")
+    cmd = ('node --import ./scripts/register-alias.mjs evals/engine/acceptance.ts '
+           f'--runs {max(2, runs)} --json "{out}"')
+    rc, txt, sec = sh(cmd)
+    for line in txt.strip().splitlines()[-6:]:
+        print("   " + line)
+    m, tasks = {}, []
+    try:
+        data = json.load(open(out, encoding="utf-8"))
+        t = data.get("totals", {})
+        m = {"engine_violations": t.get("violations"),
+             "engine_hard_issues": t.get("hardIssues"),
+             "engine_tight_transfers": t.get("tightTransfers"),
+             "engine_transfers_seen": t.get("transfersSeen"),
+             "engine_determinism": 1.0 if t.get("determinism") else 0.0}
+        tasks = [{k: v for k, v in r.items() if k != "metrics"} | {"metrics": r.get("metrics")}
+                 for r in data.get("results", [])]
+    except Exception as e:
+        print(f"   ⚠️ 解析引擎报告失败：{e}")
+        m = {"engine_violations": None}
+    return tasks, m, rc, round(sec, 1)
+
+
 def suite_e2e(base):
     """端到端（花钱档）：全量 golden 过对话，规则判分（规则档免费，裁判档 P1）"""
     items = load_golden()
@@ -386,6 +417,12 @@ def suite_e2e(base):
     return per, {"n": len(items), "acc": round(ok_n / len(items), 4) if items else 0.0}
 
 
+# 这些是「计数/耗时」不是质量指标：变快/变少不代表退步，只印 Δ 不报警告。
+# （第一版把它们一起当质量指标，结果「跑得更快」被标成 ⚠️ 退步 —— 门禁的显示逻辑也要被检视。）
+_NO_WARN = {"sec", "n", "entities", "docs", "templates", "obs_cap_docs",
+            "engine_transfers_seen", "engine_hard_issues", "engine_tight_transfers"}
+
+
 def compare_baseline(metrics):
     if not os.path.exists(BASE_LINE):
         return ["（无基线，本次可作基线：--update-baseline）"]
@@ -395,14 +432,14 @@ def compare_baseline(metrics):
         if isinstance(v, (int, float)) and k in old:
             d = round(v - old[k], 4)
             arrow = "→" if d == 0 else ("↑" if d > 0 else "↓")
-            flag = "" if d >= 0 else "  ⚠️ 退步"
+            flag = "" if (d >= 0 or k in _NO_WARN) else "  ⚠️ 退步"
             lines.append(f"   {k:<14} {old[k]} {arrow} {v}{flag}")
     return lines or ["（基线里没有可比指标）"]
 
 
 def main():
     ap = argparse.ArgumentParser(description="梨宝评测台架")
-    ap.add_argument("--suite", default="all", choices=["l0", "l1", "l3", "e2e", "all"])
+    ap.add_argument("--suite", default="all", choices=["l0", "l1", "l3", "engine", "e2e", "all"])
     ap.add_argument("--repeat", type=int, default=1,
                     help="l3：每个回归场景的试次 k（pass^k = k 次全对），默认 1（省钱）")
     ap.add_argument("--base", default=os.environ.get("LIBAO_BASE", "http://127.0.0.1:8000"))
@@ -470,6 +507,19 @@ def main():
               + (f"｜capability pass@1 = {m['capability_pass@1']}" if m['capability_pass@1'] is not None else ""))
         if args.gate and m["pass^k"] is not None and m["pass^k"] < 1.0:
             fails.append(f"l3 pass^{args.repeat}={m['pass^k']} < 1.0（对用户可见路径必须每次都对）")
+        print()
+
+    if args.suite == "engine":
+        print("== 引擎独立验收（CY 侧口径 · 0 成本 · 需 node）==")
+        tasks, m, rc, sec = suite_engine()
+        result["tasks"] = tasks
+        result["metrics"].update(m)
+        v = m.get("engine_violations")
+        print(f"  不变量违反 {v}｜硬约束 issues {m.get('engine_hard_issues')}"
+              f"｜转场 {m.get('engine_transfers_seen')}（紧 {m.get('engine_tight_transfers')}）"
+              f"｜确定性 {m.get('engine_determinism')}｜{sec}s")
+        if rc != 0 or (v or 0) > 0:
+            fails.append(f"引擎不变量违反 {v} 处（rc={rc}）")
         print()
 
     if args.suite == "e2e":

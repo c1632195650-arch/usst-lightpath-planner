@@ -29,10 +29,38 @@
 | 层 | 内容 | 判分 | 状态 |
 |---|---|---|---|
 | L0 确定性单测（**双端**） | 图谱/拼音/路网/排程/模板直答（后端）+ UI/引擎/类型（前端）+ 判分器回归 | 代码断言，0 成本 | ✅ `--suite l0` |
+| **L0+ 引擎独立验收** | 排程引擎不变量（几何/不重叠/课程不漏/转场合规/确定性）+ 性能与转场覆盖 | **CY 侧独立口径**，0 成本 | ✅ `--suite engine` |
 | L1 检索评测 | 实体召回、文档 recall@5 / MRR、模板直答正确性 | 代码断言，0 成本 | ✅ `--suite l1` |
 | L2 生成评测 | 忠实度 / 相关性 / 完整性 / 分寸 | LLM 裁判 | 🟡 适配器与 rubric 就位（`judge.py`，默认免费档），待人工标注校准 |
 | L3 对话级评测 | 多轮、指代、终态（mode/tools/used_space）、诚实性、分寸 | 终态断言 + pass^k | ✅ `--suite l3`（花钱档，5 场景） |
 | L4 线上监控 | 真实流量漂移 | 采样过裁判 | 🟡 trace 已落 JSONL + `report.py` 出趋势；采样调用待接 |
+
+### 引擎独立验收（`evals/engine/acceptance.ts`）
+
+**立场**：引擎的实现归 B，但验收不该也交出去。本台架**不复用** `tests/golden-lib.ts` 的校验辅助
+（复用等于用被测方的尺子量自己），只借冻结语料与引擎入口，用自己的尺子查不变量：
+
+| 不变量 | 内容 |
+|---|---|
+| I1 几何合法 | `startMin < endMin` 且落在 [0,1440) |
+| I2 日内不重叠 | 同一天任意两块区间不相交 |
+| I3 课程不漏 | 本周有课的课程每门至少一个 course 块 |
+| I4 转场合规 | `transfer.minutes` 为整数（铁律①）且 ≤ 实际间隔（铁律②）；`tight` 必须为 0 |
+| I5 确定性 | 同一输入两次运行可比较内容完全一致 |
+| I6 转场覆盖 | 相邻两块地点不同时必须有转场提示（**只在注入 provider 的档位检查**） |
+| I7 slack 一致 | `slackMin == 实际 gap − 转场分钟`（防「转场数据与实际排布不一致」） |
+
+**三档变体**（第一版只跑一档时转场恒为 0、I4 形同虚设 —— 这是必须记住的教训）：
+`as-is`（语料声明）/ `campus`（跨校区兜底）/ `transfers`（`planWeek` + 注入确定性 provider，唯一真正验到转场的档）。
+
+```bash
+npm run eval:engine          # = python evals/run.py --suite engine（含门禁）
+node --import ./scripts/register-alias.mjs evals/engine/acceptance.ts --runs 9 --update-baseline
+```
+
+- 基线：`evals/runs/engine_baseline.json`（B 每次推「优化」后重跑，看块数/学习时长/转场数/p95 变化）
+- ⚠️ **计时对比**：5 轮以内噪声大，Δ<50% 不下结论；定论用 `--runs 9` 看 p50
+- ⚠️ **要在干净检出上跑**（B 推送产物 ≠ 你本地工作区）：`git archive <SHA> | tar -x -C <空目录>` 后借 `node_modules`，再在此目录跑上面那条命令 —— 否则你验的是自己的旧磁盘状态
 
 ## Golden Set 怎么来的（三段式）
 
