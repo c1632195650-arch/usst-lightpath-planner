@@ -17,7 +17,7 @@
  *    原先是本组件与 `features/libao/weekPlanForChat.ts` 各写一份 —— 同一套编排
  *    写两份，任何一处调整都要改两遍，且必然漂移。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanIssue, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
@@ -191,6 +191,17 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const [engineRollingOut, setEngineRollingOut] = useState<import('@/types').RollingState | null>(null);
   /** 上周执行情况的一句话总结；没有反馈时为 null（不假装有数据） */
   const [rollingNote, setRollingNote] = useState<string | null>(null);
+  /**
+   * 上一版计划（**仅会话内**，刻意不持久化）—— 「最小扰动」的基线。
+   *
+   * 两条约束：
+   *   1. **不进 `planState`** —— 持久化状态刻意只存锁与滚动负荷、不存整周计划；
+   *      「改动了多少」只在会话内比较前后两版时才有意义，落盘既没必要也踩了那条约定。
+   *   2. **必须记住是哪一周的** —— 块 id 里含周次，换周后 id 全变；若把上一周的计划
+   *      当基线，churn 会把「上一周的块全被删掉」算成几千分钟的扰动。所以只在
+   *      **同一周次**内才传。
+   */
+  const prevPlanRef = useRef<{ weekNo: number; plan: WeekPlan } | null>(null);
   /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
   const [weather, setWeather] = useState<WeatherReport | null>(null);
 
@@ -291,6 +302,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // `rollingForPlan` 只在知识截止周**早于**本周时才返回 —— 这是挡住自指的唯一防线
             // （本周自己排出来的值回头影响本周的排法，会形成「越排越空」的正反馈）。
             rolling: rollingForPlan(planState, weekNo),
+            // 最小扰动：把**同一周**上一版的计划传进去，让 churn（改动量）真的被算出来。
+            // 不传的话 churn 恒为 0，界面上那句「本次挪动 X 分钟」永远不亮。
+            previousPlan: prevPlanRef.current?.weekNo === weekNo
+              ? prevPlanRef.current.plan
+              : undefined,
           },
           {
             transferFactory: async (blocks) => {
@@ -306,6 +322,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           setNotes(result.notes);
           setDiag(result.diagnostics);
           setEngineRollingOut(result.nextRolling);
+          prevPlanRef.current = { weekNo, plan: result.plan };
         }
       } finally {
         if (!cancelled) setLoading(false);
