@@ -14,6 +14,8 @@
     "eval:libao": "python scripts/libao_eval.py",
     "probe:fact": "python scripts/fact_probe.py",
     "probe:reverse": "python scripts/fact_judge_reverse.py",
+    "audit:quality": "python scripts/audit_spatial_quality.py",
+    "audit:quality:reverse": "python scripts/audit_spatial_quality.py --selftest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
