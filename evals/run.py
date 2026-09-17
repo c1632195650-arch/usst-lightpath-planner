@@ -140,6 +140,35 @@ def _post(base, path, obj, timeout=90):
         return json.loads(r.read().decode("utf-8"))
 
 
+_PREFLIGHT_Q = "学校有没有麦当劳"   # 存在性题 → 新版走 L0 模板，0 次 LLM
+
+
+def _preflight(base):
+    """后端版本指纹预检（**防「旧进程占着 8000 → 门禁假红」**）。
+
+    2026-09-18 实测教训：8000 端口被一个**旧版后端**占着（响应无 `tools`/`request_id`
+    字段，且它正答着早已修掉的老 bug），L1 门禁于是报 template_acc 1.0→0.0、耗时 12s→60s
+    ——看起来像产品崩了，其实只是打到了旧进程。这类「环境问题伪装成产品失败」在本项目
+    已出现三次，所以做成硬预检：指纹不符直接拒绝出结论。
+
+    返回空串 = 通过；非空 = 拒绝原因。
+    """
+    try:
+        _get(base, "/api/health", timeout=6)
+    except Exception as e:
+        return f"后端不可达：{e}\n     先启动：python server/app.py"
+    try:
+        d = _post(base, "/api/chat", {"q": _PREFLIGHT_Q, "user_id": "u-preflight",
+                                      "session_id": f"s-preflight-{int(time.time())}"})
+    except Exception as e:
+        return f"指纹请求失败：{e}"
+    if "tools" not in d or "request_id" not in d:
+        return ("后端是**旧版本**（响应缺 tools/request_id 字段）→ 本次结果不可信。\n"
+                "     旧进程占着 8000 时新进程会 bind 失败、但看起来一切正常，"
+                "请先停掉占用者再启动当前代码。")
+    return ""
+
+
 def load_golden(version="v1"):
     path = os.path.join(ROOT, "evals", "golden", f"golden_{version}.jsonl")
     return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
@@ -464,10 +493,9 @@ def main():
 
     if args.suite in ("l1", "all"):
         print("== L1 检索层评测（0 成本 · 需后端活着）==")
-        try:
-            _get(base, "/api/health", timeout=6)
-        except Exception as e:
-            print(f"  ❌ 后端不可达：{e}\n     先启动：python server/app.py")
+        warn = _preflight(base)
+        if warn:
+            print(f"  ❌ {warn}")
             return 2
         per, m = suite_l1(base, run_id=ts)
         result["tasks"] = per
@@ -494,10 +522,9 @@ def main():
 
     if args.suite in ("l3",):
         print(f"== L3 对话级套件（花钱档 · pass^{args.repeat}）==")
-        try:
-            _get(base, "/api/health", timeout=6)
-        except Exception as e:
-            print(f"  ❌ 后端不可达：{e}\n     先启动：python server/app.py")
+        warn = _preflight(base)
+        if warn:
+            print(f"  ❌ {warn}")
             return 2
         per, m = suite_l3(base, repeat=max(1, args.repeat), run_id=ts)
         result["tasks"] = per
