@@ -341,7 +341,17 @@ export function lockFactorOf(level: LockLevel): number {
   return 0;
 }
 
-/** 计划差异的**未加权**分钟数（供 Diagnostics.churnMin） */
+/**
+ * 「改动量」的**未加权**分钟数（供 `Diagnostics.churnMin`）。
+ *
+ * ⚠️ **只计「上一版就有、这一版被挪动或被删掉」的块，新增块不计。**
+ *    实测（2026-09-18）：往周三 14:00 加一个 60 分钟的固定任务，既有块
+ *    **一个都没动**（挪动 0、删除 0），而旧口径报 churnMin = 60 ——
+ *    因为把新增块本身也算成了扰动。界面于是说「本次挪动 60 分钟」，
+ *    可用户看到的是：什么都没动，只是多了一件事。
+ *    用户主动加的东西是**他要的变化**，不是**被打扰**；把它算进 churn，
+ *    等于惩罚用户做他本来就想做的事。
+ */
 export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan): number {
   if (!previousPlan) return 0;
   const prev = new Map(previousPlan.blocks.map((b) => [b.id, b]));
@@ -349,10 +359,7 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
   let total = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    if (!p) {
-      total += b.endMin - b.startMin; // 新增块
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) total += Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
   }
   for (const [id, p] of prev) {
@@ -362,8 +369,14 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
 }
 
 /**
- * 计划扰动代价（规格书 §5.5 的 churn 项）——P1 的 `evaluate()` 直接消费本函数。
+ * 计划扰动代价（规格书 §5.5 的 churn 项）——`evaluate()` 直接消费本函数。
  * `cost = w.churn * Σ lockFactor(block) * changedMinutes(block)`
+ *
+ * 与 `churnMinutes` 同口径：**新增块不计代价**（理由见该函数）。
+ * 顺带消掉一个数量级问题：用户 fixed 的块 `lockFactorOf('hard') = 100`，
+ * 旧口径下「新增一个 60 分钟的固定任务」会凭空产生
+ * `0.8 × 100 × 60 = 4800` 的代价 —— 比整周其余成本（约 78）高两个数量级，
+ * 会让界面上的「质量分」完全失去可比性。
  */
 export function churnCost(
   previousPlan: WeekPlan | undefined,
@@ -377,12 +390,9 @@ export function churnCost(
   let cost = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
-    if (!p) {
-      cost += weights.churn * factor * (b.endMin - b.startMin);
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) {
+      const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
       cost += weights.churn * factor * Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
     }
   }
