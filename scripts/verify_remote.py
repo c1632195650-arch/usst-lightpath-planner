@@ -70,6 +70,25 @@ def sha(branch):
     return out.split()[0]
 
 
+def ensure_local(sha_: str, branch: str) -> bool:
+    """确保对象在本地（2026-09-19 实测：`ls-remote` 能拿到 SHA，但 `fetch` 可能**没把对象带回来**，
+    于是 merge-tree 报 `not something we can merge`。这里显式补一次 fetch 并复核。）"""
+    if not sha_:
+        return False
+    rc, _ = run(f"git cat-file -e {sha_}")
+    if rc == 0:
+        return True
+    print(f"… 本地缺对象 {sha_[:8]}，显式 fetch {branch}")
+    run(f"git fetch --no-tags origin {branch}:refs/remotes/origin/{branch}")
+    rc, _ = run(f"git cat-file -e {sha_}")
+    return rc == 0
+
+
+def count_files(treeish: str) -> int:
+    rc, out = run(f"git ls-tree -r --name-only {treeish}")
+    return len([l for l in out.splitlines() if l.strip()]) if rc == 0 else -1
+
+
 def main():
     ap = argparse.ArgumentParser(description="远程验收循环")
     ap.add_argument("--push", action="store_true", help="验收全绿才把 merge 推到 beta")
@@ -79,6 +98,10 @@ def main():
     rc, _ = run("git fetch origin '+refs/heads/*:refs/remotes/origin/*'")
     dev, beta = sha("dev"), sha("feat/integration-beta")
     print(f"🧭 远程：dev={dev[:8] if dev else '?'}  beta={beta[:8] if beta else '?'}")
+    for s, br in ((dev, "dev"), (beta, "feat/integration-beta")):
+        if not ensure_local(s, br):
+            print(f"❌ 拉不到 {br}({s}) 的对象 —— 网络/代理问题？")
+            return 1
 
     # dev 是否已包含在 beta 里
     rc, out = run(f"git merge-base --is-ancestor {dev} {beta}")
@@ -90,15 +113,33 @@ def main():
         if rc != 0:
             files = sorted({m.group(1) for m in re.finditer(r"^\d+ [0-9a-f]{40} [123]\t(.+)$",
                                                             out, re.M)})
-            print(f"❌ dev 与 beta 有冲突（{len(files)} 个文件），需人工消解：")
+            if not files:      # 兜底：另一种输出格式（CONFLICT (content): Merge conflict in X）
+                files = sorted({m.group(1) for m in re.finditer(r"[Cc]onflict.*?\bin (.+?)\s*$",
+                                                                out, re.M)})
+            print(f"❌ dev 与 beta 合并失败（{len(files)} 个冲突文件）——需人工消解，**不自动决策**：")
             for f in files[:12]:
                 print("   ·", f)
+            if not files:      # 连文件都解析不出 → 把原始输出打出来，别只说"有冲突但没说是什么"
+                print("   （无法解析冲突文件，原始输出如下）")
+                for l in out.strip().splitlines()[:10]:
+                    print("   |", l)
             return 1
         tree = out.split("\n")[0].strip()
         rc, out = run(f'git commit-tree {tree} -p {beta} -p {dev} '
                       f'-m "merge: dev({dev[:8]}) 并入 beta（verify_remote 自动合并）"')
         target = out.strip().splitlines()[-1].strip()
         print(f"🔀 干净合并 → {target[:8]}")
+
+        # 🔴 文件数守卫（2026-09-19 事故后新增）：
+        # 我曾在构建提交时手抄了过期的基树 SHA，导致一次推送"删掉"22 个文件
+        # （evals/ 全部、scripts/verify_remote.py…），而**只有下游验收报模块缺失时才暴露**。
+        # 合并/提交**只会增删文件，不该整批消失** —— 少一个就先停下问人。
+        n_before, n_after = count_files(beta), count_files(target)
+        if n_after < n_before:
+            print(f"❌ 文件数守卫：{n_before} → {n_after}（减少了 {n_before - n_after} 个）——拒绝继续。")
+            print("   常见原因：构建提交时用错了基树/SHA。请核对 `git diff --stat <旧> <新>` 里的删除项。")
+            return 1
+        print(f"  文件数守卫：{n_before} → {n_after} ✅")
 
     # 干净检出（必须是远程产物）
     run(f'rm -rf "{CHECKOUT}" && mkdir -p "{CHECKOUT}"')
