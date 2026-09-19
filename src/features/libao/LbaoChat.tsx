@@ -132,8 +132,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     setLoading(true);
 
     /** 排程意图：走**真引擎**（与「周计划」页同源），只把结果要点化后回话。
-     *  这里刻意不再调用 `lbaoRecommend` —— 那份是硬编码时间的模板（08:00/11:45/19:00），
-     *  排出来会和周计划页对不上；用户连着看两处就会发现，这就是「双轨」的破绽。 */
+     *  这里刻意不调那套旧模板（`lib/lbao.ts` 里的 `lbaoRecommend`，已于 2026-09-19 删除）——
+     *  它是硬编码时间的（08:00/11:45/19:00），排出来会和周计划页对不上；
+     *  用户连着看两处就会发现，这就是「双轨」的破绽。 */
     if (isRecommendIntent(q)) {
       // 既无画像也无课表 → 没有可排的输入。说清楚缺什么，不假装能排。
       if (!profile && schedule.courses.length === 0) {
