@@ -5,8 +5,8 @@
     "engine": "src/lib/planner/schedule.ts::buildWeekPlan",
     "engineKind": "greedy-golden",
     "spec": "docs/scheduler-v2-spec.md#T1.6",
-    "gitRev": "2ab1fbddae7504df8a219d7a85e31de5cc7dd929",
-    "capturedAt": "2026-09-15T10:55:37.430Z"
+    "gitRev": null,
+    "capturedAt": "2026-09-19T07:50:20.115Z"
   },
   "input": {
     "name": "week-19-exam",
@@ -69,8 +69,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 1,
@@ -85,8 +85,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 1,
@@ -117,8 +117,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 2,
@@ -133,8 +133,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 2,
@@ -165,8 +165,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 3,
@@ -181,8 +181,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 3,
@@ -213,8 +213,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 4,
@@ -229,8 +229,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 4,
@@ -261,8 +261,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 5,
@@ -277,8 +277,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 5,
@@ -293,8 +293,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 6,
@@ -309,8 +309,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 6,
@@ -325,8 +325,8 @@
       "startMin": 715,
       "endMin": 765,
       "kind": "meal",
-      "title": "午餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "午餐",
+      "place": null
     },
     {
       "dayOfWeek": 7,
@@ -341,8 +341,8 @@
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
-      "title": "晚餐 · 第一食堂",
-      "place": "第一食堂"
+      "title": "晚餐",
+      "place": null
     },
     {
       "dayOfWeek": 7,
@@ -391,9 +391,9 @@
     "churn": 0,
     "errorIssues": 0,
     "warnIssues": 0,
-    "infoIssues": 0
+    "infoIssues": 7
   },
   "timing": {
-    "elapsedMs": 0.773
+    "elapsedMs": 1.071
   }
 }

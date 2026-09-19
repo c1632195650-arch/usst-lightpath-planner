@@ -20,7 +20,7 @@
 import type { BlockKind, ScenarioFields } from '@/types';
 import { toMinutes } from '../../constants/time.ts';
 
-export type ActivityCategory = 'meal' | 'study' | 'sport' | 'rest' | 'life' | 'custom';
+export type ActivityCategory = 'meal' | 'study' | 'sport' | 'rest' | 'life' | 'social' | 'custom';
 export type CampusName = '北校' | '南校' | '580' | 'any';
 
 export interface ActivityWindow {
@@ -251,8 +251,50 @@ const LIFE: ActivityTemplate[] = [
   },
 ];
 
+/**
+ * 社交模块（阶段 D）—— 补的是「画像里四个数据都在描述社交，却一个都没进排程」这个空白。
+ *
+ * 相关的画像数据有三处，它们的语义各不相同，所以**分开接入**而不是只用一个：
+ *   · `scenarios.social_radius`（社交半径：群里喊人 / 固定搭子）→ 决定「搭子自习」要不要排
+ *   · `scenarios.event_breadth`（活动参与：只看相关的 / 什么都看看）→ 决定「社团活动」要不要排
+ *   · `axes.SOC`（社交度，0–100）→ 决定这类块**能排几个**（见 `construct` 的每日上限）
+ *
+ * 为什么新开一个 `social` 类别而不是塞进 `life`：
+ * `CATEGORY_PER_DAY.life` 是 1 —— 社交会和「取快递/夜宵/午休」抢同一个名额，
+ * 结果就是「说好的社交时间被取快递挤掉了」。分开计数才符合直觉。
+ *
+ * ⚠️ **S2（2026-09-19）：删除了「和朋友约饭」（`social-meal`）。**
+ *
+ * 原因（用户原话）：「约不约饭看的是有没有心情、对方有没有时间，这些数据我们都（不）知道。
+ * 把约饭这个可安排日程去掉，之后也不要考虑约饭安排。」
+ *
+ * 具体问题：约饭的时段窗口（午餐 11:00–13:30 / 晚餐 17:00–19:30）与 `MEAL_SLOTS`
+ * 的正餐**完全重叠**，而两者走的是**两条互不知情的通道**（正餐走 `placeMeal`，
+ * 约饭走 `buildCandidates`）—— 于是晚餐和约饭挤在同一时段，用户看到「饭吃了两顿」。
+ *
+ * **连带影响已记账**：约饭曾是 `social_radius` 的落点之一；删除后该字段只剩
+ * 「搭子自习」（仅 `wide` 触发）在用，影响面变小 —— 这是有意接受的取舍。
+ */
+const SOCIAL: ActivityTemplate[] = [
+  {
+    id: 'social-hangout', name: '和朋友一起自习', emoji: '👥', category: 'social', kind: 'activity',
+    durations: [60, 90], place: '图书馆（图文信息中心）', campus: '北校',
+    windows: wins({ 开放: '09:00-22:00' }),
+    priority: 42, verified: true,
+    trigger: { field: 'social_radius', in: ['wide'] },
+    note: '你习惯「群里喊人」，留一块可以拉人一起学的时间',
+  },
+  {
+    id: 'social-club', name: '社团 / 校园活动', emoji: '🎭', category: 'social', kind: 'activity',
+    durations: [90, 120], campus: 'any',
+    windows: [], priority: 40, verified: false,
+    trigger: { field: 'event_breadth', in: ['broad'] },
+    note: '你选了「什么都看看」—— 留一块给活动，具体去哪自己定',
+  },
+];
+
 /** 全部内置模块 */
-export const DEFAULT_TEMPLATES: ActivityTemplate[] = [...MEALS, ...STUDY, ...SPORT, ...LIFE];
+export const DEFAULT_TEMPLATES: ActivityTemplate[] = [...MEALS, ...STUDY, ...SPORT, ...LIFE, ...SOCIAL];
 
 /** 引擎用的三餐定义（与 constants/time.ts 的 MEAL_BLOCKS 对齐） */
 export const MEAL_SLOTS: Array<{

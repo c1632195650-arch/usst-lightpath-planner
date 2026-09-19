@@ -56,9 +56,9 @@ export interface WeatherReport {
 }
 
 /** 拉取失败返回 null —— 调用方据此**不显示**天气，而不是显示假的天气。 */
-export async function fetchWeather(days = 7): Promise<WeatherReport | null> {
+export async function fetchWeather(days = 7, pastDays = 0): Promise<WeatherReport | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/weather?days=${days}`);
+    const res = await fetch(`${API_BASE}/api/weather?days=${days}&past_days=${pastDays}`);
     if (!res.ok) return null;
     const data = (await res.json()) as WeatherReport;
     return data.ok ? data : null;

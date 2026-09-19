@@ -28,11 +28,12 @@ import {
 import { campusOfPlace, resolvePlace } from './places.ts';
 import { campusFallbackTransfer, campusOfName, type TransferProvider } from './campusLookup.ts';
 import { blockId, type Commit, type PlanRequest } from './model.ts';
+import { capacityFactorOn, dayCapacityFactors, rollingNotes, type DayLoadDecision, type LoadSource } from './roll.ts';
 import { effectiveEffortMin, sortCommits } from './objective.ts';
 import {
   buildWeekNotes, issueCourseConflict, issueCourseNoPlace, issueMealSkipped,
   issueTransferLate, issueTransferMissingPlace, issueTransferTight,
-  reasonForCommit, reasonForCommitDeps, reasonForCommitPart, reasonForMeal,
+  reasonForCommit, reasonForCommitDeps, reasonForCommitPart,
   reasonForStudy, reasonForTemplate, reasonForUserTask, summaryStudyIssue,
 } from './explain.ts';
 
@@ -56,13 +57,16 @@ const TIGHT_SLACK = 5;
 const EVENING_FROM = toMinutes('18:00');
 /** 一天里活动模块的总时长上限（别把一天切成一堆碎片） */
 const ACTIVITY_CAP_MIN = 120;
-/** 走到食堂后排队/洗手的缓冲 —— 否则每顿饭后紧跟的转场都是「0 余量偏紧」 */
-const MEAL_BUFFER_MIN = 5;
 /** 引擎自己排的软块，从上个块走过来之后再多留 5 分钟 —— 不把自己逼到「0 余量」 */
 const SOFT_BUFFER_MIN = 5;
-/** 每类活动模块每天最多几个（运动 1 个、生活类 1 个…） */
+/**
+ * 每类活动模块每天最多几个（运动 1 个、生活类 1 个、社交类 1 个…）
+ *
+ * ⚠️ 曾经的 `MEAL_BUFFER_MIN`（走到食堂后排队/洗手的缓冲）在 T2 之后**已删除** ——
+ * 三餐不再指定地点，也就没有「走到食堂」这一段需要缓冲。
+ */
 const CATEGORY_PER_DAY: Record<string, number> = {
-  sport: 1, rest: 1, life: 1, custom: 3, meal: 0, study: 0,
+  sport: 1, rest: 1, life: 1, social: 1, custom: 3, meal: 0, study: 0,
 };
 
 const COURSE_EMOJI: Record<string, string> = {
@@ -180,13 +184,6 @@ function lastBlockBefore(blocks: TimeBlock[], t: number): TimeBlock | undefined 
   return [...blocks].filter((b) => b.endMin <= t).sort((a, b) => b.endMin - a.endMin)[0];
 }
 
-/** 在 t 之前（结束时间 ≤ t）的最后一个非用餐块 —— 「我从哪儿来」 */
-function lastNonMealBefore(blocks: TimeBlock[], t: number): TimeBlock | undefined {
-  return [...blocks]
-    .filter((b) => b.endMin <= t && b.kind !== 'meal')
-    .sort((a, b) => b.endMin - a.endMin)[0];
-}
-
 /** 在 t 之后（开始时间 ≥ t）的最近一个块 —— 「接下来要去哪儿」 */
 function nextBlockOnOrAfter(blocks: TimeBlock[], t: number): TimeBlock | undefined {
   return [...blocks].filter((b) => b.startMin >= t).sort((a, b) => a.startMin - b.startMin)[0];
@@ -235,11 +232,23 @@ export interface ConstructCtx {
   templates?: ActivityTemplate[];
   /** 旧版用户自定义模块；缺省 = `req.tasks` */
   tasks?: UserTask[];
+  /**
+   * 实际负荷（下标 0 = 周一 … 6 = 周日），由调用方从行为记录算出（P2-T2.2）。
+   *
+   * 为什么走 `ctx` 而不是 `req`：`behaviorLog` 属**前端特征层**（`features/behavior/`），
+   * 引擎不该 import 它（会污染纯函数链、也没法在 Node 单测里加载 localStorage）。
+   * 由调用方算好注入，是「引擎纯函数 + 外部取数」这条既定分工的延续
+   * （与 `transfer` provider 同一手法）。
+   * 缺省 `undefined` → 只用计划负荷（口径：实际优先、计划兜底）。
+   */
+  actualLoadByDow?: number[] | null;
 }
 
 export interface ConstructResult {
   plan: WeekPlan;
   notes: string[];
+  /** 本周逐日的滚动负荷判定（P2-T2.2；供 solver 组装 note 与诊断） */
+  loadDecisions: DayLoadDecision[];
 }
 
 /**
@@ -258,6 +267,25 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const dayEndMin = toMinutes(req.dayEnd ?? '23:00');
   const withMeals = req.withMeals !== false;
   const commits = req.commits ?? [];
+
+  /**
+   * `fromNow`（P2-T2.3 / 规格书 §4.4、§8.2「`fromNow` 落在某块中间」）。
+   *
+   * 语义：**只排 `[fromNow, dayEnd]`，hard 块保留原样**。
+   *
+   * 实现要点 —— 这里只用它当**软块的排程下界**，而**不去裁剪任何已有块**：
+   *   · `fromNow` 是「现在几点」，而计划是**整周**的。今天剩下的时间要收紧，
+   *     但**明天、后天不该跟着被砍** —— 那会变成「下午三点开始用，整周都排不满」。
+   *   · 所以 `fromNow` 只在「今天」这一天抬高软块下界（三餐/自习/活动），
+   *     其余天一律照 `dayStartMin` 走。
+   *   · **已有块（课程 / 用户固定块 / 已开始的块）一律保留**：它们已经发生了，
+   *     砍掉它们等于篡改事实（§8.2 硬块保留原样的同一条精神）。
+   *
+   * ⚠️ 依赖调用方把「今天」告诉引擎：`fromNowDay`。缺省 = 不在任何一天生效，
+   *    即退化为「没有 `fromNow`」—— 这是刻意的，避免引擎去读时钟猜今天是周几。
+   */
+  const fromNow = req.fromNow;
+  const fromNowDay = req.fromNowDay ?? null;
 
   /** 语义键 id 生成器（规格书 §6.4） */
   const mkId = (day: number, kind: string, key: string): string =>
@@ -290,10 +318,28 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const commitEnd = new Map<string, number>();
   let commitMin = 0;
 
+  /**
+   * 跨周负荷判定（P2-T2.2 / 规格书 §5.3「跨天加成」）。
+   *
+   * 上周负荷显著偏高的那几天，本周同一天下调 10% 容量。
+   * `req.rolling` 缺省 / 历史不足 → 全 1.0（见 `roll.ts` 的「不猜」纪律）。
+   */
+  const rollingRes = dayCapacityFactors(req.rolling, ctx.actualLoadByDow ?? undefined);
+  const loadDecisions = rollingRes.days;
+
   for (const day of DAY_ORDER) {
     const dayName = DAY_NAME[day];
     const daySlots = slotsOn(schedule, weekNo, day);
     const dayCampus = dominantCampus(daySlots);
+
+    /**
+     * 当天的软块下界：只有「今天」且给了 `fromNow` 才抬高（见上方 `fromNow` 注释）。
+     * 取 `max(dayStartMin, fromNow)` —— 若 `fromNow` 比常规起点还早（如凌晨 5 点），
+     * 不应该把一天往后推，所以用 max 而不是直接覆盖。
+     */
+    const softFloorMin = (fromNow != null && fromNowDay === day)
+      ? Math.max(dayStartMin, fromNow)
+      : dayStartMin;
 
     /* --- 6.1 课程块 --- */
     const courseBlocks: TimeBlock[] = daySlots.map((s) => {
@@ -376,7 +422,10 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
         if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
         const res = placeMeal({
-          day, meal, placed, dayStartMin, dayEndMin, templates, scenarios, transfer, dayCampus, mkId,
+          // 三餐同属软块：`fromNow` 之后不再「补排」已经过去的饭点
+          day, meal, placed, dayStartMin: softFloorMin, dayEndMin, mkId,
+          // S4：用户为这一餐指定的食堂（缺省 undefined = 不指定）
+          mealPlace: req.mealPlaces?.[meal.id],
         });
         if (res.block) {
           placed = [...placed, res.block];
@@ -388,11 +437,21 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.4 空档与预算 --- */
-    const freeTotal = freeGaps(dayStartMin, dayEndMin, placed)
+    // 空档从 `softFloorMin` 起算：`fromNow` 之后的那段才算「今天还剩的时间」
+    const freeTotal = freeGaps(softFloorMin, dayEndMin, placed)
       .reduce((n, g) => n + (g.endMin - g.startMin), 0);
     totalFree += freeTotal;
+    /**
+     * 跨周降档（§5.3 跨天加成）：上周这天显著偏高 → 本周可支配容量 ×0.9。
+     *
+     * 作用位置刻意选在 `usable`（可支配容量）上，而不是 `activityBudget` 或
+     * `studyBudget` 上：`usable` 是这一天所有软块的**共同上游**，
+     * 降在这里能让活动与自习**按同比例**一起让步 —— 只降自习会让「累了却还在排满活动」，
+     * 只降活动则等于没降（自习照样填满）。
+     */
+    const dayCapacityFactor = capacityFactorOn(loadDecisions, day);
     // 留白是「下限」：至少留下 blankRatio 的空档不被占用
-    const usable = Math.max(0, freeTotal - Math.round(freeTotal * policy.blankRatio));
+    const usable = Math.max(0, freeTotal - Math.round(freeTotal * policy.blankRatio)) * dayCapacityFactor;
     // 事件准备块（有截止日期）是硬需求：单独留出预算，不与日常活动抢额度。
     // 「光电杯明天截止」比「今天少自习一小时」严重得多 —— 少了这一项，
     // 日程一满，备考/交材料的块会被日常活动预算静默挤掉，用户完全看不出来。
@@ -404,7 +463,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     /* --- 6.4b 提交项填充（EDF × urgency 择序，贪心填空档）--- */
     const commitBlocks = placeCommits({
       day, dayName, commits: floatingCommits, placed, policy, transfer,
-      dayStartMin, dayEndMin, mkId, commitEnd,
+      // 提交项是软块，同样受 `fromNow` 约束
+      dayStartMin: softFloorMin, dayEndMin, mkId, commitEnd,
     });
     if (commitBlocks.length) {
       placed = [...placed, ...commitBlocks];
@@ -415,13 +475,23 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day);
     const perCat: Record<string, number> = {};
     let activityMin = 0;
+    /**
+     * 阶段 D：社交度高的用户，一天可以安排两件社交（默认 1 件）。
+     *
+     * 用 `req.persona` 而不是新加一个 ctx 字段 —— `PlanRequest` 本就有 persona，
+     * 没必要为一个数值把注入链再拉长一层。
+     *
+     * ⚠️ 阈值 70 与 `buildPhases.applyPersona` 里其它轴用的是同一把尺子
+     * （「显著偏高」= ≥70，「显著偏低」= ≤35），保持一致才不会有「两套标准」。
+     */
+    const socialCap = (req.persona?.axes.SOC ?? 0) >= 70 ? 2 : 1;
     for (const tpl of candidates) {
       const cat = tpl.category as ActivityCategory;
-      const cap = CATEGORY_PER_DAY[cat] ?? 1;
+      const cap = cat === 'social' ? socialCap : (CATEGORY_PER_DAY[cat] ?? 1);
       if ((perCat[cat] ?? 0) >= cap) continue;
       if (activityMin + Math.min(...tpl.durations) > activityBudget) continue;
       const block = placeTemplate({
-        tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin, dayEndMin,
+        tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
       });
       if (block) {
         placed = [...placed, block];
@@ -434,7 +504,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin));
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
-      dayStartMin, dayEndMin,
+      dayStartMin: softFloorMin, dayEndMin,
     });
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
@@ -463,21 +533,41 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     unverifiedMeals,
   }));
 
+  // 跨周降档必须**说出来**（§4.1 表第 5 行「诚实」）——否则用户只会觉得「这周怎么排少了」
+  notes.push(...rollingNotes(loadDecisions, rollingRes.source));
+
+  /* --- 6.9 用户明确排除的块（阶段 A：用户干预） --- */
+  /**
+   * 用户点了「删掉这块」之后，如果不告诉引擎，**下一轮构造又会把它排回来**
+   * —— 用户会觉得「删了没用」。所以在这里做最后一道过滤。
+   *
+   * 两条刻意的规则：
+   *   · **课程块永不被排除**：它是既成事实（`resolveLockLevel` 也把它判成 hard）。
+   *     界面上本就不该给课程显示删除按钮，引擎侧再兜一层，防止脏数据把它抹掉。
+   *   · **不产生 issue**：这是用户的主动选择，不是「引擎排不出来」，
+   *     混进 issues 会让用户以为自己排错了。
+   */
+  const excluded = new Set(req.excludedBlockIds ?? []);
+  const finalBlocks = excluded.size === 0
+    ? allBlocks
+    : allBlocks.filter((b) => b.kind === 'course' || !excluded.has(b.id));
+
   return {
     plan: {
       weekNo,
-      blocks: sortBlocks(allBlocks),
+      blocks: sortBlocks(finalBlocks),
       stats: {
         courseMin,
         studyMin,
         // 说明：stats 里不含 commitMin 字段（那要改契约层 types.ts 的 WeekPlan.stats）
         //       → 提交项时长并入 blankMin 的扣减已在上面处理，这里只回填既有四个字段
         blankMin,
-        blockCount: allBlocks.length,
+        blockCount: finalBlocks.length,
       },
       issues,
     },
     notes,
+    loadDecisions,
   };
 }
 
@@ -499,27 +589,39 @@ interface MealPick {
 }
 
 /**
- * 排一顿饭。顺序有讲究：
- *   ① 先找「上一个非用餐块」——它决定你从哪儿来、要走多久；
- *   ② 用它挑食堂（同校区 + 此刻在营业 + 走最近 or 按口味）；
- *   ③ 落点必须 ≥ 上一块结束 + 走过去的时间 —— 否则就是假排程。
+ * 排一顿饭。
+ *
+ * ⚠️ **T2（2026-09-19）：不再指定去哪个食堂。**
+ *
+ * 原实现会按「同校区 + 此刻营业 + 走得最近 / 按画像的就餐半径」自动挑一家食堂，
+ * 还会在「紧接着要去另一个校区」时改到那边吃。用户反馈：**这个判断的依据不成立** ——
+ * 大部分人只去固定摊位，少数情况才换新的；而引擎既不知道你平时吃哪，
+ * 也不知道你今天想吃什么，猜出来的结果只是噪音。
+ *
+ * 现在三餐只回答一件事：**这顿饭占哪段时间**。地点交给用户（`block.place` 留空）。
+ *
+ * 被移除的能力与去向：
+ *   · 食堂候选池 / 营业时段过滤 → 随 `place` 一起没了（不再有「食堂没开」这种状态）
+ *   · 「接下来要去别的校区就在那边吃」→ 一并移除（跨校区折返的优化失去依据）
+ *   · 画像的 `meal_radius`（就近 / 走远）→ 暂时不影响三餐
+ *   · `unverified`（南校食堂时段是推算值）→ 不再产生
  */
 function placeMeal(args: {
   day: DayOfWeek;
   meal: (typeof MEAL_SLOTS)[number];
   placed: TimeBlock[];
-  dayCampus: string;
   dayStartMin: number;
   dayEndMin: number;
-  templates: ActivityTemplate[];
-  scenarios: ScenarioFields | null;
-  transfer: TransferProvider;
   mkId: (day: number, kind: string, key: string) => string;
+  /**
+   * 用户为这一餐指定的食堂（S4）。给了就填进 `place`；不填 = 不指定（T2 行为）。
+   * 引擎**不做任何推断** —— 这正是 T2 之后的分工：地点由用户定，引擎只管时间。
+   */
+  mealPlace?: string;
 }): MealPick {
-  const { day, meal, placed, dayCampus, dayStartMin, dayEndMin, templates, scenarios, transfer, mkId } = args;
+  const { day, meal, placed, dayStartMin, dayEndMin, mkId, mealPlace } = args;
   const nominal = toMinutes(meal.nominal);
   const dur = meal.durationMin;
-  const label = campusLabel(dayCampus);
 
   const primary = meal.id === 'breakfast' ? -1 : 1; // 早餐推迟无意义（要赶课），午晚优先往后
   const offsets = [0];
@@ -538,59 +640,12 @@ function placeMeal(args: {
     return null;
   };
 
-  // ① 粗定位：先不管走路时间，只为知道「大概几点吃」
-  const t0 = search(dayStartMin);
-  if (t0 == null) {
+  // 唯一要做的事：找到离名义饭点最近的空档。
+  // 走路时间不再参与定位 —— 因为没有目的地了（T2 起不指定食堂）。
+  const start = search(dayStartMin);
+  if (start == null) {
     return { block: null, skippedReason: `课排得太满，${meal.label}没找到合适的时间段，记得自己补一顿` };
   }
-
-  // ② 从哪儿来：真正紧邻这一餐、且在它之前结束的块（课程/用户块）
-  const anchor = lastNonMealBefore(placed, t0);
-  // 接下来要去哪儿：如果**紧接着**要去另一个校区（比如晚课在南校卓越楼），
-  // 那就该在那边的食堂吃 —— 否则饭后还要跨区折返，纯属白走。
-  // ⚠️ 只看 3 小时以内的下一件事：中午不该因为「晚上 18:00 要去南校」就跑去南校吃午饭。
-  const next = nextBlockOnOrAfter(placed, t0);
-  const nearNext = next && next.startMin - t0 <= 180;
-  const nextCampus = nearNext && next?.place ? campusLabel(campusOfName(next.place)) : null;
-  const eatOnNextCampus = !!nextCampus && nextCampus !== label;
-
-  // ③ 选食堂：同校区 + 那一刻真的在营业（openAt 直接看营业时段，不做餐次标签硬匹配）
-  const pool = templates
-    .filter((t) => t.category === 'meal' && t.place)
-    .filter((t) => !t.trigger || !scenarios || t.trigger.in.includes(String(scenarios[t.trigger.field])))
-    .filter((t) => openAt(t, t0, t0 + dur))
-    .sort((a, b) => b.priority - a.priority);
-  const sameCampus = pool.filter((t) => t.campus === label || t.campus === 'any');
-  const onNextCampus = eatOnNextCampus ? pool.filter((t) => t.campus === nextCampus) : [];
-  const chosenPool = onNextCampus.length ? onNextCampus
-    : (sameCampus.length ? sameCampus : pool);
-  if (chosenPool.length === 0) return { block: null, skippedReason: `${meal.label}时段附近的食堂都没开` };
-
-  let chosen = chosenPool[0];
-  let why = eatOnNextCampus && onNextCampus.length
-    ? `接下来要去${nextCampus}的${next?.title ?? '下一件事'}，所以把${meal.label}排在那边的${chosen.name}，省一次跨校区折返`
-    : '按常去的食堂排的';
-  if (scenarios?.meal_radius === 'near' && anchor?.place) {
-    // 就近：按转场时间挑最近的（画像在这里真的改变结果）
-    let bestMin = Number.POSITIVE_INFINITY;
-    for (const t of chosenPool.slice(0, 4)) {
-      const info = transfer(anchor.place, t.place as string);
-      if (info && info.minutes < bestMin) { bestMin = info.minutes; chosen = t; }
-    }
-    if (Number.isFinite(bestMin)) {
-      why = `你选的是「就近快吃」，所以按从${anchor.place}走过去的时间挑了最近的`;
-    }
-  } else if (scenarios?.meal_radius === 'far') {
-    why = '你愿意为想吃的走远一点，所以按口味优先（不是最近的）';
-  }
-
-  // ④ 精定位：落点不得早于「上一块结束 + 走过去 + 排队缓冲」，
-  //    也不得晚到「吃完来不及走到下一件事」—— 两头都要留出走路时间
-  const need = travelNeed(transfer, anchor?.place, chosen.place);
-  const earliest = anchor ? anchor.endMin + need + MEAL_BUFFER_MIN : dayStartMin;
-  const tail = travelNeed(transfer, chosen.place, next?.place);
-  const limit = next ? next.startMin - tail - MEAL_BUFFER_MIN : dayEndMin;
-  const start = search(earliest, limit) ?? search(earliest) ?? t0;
 
   return {
     block: {
@@ -600,15 +655,16 @@ function placeMeal(args: {
       dayOfWeek: day,
       startMin: start,
       endMin: start + dur,
-      title: `${meal.label} · ${chosen.name}`,
-      place: chosen.place,
-      emoji: chosen.emoji,
-      reason: reasonForMeal({
-        why, note: chosen.note, need, anchorPlace: anchor?.place, tail, nextPlace: next?.place,
-      }),
+      // 标题只留餐次 —— 不再拼「· 第一食堂」（T2：地点不由引擎决定）
+      title: meal.label,
+      // S4：用户指定了食堂就填上；没指定则留空（地点交给用户）
+      ...(mealPlace ? { place: mealPlace } : {}),
+      emoji: meal.id === 'breakfast' ? '🥣' : meal.id === 'lunch' ? '🍚' : '🍜',
+      reason: mealPlace
+        ? `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间；去「${mealPlace}」是你在设置里指定的`
+        : `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间，去哪吃你自己定`,
       source: 'template',
     },
-    unverified: chosen.verified === false,
   };
 }
 
@@ -980,6 +1036,9 @@ export function attachTransfers(
       minutes: Math.round(info.minutes * 10) / 10,
       slackMin,
       tight: slackMin < TIGHT_SLACK,
+      // `reliable` 是**机器可读**的来源标记（P2-T2.4）。`note` 是给人看的文案 ——
+      // 两者都要有：前端要判断「这条是不是估算的」时不该去匹配中文。
+      reliable: info.reliable,
       note: info.reliable === false ? '估算值（跨校区），精确时间可让梨宝算一下' : undefined,
     };
 

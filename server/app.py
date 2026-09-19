@@ -315,8 +315,15 @@ def _bucket(hour: int) -> str:
 
 
 @app.get("/api/weather")
-def api_weather(days: int = Query(7, ge=1, le=16)):
+def api_weather(
+    days: int = Query(7, ge=1, le=16),
+    past_days: int = Query(0, ge=0, le=7),
+):
     """未来若干天天气，含**分时段**（上午 / 下午 / 晚间）摘要。
+
+    `past_days`：同时返回过去 N 天（Open-Meteo 原生支持）——
+    前端固定传 6，让「本周」无论今天周几都有完整七天的数据
+    （否则周末打开页面，本周的周一到周五没有天气 —— 实测教训 2026-09-19）。
 
     只返回数据、不返回建议 —— 「下雨该不该把跑步改到室内」是产品策略，
     归前端 `features/weather/`，那里才可测试、可调整。
@@ -327,7 +334,8 @@ def api_weather(days: int = Query(7, ge=1, le=16)):
     import time as _time
     from collections import defaultdict
 
-    cached = _weather_cache.get(days)
+    cache_key = (days, past_days)
+    cached = _weather_cache.get(cache_key)
     if cached and _time.time() - cached["at"] < WEATHER_TTL:
         return {**cached["payload"], "cached": True}
 
@@ -343,6 +351,7 @@ def api_weather(days: int = Query(7, ge=1, le=16)):
                 "hourly": "temperature_2m,precipitation_probability,weather_code",
                 "timezone": "Asia/Shanghai",
                 "forecast_days": days,
+                "past_days": past_days,
             },
             timeout=12,
         )
@@ -415,7 +424,7 @@ def api_weather(days: int = Query(7, ge=1, le=16)):
         "source": "open-meteo",
         "days": out,
     }
-    _weather_cache[days] = {"at": _time.time(), "payload": payload}
+    _weather_cache[cache_key] = {"at": _time.time(), "payload": payload}
     return {**payload, "cached": False}
 
 

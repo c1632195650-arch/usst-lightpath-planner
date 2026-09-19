@@ -263,6 +263,18 @@ export interface TransferHint {
   slackMin: number;
   tight: boolean;
   note?: string;
+  /**
+   * 这个分钟数是否来自**真实路网实测**（`true`）还是兜底估算（`false`）。
+   *
+   * 为什么必须有它（P2-T2.4 / AC-10）：在此之前，「实测还是估算」这件事
+   * **只编码在 `note` 的中文字符串里**，前端要判断就得去匹配
+   * `'估算值（跨校区）…'` 这样的文案 —— 文案一改判断就静默失效。
+   * 转场收敛的诚实原则（「个别转场时间为估算值」）需要一个机器可读的信号。
+   *
+   * 缺省 `undefined` = 引擎没被告知来源（旧调用方 / 未注入 provider）。
+   * **不要把它当 `false` 用** —— 语义是「未知」，不是「估算」。
+   */
+  reliable?: boolean;
 }
 
 export interface TimeBlock {

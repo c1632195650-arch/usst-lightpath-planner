@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnswerEntry, AnswerMap } from '@/types';
 import { PERSONA_ITEMS, SECTION_META } from '@/data/personaBank';
 import { isAnswered } from '@/lib/persona';
@@ -58,12 +58,50 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
     else setIdx((current) => current + 1);
   };
 
+  /**
+   * 自动进入下一题（2026-09-19 交互改版）。
+   *
+   * 点击选项 / 排序排满后**默认自动前进**，不再要求多点一次「下一题」。
+   * 留 ~320ms 的停顿是刻意的：让选中高亮先亮起来 ——
+   * 立即跳走的话用户根本看不到自己选了什么，等于盲选。
+   *
+   * `advancing` 在停顿期间锁住全部选项：双击/连点不能跳两题。
+   * 期间点「上一题」会取消这次前进（goPrev 里清定时器）——
+   * 用户反悔的意愿必须优先于既定的自动前进。
+   */
+  const [advancing, setAdvancing] = useState(false);
+  const advTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (advTimer.current !== null) window.clearTimeout(advTimer.current);
+  }, []);
+
+  const advance = (delay = 320) => {
+    if (advTimer.current !== null) return;
+    setAdvancing(true);
+    advTimer.current = window.setTimeout(() => {
+      advTimer.current = null;
+      setAdvancing(false);
+      goNext();
+    }, delay);
+  };
+
+  const goPrev = () => {
+    if (advTimer.current !== null) {
+      window.clearTimeout(advTimer.current);
+      advTimer.current = null;
+      setAdvancing(false);
+    }
+    setIdx((current) => Math.max(0, current - 1));
+  };
+
   /** 依次记录排序题的选择，已选项目保持顺序以明确其优先级。 */
   const handleSortTap = (key: string) => {
     if (sortPick.includes(key)) return;
     const next = [...sortPick, key];
     setSortPick(next);
     onAnswer('B05', next);
+    // 排满 5 项 = 这题答完 → 自动前进（与选择题同一交互口径）
+    if (next.length >= 5) advance(420);
   };
 
   /** 同时清除局部排序和外层答案，避免视觉与保存内容不同步。 */
@@ -143,7 +181,11 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-light">QUESTION {String(idx + 1).padStart(2, '0')}</p>
               <h2 className="mt-4 max-w-3xl text-2xl font-semibold leading-9 tracking-tight text-white sm:text-3xl sm:leading-[1.35]">{item.text}</h2>
               <p className="mt-4 text-sm leading-6 text-white/60">
-                {item.type === 'L5' ? '按你通常的状态选择，不需要追求“更好”的答案。' : item.type === 'SORT' ? '按重要程度依次选择；第一次选择会排在最前。' : '选择更接近你第一反应的一项。'}
+                {item.type === 'L5'
+                  ? '按你通常的状态选择，不需要追求“更好”的答案。点一下就进入下一题；选错了用「上一题」回来改。'
+                  : item.type === 'SORT'
+                    ? '按重要程度依次选择，第一次选择会排在最前；选满 5 项自动进入下一题。'
+                    : '选择更接近你第一反应的一项，点一下就进入下一题。'}
               </p>
 
               <div className="mt-8 rounded-2xl bg-white p-3 text-ink sm:p-4">
@@ -155,7 +197,8 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                       return (
                         <button
                           key={value}
-                          onClick={() => answer(value)}
+                          onClick={() => { answer(value); advance(); }}
+                          disabled={advancing}
                           aria-pressed={active}
                           className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 ease-out sm:min-h-[132px] sm:flex-col sm:items-center sm:justify-between sm:px-2 sm:text-center ${
                             active ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
@@ -176,7 +219,8 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                       return (
                         <button
                           key={option.key}
-                          onClick={() => answer(option.key)}
+                          onClick={() => { answer(option.key); advance(); }}
+                          disabled={advancing}
                           aria-pressed={active}
                           className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-200 ease-out ${
                             active ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
@@ -207,7 +251,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                         <button
                           key={option.key}
                           onClick={() => handleSortTap(option.key)}
-                          disabled={picked}
+                          disabled={picked || advancing}
                           aria-pressed={picked}
                           className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-200 ease-out disabled:cursor-default ${
                             picked ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
@@ -228,34 +272,36 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
 
             <footer className="flex flex-wrap items-center gap-3 border-t border-white/10 px-5 py-4 sm:px-8">
               {item.type === 'SORT' ? (
-                <>
-                  <button onClick={resetSort} disabled={sortPick.length === 0} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35">
-                    清空排序
-                  </button>
-                  <div className="flex-1" />
-                  <button
-                    onClick={goNext}
-                    disabled={!sortDone}
-                    className="button-on-dark"
-                  >
-                    {isLast ? '生成我的画像' : '下一步'}
-                  </button>
-                </>
+                <button onClick={resetSort} disabled={sortPick.length === 0 || advancing} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35">
+                  清空排序
+                </button>
               ) : (
-                <>
-                  <button onClick={goNext} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white">
-                    暂时跳过
-                  </button>
-                  <div className="flex-1" />
-                  {idx > 0 && (
-                    <button onClick={() => setIdx((current) => current - 1)} className="min-h-10 px-2 text-sm font-medium text-white/75 transition-colors hover:text-white">
-                      上一题
-                    </button>
-                  )}
-                  <button onClick={goNext} disabled={!answered} className="button-on-dark">
-                    {isLast ? '生成我的画像' : '下一题'}
-                  </button>
-                </>
+                <button onClick={goNext} disabled={advancing} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35">
+                  暂时跳过
+                </button>
+              )}
+              <div className="flex-1" />
+              {/* 「上一题」—— 所有题型都有（排序题之前没有，这次补上）。
+                  它同时是自动前进的「撤销」：点它会取消还没发生的前进。 */}
+              {idx > 0 && (
+                <button onClick={goPrev} className="min-h-10 px-2 text-sm font-medium text-white/75 transition-colors hover:text-white">
+                  上一题
+                </button>
+              )}
+              {/* 兜底按钮，只留给自动前进覆盖不到的场景：
+                  · 排序题「上一题回来且已答满」—— 选项全是 disabled，点不动就只能靠它，
+                    否则用户会被困在这一题；
+                  · 最后一题 —— 用户可能想先看看再生成。
+                  正常从头作答时它们根本不会出现在路径上（自动前进先行一步）。 */}
+              {item.type === 'SORT' && sortDone && (
+                <button onClick={goNext} disabled={advancing} className="button-on-dark">
+                  {isLast ? '生成我的画像' : '下一步'}
+                </button>
+              )}
+              {item.type !== 'SORT' && isLast && (
+                <button onClick={goNext} disabled={!answered || advancing} className="button-on-dark">
+                  生成我的画像
+                </button>
               )}
             </footer>
           </div>

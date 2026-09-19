@@ -23,7 +23,13 @@ import type { TransferProvider } from './campusLookup.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 import { evaluate } from './objective.ts';
 import { improve } from './improve.ts';
+import {
+  dirtyRegion, incrementalImprove, incrementalNotes, type IncrementalResult,
+} from './incremental.ts';
 import { explain, issueLockConflict } from './explain.ts';
+import { applyLongLocks } from './longLocks.ts';
+import { applyUnavailableSlots } from './unavailableSlots.ts';
+import { toMinutes as toMinutesOf } from '@/constants/time';
 
 /* ============================================================
  * 一、硬约束违反（AC-1）
@@ -57,6 +63,41 @@ export function countHardViolations(plan: WeekPlan): HardViolations {
   }
   const lateTransfers = plan.blocks.filter((b) => b.transfer != null && b.transfer.slackMin < 0).length;
   return { overlaps, lateTransfers, total: overlaps + lateTransfers };
+}
+
+/* ============================================================
+ * 一·五、默认锁（T9，2026-09-19）
+ * ========================================================== */
+
+/**
+ * 由「上一版计划」推导出**默认 soft 锁**。
+ *
+ * 用户的原话是：「我不改它，那它不就是定住的吗？」—— 这个直觉是对的，
+ * 但此前的引擎不是这么工作的：它每次重排都**从头构造**，而引擎自排的块都算
+ * `free`（`lockFactorOf` 给 ×0），于是 `churn` 完全管不住它们，每次重排都可能大改。
+ * 用户必须手动点「🔒 定住」才能保住一块 —— 主次反了。
+ *
+ * 为什么不直接改 `lockFactorOf`（把 `free` 从 ×0 提到 ×1）：
+ *   那会影响**所有**排程，且让 `churn = 0.8` 这个权重的语义整体漂移。
+ * 改在入口处注入则约束得住：
+ *   · **只在有上一版计划时生效** → 首次排程行为完全不变（golden 快照不受影响）；
+ *   · 显式的 `lockLevels` 永远优先（用户手动锁的 `hard` 不会被降级）；
+ *   · 课程块跳过（它的 hard 由 `resolveLockLevel` 推导，不需要也不该被降级）。
+ *
+ * @returns `blockId → 'soft'`（无上一版计划时返回空对象）
+ */
+export function computeDefaultSoftLocks(
+  previousPlan: WeekPlan | undefined,
+  lockLevels: Record<string, LockLevel> | undefined,
+): Record<string, LockLevel> {
+  const out: Record<string, LockLevel> = {};
+  if (!previousPlan) return out;
+  for (const b of previousPlan.blocks) {
+    if (lockLevels?.[b.id] !== undefined) continue;
+    if (b.kind === 'course') continue;
+    out[b.id] = 'soft';
+  }
+  return out;
 }
 
 /* ============================================================
@@ -294,10 +335,36 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   const n = normalize(req, ctx);
   const { weights, config } = n;
 
+  // `PlanRequest` 的可选字段允许 `null`（调用方（UI）手里常常是 `X | null`）。
+  // 在这里一次性收敛成 `undefined`，下游（improve / evaluate / churn / 增量）
+  // 就不必到处写 `?? undefined` —— 那些内部函数只关心「有 / 没有」，
+  // 不关心是 `null` 还是 `undefined` 造成的「没有」。
+  const previousPlan = req.previousPlan ?? undefined;
+  const previousCommits = req.previousCommits ?? undefined;
+
+  /**
+   * T9（2026-09-19）：**上一版计划里仍然存在的块，默认按 `soft` 锁对待。**
+   *
+   * 用户的原话是：「我不改它，那它不就是定住的吗？」—— 这个直觉是对的，
+   * 但此前的引擎不是这么工作的：它每次重排都**从头构造**一份计划，
+   * 而引擎自排的块都算 `free`（`lockFactorOf` 给 ×0），于是 `churn` 完全管不住它们，
+   * 每次重排都可能大改。用户必须手动点「🔒 定住」才能保住一块，这反了。
+   *
+   * 修法上**刻意不选「把 `free` 的系数从 ×0 提到 ×1」**（那会影响所有排程，
+   * 且让 `churn = 0.8` 这个权重的语义整体漂移）。改用在入口处注入默认锁：
+   *   · 只在**有上一版计划**时生效 → 首次排程行为完全不变（golden 快照不受影响）；
+   *   · 显式的 `req.lockLevels` 永远优先（用户手动锁的 `hard` 不会被降级）；
+   *   · 已经被用户排除的块不参与（它们这一轮根本不会出现）。
+   */
+  const defaultSoftLocks = computeDefaultSoftLocks(previousPlan, req.lockLevels);
+  const effectiveLockLevels: Record<string, LockLevel> | undefined =
+    Object.keys(defaultSoftLocks).length === 0
+      ? (req.lockLevels ?? undefined)
+      : { ...defaultSoftLocks, ...(req.lockLevels ?? {}) };
+
   // ③ 构造（必然可行）
   const built = construct(n.req, ctx);
-  let plan0 = built.plan;
-  if (n.cycle) {
+  let plan0 = built.plan;  if (n.cycle) {
     plan0.issues.push({
       level: 'error',
       message: `提交项依赖成环（${n.cycle.join(' → ')}），已忽略环上的依赖以免排不出计划`,
@@ -308,23 +375,82 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   const lockRes = applyLockedPlacements(plan0, req.lockedPlacements, req.lockLevels);
   plan0 = lockRes.plan;
 
+  /**
+   * ③.6 **长期锁**（S1：定住跨周，单双周分开）—— 在这周把那个时段留出来。
+   *
+   * 为什么放在这里而不是 construct 里：长期锁是「用户事后声明的约束」，
+   * 而 construct 是「按校历与策略排一份可行解」。混进去会让 construct 的参数
+   * 越来越臃肿，并且长期锁本来就是**对已排出结果的就地调整**。
+   * 放在 improve 之前也保证了后续改进不会把它挪走（它的 `locked` = hard）。
+   */
+  const longLock = applyLongLocks(
+    plan0,
+    req.lockedPlacements,
+    req.lockLevels,
+    req.weekNo,
+    {
+      // 顺延的边界与 construct 同口径（`'07:00'` / `'23:00'` 是那里的默认值）
+      dayStartMin: toMinutesOf(req.dayStart ?? '07:00'),
+      dayEndMin: toMinutesOf(req.dayEnd ?? '23:00'),
+    },
+  );
+  plan0 = { ...plan0, blocks: longLock.blocks };
+
+  /**
+   * ③.7 **不可时段**（R6.2）—— 用户声明的「这段时间别排」按硬约束处理。
+   *
+   * 放在这里是刻意的：用户约束本来就是**对已排出结果的调整**，
+   * 而且集中在一点比让 construct 的四处候选搜索都认识它更好测。
+   */
+  const slotRes = applyUnavailableSlots(
+    plan0,
+    (req.unavailable ?? []).map((s) => ({
+      id: s.id ?? `${s.days.join(',')}-${s.fromMin}-${s.toMin}`,
+      days: s.days,
+      fromMin: s.fromMin,
+      toMin: s.toMin,
+      weeks: s.weeks ?? [],
+      scope: (s.weeks == null || s.weeks.length === 0) ? 'long' : 'once',
+      createdAtWeek: s.createdAtWeek,
+      title: s.title,
+    })),
+    req.weekNo,
+    { dayStartMin: toMinutesOf(req.dayStart ?? '07:00'), dayEndMin: toMinutesOf(req.dayEnd ?? '23:00') },
+  );
+  plan0 = { ...plan0, blocks: slotRes.blocks };
+
   // ④ 改进（solver='greedy' 时跳过 —— 兼容旧行为）
   let plan = plan0;
   let iterations = 0;
   let acceptedCount = 0;
+  let incrementalRes: IncrementalResult | null = null;
   if (config.solver === 'lns') {
-    const res = improve(plan0, {
+    const improveCtx = {
       weekNo: req.weekNo,
       policy: req.policy,
       weights,
       commits: n.req.commits,
-      lockLevels: req.lockLevels,
-      previousPlan: req.previousPlan,
+      // T9：用注入过默认 soft 锁的版本（用户显式锁的 hard 优先级更高）
+      lockLevels: effectiveLockLevels,
+      previousPlan,
       config: req.config,
+    };
+    /**
+     * ④ 改进：有 `previousPlan` 时走**增量**（P2-T2.1 / §5.8），否则全量。
+     *
+     * 为什么放在这里而不是换掉 construct：脏区域是「上一版计划 → 这一版输入」的
+     * 差异，构造阶段不掌握上一版的信息（它只负责排出一份可行解）。
+     * 增量是**改进阶段**的策略，所以挂在此处。
+     */
+    const dirty = dirtyRegion({
+      previousPlan,
+      commits: n.req.commits,
+      previousCommits,
     });
-    plan = res.plan;
-    iterations = res.iterations;
-    acceptedCount = res.accepted.length;
+    incrementalRes = incrementalImprove(plan0, dirty, improveCtx);
+    plan = incrementalRes.plan;
+    iterations = incrementalRes.improve.iterations;
+    acceptedCount = incrementalRes.improve.accepted.length;
   }
 
   // ④.5 重挂转场 —— improve 会移动块，而 `attachTransfers` 只在 construct 里跑过一次
@@ -342,8 +468,9 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     policy: req.policy,
     weights,
     commits: n.req.commits,
-    previousPlan: req.previousPlan,
-    lockLevels: req.lockLevels,
+    previousPlan,
+    // T9：诊断里的 cost 必须和 improve 用同一套锁级别，否则 churn 分项对不上
+    lockLevels: effectiveLockLevels,
   });
   const hard = countHardViolations(plan);
 
@@ -372,12 +499,15 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   if (iterations > 0) {
     notes.push(`求解器跑了 ${iterations} 轮改进，接受了 ${acceptedCount} 处调整（成本降到 ${cost.total.toFixed(1)}）`);
   }
+  // 「这次只动了哪几天」—— P2 最省力的差异化展示（§5 P4）
+  if (incrementalRes) notes.push(...incrementalNotes(incrementalRes));
 
   const result: PlanResult = {
     plan,
     notes,
     diagnostics,
     nextRolling: nextRollingFrom(plan, n.req.commits, req.weekNo),
+    loadDecisions: built.loadDecisions,
   };
   return result;
 }
