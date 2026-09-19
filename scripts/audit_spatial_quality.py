@@ -102,18 +102,33 @@ KNOWN_OMISSION = [
      "status": "未补"},
 ]
 
+# ---------- 覆盖范围声明（2026-09-19，CY 定）----------
+# 🔴 本空间数据库**只覆盖**：军工路本部（北校 / 南校 / 580）+ 1100 基础学院。
+#    **复兴路校区明确不在范围内** —— 不建图、不做检核、**不计入完整性缺口**。
+#    为什么写死成声明而不是留成"缺口"：留成缺口就永远是一条 ⚠️，
+#    读者无法区分「我们漏了」和「我们说好不做」，久了这条警报会被无视。
+#    （前端 `src/constants/campus.ts` 仍保留 FUXING 词条 —— 那是给**课表地点字符串
+#      反推校区**用的映射，与"本数据库是否覆盖复兴路空间数据"是两件事，别混。）
+SCOPE_IN = ("北校", "南校", "580", "1100", "连接")   # 连接 = 海安路跨校区天桥，刻意保留
+SCOPE_OUT = {"复兴路": "明确不在本次范围（CY 2026-09-19 定）：不建图、不检核、不计缺口"}
+
 # 已接受的不合格项（**每项都必须带理由与处置计划**）。
 # 🔴 为什么要有这个列表：一个「只要有不合格就红」的门禁，如果当下就有 2 条不合格，
 #    它永远红着 —— **永远红的门禁等于没有门禁**，没人会看它，新增的缺陷也淹在里面。
 #    所以 --gate 只拦「**新增**的不合格」，这里登记的每条都是一个已知、已排期的账。
 ACCEPTED_BAD = [
-    {"sub": "多余 commission",
-     "why": "`(原第四食堂)` 脏桩条目（osm-001，verified:false，被 6 条关系引用）。"
-            "清理需连带重生成 `relative_bearing.json`，已排在后续批次。"},
     {"sub": "绝对偏差 95 分位 ｜ 学长站 · 我方弱锚层（偏大需复核）",
      "why": "**弱锚的代价**，正是 P1-3「弱锚提锚」要打的靶子。"
             "收敛路径 = GPS 轨迹外业（docs/gps-trace-protocol.md），"
             "不是改阈值把红灯涂绿。"},
+]
+# 已修复项的历史记录（不再是不合格，留档以免有人重复踩同一个坑）
+FIXED_BAD_HISTORY = [
+    {"sub": "多余 commission",
+     "was": "1 —— `(原第四食堂)`（osm-001）OSM 自动导入的括号残留名，挂北校、verified:false。",
+     "fixed": "2026-09-19 删除。OSM 里另有独立的 `第四食堂`（= 1100 那栋），"
+              "而这条挂在北校会让「北校有什么食堂」把学生引到一栋已不存在的食堂。"
+              "连带重生成 `data/relative_bearing.json`（清掉 13 处引用）。"},
 ]
 
 # 与 OSM 归属不一致（或曾不一致）的条目 —— 专题精度的实测样本
@@ -225,11 +240,9 @@ def q_completeness(cm, net):
     osl = [n for n in (_bld_name(b) for b in net.bld) if n]
     unmatched = sorted({n for n in osl if n not in have})
 
-    # 校区分组覆盖：声明了 4 个分组（北校/南校/580 + 独立 1100/复兴路），
-    # 实际有地物的分组 = ？
+    # 校区分组覆盖：**只看范围内的分组**（范围声明见 SCOPE_IN / SCOPE_OUT）
     campus_cov = Counter(p.get("campus") for p in items_all)
-    declared_groups = {"北校", "南校", "580", "1100", "复兴路"}
-    empty_groups = sorted(g for g in declared_groups if not campus_cov.get(g))
+    empty_groups = sorted(g for g in SCOPE_IN if not campus_cov.get(g))
 
     omission = {
         "known_omission": KNOWN_OMISSION,
@@ -252,15 +265,18 @@ def q_completeness(cm, net):
              "value": n, "threshold": f"≤ {THRESHOLDS['known_omission_max']}",
              "verdict": _verdict(n <= THRESHOLDS["known_omission_max"]),
              "note": "每条带证据出处，见 detail.known_omission"},
-            {"sub": "遗漏 omission（校区分组覆盖）",
-             "measure": "声明分组里一条地物都没有的分组数",
+            {"sub": "遗漏 omission（范围内分组覆盖）",
+             "measure": "范围内声明的分组里一条地物都没有的分组数",
              "value": f"{n_empty}（{('、'.join(empty_groups)) if empty_groups else '无'}）",
              "threshold": "0",
              "verdict": _verdict(n_empty == 0, warn=True),
-             "note": "复兴路校区在 146 条里 0 条 —— 是**真实覆盖缺口**，"
-                     "但已是**已声明的已知状态**（`campus_network.py` 注释："
-                     "「复兴路校区（fuxinglu.osm）暂不接入：图谱里没有复兴路 POI」）；"
-                     "6 条校外餐饮另计在 off_campus"},
+             "note": f"范围内分组 = {'、'.join(SCOPE_IN)}；"
+                     f"6 条校外餐饮另计在 off_campus"},
+            {"sub": "范围声明 scope（不是缺口）",
+             "measure": "明确排除在外的校区",
+             "value": "、".join(SCOPE_OUT) or "无",
+             "threshold": "—（声明即已管理）", "verdict": NA,
+             "note": "；".join(f"{k}：{v}" for k, v in SCOPE_OUT.items())},
             {"sub": "遗漏 omission（未决登记）",
              "measure": "data/campus_map.json → needs_check 登记在册项",
              "value": omission["n_needs_check"], "threshold": "—（登记即在管理）",
@@ -705,11 +721,14 @@ def metaquality(n_sources, n_ckpt, ckpt, cm):
                             f"/{len(items_all)} 条无实地/三方证据"
                             f"（verified 占比 {n_ver / max(len(items_all), 1):.1%}）",
         "homogeneity": "检核点来自 2 个互相独立的来源（腾讯 POI / 高德系），"
-                       "但空间上集中在校园主干与校门；**弱锚片区（1100、复兴路、"
-                       "580）与外业未覆盖区没有任何检核点**",
+                       "但空间上集中在校园主干与校门；**弱锚片区（1100、580）"
+                       "与外业未覆盖区没有任何检核点**",
         "conclusion": "**位置精度目前只能给「指示性」结论，尚不构成正式检定值。**"
                       "补齐路径：docs/gps-trace-protocol.md 的 5 人 × 10 条定向 OD 外业，"
-                      "使检核点 ≥ 20 且覆盖三个校区分组。",
+                      "使检核点 ≥ 20 且覆盖范围内的三个分组。",
+        "scope": "覆盖范围 = "
+                 + "、".join(SCOPE_IN) + "（军工路本部 + 1100 基础学院）；"
+                 + "；".join(f"{k}：{v}" for k, v in SCOPE_OUT.items()),
         "gap": (ckpt.get("gap") or {}).get("uncovered", ""),
     }
 
@@ -902,10 +921,119 @@ def selftest():
     return 1 if fails else 0
 
 
+def _wrap(text, width):
+    """纯文本折行：优先在标点/分隔符处断，别把 `emoji/tags` 劈成 `emoji/t` + `ags`。"""
+    breaks = "，。；、）】」/｜ 　"
+    out, cur = [], ""
+    for ch in text:
+        cur += ch
+        if len(cur) >= width:
+            cut = max((cur.rfind(b) for b in breaks), default=-1)
+            if cut >= width // 2:
+                out.append(cur[:cut + 1])
+                cur = cur[cut + 1:]
+            else:
+                out.append(cur)
+                cur = ""
+    if cur:
+        out.append(cur)
+    return out or [""]
+
+
+def _txt(sections, mq, cm, n_src):
+    """纯文本报告（无 markdown 管道符 —— 对齐列宽，任何编辑器直接可读）。"""
+    W = 78
+    L = []
+    p = L.append
+    items_all = _all_items(cm)
+    p("=" * W)
+    p("空间数据库可靠性评估测试报告 · ISO 19157 数据质量元素口径".center(W - 12))
+    p("=" * W)
+    p("")
+    p(f"生成日期   2026-09-19")
+    p(f"数据文件   data/campus_map.json")
+    p(f"数据规模   {len(items_all)} 条（pois {len(cm['pois'])} + landmarks {len(cm['landmarks'])}）")
+    p(f"检核源     {n_src} 个独立来源")
+    p(f"覆盖范围   " + "、".join(SCOPE_IN) + "（军工路本部 + 1100 基础学院）")
+    for k, v in SCOPE_OUT.items():
+        p(f"           范围外：{k} —— {v}")
+    p("")
+    p("权威口径")
+    p("  · ISO 19157（地理信息 · 数据质量）六元素 + 元质量")
+    p("  · NSSDA / ASPRS Positional Accuracy Standards (2014)：")
+    p("      RMSE_r = sqrt(Σ d_i² / n)")
+    p("      ACCURACY_r(95%) = RMSE_r × 1.7308")
+    p("    硬约束：检核点须独立且更精确（优于目标 3 倍）、n ≥ 20 才够统计显著")
+    p("")
+    p("判定图例  [合格] [警戒] [不合格] [无法判定=样本/参照源不达标，如实降级为指示性]")
+    p("")
+    for s in sections:
+        p("-" * W)
+        p(f"## {s['element']}")
+        p("-" * W)
+        for it in s["items"]:
+            v = {"✅": "[合格]", "⚠️": "[警戒]", "❌": "[不合格]", "⚪": "[无法判定]"}[it["verdict"]]
+            p(f"{v} {it['sub']}")
+            p(f"      度量  {it['measure']}")
+            p(f"      实测  {it['value']}")
+            p(f"      阈值  {it['threshold']}")
+            if it.get("note"):
+                note = it["note"].replace("**", "")
+                for seg in _wrap(note, W - 20):
+                    p(f"      说明  {seg}")
+            p("")
+    p("=" * W)
+    p("元质量 metaquality —— 上面那些数字能信到什么程度")
+    p("=" * W)
+    for k, v in mq.items():
+        if v:
+            txt = str(v).replace("**", "")
+            p(f"  {k}")
+            for seg in _wrap(txt, W - 8):
+                p(f"    {seg}")
+    p("")
+    n_ok = sum(1 for s in sections for i in s["items"] if i["verdict"] == OK)
+    n_warn = sum(1 for s in sections for i in s["items"] if i["verdict"] == WARN)
+    n_bad = sum(1 for s in sections for i in s["items"] if i["verdict"] == BAD)
+    n_na = sum(1 for s in sections for i in s["items"] if i["verdict"] == NA)
+    p("=" * W)
+    p("汇总")
+    p("=" * W)
+    p(f"  [合格] {n_ok}   [警戒] {n_warn}   [不合格] {n_bad}   [无法判定] {n_na}")
+    p("")
+    p("不合格 / 警戒项明细：")
+    for s in sections:
+        for it in s["items"]:
+            if it["verdict"] in (BAD, WARN):
+                p(f"  {it['verdict']} {it['sub']}")
+                p(f"      {it['measure']}：实测 {it['value']}（阈值 {it['threshold']}）")
+                if it.get("note"):
+                    p(f"      {it['note'].replace('**', '')}")
+    p("")
+    if ACCEPTED_BAD:
+        p("已接受的不合格项（登记在案，门禁只拦新增）：")
+        for a in ACCEPTED_BAD:
+            p(f"  · {a['sub']}")
+            for seg in _wrap(a["why"].replace("**", ""), W - 8):
+                p(f"      {seg}")
+        p("")
+    if FIXED_BAD_HISTORY:
+        p("本次已修复（留档，防止重复踩坑）：")
+        for a in FIXED_BAD_HISTORY:
+            p(f"  · {a['sub']}")
+            p(f"      原值  {a['was']}")
+            for seg in _wrap("处置  " + a["fixed"], W - 8):
+                p(f"      {seg}")
+        p("")
+    p("=" * W)
+    return "\n".join(L)
+
+
 def main():
     ap = argparse.ArgumentParser(description="空间数据库可靠性审计（ISO 19157）")
     ap.add_argument("--json", default=None, help="报告 JSON 写到该路径")
     ap.add_argument("--md", default=None, help="报告 Markdown 写到该路径")
+    ap.add_argument("--txt", default=None, help="报告**纯文本**写到该路径（无 markdown 语法）")
     ap.add_argument("--checkpoints", default=None,
                     help="检核点证据文件（默认 data/quality_checkpoints.json）")
     ap.add_argument("--gate", action="store_true", help="出现 ❌ 则 exit 1")
@@ -942,6 +1070,14 @@ def main():
             if not md.endswith("\n"):
                 f.write("\n")
         print(f"\n报告 Markdown：{args.md}")
+    if args.txt:
+        txt = _txt(sections, mq, cm, len(ckpt.get("sources", [])))
+        os.makedirs(os.path.dirname(os.path.abspath(args.txt)) or ".", exist_ok=True)
+        with open(args.txt, "w", encoding="utf-8", newline="\n") as f:
+            f.write(txt)
+            if not txt.endswith("\n"):
+                f.write("\n")
+        print(f"报告纯文本：{args.txt}")
     if args.json:
         payload = {"generated": date.today().isoformat(), "thresholds": THRESHOLDS,
                    "campus_domain": CAMPUS_DOMAIN,

@@ -197,12 +197,19 @@ usst-planner/
 | P2-1 | 路网体检（拓扑/形状/方向熵/绕行率/锚源分布，ISO 19157 口径） | `scripts/audit_network_quality.py` |
 | P2-2 | GPS 轨迹 OA 验证协议（噪声上限，不是拍脑袋的 90%） | `scripts/overlap_accuracy.py`、`docs/gps-trace-protocol.md` |
 | P2-3 | Valhalla 可行性：**不替换**自建路由（A 离线矩阵 / B 轨迹吸附可用，C 换引擎不可行） | `docs/valhalla-assessment.md` |
-| P2-4 | **空间可靠性报告**（ISO 19157 六元素 + NSSDA 位置精度） | `scripts/audit_spatial_quality.py`、`docs/spatial-quality-2026-09-18.md` |
+| P2-4 | **空间可靠性报告**（ISO 19157 六元素 + NSSDA 位置精度） | `scripts/audit_spatial_quality.py`、`docs/spatial-quality-2026-09-19.{txt,md,json}` |
+| P2-5 | 数据收尾：删 OSM 脏桩、正名范围、重生成派生表 | `data/campus_map.json`（**145 条**）、`data/relative_bearing.json` |
 
-### 空间可靠性结论（`npm run audit:quality`）
+### 🔴 覆盖范围（2026-09-19 CY 定）
+**只覆盖军工路本部（北校 / 南校 / 580）+ 1100 基础学院。**
+**复兴路校区明确不在范围内** —— 不建图、不检核、不计缺口。
+（前端 `constants/campus.ts` 仍保留 FUXING 词条，那是给**课表地点字符串反推校区**用的映射，
+与「本数据库是否覆盖复兴路空间数据」是两件事，别混。）
+
+### 空间可靠性结论（`npm run audit:quality`，纯文本版 `docs/spatial-quality-2026-09-19.txt`）
 
 按 **ISO 19157** 报六元素，位置精度按 **NSSDA / ASPRS**：`ACCURACY_r(95%) = RMSE_r × 1.7308`。
-当前 **✅ 21 ｜ ⚠️ 2 ｜ ❌ 2 ｜ ⚪ 11**，其中 ⚪ 全部是「样本或参照源达不到标准，如实降级为指示性」。
+当前 **✅ 23 ｜ ⚠️ 1 ｜ ❌ 1 ｜ ⚪ 12**，其中 ⚪ 全部是「样本或参照源达不到标准，如实降级为指示性」。
 
 | 结论 | 数值 |
 |---|---|
@@ -210,17 +217,20 @@ usst-planner/
 | 位置精度（对照高德系点，n=9，peer 换算 √2） | **20.0 m**（RMSE_r 11.6 m） |
 | 同一物体层偏差 95 分位 | **17.8 m / 27.3 m**（阈值 50 m，✅） |
 | **我方弱锚层**偏差 95 分位 | **114.9 m**（❌ —— 这就是弱锚的代价） |
-| 实锚占比 | 117/146 = **80.1%**（✅ ≥79%） |
+| 实锚占比 | 116/145 = **80.0%**（✅ ≥79%） |
 | 拓扑（孤立点/自环/零长边/重复有向对） | 全 **0**（✅） |
 | 可解析率 / 可寻路率 | **100% / 100%**（✅） |
+| 证据完备度（verified 占比） | 98/145 = **67.6%**（指示性） |
 
-🔴 **两条必读**：
+🔴 **三条必读**：
 1. **位置精度只能是「指示性」** —— 检核点 n=9 < 20，且两个检核源自身精度都达不到目标精度的
    1/3。USGS 实践里 17 个检核点都写「not statistically significant enough to report as a
    final tested value」。**升级路径 = `docs/gps-trace-protocol.md` 的外业**。
 2. **「同名两地」不算位置误差** —— 6 条严重不一致（外语学院/理学院南北校、516 门、医务室等）
    是**归属争议**，按 ISO 19157 属专题精度。混进 RMSE 会得出 **267 m** 这种假数字。
    **不许用「改坐标」去掩盖** —— 那是把分类错改造成位置错。
+3. **「未核验」≠「多余」** —— `verified:false`（47 条）表达的是「尚无独立证据」，
+   属证据完备度。混算会得出「48 条多余」的假警报。
 
 **审计脚本自己也做了反向验证**（`npm run audit:quality:reverse`，6/6 通过）：它在第一版就
 **骗过我两次** —— 只遍历 `pois` 漏掉 120 条 landmarks、读一个根本不存在的 `anchor` 字段

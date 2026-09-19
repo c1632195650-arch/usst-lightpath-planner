@@ -587,10 +587,14 @@ def main():
     allp = m_all["pois"] + m_all["landmarks"]
     names = [p["name"] for p in allp]
 
-    # 1) 合并掉两条重复、再补 1 条缺项后 147 → 146
-    #    （147 − 图书馆重复 − 卫生科重复 + 现代化教学中心）
-    _check_j("图谱条目数 = 146（147 − 2 重复 + 1 补录）",
-             len(allp) == 146, f"实际 {len(allp)}")
+    # 1) 合并掉两条重复、补 1 条缺项、再删 1 条 OSM 脏桩后 147 → 145
+    #    （147 − 图书馆重复 − 卫生科重复 + 现代化教学中心 − (原第四食堂)）
+    #    🔴 (原第四食堂) 是 OSM 自动导入的**括号残留名**，挂北校、verified:false。
+    #       真第四食堂在 1100（三方证据已确认并已修）→ 留着它会让「北校有什么食堂」
+    #       把学生引到一栋已不存在的食堂。删除见 scripts/audit_spatial_quality.py
+    #       报出的 commission，并由 data/relative_bearing.json 一并重生成。
+    _check_j("图谱条目数 = 145（147 − 2 重复 + 1 补录 − 1 脏桩）",
+             len(allp) == 145, f"实际 {len(allp)}")
     _check_j("主名唯一（无同名重复条目）", len(names) == len(set(names)),
              f"{len(names)} → {len(set(names))}")
 
