@@ -25,6 +25,8 @@
  *   python evals/run.py --suite engine         # 由台架统一调用（npm run eval:engine）
  */
 import { buildWeekPlan, toPlanRequest } from '@/lib/planner/schedule.ts';
+import { evaluate } from '@/lib/planner/objective.ts';
+import { DEFAULT_WEIGHTS } from '@/lib/planner/model.ts';
 import { planWeek } from '@/lib/planner/planWeek.ts';
 import { GOLDEN_INPUTS, buildGoldenInput } from '../../tests/golden-inputs.ts';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
@@ -176,6 +178,19 @@ async function runVariant(spec: AnyRec, variant: string) {
     checkInvariants(plan, buildGoldenInput(spec), { coverage: variant === 'transfers' });
   if (!deterministic) bad.push({ code: 'I5', detail: '同一输入两次运行结果不一致' });
 
+  // ITC 成本编码（2026-09-19，ITC2011/XHSTT 惯例）：解质量 = (infeasibility, objective)
+  // 字典序二元组——先比硬违约数、同则比软成本，**不做加权合并**（ITC2019：不可行解直接出局）。
+  const itcCost: { infeasibility: number; objective: number | null } =
+    { infeasibility: bad.length, objective: null };
+  try {
+    const gi = buildGoldenInput(spec);
+    const c = evaluate(plan, {
+      weekNo: gi.weekNo, policy: gi.policy, weights: DEFAULT_WEIGHTS,
+      dayStartMin: 420, dayEndMin: 1380,
+    });
+    itcCost.objective = +c.total.toFixed(4);
+  } catch { /* 评分失败不阻塞验收，objective 记 null */ }
+
   const sorted = [...times].sort((a, b) => a - b);
   const p = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
   const days = new Set((plan.blocks ?? []).map((b: AnyRec) => b.dayOfWeek));
@@ -196,6 +211,7 @@ async function runVariant(spec: AnyRec, variant: string) {
       blankMin: plan.stats?.blankMin,
       issues: issuesOf(plan),
       ms: { p50: +p(0.5).toFixed(2), p95: +p(0.95).toFixed(2), max: +Math.max(...times).toFixed(2) },
+      itc: itcCost,
       determinism: deterministic,
       // 相对基线是否明显变慢（供 run.py --suite engine 报警；噪声大故阈值取 1.5×）
       slow: false,
@@ -231,6 +247,7 @@ for (const r of results) {
     `${mark} ${r.name} [${r.variant}]｜块 ${m.blocks}（课 ${m.courseBlocks}）｜天 ${m.daysCovered}`
       + `｜转场 ${m.transfers}（紧 ${m.tightTransfers}/最长 ${m.maxTransferMin}min）`
       + `｜issues e${m.issues.error}/w${m.issues.warn}/i${m.issues.info}`
+      + `｜ITC(${m.itc.infeasibility}, ${m.itc.objective ?? 'null'})`
       + `｜p50 ${m.ms.p50}ms p95 ${m.ms.p95}ms｜${m.determinism ? '确定性✓' : '确定性✗'}`,
   );
   for (const v of r.violations ?? []) console.log(`     ❌ [${v.code}] ${v.detail}`);
