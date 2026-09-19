@@ -20,3 +20,9 @@ beautifulsoup4
 # 生成结果已作为纯数据写进 data/campus_map.json（pyf/pyi/pyt/pyg 字段），
 # 所以**部署与运行后端都不需要装它**。
 pypinyin
+
+# ---- 幻觉一致性门禁（**可选**，scripts/hhem_gate.py 用）----
+# HHEM-2.1-Open 的远程代码与 transformers 5.x 不兼容（缺 all_tied_weights_keys），
+# **必须钉 <5**（2026-09-19 实测；模型权重首次经代理从 huggingface.co 下载，约 3GB）。
+torch
+transformers<5

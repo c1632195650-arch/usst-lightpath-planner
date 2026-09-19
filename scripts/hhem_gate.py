@@ -17,6 +17,7 @@
 模型缓存：首次运行经 hf-mirror 下载（约 3GB），之后离线可用。
 """
 import argparse
+import json
 import os
 import sys
 
@@ -43,7 +44,7 @@ def load_model():
 
 def score(model, pairs):
     with __import__("torch").no_grad():
-        out = model.predict([p for p, _ in pairs])
+        out = model.predict([(p, h) for p, h in pairs])   # ⚠️ 必须传 (前提, 假设) 对
     return [float(x) for x in out]
 
 
