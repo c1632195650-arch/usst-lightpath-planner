@@ -992,6 +992,10 @@ export function attachTransfers(
       slackMin,
       tight: slackMin < TIGHT_SLACK,
       note: info.reliable === false ? '估算值（跨校区），精确时间可让梨宝算一下' : undefined,
+      // 把「可信度 / 来源」写进契约（2026-09-19）：评分要按可信度打折，UI 也要能标注估算值，
+      // 而不再依赖 note 的中文字符串
+      reliable: info.reliable,
+      source: info.source,
     };
 
     if (SOFT_KINDS.has(next.kind) && !next.locked) continue; // 软块不报警

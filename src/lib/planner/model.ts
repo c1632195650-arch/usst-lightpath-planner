@@ -152,10 +152,44 @@ export const DEFAULT_WEIGHTS: Weights = {
   placeMismatch: 3.0,
 };
 
+/**
+ * 评分口径（2026-09-19，PR-A）。
+ *
+ * 为什么需要灰度开关：`tests/golden/*.json` 是**冻结语料**（拍一次就不再改），
+ * 而 transfer-aware 会改变 cost 数值 → 新口径上线必然让旧快照"失效"。
+ * 因此默认仍是 `legacy`（**逐位保持与快照一致**），新口径显式开启、另拍基线，
+ * 等验证充分后再把默认翻过来。
+ *
+ * · `legacy`         —— 地点一变就按固定 3 档罚分（同地点 0 / slack<0 罚 10 / <5 罚 3 / 其余罚 1）
+ * · `transfer-aware` —— 用**真实转场分钟**分级：拿不到分钟数时才退回上面那 3 档
+ */
+export type ScoringMode = 'legacy' | 'transfer-aware';
+
+export const DEFAULT_SCORING: ScoringMode = 'legacy';
+
+/**
+ * 转场数据的**可信度折扣**（transfer-aware 才生效）。
+ *
+ * 依据（可复现）：`npm run audit:transfer` 实测我方 OSM 路网**系统性偏长**
+ * —— 8/8 矛盾全是"路网 > 真值"，平均相对偏差 161%（如 二公寓→思餐厅 595m vs 高德 288m）。
+ * 若直接把这些偏长的分钟数喂给评分，引擎会**过度保守**（把日程排得更松、宁可少排也不冒险）。
+ * 故在数据修好之前给一个**明确的、可撤销的**补偿：×0.8。
+ * 路网修复后应回到 1.0（改这一个常量即可）。
+ */
+export const TRANSFER_TRUST = 0.8;
+
+/** 粗粒度兜底估算（`source: 'campus-estimate'`, `reliable: false`）再打一档折扣：
+ *  它只是"跨校区缓冲常数"，比 OSM 距离更不可信 —— 两档折扣相乘。 */
+export const ESTIMATE_TRUST = 0.75;
+
 /** 求解器配置 */
 export interface SolverConfig {
   /** 灰度开关：'greedy' 走旧引擎；'lns' 构造 + 改进 */
   solver: 'greedy' | 'lns';
+  /** 评分口径；缺省 `legacy`（保住冻结快照）。见 `ScoringMode` */
+  scoring?: ScoringMode;
+  /** 转场数据可信度折扣（transfer-aware 用）；缺省 `TRANSFER_TRUST` */
+  transferTrust?: number;
   /** 随机种子；缺省 = 确定性纯爬山（不用随机数） */
   seed?: number;
   /** 最大迭代轮数（默认 2000） */
@@ -168,6 +202,8 @@ export interface SolverConfig {
 
 export const DEFAULT_SOLVER_CONFIG: Required<Omit<SolverConfig, 'seed'>> & { seed?: number } = {
   solver: 'lns',
+  scoring: DEFAULT_SCORING,
+  transferTrust: TRANSFER_TRUST,
   maxIterations: 2000,
   budgetMs: 200,
   acceptWorse: false,
@@ -332,13 +368,27 @@ export function resolveLockLevel(
 }
 
 /**
+ * `free` 块的 churn 系数（**2026-09-19 起非零**，规格 §5.5 已修订）。
+ *
+ * 原值 0 的含义是「引擎自排的软块，随便挪都不要钱」→ churn 代价恒为 0
+ * ⇒「最小扰动」只有度量、没有驱动力（用户改一次计划仍然全盘重排）。
+ *
+ * 标定：`soft = 1`（用户明确要求保持）比它强 12.5 倍；`hard = 100` 仍等价于禁止移动。
+ * 量化效果：挪动 60 分钟的引擎软块 ≈ `0.8 × 0.08 × 60 = 3.84 分` ——
+ *   · 远小于「一次地点变更」(2.0/次) 的破坏力，**不会阻止真正的改进**（如省下 20 分转场风险）；
+ *   · 大于 0，足以让 improve 在**等价方案**之间挑「少动」的那个。
+ * 若实测发现太粘（计划该变却不变），先调这个常量，别改结构。
+ */
+export const FREE_CHURN_FACTOR = 0.08;
+
+/**
  * 锁 → churn 权重系数（规格书 §5.5）。
- *   hard ×100 等价于「禁止移动」；soft ×1；free ×0。
+ *   hard ×100 等价于「禁止移动」；soft ×1；free ×`FREE_CHURN_FACTOR`（原为 0）。
  */
 export function lockFactorOf(level: LockLevel): number {
   if (level === 'hard') return 100;
   if (level === 'soft') return 1;
-  return 0;
+  return FREE_CHURN_FACTOR;
 }
 
 /**

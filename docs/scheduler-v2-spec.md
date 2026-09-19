@@ -579,7 +579,14 @@ total =   w.studyShortfall * max(0, targetStudy - actualStudy)
         + w.placeMismatch  * Σ(跨校区块数)          # 校区未知(null)不计，见 §12.5.8
 ```
 
-`lockFactor`：`hard` 块参与 diff 时权重 ×100（等价于禁止移动）；`soft` 块 ×1；`free` 块 ×0。
+`lockFactor`：`hard` 块参与 diff 时权重 ×100（等价于禁止移动）；`soft` 块 ×1；`free` 块 ×**`FREE_CHURN_FACTOR = 0.08`**。
+
+> ⚠️ **裁决修订（2026-09-19，CY）**：`free` 由 `×0` 改为 `×0.08`。
+> 原因：`free` 覆盖的是**引擎自排的软块**（自习/三餐/活动），而 ×0 让 churn **代价恒为 0** ——
+> 「最小扰动」只剩度量、没有驱动力，用户改一次计划仍会全盘重排（实测：`tests/churn.test.ts`
+> 里被挤走的块 `churnMin > 0` 而 `cost.parts.churn === 0`）。
+> 标定与影响见 `model.ts::FREE_CHURN_FACTOR` 的注释（60 分钟挪动 ≈ 3.84 分，不阻止真正改进）。
+> 回归护栏：`tests/p0-check.ts` 与 `tests/churn.test.ts` 已同步更新并注明本次修订。
 
 **`placeMismatch` 计数口径（§12.5.8 全局口径的落地）**：只统计「**已解析出校区**（`campusOfPlace(...) != null`）且与当天主校区不一致」的块。`null`（未登记地点）**既不加罚也不排除**。当天主校区推不出时，该天所有块一律不计。
 

@@ -325,6 +325,12 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
       previousPlan: req.previousPlan,
       config: req.config,
       rolling: req.rolling,
+      // PR-A：评分口径必须与下面组装 `evaluate` 时一致，否则 improve 会朝旧目标爬
+      scoring: config.scoring,
+      transferTrust: config.transferTrust,
+      // PR-B：把转场数据源交给 improve —— 没有它，"为了少走 10 分钟而重排"这类候选
+      // 根本不会进候选表（实测：只改度量时计划逐块不变）
+      transfer: n.req.transfer ?? undefined,
     });
     plan = res.plan;
     iterations = res.iterations;
@@ -349,6 +355,9 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     previousPlan: req.previousPlan,
     lockLevels: req.lockLevels,
     rolling: req.rolling,
+    scoring: config.scoring,
+    transferTrust: config.transferTrust,
+    transfer: n.req.transfer ?? undefined,
   });
   const hard = countHardViolations(plan);
 

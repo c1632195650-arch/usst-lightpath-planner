@@ -26,7 +26,7 @@
 🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
    真实坐标只用于后端算路与排序，不出现在任何响应体里。
 """
-import os, re, sys, io, json
+import os, re, sys, io, json, time, uuid
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -41,6 +41,12 @@ from pydantic import BaseModel, Field
 import rag
 import campus
 import memory
+# 三级梯子的后两级（2026-09-16）：
+#   direct = L0 模板直答（存在性/位置/营业时间，0 次 LLM）
+#   agent  = L2 托底（库外流量交给 LLM 自查一轮，必要时才联网）
+import direct
+import agent
+import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
@@ -69,6 +75,14 @@ _load_env(os.path.join(_HERE, ".env"))
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
+
+# 调试开关（默认关，关时行为与本开关不存在时**完全一致**）：
+#   LIBAO_DEBUG=1 python server/app.py
+# 打开后每轮 /api/chat 打**一行** trace，用于把「答得不对」拆成四段定位：
+#   检索错（raw_vec 低 / 没有相关条目）｜上下文错（snippet 里没有答案）
+#   模型错（snippet 有答案但回答跑偏）｜渲染错（前端显示 ≠ answer）
+# 刻意只打一行：多行日志在终端里翻不动，也没法 grep。
+LIBAO_DEBUG = os.environ.get("LIBAO_DEBUG", "").strip().lower() not in ("", "0", "false", "no", "off")
 
 # 路由阈值（可用环境变量微调；raw_vec 是未归一化的余弦绝对值）
 # ⚠️ 阈值来自 2026-09-08 实测校准（bge-small-zh-v1.5 短查询相似度普遍虚高）：
@@ -529,11 +543,89 @@ def api_route_batch(body: RouteBatchReq):
         out[f"{a}→{b}"] = _route_payload(a, b, mode)
     return {"routes": out, "mode": mode}
 
+
+_TRACE_JSONL = os.environ.get("LIBAO_TRACE_JSONL", "")
+
+
+def _trace_jsonl(rec):
+    """把一轮 trace 落成 JSONL —— L4 线上监控的数据源（2026-09-18 加）。
+
+    为什么单独落文件：终端那行 trace 只能人眼看，做不了分位数、趋势与离线采样。
+    与终端 trace 同一开关（LIBAO_DEBUG=1），默认写到
+    `<repo>/evals/runs/trace_YYYYMMDD.jsonl`（已被 .gitignore 排除）。
+    **任何异常都吞掉** —— 观测层绝不能把正常对话搞挂。
+    """
+    try:
+        import datetime as _d
+        path = _TRACE_JSONL or os.path.join(
+            _HERE, "..", "evals", "runs", f"trace_{_d.date.today():%Y%m%d}.jsonl")
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
+                space_ctx, mem_ctx, profile_ctx, mode, answer, ms, tools=None):
+    """把一轮对话的关键中间量压成**一行**日志（仅在 LIBAO_DEBUG 打开时调用）。
+
+    它存在的原因：响应体里的 route / top_raw_vec / sources 分数其实一直都有，
+    只是**没有任何地方把它们打出来** —— 调一轮对话要么开浏览器、要么加断点。
+    这一行是为了能在终端里一眼分清四类故障：
+
+      检索错   → top_raw 低，或 sources 全是风马牛不相及的标题
+      上下文错 → 标题对，但 snippet 里根本没有答案（这是 F2 修掉的那类）
+      模型错   → snippet 里明明有答案，answer 却跑偏
+      渲染错   → answer 正常，前端显示不对（看前端的调试抽屉）
+
+    `src3` 里三个数字依次是：score（归一化排序分）/ raw_vec（绝对余弦，判边界的那个）/
+    snippet 字符数 —— **snip_len=0 基本等于「这一条什么都没喂给模型」**。
+    """
+    try:
+        top = " ".join(
+            f"{s['title'][:22]}({s.get('score', 0.0):.2f}/{s.get('raw_vec', 0.0):.2f}/"
+            f"{len(s.get('snippet') or '')})"
+            for s in sources[:3]
+        ) or "-"
+        print(
+            f"[chat {rid}] q={q[:36]!r} route={route} intent={intent} "
+            f"top_raw={top_raw:.3f} k={n_results} src3=[{top}] "
+            f"space={int(bool(space_ctx))} mem={int(bool(mem_ctx))} "
+            f"prof={int(bool(profile_ctx))} mode={mode} "
+            f"tools=[{','.join(tools or []) or '-'}] "
+            f"ans_len={len(answer)} ms={int(ms)}",
+            flush=True,
+        )
+        # 同一份数据再落一行 JSONL（供 report.py 做分位数/趋势/离线采样）
+        import datetime as _d
+        _trace_jsonl({
+            "ts": _d.datetime.now().isoformat(timespec="seconds"),
+            "rid": rid, "q": q, "route": route, "intent": intent,
+            "top_raw": round(float(top_raw), 4), "mode": mode,
+            "tools": list(tools or []),
+            "used_space": bool(space_ctx), "used_memory": bool(mem_ctx),
+            "used_profile": bool(profile_ctx),
+            "ans_len": len(answer), "ms": int(ms),
+            "src": [{"title": s.get("title", "")[:60],
+                     "score": s.get("score"), "raw_vec": s.get("raw_vec"),
+                     "snip_len": len(s.get("snippet") or "")}
+                    for s in (sources or [])[:4]],
+        })
+    except Exception as e:      # 日志绝不能把正常对话搞挂
+        print(f"[chat {rid}] trace 失败：{e}", flush=True)
+
+
 @app.post("/api/chat")
 def api_chat(body: ChatReq):
+    # request_id：把「终端里那一行 trace」和「前端调试抽屉里这一轮」对起来
+    rid = uuid.uuid4().hex[:8]
+    _t0 = time.perf_counter()
+
     q = desensitize((body.q or "").strip())
     if not q:
-        return {"answer": "你想问梨宝什么呢？", "route": "empty", "sources": []}
+        return {"answer": "你想问梨宝什么呢？", "route": "empty", "sources": [],
+                "request_id": rid, "elapsed_ms": 0}
 
     # 用户档案：再兜一层脱敏（前端已过滤一轮），并截断防 prompt 膨胀。
     # 注意档案里**不该**出现学号/姓名/手机号，但信任边界不能靠前端单方面保证。
@@ -575,11 +667,47 @@ def api_chat(body: ChatReq):
         print("[memory] 读取失败：", e)
         mem_ctx = ""
 
-    # 5) 生成答案（profile_ctx 让「你是谁」参与生成，而不只是一个匿名提问者）
-    answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
-    mode = "llm" if answer else "extractive"
-    if not answer:
-        answer = extractive_answer(sources, route)
+    # 5) 生成答案 —— 三层梯子（2026-09-16 落地，钱花在刀刃上）：
+    #    L0 template  存在性/位置/营业时间 + 实体命中 → 图谱拼答案，**0 次 LLM**
+    #    L1 快路径    grounded / hybrid → 现有「检索 + 一次生成」
+    #    L2 托底      route=="llm"（规则判定库外）→ agent 自查一轮（图谱/资讯库/联网）
+    #                 失败则回退旧行为，行为不比改动前更差
+    # 注意：`route` 字段语义**保持不变**（仍是规则路由的判定结果，供回归断言与调试对齐），
+    #       新行为只体现在 `mode`（template / llm / extractive）与新增的 `tools` 上。
+    tools_used = []
+    da = None
+    try:
+        da = direct.try_direct(q)
+        if not da:
+            # 多轮指代（2026-09-18 评测抓到）：「那它几点开门」这类追问句里没有实体，
+            # 但上一轮有 —— 借最近几轮原话再解析一次实体，命中即仍走 L0（0 次 LLM）。
+            # 触发词只认当前句，实体允许来自上下文，避免把别的话题误当本题。
+            recent = " ".join(t for _, t in memory.recent_messages(body.session_id, 4))
+            if recent:
+                da = direct.try_direct(q, context=recent)
+    except Exception as e:
+        print("[direct] 异常：", e)
+    if da:
+        answer, mode = da["answer"], "template"
+        # 模板答完全取自结构化图谱，不引用资讯库 → 置空 sources，避免前端显示"假来源"
+        sources = []
+    elif route == "llm":
+        ag = agent.run_agent(q, LIBAO_PERSONA, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                             mem_ctx=mem_ctx, profile_ctx=profile_ctx,
+                             web_ok=websearch.enabled())
+        if ag and ag.get("answer"):
+            answer, mode = ag["answer"], "llm"
+            tools_used = ag.get("tools") or []
+        else:
+            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+            mode = "llm" if answer else "extractive"
+            if not answer:
+                answer = extractive_answer(sources, route)
+    else:
+        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+        mode = "llm" if answer else "extractive"
+        if not answer:
+            answer = extractive_answer(sources, route)
 
     # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
     try:
@@ -587,6 +715,13 @@ def api_chat(body: ChatReq):
         memory.remember(body.user_id, body.session_id, "assistant", desensitize(answer))
     except Exception as e:
         print("[memory] 写入失败：", e)
+
+    # 7) 调试 trace（默认关；`LIBAO_DEBUG=1` 时每轮一行）
+    elapsed_ms = (time.perf_counter() - _t0) * 1000
+    if LIBAO_DEBUG:
+        _chat_trace(rid, q, route, intent, top_raw, len(results), sources,
+                    space_ctx, mem_ctx, profile_ctx, mode, answer, elapsed_ms,
+                    tools=tools_used)
 
     return {
         "answer": answer, "mode": mode, "route": route,
@@ -596,6 +731,11 @@ def api_chat(body: ChatReq):
         "used_memory": bool(mem_ctx),
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
+        # 托底层用了哪些工具（search_kb / search_pois / web_search）——
+        # 空数组 = L0 模板或 L1 快路径，未进入 agent
+        "tools": tools_used,
+        # 纯附加字段（不破坏既有契约）：给前端调试抽屉与日志做对齐用
+        "request_id": rid, "elapsed_ms": round(elapsed_ms),
     }
 
 class ResetReq(BaseModel):

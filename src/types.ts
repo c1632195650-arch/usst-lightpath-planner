@@ -263,6 +263,15 @@ export interface TransferHint {
   slackMin: number;
   tight: boolean;
   note?: string;
+  /**
+   * 数据是否可信（2026-09-19 补入契约）。
+   * 为什么需要：评分口径 `transfer-aware` 要按可信度打折 —— 粗粒度跨校区估算
+   * （`source: 'campus-estimate'`）比 OSM 路网实算更不可信，不能同样对待。
+   * 此前这个信息只被写成一句中文 `note`，机器读不到 → 只能靠字符串匹配，很脆。
+   */
+  reliable?: boolean;
+  /** 数据来源，如 `'osm'` / `'campus-estimate'` / `'manual'` */
+  source?: string;
 }
 
 export interface TimeBlock {

@@ -8,6 +8,17 @@
     python scripts/test_libao.py --route-only  # 只判路由，跳过内容断言
 输出：控制台 + docs/test-report-libao.md
 
+自由提问（命令行版对话调试器，不跑回归批、不写报告）
+------------------------------------------------
+    python scripts/test_libao.py --ask "今年什么时候放寒假？"
+    python scripts/test_libao.py --ask "三教附近有啥吃的" --ask "怎么选课"
+    python scripts/test_libao.py --interactive
+它会打出这一轮的 route / intent / raw_vec / used_* / 耗时 / request_id，
+以及**每条来源的 score、raw_vec 与 snippet 正文** —— snippet 里有没有答案，
+正是「检索错」与「上下文错」的分界。
+身份可用 LIBAO_USER / LIBAO_SESSION 覆盖（默认 u-debug / s-debug），
+后端地址用 LIBAO_BASE 覆盖（默认 http://127.0.0.1:8000）。
+
 判据（2026-09-15 加固）
 ------------------------
 过去本脚本**只断言路由**（`ok = route in t["expect"]`），导致同一份报告里
@@ -186,14 +197,98 @@ def chat(q, sid, uid, timeout=90):
     return r.json()
 
 
+# ---------------- 自由提问：命令行版对话调试器 ----------------
+# 回归跑批（GROUPS）证明的是「没退化」，但它只能跑**写死的题**。
+# 调一轮真实对话时的问题永远是「我刚问的这句为什么答成这样」——
+# 所以需要能把任意一句话丢进去，并把这一轮的全部中间量打出来。
+#
+# 字段与后端 `LIBAO_DEBUG=1` 的 trace 行一致，但这里把 **snippet 也打出来**：
+# snippet 里有没有答案，正是「检索错」与「上下文错」的分界（F2 修的就是这一类）。
+DEBUG_UID = os.environ.get("LIBAO_USER", "u-debug")
+DEBUG_SID = os.environ.get("LIBAO_SESSION", "s-debug")
+
+
+def ask_once(q, uid=DEBUG_UID, sid=DEBUG_SID):
+    """问一句，把这一轮的全部可观测信号打出来。返回是否成功。"""
+    print(f"\n{'-' * 72}\nQ: {q}\n{'-' * 72}")
+    t0 = time.time()
+    try:
+        res = chat(q, sid, uid)
+    except Exception as e:
+        print(f"  ❌ 请求失败：{e}")
+        print("     后端起来了吗？先跑 python server/app.py（或设 LIBAO_BASE 指向别的实例）")
+        return False
+
+    top = res.get("top_raw_vec") or 0.0
+    tag = "知识库有" if top >= 0.68 else ("相关但可能不全" if top >= 0.56 else "知识库外")
+    print(f"  路由={res.get('route')}｜意图={res.get('intent')}｜"
+          f"raw_vec={top} → {tag}（阈值 0.68 / 0.56）")
+    print(f"  模式={res.get('mode')}｜空间={res.get('used_space')} 记忆={res.get('used_memory')} "
+          f"档案={res.get('used_profile')}｜服务端 {res.get('elapsed_ms')}ms "
+          f"｜客户端 {(time.time() - t0) * 1000:.0f}ms｜rid={res.get('request_id')}")
+
+    for i, s in enumerate(res.get("sources", []), 1):
+        snip = (s.get("snippet") or "")
+        print(f"\n  [{i}] {s.get('title')}")
+        print(f"      {s.get('account')} · {s.get('pub_time')}")
+        print(f"      score={s.get('score')} raw_vec={s.get('raw_vec')} snip={len(snip)} 字"
+              + ("" if snip else "  ← 空的！等于没喂给模型"))
+        if snip:
+            print(f"      {snip[:300].replace(chr(10), ' ')}")
+
+    answer = res.get("answer", "")
+    print(f"\n  梨宝: {answer}")
+    if not answer:
+        print("  ⚠️ 回答是空的 —— 看上面 raw_vec 与 snippet 判断卡在哪一层")
+    return True
+
+
+def ask_repl(uid=DEBUG_UID, sid=DEBUG_SID):
+    """交互式一问一答。空行/exit/quit 退出。"""
+    print(f"梨宝调试台｜后端 {API}｜user={uid} session={sid}")
+    print("直接输入问题回车；输入 exit 或 quit 结束。\n")
+    while True:
+        try:
+            q = input("❯ ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not q:
+            continue
+        if q.lower() in ("exit", "quit", ":q"):
+            return 0
+        ask_once(q, uid, sid)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="", help="只跑指定组，如 A 或 A,B")
     ap.add_argument("--route-only", action="store_true",
                     help="只判路由，跳过内容断言（内容断言打真实 LLM，偶发波动时用这个逃生）")
+    ap.add_argument("--ask", action="append", default=[], metavar="Q",
+                    help="自由提问（可重复）：不跑回归批，只问这一句并打出全链路信号")
+    ap.add_argument("--interactive", action="store_true",
+                    help="交互式一问一答（命令行版对话调试器）")
     args = ap.parse_args()
     only = [x.strip().upper() for x in args.only.split(",") if x.strip()]
     check_content = not args.route_only
+
+    # 自由提问模式：先探活，再把问题逐条问出去，**不跑 GROUPS、不写报告**。
+    if args.ask or args.interactive:
+        try:
+            h = requests.get(API + "/api/health", timeout=8).json()
+        except Exception as e:
+            print("❌ 后端没起来。请先运行：python server/app.py\n  错误：", e)
+            return 1
+        print(f"后端 {API}：llm={h.get('llm')} model={h.get('model')}")
+        print("提示：后端开 LIBAO_DEBUG=1 可同时拿到带 request_id 的单行 trace，两边对齐看。")
+        rc = 0
+        for q in args.ask:
+            if not ask_once(q):
+                rc = 1
+        if args.interactive:
+            return ask_repl() or rc
+        return rc
 
     try:
         h = requests.get(API + "/api/health", timeout=8).json()
