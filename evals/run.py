@@ -169,18 +169,27 @@ def _preflight(base):
     return ""
 
 
-def load_golden(version="v1"):
-    path = os.path.join(ROOT, "evals", "golden", f"golden_{version}.jsonl")
-    return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+def load_golden(version="v1", private=False):
+    """读黄金集。private=True 时追加 golden_private_{version}.jsonl
+    （Kaggle 公私榜机制：私有集默认不跑、不进调参视野，release 前才跑）。"""
+    files = [os.path.join(ROOT, "evals", "golden", f"golden_{version}.jsonl")]
+    if private:
+        p = os.path.join(ROOT, "evals", "golden", f"golden_private_{version}.jsonl")
+        if os.path.exists(p):
+            files.append(p)
+    items = []
+    for path in files:
+        items += [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+    return items
 
 
-def suite_l1(base, run_id="run"):
+def suite_l1(base, run_id="run", items=None):
     """检索层评测（免费）。返回 (per_task, metrics)
 
     `run_id` 进 session id：每次运行的模板直答题都要从干净会话开始，
     否则上一轮的历史会污染这一轮（同 l3 的纪律）。
     """
-    items = load_golden()
+    items = items if items is not None else load_golden()
     per, t0 = [], time.time()
     # 🔴 门禁只统计 split=regression（真值硬、可本地校验）；
     #    capability（期望较软，如主题召回）单独记录为观察值，**不参与门禁** ——
@@ -264,6 +273,9 @@ def suite_l1(base, run_id="run"):
          "obs_cap_recall@5": round(c_hits5 / c_n_doc, 4) if c_n_doc else None,
          "obs_cap_docs": c_n_doc,
          "forbidden_hits": len(forbidden), "forbidden": forbidden,
+         # 静默降级信号：DeepSeek 402/限流时会静默降级 extractive 且不报错——
+         # 分数漂移时先归因这里（配 attribution 块一起看）
+         "llm_fallback_hits": sum(1 for r in per if r.get("mode") == "extractive"),
          "sec": round(time.time() - t0, 1)}
     return per, m
 
@@ -386,7 +398,9 @@ def suite_l3(base, repeat=1, run_id="run"):
                     "k": trials, "trials": results})
     m = {"scenarios": len(scs), "regression_n": n_reg,
          "pass^k": round(ok_reg / n_reg, 4) if n_reg else None,
-         "capability_pass@1": round(cap_ok / n_cap, 4) if n_cap else None}
+         "capability_pass@1": round(cap_ok / n_cap, 4) if n_cap else None,
+         "llm_fallback_hits": sum(1 for r in per for t in r["trials"]
+                                  for tn in t["turns"] if tn.get("mode") == "extractive")}
     return per, m
 
 
@@ -443,7 +457,8 @@ def suite_e2e(base):
             ok_n += bool(good)
         except Exception as e:
             per.append({"id": it["id"], "q": it["q"], "ok": False, "error": str(e)})
-    return per, {"n": len(items), "acc": round(ok_n / len(items), 4) if items else 0.0}
+    return per, {"n": len(items), "acc": round(ok_n / len(items), 4) if items else 0.0,
+                 "llm_fallback_hits": sum(1 for r in per if r.get("mode") == "extractive")}
 
 
 # 这些是「计数/耗时」不是质量指标：变快/变少不代表退步，只印 Δ 不报警告。
@@ -466,6 +481,33 @@ def compare_baseline(metrics):
     return lines or ["（基线里没有可比指标）"]
 
 
+def build_attribution():
+    """评测归因块：**分数漂移但代码没变时，先归因「评测器 or 模型 or 数据」。**
+
+    依据：Chen/Zaharia/Zou（arXiv:2307.09009）证明 API 模型行为会随时间剧烈漂移，
+    业界惯例是 pin 模型快照 + 记录 provider。本项目已真实踩过
+    「DeepSeek 402 → 静默降级 extractive」——/api/health 的 llm:true 不等于有钱。
+    ⚠️ 只记录键名与**非敏感**字段；API Key 本身绝不落盘。
+    """
+    att = {"llm_provider": None, "llm_model": None, "llm_key_configured": False,
+           "python": sys.version.split()[0], "platform": sys.platform}
+    envp = os.path.join(ROOT, "server", ".env")
+    if os.path.exists(envp):
+        for line in open(envp, encoding="utf-8", errors="replace"):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = (x.strip() for x in line.split("=", 1))
+            ku = k.upper()
+            if ku in ("LLM_PROVIDER", "LLM_BASE_URL") and not att["llm_provider"]:
+                att["llm_provider"] = v
+            elif ku in ("LLM_MODEL", "DEEPSEEK_MODEL") and not att["llm_model"]:
+                att["llm_model"] = v
+            elif ku in ("LLM_API_KEY", "DEEPSEEK_API_KEY", "API_KEY"):
+                att["llm_key_configured"] = bool(v)
+    return att
+
+
 def main():
     ap = argparse.ArgumentParser(description="梨宝评测台架")
     ap.add_argument("--suite", default="all", choices=["l0", "l1", "l3", "engine", "e2e", "all"])
@@ -474,10 +516,13 @@ def main():
     ap.add_argument("--base", default=os.environ.get("LIBAO_BASE", "http://127.0.0.1:8000"))
     ap.add_argument("--gate", action="store_true", help="按门禁阈值设退出码")
     ap.add_argument("--update-baseline", action="store_true")
+    ap.add_argument("--include-private", action="store_true",
+                    help="额外跑 golden_private（私有集，release 前用；默认不跑、不进调参视野）")
     args = ap.parse_args()
     base = args.base.rstrip("/")
     ts = time.strftime("%Y%m%d-%H%M%S")
-    result = {"ts": ts, "base": base, "suite": args.suite, "metrics": {}, "tasks": []}
+    result = {"ts": ts, "base": base, "suite": args.suite,
+              "attribution": build_attribution(), "metrics": {}, "tasks": []}
     fails = []
 
     print(f"🧪 梨宝评测 · suite={args.suite} · 后端 {base}\n")
@@ -497,7 +542,11 @@ def main():
         if warn:
             print(f"  ❌ {warn}")
             return 2
-        per, m = suite_l1(base, run_id=ts)
+        if not args.include_private:
+            priv_n = sum(1 for i in load_golden(private=True) if i["split"] != "regression")
+            if priv_n:
+                print(f"  🔒 private 集 {priv_n} 条未跑（release 前 --include-private；不进调参视野）")
+        per, m = suite_l1(base, run_id=ts, items=load_golden(private=args.include_private))
         result["tasks"] = per
         result["metrics"].update(m)
         print(f"  用例 {m['n']} 条｜实体召回 {m['entity_recall']}"
@@ -559,6 +608,24 @@ def main():
         result["tasks"] = per
         result["metrics"].update(m)
         print(f"  准确率 {m['acc']}（{m['n']} 条）")
+
+    fb = result["metrics"].get("llm_fallback_hits") or 0
+    if fb:
+        print(f"\n⚠️ 静默降级信号：{fb} 轮回答 mode=extractive（Key 欠费/被限流时静默降级）"
+              f"—— 分数漂移先归因这里与 attribution 块")
+
+    # 不可归因扫描：历史 run 缺 attribution 字段 = 那次分数出了问题无法归因
+    prev_runs = sorted(glob.glob(os.path.join(RUNS_DIR, "run_*.json")))[-30:]
+    unattr = []
+    for p in prev_runs:
+        try:
+            if not json.load(open(p, encoding="utf-8")).get("attribution"):
+                unattr.append(os.path.basename(p))
+        except Exception:
+            pass
+    if unattr:
+        print(f"⚠️ 不可归因：{len(unattr)} 份历史 run 缺 attribution 字段（本地产物可删；"
+              f"例：{unattr[:3]}）")
 
     print("== 与基线对比 ==")
     for line in compare_baseline(result["metrics"]):
