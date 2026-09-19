@@ -487,10 +487,14 @@ def main():
     fam = [p["name"] for p in campus.brand_pois("学校有没有全家")]
     _check_j("「全家」反查 → 全家便利店（品牌短名→POI全名）",
              fam and fam[0] == "全家便利店", str(fam))
-    _check_j("「瑞幸/星巴克/肯德基」不在索引（真没有，负样本不误报）",
-             not campus.brand_pois("学校有没有瑞幸")
-             and not campus.brand_pois("学校有没有星巴克")
-             and not campus.brand_pois("咱们学校有肯德基吗"))
+    # 2026-09-19 数据更新：瑞幸/肯德基已入驻思餐厅（文证：后勤/学生会推文）→ 转正为正例
+    _check_j("「瑞幸/肯德基」反查 → 思餐厅（2026 秋新入驻）",
+             "思餐厅" in [p["name"] for p in campus.brand_pois("学校有没有瑞幸")]
+             and "思餐厅" in [p["name"] for p in campus.brand_pois("咱们学校有肯德基吗")])
+    _check_j("「星巴克/喜茶/海底捞」不在索引（真没有，负样本不误报）",
+             not campus.brand_pois("学校有没有星巴克")
+             and not campus.brand_pois("学校有没有喜茶")
+             and not campus.brand_pois("咱们学校有海底捞吗"))
     _check_j("否定语境不入索引（「非全家」不算全家）",
              not any(p["name"] == "南校区教育超市"
                      for p in campus.brand_pois("全家")))

@@ -169,7 +169,7 @@ def _preflight(base):
     return ""
 
 
-def load_golden(version="v1", private=False):
+def load_golden(version="v2", private=False):
     """读黄金集。private=True 时追加 golden_private_{version}.jsonl
     （Kaggle 公私榜机制：私有集默认不跑、不进调参视野，release 前才跑）。"""
     files = [os.path.join(ROOT, "evals", "golden", f"golden_{version}.jsonl")]

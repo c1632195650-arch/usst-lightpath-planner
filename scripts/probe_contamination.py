@@ -85,7 +85,7 @@ def build_corpus_shingles():
 
 def load_golden_all():
     items = []
-    for name in ("golden_v1.jsonl", "golden_private_v1.jsonl"):
+    for name in ("golden_v2.jsonl", "golden_private_v2.jsonl"):
         path = os.path.join(GOLDEN_DIR, name)
         if os.path.exists(path):
             for l in open(path, encoding="utf-8"):
