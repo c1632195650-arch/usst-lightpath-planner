@@ -78,3 +78,7 @@ _wx_raw4/
 data/libao_memory.db
 docs/_coverage_stat.json
 data/*.bak-*
+
+# Playwright 产物（视觉基线快照 e2e/**-snapshots 进仓库，运行产物不进）
+test-results/
+playwright-report/
