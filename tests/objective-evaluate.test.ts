@@ -154,14 +154,18 @@ test('dayCampusOf：当天主校区由**课程块**决定', () => {
  * 3. 锁与 churn
  * ========================================================== */
 
-test('锁：hard 块的位移按 ×100 计入 churn；free 块位移不计', () => {
+test('锁：hard ×100 ≫ soft ×1 ≫ free ×0.08（2026-09-19 §5.5 修订后 free 非零）', () => {
   const prev = plan([blk({ id: 'k1', kind: 'study', dayOfWeek: 1, startMin: 600, endMin: 660 })]);
   const next = plan([blk({ id: 'k1', kind: 'study', dayOfWeek: 1, startMin: 660, endMin: 720 })]);
   const free = evaluate(next, ctx({ previousPlan: prev }));
+  const soft = evaluate(next, ctx({ previousPlan: prev, lockLevels: { k1: 'soft' } }));
   const hard = evaluate(next, ctx({ previousPlan: prev, lockLevels: { k1: 'hard' } }));
-  assert.equal(free.churn, 0);
+  // free 由 0 改为小非零：挪动 60 分钟的引擎软块 = 0.8 × 0.08 × 60 = 3.84 分
+  assert.equal(free.churn, DEFAULT_WEIGHTS.churn * 0.08 * 60);
+  assert.equal(soft.churn, DEFAULT_WEIGHTS.churn * 1 * 60);
   assert.equal(hard.churn, DEFAULT_WEIGHTS.churn * 100 * 60);
-  assert.ok(hard.total > free.total);
+  // 三级秩序：hard ≫ soft ≫ free > 0（旧的「free = 0」已被规格修订取代）
+  assert.ok(hard.total > soft.total && soft.total > free.total && free.churn > 0);
   assert.equal(evaluateDelta(next, next, ctx()), 0);
 });
 

@@ -368,13 +368,27 @@ export function resolveLockLevel(
 }
 
 /**
+ * `free` 块的 churn 系数（**2026-09-19 起非零**，规格 §5.5 已修订）。
+ *
+ * 原值 0 的含义是「引擎自排的软块，随便挪都不要钱」→ churn 代价恒为 0
+ * ⇒「最小扰动」只有度量、没有驱动力（用户改一次计划仍然全盘重排）。
+ *
+ * 标定：`soft = 1`（用户明确要求保持）比它强 12.5 倍；`hard = 100` 仍等价于禁止移动。
+ * 量化效果：挪动 60 分钟的引擎软块 ≈ `0.8 × 0.08 × 60 = 3.84 分` ——
+ *   · 远小于「一次地点变更」(2.0/次) 的破坏力，**不会阻止真正的改进**（如省下 20 分转场风险）；
+ *   · 大于 0，足以让 improve 在**等价方案**之间挑「少动」的那个。
+ * 若实测发现太粘（计划该变却不变），先调这个常量，别改结构。
+ */
+export const FREE_CHURN_FACTOR = 0.08;
+
+/**
  * 锁 → churn 权重系数（规格书 §5.5）。
- *   hard ×100 等价于「禁止移动」；soft ×1；free ×0。
+ *   hard ×100 等价于「禁止移动」；soft ×1；free ×`FREE_CHURN_FACTOR`（原为 0）。
  */
 export function lockFactorOf(level: LockLevel): number {
   if (level === 'hard') return 100;
   if (level === 'soft') return 1;
-  return 0;
+  return FREE_CHURN_FACTOR;
 }
 
 /**

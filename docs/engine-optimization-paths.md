@@ -65,7 +65,7 @@ provider 调用次数还是 improve 迭代变长。
 |---|---|---|---|
 | P1 | transferRisk 接真实分钟 + 可信度折扣 + 灰度开关 | ✅ **PR-A 已完成**（默认仍 legacy） | `tests/scoring-transfer.test.ts` 13/13（含 5 条冻结锚点、单调性、反向验证）；legacy 逐位等于快照 |
 | P2 | improve 对转场有感（算子里用真实分钟） | ✅ **PR-B 已完成** | `tests/improve-transfer.test.ts` 3/3（含反向验证：关掉 aware 开关必须变红） |
-| P3 | churn 落地（free 非零因子） | ⬜ | `tests/churn.test.ts` 扩：free 被挪 ⇒ churn>0；不动 ⇒ 0；`eval:l3 --repeat 3` pass^3=1.0 |
+| P3 | churn 落地（free 非零因子） | ✅ **PR-C 已完成**（规格 §5.5 已修订） | `tests/churn.test.ts`：free 被挪 ⇒ churn>0；`p0-check` / `objective-evaluate` 同步更新并注明修订 |
 | P4 | 两遍法性能（先 profile） | ⬜ | `eval:engine` transfers 档 p50 下降 ≥30% 且不变量全过 |
 | P5 | transferRisk 与 placeMismatch 分工 | ✅ 随 P1 解决 | 有真实分钟时不再用固定罚分 → 同一次跨校区不会"按次数再罚一遍"；placeMismatch 只管"整天校区一致性" |
 | P6 | 「自习/空白已饱和」结论固化 | ✅ 本文档（发现 4） | — |
@@ -132,6 +132,21 @@ provider 调用次数还是 improve 迭代变长。
 >
 > 代价与取舍：`improve` 原本声明「与 `construct.ts` 无耦合」，PR-B 有意打破它（只为复用 `attachTransfers`），
 > 理由写在 import 处：抄一份必然漂移的副本更糟。
+
+## 三·六、PR-C 具体做了什么（2026-09-19）
+
+**规格级变更**：`lockFactorOf('free')` 由 `0` 改为 `FREE_CHURN_FACTOR = 0.08`（§5.5 已同步修订）。
+
+- 原值 0 的后果：`free` 覆盖**引擎自排的软块**（自习/三餐/活动）→ churn **代价恒为 0**
+  →「最小扰动」只有度量、没有驱动力，用户改一次计划仍然全盘重排
+  （实测：`tests/churn.test.ts` 里被挤走的块 `churnMin > 0` 而 `cost.parts.churn === 0`）。
+- 标定：`soft = 1` 比它强 12.5 倍、`hard = 100` 仍等价于禁止移动；60 分钟挪动 ≈ `0.8 × 0.08 × 60 = 3.84 分`
+  —— 远小于一次地点变更（2.0）的破坏力，**不阻止真正的改进**（如省下 20 分转场风险），
+  但足以让 improve 在**等价方案**间挑「少动」的那个。
+- 与快照的关系：churn 只在**给了 `previousPlan`** 时才计（§5.5），golden 语料不传 → 5 份冻结快照不受影响 ✅
+- 测试同步：`tests/churn.test.ts` 断言翻转（free 被挪 ⇒ churn > 0）、
+  `tests/p0-check.ts` 期望值更新（`free = 0.08`）、
+  `tests/objective-evaluate.test.ts` 改为三级秩序 hard ≫ soft ≫ free > 0，三处都注明「本次修订」。
 
 ## 四、发布到 engine beta 的验收清单
 

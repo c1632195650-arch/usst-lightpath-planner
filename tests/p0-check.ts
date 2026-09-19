@@ -212,10 +212,12 @@ check('显式 lockLevels 覆盖默认推断', () => {
   assert.equal(resolveLockLevel(mkBlock({ id: 'k', source: 'template' }), { k: 'hard' }), 'hard');
 });
 
-check('lockFactorOf: hard=100 / soft=1 / free=0', () => {
+// ⚠️ 2026-09-19 规格 §5.5 修订：free 由 0 改为 FREE_CHURN_FACTOR(0.08)
+//    —— 原值让 churn 代价恒为 0，「最小扰动」失去驱动力。
+check('lockFactorOf: hard=100 / soft=1 / free=0.08', () => {
   assert.equal(lockFactorOf('hard'), 100);
   assert.equal(lockFactorOf('soft'), 1);
-  assert.equal(lockFactorOf('free'), 0);
+  assert.equal(lockFactorOf('free'), 0.08);
 });
 
 check('同一份计划 churn = 0', () => {
