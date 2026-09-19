@@ -12,6 +12,11 @@ export interface RagSource {
   pub_time: string;
   snippet: string;
   url: string;
+  /* 后端一直在返回、此前没声明 → 调试时看不到「这条到底多相关」。 */
+  /** 归一化排序分（top1 恒接近 1.0，**不能**用来判相关性） */
+  score?: number;
+  /** 未归一化余弦绝对值 —— 判「知识库到底有没有」看这个（阈值 0.68 / 0.56） */
+  raw_vec?: number;
 }
 
 export interface ChatResult {
@@ -30,6 +35,12 @@ export interface ChatResult {
   used_space?: boolean;
   /** 本轮是否读到了记忆（长期画像 / 增量摘要 / 最近原话） */
   used_memory?: boolean;
+  /** 本轮是否带上了用户档案摘要（前端 profileCtx） */
+  used_profile?: boolean;
+  /** 本轮请求 id —— 与后端 `LIBAO_DEBUG=1` 打的 trace 行对齐用 */
+  request_id?: string;
+  /** 后端侧耗时（毫秒，含检索 + 空间 + 记忆 + LLM） */
+  elapsed_ms?: number;
 }
 
 export interface SearchResult {

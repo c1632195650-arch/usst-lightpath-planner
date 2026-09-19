@@ -187,11 +187,20 @@ def cross_campus(a, b):
                 "note": "有一方的校区未收录，按同区处理更稳妥"}
     if ca == cb:
         return {"is_cross": False, "from": ca, "to": cb, "minutes": 0, "note": "同校区"}
-    # 只有「北校↔南校」是日常跨区场景（走海安路天桥），才用路网实算；
-    # 1100/580/复兴路 与本部相距数公里，不步行可达，直接返回 None
+    # 只有「北校↔南校」是日常跨区场景（走海安路天桥），才用路网实算进排程；
+    # 1100/复兴路 不参与本部日常排程（口径不变）——但 1100 的路网自 2026-09-16
+    # 起已接入（jichuxueyuan.osm），沿军工路实际步行可达（约 1.5 km），
+    # 故 note 附上诚实的步行参考，让梨宝答「本部到基础学院怎么走」不空手。
     if (ca, cb) not in _CROSS_MIN:
+        note = f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"
+        if "1100" in (ca, cb):
+            net = network()
+            r = net.route_cross_group(a, b) if net else None
+            if r and r.get("reliable"):
+                note += (f"（沿军工路步行约 {r['meters']:.0f} 米 / "
+                         f"{max(1, round(r['minutes']))} 分钟）")
         return {"is_cross": True, "from": ca, "to": cb, "minutes": None,
-                "note": f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"}
+                "note": note}
 
     # 优先用 OSM 真实路网实算（经海安路人行天桥）
     r = route(a, b)
@@ -417,8 +426,24 @@ def poi_public(p, score=None):
 
 
 def search_pois(text, func=None, limit=5):
-    """对外：口语检索 → 公开投影列表（不含坐标）。"""
-    return [poi_public(p, s) for p, s in rank_pois(text, func=func, limit=limit)]
+    """对外：口语检索 → 公开投影列表（不含坐标）。
+
+    2026-09-16：品牌反向索引前置。『麦当劳』这类只存在于 features 特征串里的
+    连锁店名，rank_pois 的主名/别名/tags 三层都够不到，必须先查索引；
+    命中排最前，剩余名额仍由原排序补齐（对既有检索零行为变化）。
+    """
+    out, seen = [], set()
+    for p in brand_pois(text):
+        out.append(poi_public(p))
+        seen.add(p["name"])
+    for p, s in rank_pois(text, func=func, limit=limit):
+        if p["name"] in seen:
+            continue
+        out.append(poi_public(p, s))
+        seen.add(p["name"])
+        if len(out) >= limit:
+            break
+    return out[:limit]
 
 
 # ---------- 营业时间（把开放时间变成可判断的事实，而不是一串字符串）----------
@@ -586,23 +611,130 @@ _SPACE_HINTS = ["附近", "旁边", "近", "哪儿", "哪里", "去哪", "下课
                 "看病", "校医院", "取钱", "取快递", "寄快递", "买文具", "买东西",
                 "图文", "大活", "水母楼"]
 
-def has_space_intent(text):
+# ---------- 品牌/连锁店反向索引（2026-09-16「麦当劳翻车」修复） ----------
+# 事实探针（outputs/梨宝事实正确性测试报告_2026-09-15.md）发现：问「学校有没有
+# 麦当劳」会答「没有」，但事实就在 第二食堂.features = ["左侧有麦当劳（…）"] 里。
+# 根因链：存在性问法（有没有/有X吗）不在 _SPACE_HINTS → 图谱不注入 → LLM 凭常识
+# 说没有。修法（报告方向①②，经用户确认）：
+#   ① 意图判定改为「实体命中优先，关键词兜底」——见 has_space_intent / space_context；
+#   ② 品牌反向索引：启动时从 POI 的 name/features/note 里自动抽品牌词，映射回 POI，
+#      并给「全家 → 全家便利店」这类**品牌短名 → POI 全名**的反向别名。
+# 与 _SPACE_HINTS 的本质区别：品牌是**有限封闭集合**（校园里实际出现的店），
+# 覆盖率可被探针自动校验（scripts/fact_probe.py），不存在「问不完」的开放集合问题。
+# 抽取只认「X（时间/地点）」式带括号证据的特征串 + 种子词表，并排除品类泛词，
+# 避免「有专门打包窗口」这类句子被误当品牌。
+_BRAND_SEED = ("麦当劳", "金拱门", "全家", "罗森", "7-11", "711", "便利蜂",
+               "瑞幸", "星巴克", "库迪", "蜜雪冰城", "茶百道", "沪上阿姨",
+               "益禾堂", "肯德基", "德克士", "华莱士", "老娘舅", "永和豆浆",
+               "张亮麻辣烫", "杨国福", "上理烘焙坊", "1906")
+_BRAND_GENERIC = {"食堂", "餐厅", "便利店", "超市", "咖啡", "奶茶", "打印",
+                  "快递", "自习室", "浴室", "开水房", "烘焙", "外卖", "打包",
+                  "窗口", "麻辣烫", "水果捞", "煎饼"}
+_BRAND_RE = _re.compile(r"[有含设入驻引进开]([一-龥A-Za-z0-9]{2,8}?)(?=[（(])")
+
+def _pos_mentions(s, b):
+    """b 在 s 中出现且**前面紧跟的不是否定词**（「非全家」不算全家）。
+    2026-09-16 实测踩坑：教育超市备注写「（非全家）」，不做守卫会注入
+    『全家』本校有 → 教育超市 的自相矛盾证据。"""
+    s = s or ""
+    start = 0
+    while True:
+        i = s.find(b, start)
+        if i < 0:
+            return False
+        if not any(n in s[max(0, i - 2):i] for n in ("非", "没", "无")):
+            return True
+        start = i + 1
+
+
+_brand_idx = None
+
+
+def _brand_index():
+    """懒构建 {品牌词: [poi, ...]}。只读 name/features/note，不动数据文件。"""
+    global _brand_idx
+    if _brand_idx is not None:
+        return _brand_idx
+    idx = {}
+    for p in _all_pois():
+        feats = list(p.get("features", [])) + [p.get("note") or ""]
+        toks = set(b for b in _BRAND_SEED
+                   if b in p["name"] or any(_pos_mentions(s, b) for s in feats))
+        for s in feats:
+            for mm in _BRAND_RE.finditer(s):
+                w = mm.group(1)
+                if len(w) >= 2 and w not in _BRAND_GENERIC and not any(g in w for g in _BRAND_GENERIC):
+                    toks.add(w)
+        for b in toks:
+            idx.setdefault(b, [])
+            if all(x["name"] != p["name"] for x in idx[b]):
+                idx[b].append(p)
+    # 主名命中（『全家』就是 POI 名的一部分）排前面，特征串命中排后面
+    for b, ps in idx.items():
+        ps.sort(key=lambda p: 0 if b in p["name"] else 1)
+    _brand_idx = idx
+    return idx
+
+
+def match_brands(text):
+    """[(brand, poi)] 按品牌词长度降序；text 中出现品牌词即命中。"""
     t = text or ""
-    return any(h in t for h in _SPACE_HINTS)
+    hits = [(b, p) for b, ps in _brand_index().items() if b in t for p in ps]
+    hits.sort(key=lambda x: -len(x[0]))
+    return hits
+
+
+def brand_pois(text):
+    """text 提到的品牌所在的 POI（去重，保持品牌词长度优先序）。"""
+    out, used = [], set()
+    for _b, p in match_brands(text):
+        if id(p) not in used:
+            out.append(p)
+            used.add(id(p))
+    return out
+
+
+def _brand_evidence(p, brand):
+    """取出该品牌在 POI 数据里的原始证据串，供存在性模板直接引用。"""
+    if brand in p["name"]:
+        return p["name"]
+    for s in list(p.get("features", [])) + [p.get("note") or ""]:
+        if brand in s:
+            return s
+    return ""
+
+
+def has_space_intent(text):
+    # 2026-09-16：品牌实体命中也算空间意图 —— 存在性问法（有没有麦当劳）
+    # 不再依赖关键词表穷举，见 _brand_index 注释。
+    t = text or ""
+    return any(h in t for h in _SPACE_HINTS) or bool(match_brands(t))
+
+
+def match_entities(text):
+    """match_pois（官方名/别名）+ brand_pois（品牌反向索引），按 id 去重。"""
+    hits = match_pois(text)
+    used = {id(p) for p in hits}
+    for p in brand_pois(text):
+        if id(p) not in used:
+            hits.append(p)
+            used.add(id(p))
+    return hits
+
 
 def space_context(text):
     """
     生成给 LLM 的空间上下文。
-    - 命中已知地点 → 给"该地点附近的 POI + 步行分钟"
-    - 未命中（如"三教"官网未收录）→ 给"校区食堂全览"并标注未知，绝不编造距离
-    - 无空间意图 → 返回 ""
+    - 命中已知地点（含品牌反向索引）→ 给"该地点附近的 POI + 步行分钟"
+    - 命中品牌 → 额外给[存在性事实]块，钉死「有/在哪」，禁止 LLM 凭常识否定
+    - 未命中但有空间意图（如"三教"官网未收录）→ 给"校区食堂全览"并标注未知，绝不编造距离
+    - 既无实体也无意图 → 返回 ""
     """
-    if not has_space_intent(text):
-        return ""
-
     m = load_map()
-    hits = match_pois(text)
+    hits = match_entities(text)  # 2026-09-16：实体先行，关键词只做兜底闸门
     if not hits:
+        if not has_space_intent(text):
+            return ""
         # 口语/黑话兜底（2026-09-15 新增）：官方名与别名都没命中时，才用 tags 检索。
         # 门槛 = tags 精确命中（『图文』→图书馆、『取快递』→菜鸟驿站）。
         # 低于此不注入 —— 宁可落到「诚实兜底 + 食堂全览」，也不要塞错地点。
@@ -612,7 +744,28 @@ def space_context(text):
                 continue
             seen.add(p["name"])
             hits.append(p)
-    blocks = [f"[校园空间·{m['_meta']['campus']}]"]
+
+    # 存在性事实块（2026-09-16）：品牌命中的地点，把「有/在哪/什么时间」
+    # 以结构化数据直接钉进上下文 —— 答案优先级：图谱 > 语料 > LLM 常识。
+    brand_hits = match_brands(text)
+    if brand_hits:
+        blocks_pre = ["[存在性事实·结构化图谱，以此为准，禁止凭常识回答「没有」]"]
+        emitted = set()
+        for b, p in brand_hits:
+            if p["name"] in emitted:
+                continue
+            emitted.add(p["name"])
+            ev = _brand_evidence(p, b)
+            st = open_now(p)
+            now = ""
+            if st.get("open") is True:
+                now = f"，现在开放中（到 {st['until']}）"
+            elif st.get("open") is False:
+                now = f"，现在不开放（{st['reason']}）"
+            blocks_pre.append(f"- 『{b}』本校有 → {p['name']}｜证据：{ev}{now}")
+        blocks = [f"[校园空间·{m['_meta']['campus']}]"] + blocks_pre
+    else:
+        blocks = [f"[校园空间·{m['_meta']['campus']}]"]
 
     resolved = False
     for p in hits[:2]:
