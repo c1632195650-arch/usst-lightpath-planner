@@ -65,6 +65,7 @@ sys.path.insert(0, HERE)
 
 import campus                      # noqa: E402
 import campus_network as cn        # noqa: E402
+import campus_vocab as cv          # noqa: E402  ← 校区词表唯一事实源
 
 NET = cn.Network()
 
@@ -109,8 +110,11 @@ KNOWN_OMISSION = [
 #    读者无法区分「我们漏了」和「我们说好不做」，久了这条警报会被无视。
 #    （前端 `src/constants/campus.ts` 仍保留 FUXING 词条 —— 那是给**课表地点字符串
 #      反推校区**用的映射，与"本数据库是否覆盖复兴路空间数据"是两件事，别混。）
-SCOPE_IN = ("北校", "南校", "580", "1100", "连接")   # 连接 = 海安路跨校区天桥，刻意保留
-SCOPE_OUT = {"复兴路": "明确不在本次范围（CY 2026-09-19 定）：不建图、不检核、不计缺口"}
+# ⚠️ 2026-09-19：范围声明与值域**不再在此维护副本**，改从唯一事实源派生
+# （`data/campus_vocab.json`；`连接` 的「刻意保留」理由写在 campus_vocab.py）。
+# 三处 Python 副本已收敛，由 campus_vocab.check_consistency() 的 A/B/C 断言守住。
+SCOPE_IN = cv.SCOPE_IN
+SCOPE_OUT = cv.SCOPE_OUT
 
 # 已接受的不合格项（**每项都必须带理由与处置计划**）。
 # 🔴 为什么要有这个列表：一个「只要有不合格就红」的门禁，如果当下就有 2 条不合格，
@@ -120,7 +124,11 @@ ACCEPTED_BAD = [
     {"sub": "绝对偏差 95 分位 ｜ 学长站 · 我方弱锚层（偏大需复核）",
      "why": "**弱锚的代价**，正是 P1-3「弱锚提锚」要打的靶子。"
             "收敛路径 = GPS 轨迹外业（docs/gps-trace-protocol.md），"
-            "不是改阈值把红灯涂绿。"},
+            "不是改阈值把红灯涂绿。"
+            "【2026-09-19 进展】**派生锚 29 → 28、塌缩组 8 → 7**（红塔打印提锚为 osm 实锚，"
+            "实锚率 80.0% → 80.7%）；8 组塌缩已**逐组定性**（见 ANCHOR_COLLAPSE_VERDICTS）。"
+            "但**95 分位 114.9 m 今天动不了**：那 4 个点里「理学院楼」「先进制造大楼」已是 osm 实锚、"
+            "「综合楼」已有 match_osm —— 偏差来自**对等检核源本身**，只能靠外业或换 ≤6.7 m 检核源。"},
 ]
 # 已修复项的历史记录（不再是不合格，留档以免有人重复踩同一个坑）
 FIXED_BAD_HISTORY = [
@@ -138,6 +146,42 @@ CAMPUS_MISMATCH_HISTORY = [
     {"name": "第二学生公寓", "was": "516（北校）", "now": "516（北校）", "fixed": False,
      "note": "_campus_ok 用「最近中心」判校区，在海安路/军工路斜向边界上不可靠；"
              "其 OSM 坐标 31.2922 正落在 516 南侧边界 → 疑似误判，待实地定案"},
+]
+
+# 锚点塌缩组**逐组定性**（2026-09-19）。
+# 为什么要有它：「塌缩组 8」原先是一个**光报数不判定**的指标 —— 读者无法区分
+# 「合法同址」（同楼 1 层食堂/2 层图书馆）与「派生锚抄了邻居坐标」（真缺陷）。
+# 现在每组都必须有 nature + 依据 + 处置，判据变成**未定性数 = 0**（可被反向验证）。
+# 依据：docs/anchor-audit-2026-09-18.md §八 + 本轮实测的成员与锚源。
+ANCHOR_COLLAPSE_VERDICTS = [
+    {"members": ["动力二馆", "菜鸟驿站"], "nature": "copied-coords",
+     "evidence": "菜鸟驿站的 near_landmark 派生锚抄了动力二馆坐标（两者不是同一栋楼）",
+     "disposition": "外业第 6 组 OD（菜鸟驿站 → 动力二馆）实测定案；落差大即证实"},
+    {"members": ["580号校门", "七公寓", "民族餐厅（580号）"], "nature": "copied-coords",
+     "evidence": "七公寓的 approx 锚坐标与 580 号校门**完全相同**（approx 复用所致）；"
+                 "民族餐厅为 zone 质心，落进同一格",
+     "disposition": "已登记 ACCEPTED_BAD ＋ 外业第 1 组（七公寓 → 三教）；"
+                    "民族餐厅另有实测值，不单独误导"},
+    {"members": ["1906咖啡厅", "心理健康中心", "第五教学楼"], "nature": "zone-centroid",
+     "evidence": "三处都是 zone 质心锚 —— zone 表达的是「在这一片」而非「这一点」，"
+                 "同片区多点落到同一格属结构必然",
+     "disposition": "不修坐标（zone 锚的语义就是模糊的）；"
+                    "对精度的影响走「实锚率」与「派生锚计数」两条既有指标"},
+    {"members": ["第一教学楼", "老图书馆", "第二学生公寓", "藏书阁宿舍"], "nature": "copied-coords",
+     "evidence": "老图书馆 / 藏书阁宿舍的 walk_minutes·near_landmark 派生锚抄了第一教学楼坐标；"
+                 "第二学生公寓另有 _campus_ok 边界误判疑点",
+     "disposition": "外业第 2、5 组（含跨校天桥与老图书馆 → 二公寓）定案；"
+                    "第二学生公寓见 CAMPUS_MISMATCH_HISTORY 待定项"},
+    {"members": ["傅科打印", "毛主席像"], "nature": "zone-centroid",
+     "evidence": "两个 zone 质心锚重合",
+     "disposition": "外业第 7 组（傅科打印 → 毛主席像）—— 实测步行 > 5 min 即证两个质心锚都错"},
+    {"members": ["学生活动中心", "思晏堂"], "nature": "derived-road",
+     "evidence": "思晏堂由 roads 路段派生，落在学生活动中心同一格",
+     "disposition": "roads 派生锚精度本来只到「路段级」；不修坐标，走实锚率指标"},
+    {"members": ["第一食堂", "上理烘焙坊", "咪昵餐厅"], "nature": "legit-co-located",
+     "evidence": "上理烘焙坊**就在第一食堂楼内**（两者均 osm 实锚，同址是正确的）；"
+                 "咪昵餐厅为 walk_minutes 派生锚落进同格",
+     "disposition": "无需处置 —— 合法同址。本条存在的意义是**证明判据不是「同坐标就算缺陷」**"},
 ]
 
 OK, WARN, BAD, NA = "✅", "⚠️", "❌", "⚪"
@@ -183,17 +227,11 @@ def _all_items(cm):
     return cm["pois"] + cm["landmarks"]
 
 
-# campus 值域（声明口径）。`连接` 是**刻意保留的特殊值** —— 海安路师生专用通道
-# 位于北校（516）与南校（334）之间，不属于任何一个校区，若强行归入某一侧，
-# 「就近推荐不跨组」会把它算进那一侧的距离里，反而制造错答案。
-CAMPUS_DOMAIN = {
-    "北校": "本部北区（军工路 516）",
-    "南校": "本部南区（军工路 334）",
-    "580": "军工路 580 号片区（校门 + 校门口业态）",
-    "1100": "1100 基础学院（远庆路），独立分组",
-    "连接": "跨校区连接体（海安路人行天桥）—— 不属于任何单一校区，刻意保留",
-    "复兴路": "复兴中路校区，独立分组（当前图谱 0 条，见完整性）",
-}
+# campus 值域（**派生**自 data/campus_vocab.json，不再此处维护副本）。
+# `连接` 是**刻意保留的特殊值** —— 海安路师生专用通道位于北校（516）与南校（334）之间，
+# 不属于任何一个校区，若强行归入某一侧，「就近推荐不跨组」会把它算进那一侧的距离里，
+# 反而制造错答案。
+CAMPUS_DOMAIN = cv.CAMPUS_DOMAIN
 
 # 必填字段（**必须存在 key**）。实测全量 146/146 齐备。
 #   `id` 不在必填里 —— landmarks 多数无 id（有 id 的 107/146，仅 POI 侧使用）。
@@ -349,6 +387,16 @@ def q_logical_consistency(cm, net):
     dup = topo.get("dup_directed_pairs", 0)
     comps = topo.get("components", None)
 
+    # 校区词表 SSOT 三条断言（A 映射指向合法 CampusId｜B 前端 CampusId 全覆盖｜C 分组唯一实现点）。
+    # 2026-09-19 新增：此前这里是一条 ⚪「两套词表无机器校验」—— 那**等于没判**。
+    # 反向验证：删掉 campus_vocab.json 的 frontend_only.YINGKOU → B 必红（正是「营口路悬空」）。
+    _vocab_ok, _vocab_probs = cv.check_consistency()
+    # C（模块漂移）：只能在**能同时 import 两端**的地方查 —— 见 campus_vocab 的坑说明。
+    # 用 `is` 判「是不是同一个对象」，专抓「有人又把词表硬编码了一份」。
+    # 反向验证：把 campus_network.py 的 `_WALK_GROUP = _vocab.WALK_GROUP` 改回字面量 → 必红。
+    _vocab_probs = _vocab_probs + cv.module_drift(campus._CAMPUS_CN, cn._WALK_GROUP, cn.walk_group)
+    _vocab_ok = not _vocab_probs
+
     items = [
         {"sub": "概念一致性 conceptual", "measure": "必填字段**缺 key** 的条目数",
          "value": sum(len(v) for v in missing_key.values()), "threshold": "0",
@@ -361,15 +409,15 @@ def q_logical_consistency(cm, net):
          "note": f"取空才算问题的是 {'/'.join(NON_EMPTY_FIELDS)}"
                  f"（`alias` 为空是允许的；`verified:false` 是合法值，见时间质量）"},
         {"sub": "概念一致性 conceptual（与应用模式）",
-         "measure": "campus 值域是否与后端声明的口径一致",
-         "value": f"{len(CAMPUS_DOMAIN)} 种，源码声明一致",
-         "threshold": "—（一致性受检）", "verdict": NA,
-         "note": "后端声明口径在 `server/campus.py` 的 `campus_of()` docstring"
-                 "（'北校'|'南校'|'1100'|'580'|'复兴路'|'连接'|None）与 "
-                 "`campus_network.py::_WALK_GROUP`（580/连接→本部）。"
-                 "⚠️ 前端另有一套 CampusId 词表（JG516/JG334/JG1100/FUXING/YINGKOU），"
-                 "走 `campusOfName()` 关键字推断而非读本字段 —— **两套词表无机器校验**，"
-                 "同属「580 是否与北校同组」这类语义靠人工保持同步，是漂移风险点"},
+         "measure": "校区词表 SSOT 三条断言（A 映射指向合法 CampusId｜B 前端 CampusId 全覆盖｜C 分组唯一实现点）",
+         "value": (("通过" if _vocab_ok else "不通过")
+                   + f"（后端 {len(CAMPUS_DOMAIN)} 种码 ｜ 前端 {len(cv.FRONTEND_IDS)} 个 CampusId）"),
+         "threshold": "0 条不一致", "verdict": _verdict(_vocab_ok),
+         "note": "唯一事实源 = `data/campus_vocab.json`。Python 运行时导入；TS 侧保持硬编码"
+                 "（`places.ts:17` 明令不 import JSON）+ `tests/campus-vocab.test.ts` 逐条比对。"
+                 "此前三处副本零校验，活样本：`scheduler.test.ts` 断言 `第四食堂=JG334` "
+                 "而数据是 `1100`，**两套测试同时是绿的**。"
+                 + ("｜⚠️ " + "；".join(_vocab_probs) if _vocab_probs else "｜✅ A/B/C 全过")},
         {"sub": "概念一致性 conceptual", "measure": "id 重复数", "value": len(dup_id),
          "threshold": "0", "verdict": _verdict(not dup_id)},
         {"sub": "值域一致性 domain", "measure": "campus 取值越界种类数",
@@ -404,6 +452,15 @@ def q_logical_consistency(cm, net):
                        "bad_campus": bad_campus, "approx_bad": approx_bad,
                        "approx_n": approx_n, "campus_domain": CAMPUS_DOMAIN,
                        "campus_distribution": dict(campus_vals), "topology": topo}}
+
+
+def _indicative(enough_n, ok_3x):
+    """位置精度是否只能给「指示性」结论 —— 样本量不足 **或** 检核源不达目标 3 倍。
+
+    抽成独立函数（而不是内联布尔式）是为了让 `--selftest` 能把它改坏：
+    monkeypatch 成恒 False → 「指示性条数」必须塌回只剩那一条无检核点的条目。
+    """
+    return (not enough_n) or (not ok_3x)
 
 
 def q_positional_accuracy(cm, net, ckpt):
@@ -461,6 +518,10 @@ def q_positional_accuracy(cm, net, ckpt):
             "measure": "ACCURACY_r(95%) = RMSE_r × 1.7308",
             "value": f"{acc95:.1f} m（RMSE_r {rmse_ours:.1f} m, n={n}）{conv}",
             "threshold": f"≤ {target:.0f} m", "verdict": v,
+            # 指示性状态位（2026-09-19）：样本量不足或检核源不达标时**机器可读地**标出来，
+            # 防止有人把「指示值」当「检定值」引用。它**永不参与 ❌ 判定** ——
+            # 否则 4 条 ⚪ 会变成 4 条永久红，门禁当场失效（永远红的门禁等于没有门禁）。
+            "indicative": _indicative(enough_n, ok_3x),
             "note": why or f"最大单点偏差 {max(ds):.0f} m｜中位 "
                           f"{sorted(ds)[n // 2]:.1f} m",
         })
@@ -492,6 +553,8 @@ def q_positional_accuracy(cm, net, ckpt):
     strong = sum(v for k, v in src.items() if k in ("osm", "keypoint"))
     share = strong / total
     collapse = _collapse_groups(net)
+    collapse["unclassified"] = _collapse_unclassified(collapse["suspect_members"])
+    collapse["verdicts"] = ANCHOR_COLLAPSE_VERDICTS
     items.append({
         "sub": "相对（内部）精度 relative internal",
         "measure": "实锚占比（osm/keypoint 直接定位，非派生）",
@@ -502,16 +565,22 @@ def q_positional_accuracy(cm, net, ckpt):
     })
     items.append({
         "sub": "相对（内部）精度 relative internal",
-        "measure": "锚点塌缩组（同坐标不同地点）中「疑似缺陷」数",
-        "value": collapse["suspect_groups"], "threshold": "0（长期目标）｜当前容忍 8",
-        "verdict": _verdict(collapse["suspect_groups"] <= 8, warn=True),
-        "note": "合法同址（同楼 1 层食堂/2 层图书馆）不算缺陷；"
-                "派生锚抄邻居坐标导致的 0 m 才是",
+        "measure": "锚点塌缩组（同坐标不同地点）中**未定性**组数",
+        "value": f"{len(collapse['unclassified'])}/{collapse['suspect_groups']}"
+                 f"（已定性 {collapse['suspect_groups'] - len(collapse['unclassified'])}）",
+        "threshold": "0",
+        "verdict": _verdict(not collapse["unclassified"], warn=True),
+        "note": "每组必须带 nature（合法同址 / 抄邻居坐标 / zone 质心 / 路段派生）"
+                "+ 依据 + 处置，见 `ANCHOR_COLLAPSE_VERDICTS`。"
+                "🔴 2026-09-19 改法：此前只报「可疑 8 组」**不做判定**，"
+                "读者分不清「同楼 1 层食堂/2 层图书馆」与「真的抄错了坐标」",
     })
     items.append({
         "sub": "绝对（外部）精度 —— 未覆盖部分",
         "measure": "派生锚（未实测）条目数",
         "value": total - strong, "threshold": "0（理想）", "verdict": NA,
+        # 没有检核点 ⇒ 精度只能是指示性的（无样本可言）
+        "indicative": True,
         "note": "这部分**没有检核点证据**，其精度只能靠 GPS 轨迹外业补齐"
                 "（见 docs/gps-trace-protocol.md）",
     })
@@ -525,13 +594,25 @@ def _collapse_groups(net):
     for n, (pt, s) in net.poi.items():
         grid[(round(pt[0], 5), round(pt[1], 5))].append((n, s))
     groups, suspect = 0, 0
+    suspects = []          # 疑似缺陷组的**成员名**，供逐组定性比对
     for members in grid.values():
         if len(members) < 2:
             continue
         groups += 1
         if any(s not in ("osm", "keypoint") for _, s in members):
             suspect += 1
-    return {"groups": groups, "suspect_groups": suspect}
+            suspects.append(sorted(n for n, _ in members))
+    return {"groups": groups, "suspect_groups": suspect, "suspect_members": suspects}
+
+
+def _collapse_unclassified(suspects):
+    """返回**尚未定性**的塌缩组（成员集合在 ANCHOR_COLLAPSE_VERDICTS 里找不到对应的）。
+
+    🔴 这是把「塌缩组 8」从**光报数**变成**可判定**的那一步：判据 = 未定性数 == 0。
+    反向验证：删掉任意一条 ANCHOR_COLLAPSE_VERDICTS → 未定性数变 1 → 该条变 ⚠️。
+    """
+    known = {frozenset(v["members"]) for v in ANCHOR_COLLAPSE_VERDICTS}
+    return [m for m in suspects if frozenset(m) not in known]
 
 
 def q_thematic_accuracy(cm, ckpt=None):
@@ -597,7 +678,47 @@ def q_thematic_accuracy(cm, ckpt=None):
                        "type_distribution": dict(Counter(p.get("type") for p in items_all))}}
 
 
-def q_temporal(cm):
+def _dated_records(cm, ckpt):
+    """「证据日期台帐」—— 把所有**真实存在**的日期源汇总成 (来源, 名称, 日期)。
+
+    🔴 为什么需要它（2026-09-19 自纠）：
+        本函数替换掉一段**结构性不可达的假检查**。原实现读 `p.get("date")` 与
+        `p.get("anchor")`，而 `data/campus_map.json` 的 145 条里**这两个字段一个都没有**
+        （实测 0 个）⇒ 两个子项恒为 0、**永久 ✅**。于是已发布报告里「时间质量 2 项合格」
+        **不含任何检查** —— 这是本项目第 5 次「跑得很好看但是假的」。
+
+    换成的做法：**不引入新字段**，直接读那些本来就有日期、而且真的在维护的东西。
+    改坏它必须变红（把 `key_points.approx['七公寓'].date` 改成 2020 → 超龄数 +1）。
+    """
+    recs = []
+    kp_path = os.path.join(ROOT, "data", "osm", "key_points.json")
+    if os.path.exists(kp_path):
+        try:
+            kp = json.load(open(kp_path, encoding="utf-8"))
+        except (OSError, ValueError):
+            kp = {}
+        md = (kp.get("_meta") or {}).get("date")
+        if md:
+            recs.append({"src": "key_points._meta", "name": "_meta", "date": md})
+        for name, v in (kp.get("approx") or {}).items():
+            if name == "_note" or not isinstance(v, dict):
+                continue
+            recs.append({"src": "key_points.approx", "name": name, "date": v.get("date")})
+    ck_md = (ckpt.get("_meta") or {}).get("date")
+    if ck_md:
+        recs.append({"src": "quality_checkpoints._meta", "name": "_meta", "date": ck_md})
+    mu = (cm.get("_meta") or {}).get("updated")
+    if mu:
+        recs.append({"src": "campus_map._meta", "name": "_meta", "date": mu})
+    # hours 的来源日期（2026-09-19 起：每条新增 hours 必须带 hours_src_date）
+    for p in _all_items(cm):
+        if p.get("hours_src_date"):
+            recs.append({"src": "campus_map.hours_src_date", "name": p["name"],
+                         "date": p["hours_src_date"]})
+    return recs
+
+
+def q_temporal(cm, ckpt):
     """时间质量：时间有效性 / 时间一致性 + **证据完备度**（verified 标记）。
 
     `verified:false` 放这里而不是「多余 commission」：它表达的是
@@ -606,21 +727,22 @@ def q_temporal(cm):
     """
     items_all = _all_items(cm)
     today = date.today()
+    recs = _dated_records(cm, ckpt)
     stale = []
     no_date = []
-    for p in items_all:
-        d = p.get("date")
+    for r in recs:
+        d = r.get("date")
+        label = f"{r['src']}·{r['name']}"
         if not d:
-            if p.get("anchor") in ("approx", "near_landmark"):
-                no_date.append(p["name"])
+            no_date.append(label)
             continue
         try:
             y, m, dd = (int(x) for x in str(d).split("-")[:3])
             age = (today - date(y, m, dd)).days
             if age > THRESHOLDS["max_age_days"]:
-                stale.append({"name": p["name"], "date": d, "age_days": age})
+                stale.append({"name": label, "date": d, "age_days": age})
         except (ValueError, TypeError):
-            stale.append({"name": p["name"], "date": d, "age_days": None})
+            stale.append({"name": label, "date": d, "age_days": None})
 
     n_ver = sum(1 for p in items_all if p.get("verified") is True)
     share_ver = n_ver / max(len(items_all), 1)
@@ -641,13 +763,19 @@ def q_temporal(cm):
     return {
         "element": "时间质量 Temporal quality",
         "items": [
-            {"sub": "时间有效性 temporal validity", "measure": "锚点日期超龄条目数",
+            {"sub": "时间有效性 temporal validity",
+             "measure": "证据日期超龄条目数（台帐 = 全部真实日期源）",
              "value": n_stale, "threshold": f"≤ 0（> {THRESHOLDS['max_age_days']} 天算超龄）",
-             "verdict": _verdict(n_stale == 0, warn=True), "note": "见 detail.stale"},
-            {"sub": "时间有效性 temporal validity", "measure": "应带日期却缺失的条目数",
+             "verdict": _verdict(n_stale == 0, warn=True),
+             "note": f"台帐 {len(recs)} 条：key_points._meta / approx / "
+                     "quality_checkpoints._meta / campus_map._meta / hours_src_date。"
+                     "🔴 2026-09-19 自纠：原实现读 campus_map 的 `date`/`anchor` 字段，"
+                     "**那两个字段根本不存在**（145 条实测 0 个）→ 恒 0、永久 ✅，是假绿"},
+            {"sub": "时间有效性 temporal validity",
+             "measure": "应带日期却缺失的证据条目数",
              "value": len(no_date), "threshold": "0",
              "verdict": _verdict(len(no_date) == 0, warn=True),
-             "note": "approx / near_landmark 锚必须带 date"},
+             "note": "approx 锚必须带 date；新增 hours 必须带 hours_src_date"},
             {"sub": "证据完备度 evidence completeness",
              "measure": "verified = true 的条目占比（实地/三方证据齐备）",
              "value": f"{n_ver}/{len(items_all)} = {share_ver:.1%}",
@@ -706,16 +834,39 @@ def q_usability(cm, net):
 
 
 # ---------------------------------------------------------------- 汇总
-def metaquality(n_sources, n_ckpt, ckpt, cm):
+# metaquality 里**给人读的散文键**。渲染器只认这几个 —— 机器字段不进 txt/md 输出。
+# 为什么要白名单：2026-09-19 起 metaquality 同时装了散文与列表/数字，若仍按
+# `for k, v in mq.items()` 全量渲染，机器字段会被当散文打出来（且 list 会打成难看的一坨）。
+METAQUALITY_PROSE_KEYS = ("confidence", "representativity", "homogeneity",
+                          "conclusion", "scope", "gap")
+
+
+def metaquality(n_sources, n_ckpt, ckpt, cm, sections=None):
     """ISO 19157 元质量：confidence / representativity / homogeneity。
 
     这一段是本脚本最该被认真读的部分 —— 它回答「上面那些数字能信到什么程度」。
+
+    ⚠️ 2026-09-19 结构化：原先 6 个键的值**全是中文散文** —— 人读得懂、**机器读不到**，
+    于是它进不了门禁，也就没人能阻止它变差。现在**散文逐字保留**（给人读），
+    另加一组机器字段（给 `--gate` 的趋势比较读，见 THRESHOLDS / 基线）。
     """
     items_all = _all_items(cm)
     n_ver = sum(1 for p in items_all if p.get("verified") is True)
     conf = "高" if n_ckpt >= 20 else ("中" if n_ckpt >= 5 else "低")
+    conf_level = 2 if n_ckpt >= 20 else (1 if n_ckpt >= 5 else 0)
     rep = ("覆盖全校区（校门 + 交叉校验点）" if n_sources >= 2 else "仅局部（单源）")
+
+    # ---- 机器可读的体量指标（给趋势门禁用；只读不改，全部可从现有数据复算）----
+    secs = sections or []
+    indicative_count = sum(1 for s in secs for it in s["items"] if it.get("indicative"))
+    src = Counter(s for _, s in NET.poi.values())
+    total = max(len(NET.poi), 1)
+    strong = sum(v for k, v in src.items() if k in ("osm", "keypoint"))
+    n_hours = sum(1 for p in items_all if p.get("hours"))
+    n_answer = sum(1 for p in items_all if campus.open_now(p).get("open") is not None)
+
     return {
+        # ---------------- 散文（给人读；渲染器白名单认这些）----------------
         "confidence": f"{conf}（最大检核源 n={n_ckpt}，标准门槛 n≥20）",
         "representativity": f"{rep}；但 {len([p for p in items_all if p.get('verified') is not True])}"
                             f"/{len(items_all)} 条无实地/三方证据"
@@ -730,6 +881,22 @@ def metaquality(n_sources, n_ckpt, ckpt, cm):
                  + "、".join(SCOPE_IN) + "（军工路本部 + 1100 基础学院）；"
                  + "；".join(f"{k}：{v}" for k, v in SCOPE_OUT.items()),
         "gap": (ckpt.get("gap") or {}).get("uncovered", ""),
+
+        # ---------------- 机器字段（给 --gate 读；不进散文输出）----------------
+        "confidence_level": conf_level,          # 0 低 / 1 中 / 2 高 —— 门禁：只许升
+        "max_checkpoint_n": n_ckpt,
+        "n_checkpoint_sources": n_sources,
+        "verified_share": round(n_ver / max(len(items_all), 1), 4),
+        "n_unverified": len(items_all) - n_ver,
+        "hours_coverage": round(n_hours / max(len(items_all), 1), 4),
+        "open_now_answerable": n_answer,
+        "strong_anchor_share": round(strong / total, 4),
+        "derived_anchor_count": total - strong,  # 门禁：只许降（设计文档 §1.3 P2）
+        "indicative_count": indicative_count,    # 门禁：只许降
+        "scope_in": list(SCOPE_IN),
+        "scope_out": dict(SCOPE_OUT),
+        # 声明（不是计算值）：外业未覆盖、暂无检核点的片区 —— 见 docs/gps-trace-protocol.md
+        "gap_campuses_declared": ["1100", "580"],
     }
 
 
@@ -750,7 +917,8 @@ def _md(sections, mq, cm, n_src):
       "`n ≥ 20` 才够统计显著。")
     p("")
     p("判定图例：`✅` 合格 ｜ `⚠️` 警戒 ｜ `❌` 不合格 ｜ `⚪` 无法判定"
-      "（样本或参照源达不到标准时**不硬判**，如实降级为指示性）")
+      "（样本或参照源达不到标准时**不硬判**，如实降级为指示性）"
+      " ｜ `⚪*` **指示性**（机器可读状态位 `indicative`，**不得当正式检定值引用**）")
     p("")
     for s in sections:
         p(f"## {s['element']}")
@@ -760,12 +928,14 @@ def _md(sections, mq, cm, n_src):
         for it in s["items"]:
             note = (it.get("note") or "").replace("|", "\\|")
             val = str(it["value"]).replace("|", "\\|")
-            p(f"| {it['verdict']} | {it['sub']} | {it['measure']} | **{val}** | "
+            mark = it["verdict"] + "\u200b*" if it.get("indicative") else it["verdict"]
+            p(f"| {mark} | {it['sub']} | {it['measure']} | **{val}** | "
               f"{it['threshold']} | {note} |")
         p("")
     p("## 元质量 metaquality（上面那些数字能信到什么程度）")
     p("")
-    for k, v in mq.items():
+    for k in METAQUALITY_PROSE_KEYS:      # 白名单：机器字段不进散文输出
+        v = mq.get(k)
         if v:
             p(f"- **{k}**：{v}")
     p("")
@@ -797,7 +967,7 @@ def _run_all(cm, ckpt):
         q_logical_consistency(cm, NET),
         q_positional_accuracy(cm, NET, ckpt),
         q_thematic_accuracy(cm, ckpt),
-        q_temporal(cm),
+        q_temporal(cm, ckpt),
         q_usability(cm, NET),
     ]
 
@@ -827,7 +997,9 @@ def selftest():
         ckpt = json.load(open(p_ck, encoding="utf-8"))
 
     saved = {"sample": SCAN_SAMPLE, "commission": COMMISSION_INCLUDES_UNVERIFIED,
-             "all_items": _all_items, "pct": _pct, "run_all": _run_all}
+             "all_items": _all_items, "pct": _pct, "run_all": _run_all,
+             "dated_records": _dated_records,
+             "collapse_verdicts": ANCHOR_COLLAPSE_VERDICTS}
     SCAN_SAMPLE = 60            # selftest 跑多轮，抽样调小（拓扑类结论不受影响）
     fails = []
 
@@ -901,7 +1073,72 @@ def selftest():
         report("放宽 p95 阈值到无穷（阈值不承重时不合格项不会减少）",
                now_bad < base_bad, f"{base_bad} 项 ❌", f"{now_bad} 项 ❌")
 
-        # 6) 还原后复现基线
+        # 6) 指示性状态位：把 _indicative 改坏成恒 False → 指示性条数必须塌下来
+        #    （只剩那条「未覆盖派生锚」，它本来就是恒 True）。它**不参与 ❌ 判定**，
+        #    所以这条只能查计数 —— 也正因为不参与，它不会把门禁变成永久红。
+        saved_ind = globals().get("_indicative")
+        n_ind_base = sum(1 for i in _flat(_run_all(cm, ckpt)) if i.get("indicative"))
+        globals()["_indicative"] = lambda a, b: False
+        n_ind_mut = sum(1 for i in _flat(_run_all(cm, ckpt)) if i.get("indicative"))
+        globals()["_indicative"] = saved_ind
+        report("改坏 _indicative（恒 False）→ 指示性条数必须下降",
+               n_ind_mut < n_ind_base, f"{n_ind_base} 条", f"{n_ind_mut} 条")
+
+        # 7) 趋势门禁：必须抓得住回归，且不能把「改善」误报成回归
+        mq_now = metaquality(
+            len(ckpt.get("sources", [])),
+            max([len(s.get("per_point", [])) for s in ckpt.get("sources", [])] or [0]),
+            ckpt, cm, sections=_run_all(cm, ckpt))
+        cur = _trend_metrics(mq_now)
+        worse = dict(cur)
+        worse["derived_anchor_count"] = (cur.get("derived_anchor_count") or 0) - 1
+        reg_hit, _ = _cmp_trend(cur, worse)
+        better = dict(cur)
+        better["derived_anchor_count"] = (cur.get("derived_anchor_count") or 0) + 1
+        reg_miss, imp_miss = _cmp_trend(cur, better)
+        report("趋势门禁：抓得住 derived_anchor_count 回升，且不把「改善」误报成回归",
+               any(k == "derived_anchor_count" for k, _, _ in reg_hit) and not reg_miss,
+               "—", f"命中回归 {reg_hit}｜改善对 {imp_miss}")
+
+        # 8) 校区词表 SSOT：抽掉 frontend_only.YINGKOU → 覆盖率断言必须报「悬空」
+        saved_fo = cv.FRONTEND_ONLY
+        cv.FRONTEND_ONLY = {k: v for k, v in saved_fo.items() if k != "YINGKOU"}
+        ok_b, probs_b = cv.check_consistency()
+        cv.FRONTEND_ONLY = saved_fo
+        report("校区词表 SSOT 断言 B（抽掉营口路声明 → 悬空必须被抓）",
+               (not ok_b) and any("悬空" in p for p in probs_b), "A/B/C 通过", probs_b)
+
+        # 9) 时间质量台帐：抽掉一个 approx 的日期 → 「应带日期却缺失」必须非空
+        saved_dr = globals()["_dated_records"]
+
+        def _drop_one_date(cm_, ck_):
+            rs = saved_dr(cm_, ck_)
+            for r in rs:
+                if r["src"] == "key_points.approx":
+                    r["date"] = None
+                    break
+            return rs
+        globals()["_dated_records"] = _drop_one_date
+        nd = []
+        for s in _run_all(cm, ckpt):
+            if "时间" in s["element"]:
+                nd = s["detail"]["no_date"]
+        globals()["_dated_records"] = saved_dr
+        report("时间质量台帐：抽掉一个 approx 日期 → 「应带日期却缺失」必须非空",
+               len(nd) > 0, "[]（全部有日期）", nd)
+
+        # 10) 塌缩组定性：抽掉一条 verdict → 「未定性」必须从 0 变 1（该条变 ⚠️）
+        saved_v = globals()["ANCHOR_COLLAPSE_VERDICTS"]
+        globals()["ANCHOR_COLLAPSE_VERDICTS"] = saved_v[1:]
+        unc = []
+        for s in _run_all(cm, ckpt):
+            if "位置精度" in s["element"]:
+                unc = s["detail"]["collapse"]["unclassified"]
+        globals()["ANCHOR_COLLAPSE_VERDICTS"] = saved_v
+        report("塌缩组定性：抽掉一条 verdict → 「未定性」必须非空",
+               len(unc) > 0, "0（全部已定性）", unc)
+
+        # 11) 还原后复现基线
         again = snap()
         same = again == base
         print(f"  {'🔴 复现 ✓' if same else '🟢 复现 ✗'}  全部变异还原后复现基线")
@@ -913,8 +1150,10 @@ def selftest():
         globals()["_all_items"] = saved["all_items"]
         globals()["_pct"] = saved["pct"]
         globals()["_run_all"] = saved["run_all"]
+        globals()["_dated_records"] = saved["dated_records"]
+        globals()["ANCHOR_COLLAPSE_VERDICTS"] = saved["collapse_verdicts"]
 
-    total = 6
+    total = 11
     print(f"\n反向验证：{total - len(fails)}/{total} 项通过")
     for f in fails:
         print(f"  ❌ 未被抓住：{f}")
@@ -966,6 +1205,7 @@ def _txt(sections, mq, cm, n_src):
     p("    硬约束：检核点须独立且更精确（优于目标 3 倍）、n ≥ 20 才够统计显著")
     p("")
     p("判定图例  [合格] [警戒] [不合格] [无法判定=样本/参照源不达标，如实降级为指示性]")
+    p("          [指示性*] = 机器可读状态位 indicative，**不得当正式检定值引用**")
     p("")
     for s in sections:
         p("-" * W)
@@ -973,6 +1213,8 @@ def _txt(sections, mq, cm, n_src):
         p("-" * W)
         for it in s["items"]:
             v = {"✅": "[合格]", "⚠️": "[警戒]", "❌": "[不合格]", "⚪": "[无法判定]"}[it["verdict"]]
+            if it.get("indicative"):
+                v += " [指示性*]"
             p(f"{v} {it['sub']}")
             p(f"      度量  {it['measure']}")
             p(f"      实测  {it['value']}")
@@ -985,7 +1227,8 @@ def _txt(sections, mq, cm, n_src):
     p("=" * W)
     p("元质量 metaquality —— 上面那些数字能信到什么程度")
     p("=" * W)
-    for k, v in mq.items():
+    for k in METAQUALITY_PROSE_KEYS:      # 白名单：机器字段不进散文输出
+        v = mq.get(k)
         if v:
             txt = str(v).replace("**", "")
             p(f"  {k}")
@@ -1029,6 +1272,54 @@ def _txt(sections, mq, cm, n_src):
     return "\n".join(L)
 
 
+# ---------------------------------------------------------------- 趋势门禁（2026-09-19）
+# 为什么要有它：`--gate` 原先**只拦「新增的 ❌ 项」**。但门禁真正该防的是「悄悄变差」——
+# 比如有人把派生锚改多了、把 hours 覆盖改少了，只要没踩到 ❌ 阈值就一路绿灯。
+#
+# 为什么用**签入的基线文件**而不是「上次运行」：CI / 新 clone 里没有「上次运行」，
+# 把基线做成本地状态会让门禁不可复现（本项目要求「一条命令验收」）。
+# 基线只由显式 `--write-baseline` 更新，**更新时必须在提交信息里写明为什么允许放宽**。
+#
+# 只门禁「只会变好或不变」的指标 —— 一个永远红的门禁等于没有门禁。
+DEFAULT_BASELINE = os.path.join(ROOT, "docs", "spatial-quality-baseline.json")
+TREND_RULES = {
+    "confidence_level": "up",        # 0 低 / 1 中 / 2 高
+    "verified_share": "up",
+    "hours_coverage": "up",
+    "open_now_answerable": "up",
+    "derived_anchor_count": "down",  # 设计文档 §1.3 P2：派生锚只许降不许升
+    "indicative_count": "down",
+}
+# 只记录、**不**门禁：weak_anchor_p95_m 今天动不了（4 个点里 3 个已是 osm 实锚，
+# 偏差来自对等检核源本身）—— 设成门禁只会造出一条永久红。
+TREND_DIR_CN = {"up": "只许升", "down": "只许降"}
+
+
+def _trend_metrics(mq):
+    """从 metaquality 抽出**机器可比**的趋势指标。"""
+    return {k: mq.get(k) for k in TREND_RULES}
+
+
+def _cmp_trend(cur, base):
+    """比当前 vs 基线。返回 (regressions, improvements)，各自是 [(指标, 基线值, 本次值)]。"""
+    reg, imp = [], []
+    for k, direction in TREND_RULES.items():
+        a, b = base.get(k), cur.get(k)
+        if a is None or b is None:
+            continue
+        if direction == "up":
+            if b < a:
+                reg.append((k, a, b))
+            elif b > a:
+                imp.append((k, a, b))
+        else:
+            if b > a:
+                reg.append((k, a, b))
+            elif b < a:
+                imp.append((k, a, b))
+    return reg, imp
+
+
 def main():
     ap = argparse.ArgumentParser(description="空间数据库可靠性审计（ISO 19157）")
     ap.add_argument("--json", default=None, help="报告 JSON 写到该路径")
@@ -1036,7 +1327,13 @@ def main():
     ap.add_argument("--txt", default=None, help="报告**纯文本**写到该路径（无 markdown 语法）")
     ap.add_argument("--checkpoints", default=None,
                     help="检核点证据文件（默认 data/quality_checkpoints.json）")
-    ap.add_argument("--gate", action="store_true", help="出现 ❌ 则 exit 1")
+    ap.add_argument("--gate", action="store_true",
+                    help="出现 ❌ 则 exit 1；另比对趋势基线（只会变好或不变的指标不许回归）")
+    ap.add_argument("--write-baseline", action="store_true",
+                    help=f"把当前趋势指标写进签入基线 {os.path.relpath(DEFAULT_BASELINE, ROOT)}"
+                         "（放宽必须在提交信息里写明理由）")
+    ap.add_argument("--baseline", default=None,
+                    help="趋势基线路径（默认 docs/spatial-quality-baseline.json）")
     ap.add_argument("--selftest", action="store_true",
                     help="反向验证：改坏实现，断言报告必须跟着变")
     args = ap.parse_args()
@@ -1052,7 +1349,23 @@ def main():
 
     sections = _run_all(cm, ckpt)
     n_ckpt = max([len(s.get("per_point", [])) for s in ckpt.get("sources", [])] or [0])
-    mq = metaquality(len(ckpt.get("sources", [])), n_ckpt, ckpt, cm)
+    mq = metaquality(len(ckpt.get("sources", [])), n_ckpt, ckpt, cm, sections=sections)
+
+    if args.write_baseline:
+        os.makedirs(os.path.dirname(DEFAULT_BASELINE) or ".", exist_ok=True)
+        with open(DEFAULT_BASELINE, "w", encoding="utf-8", newline="\n") as f:
+            json.dump({
+                "_meta": {
+                    "why": "趋势门禁基线（**不是**「上次运行」）—— CI / 新 clone 里没有上次运行，"
+                           "把基线做成本地状态会让门禁不可复现（本项目要求「一条命令验收」）。"
+                           "只由 `--write-baseline` 更新，**放宽必须在提交信息里写明理由**。",
+                    "updated": date.today().isoformat(),
+                    "rules": TREND_RULES,
+                },
+                "metrics": _trend_metrics(mq),
+            }, f, ensure_ascii=False, indent=1)
+            f.write("\n")
+        print(f"已写出趋势基线：{DEFAULT_BASELINE}")
 
     n_bad = sum(1 for s in sections for i in s["items"] if i["verdict"] == BAD)
     n_warn = sum(1 for s in sections for i in s["items"] if i["verdict"] == WARN)
@@ -1082,7 +1395,10 @@ def main():
         payload = {"generated": date.today().isoformat(), "thresholds": THRESHOLDS,
                    "campus_domain": CAMPUS_DOMAIN,
                    "sections": sections, "metaquality": mq,
-                   "counts": {"ok": n_ok, "warn": n_warn, "bad": n_bad, "na": n_na}}
+                   "counts": {"ok": n_ok, "warn": n_warn, "bad": n_bad, "na": n_na,
+                              # 指示性条数（机器可读；**不参与 gate 的 ❌ 判定**，只做趋势）
+                              "indicative": sum(1 for s in sections
+                                                for i in s["items"] if i.get("indicative"))}}
         os.makedirs(os.path.dirname(os.path.abspath(args.json)) or ".", exist_ok=True)
         with open(args.json, "w", encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, ensure_ascii=False, indent=1)
@@ -1106,6 +1422,25 @@ def main():
                       file=sys.stderr)
             return 1
         print("\n✅ GATE 通过：无新增不合格项", file=sys.stderr)
+
+        # 趋势回归（2026-09-19）：只拦「新增 ❌」还不够 —— 悄悄变差同样要拦。
+        base_path = args.baseline or DEFAULT_BASELINE
+        if not os.path.exists(base_path):
+            print(f"ℹ️ 无趋势基线（{base_path}），跳过趋势比较", file=sys.stderr)
+        else:
+            bj = json.load(open(base_path, encoding="utf-8"))
+            reg, imp = _cmp_trend(_trend_metrics(mq), bj.get("metrics", {}))
+            for k, a, b in imp:
+                print(f"📈 改善 {k}：{a} → {b}", file=sys.stderr)
+            if reg:
+                print(f"\n❌ GATE 失败（趋势回归）：{len(reg)} 项指标相对基线变差", file=sys.stderr)
+                for k, a, b in reg:
+                    print(f"   · {k}：基线 {a} → 本次 {b}（{TREND_DIR_CN[TREND_RULES[k]]}）",
+                          file=sys.stderr)
+                print("   若确有理由放宽：跑 --write-baseline 重写基线，"
+                      "并在提交信息里写明为什么。", file=sys.stderr)
+                return 1
+            print(f"✅ 趋势无回归（基线 {bj.get('_meta', {}).get('updated', '?')}）", file=sys.stderr)
     return 0
 
 

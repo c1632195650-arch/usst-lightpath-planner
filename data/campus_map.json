@@ -612,12 +612,15 @@
     "买零食",
     "买东西",
     "泡面",
-    "日用品"
+    "日用品",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水"
    ],
    "pyf": "nuanwuchaoshi|nuanwu|nuanwuaixinchaoshi|nuanwuaixinchaoshidongtang",
    "pyi": "nwcs|nw|nwaxcs|nwaxcsdt",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|ms|mls|mdx|pm|ryp"
+   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|maipingshui|maipingzhuangshui|kuangquanshui|ms|mls|mdx|pm|ryp|mps|mpzs|kqs"
   },
   {
    "id": "nuanwu_fresh",
@@ -647,12 +650,15 @@
     "买菜",
     "水果",
     "生鲜",
-    "买水果"
+    "买水果",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水"
    ],
    "pyf": "nuanwuchaoshishengxiandian|nuanwushengxian",
    "pyi": "nwcssxd|nwsx",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maicai|shuiguo|shengxian|maishuiguo|mc|sg|sx|msg"
+   "pyg": "maicai|shuiguo|shengxian|maishuiguo|maipingshui|maipingzhuangshui|kuangquanshui|mc|sg|sx|msg|mps|mpzs|kqs"
   },
   {
    "id": "edu_market_s",
@@ -684,12 +690,23 @@
     "买文具",
     "文具",
     "买水",
-    "笔记本"
+    "笔记本",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "nanxiaoqujiaoyuchaoshi|334chaoshi|jiaoyuchaoshi",
    "pyi": "nxqjycs|334cs|jycs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maiwenju|wenju|maishui|bijiben|mwj|wj|ms|bjb"
+   "pyg": "maiwenju|wenju|maishui|bijiben|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|mwj|wj|ms|bjb|mps|mpzs|kqs|mb|bx",
+   "hours_vacation": {
+    "营业": "8:30-20:30"
+   },
+   "hours_src": "《上理寒假期间后勤服务开放安排！》+《上理清明后勤服务安排通知!》（两份假期安排对 334 号公共浴室的时段一致：13:00-23:00）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "学期 8:30-22:00 / 寒假 8:30-20:30（1月26日-2月14日档）"
   },
   {
    "id": "edu_market_1100",
@@ -717,12 +734,17 @@
    "tags": [
     "买文具",
     "文具",
-    "基础学院"
+    "基础学院",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "1100jiaoyuchaoshi|jichuxueyuanchaoshi",
    "pyi": "1100jycs|jcxycs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maiwenju|wenju|jichuxueyuan|mwj|wj|jcxy"
+   "pyg": "maiwenju|wenju|jichuxueyuan|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|mwj|wj|jcxy|mps|mpzs|kqs|mb|bx"
   },
   {
    "id": "cainiao",
@@ -789,7 +811,11 @@
    "pyf": "hongtadayin|beixiaohongtadayin",
    "pyi": "htdy|bxhtdy",
    "pyt": "dayin|dy",
-   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd"
+   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd",
+   "match_osm": [
+    "勤工俭学中心 (红塔)"
+   ],
+   "anchor_note": "2026-09-19 提锚：名字+语义都对（『红塔』既是打印店所在楼，也是 OSM 具名建筑），由 walk_minutes 派生锚升为 osm 实锚"
   },
   {
    "id": "print_fuke",
@@ -951,7 +977,13 @@
    "pyf": "gonggongyushinanxiaoqu|334yushi|nanxiaoyushi",
    "pyi": "ggysnxq|334ys|nxys",
    "pyt": "shenghuofuwu|shfw",
-   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz"
+   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz",
+   "hours_vacation": {
+    "开放": "13:00-23:00"
+   },
+   "hours_src": "《上理寒假期间后勤服务开放安排！》+《上理清明后勤服务安排通知!》（两份假期安排对 334 号公共浴室的时段一致：13:00-23:00）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "学期 15:00-23:00（《公共洗浴》运营表）/ 假期 13:00-23:00"
   },
   {
    "id": "atm_abc",
@@ -1023,12 +1055,15 @@
     "挂号",
     "医保",
     "医务室",
-    "门诊部"
+    "门诊部",
+    "生病",
+    "生病了去哪看",
+    "不舒服"
    ],
    "pyf": "xiaoyishiweishengke|xiaoyiyuan|weishengke|yiwushi|menzhenbu",
    "pyi": "xyswsk|xyy|wsk|yws|mzb",
    "pyt": "shenghuofuwu|shfw",
-   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|menzhen|maiyao|guahao|yibao|yiwushi|menzhenbu|kb|xyy|ky|py|tj|mz|my|gh|yb|yws|mzb"
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|menzhen|maiyao|guahao|yibao|yiwushi|menzhenbu|shengbing|shengbinglequnakan|bushufu|kb|xyy|ky|py|tj|mz|my|gh|yb|yws|mzb|sb|sblqnk|bsf"
   },
   {
    "id": "pscenter",
@@ -1101,12 +1136,17 @@
     "饭团",
     "早饭",
     "买零食",
-    "24小时"
+    "24小时",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "quanjiabianlidian|quanjia|quanjiachaoshi|quanjiabianliliansuochaoshi",
    "pyi": "qjbld|qj|qjcs|qjbllscs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|ms|bld|ft|zf|mls|24xs"
+   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|ms|bld|ft|zf|mls|24xs|mps|mpzs|kqs|mb|bx"
   }
  ],
  "landmarks": [
@@ -1665,7 +1705,14 @@
    "pyf": "yundongchang|caochang|dacaochang",
    "pyi": "ydc|cc|dcc",
    "pyt": "yundong|yd",
-   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp"
+   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp",
+   "hours": {
+    "开放": "6:00-21:00"
+   },
+   "hours_src": "《上理体育场馆全指南｜开放时间+预约流程+收费标准一键收藏！》（data/usst_articles.db 可检索原文）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "北校区田径场；校内外免费时段 6:00-8:00、18:00-21:00，教学/活动期间暂停",
+   "needs_check": null
   },
   {
    "id": "gym",
@@ -1697,7 +1744,14 @@
    "match_osm": [
     "体育文化活动中心",
     "室内体育馆"
-   ]
+   ],
+   "hours": {
+    "开放": "9:00-21:00"
+   },
+   "hours_src": "《上理体育场馆全指南｜开放时间+预约流程+收费标准一键收藏！》（data/usst_articles.db 可检索原文）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "室内免费场馆；需预约，在校师生免费",
+   "needs_check": null
   },
   {
    "id": "dorm1",
@@ -1717,12 +1771,19 @@
    "emoji": "🛏️",
    "tags": [
     "宿舍",
-    "回宿舍"
+    "回宿舍",
+    "理发",
+    "理发店",
+    "美发",
+    "洗衣",
+    "洗衣店",
+    "洗衣服",
+    "干洗"
    ],
    "pyf": "diyixueshenggongyu|1gongyu|yigongyu",
    "pyi": "dyxsgy|1gy|ygy",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss",
+   "pyg": "sushe|huisushe|lifa|lifadian|meifa|xiyi|xiyidian|xiyifu|ganxi|ss|hss|lf|lfd|mf|xy|xyd|xyf|gx",
    "pyk": "zhusu|gongyu"
   },
   {
@@ -4825,6 +4886,12 @@
   "七公寓的精确坐标待确认（CY 描述在 580 号校门/先进制造大楼旁；OSM 该区域只有无名 apartments，无匹配建筑）—— 现暂锚定 580 号校门，属近似值",
   "「工程实训中心」（金工实习上课地点）= 图谱「实训中心」？ 待核实（现按同一栋处理）",
   "「公共实验楼」的准确位置与楼号待确认（物理实验 / 模电实验上课地点）",
-  "「第七食堂」：官方《一卡通服务网点》列有该地点，但图谱无对应条目，且 OSM 155 个具名建筑里**没有**同名建筑 → 拿不到实锚。按「不猜」纪律**不建条目**，待实地确认位置/所属校区后补入。"
+  "「第七食堂」：官方《一卡通服务网点》列有该地点，但图谱无对应条目，且 OSM 155 个具名建筑里**没有**同名建筑 → 拿不到实锚。按「不猜」纪律**不建条目**，待实地确认位置/所属校区后补入。",
+  "【hours 缺口】第一浴室：616 公共浴室在**十二宿舍西北角**，《公共洗浴》运营表按宿舍楼逐条列（第五宿舍/七公寓/4公寓1号楼…）但**没有十二宿舍那一行** ⇒ 无法映射，待实地问询",
+  "【hours 缺口】菜鸟驿站：语料内未见营业时间；假期安排里的「快递中心」是否即菜鸟驿站**未定案** ⇒ 不推",
+  "【hours 缺口】1100教育超市：只有元旦假期口径（9:00-20:00），**学期口径无来源** ⇒ 学期值留空",
+  "【hours 缺口】南校区操场：《体育场馆全指南》只点名「北校区田径场」；南校场地未逐条列出 ⇒ 待核",
+  "【hours 缺口】室内体育馆：同上（「室内免费场馆 9:00-21:00」未标校区）⇒ 待核，不按北校口径照搬",
+  "【hours 缺口】教学楼：教学楼日常开放时间**语料内无硬来源**（只有假期关闭通知）⇒ 不推；这是 hours 冲 40 的主要缺口"
  ]
 }

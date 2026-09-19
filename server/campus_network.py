@@ -29,6 +29,8 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+import campus_vocab as _vocab   # 校区词表唯一事实源（data/campus_vocab.json）
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OSM_DIR = os.path.join(ROOT, "data", "osm")
@@ -95,7 +97,11 @@ NODE_TAG_KEYS = {"amenity", "shop", "leisure", "tourism", "office", "healthcare"
 #   独立 = 1100 基础学院 / 复兴路 —— **作为排程/就近推荐的口径保持独立**（不参与本部
 #          日常排程）。注：1100 的路网自 2026-09-16 起已接入（jichuxueyuan.osm），沿军工路
 #          实际步行可达 —— 跨组通行参考走 `route_cross_group()`，不放宽本口径。
-_WALK_GROUP = {"北校": "本部", "南校": "本部", "580": "本部", "连接": "本部"}
+# ⚠️ 2026-09-19：本表**不再是副本** —— 从唯一事实源 `data/campus_vocab.json` 派生
+#    （campus_vocab.WALK_GROUP 是全量映射，1100/复兴路 → 各自分组）。
+#    与旧写法的行为**完全一致**：旧版靠 `dict.get(campus, campus)` 的缺省回落，
+#    新版把那个回落显式写进表里，`walk_group()` 的取值逐条相同。
+_WALK_GROUP = _vocab.WALK_GROUP
 
 
 def walk_group(campus):

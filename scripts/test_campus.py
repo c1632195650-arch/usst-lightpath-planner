@@ -264,6 +264,32 @@ def main():
             print(f"      {h}")
         print()
 
+    # F2 · 食堂全览按需注入（2026-09-19）
+    # 反向验证落点：把 campus._food_intent 改成恒 return True（= 回到「无条件附加」），
+    # 下面「非吃类不得含食堂全览」两条必须变红。
+    # 判据用『本部食堂全览』这个词——它同时覆盖 resolved 分支（[本部食堂全览（备查）]）
+    # 与诚实兜底分支（「下面给出本部食堂全览」），不依赖具体 POI 名。
+    print("=" * 72)
+    print("F2 组 · 食堂全览按需注入（非吃类不得塞 73% 噪音）")
+    print("=" * 72)
+    for q, want in [("第三教学楼在哪", False),
+                    ("图书馆（图文信息中心）在哪", False),
+                    ("哪里有开水", False),
+                    ("取快递在哪", False),
+                    ("下课去哪吃饭", True),
+                    ("学校有哪些食堂", True)]:
+        ctx = campus.space_context(q)
+        has = "本部食堂全览" in ctx
+        good = (has == want)
+        mark = "✅" if good else "❌"
+        if good:
+            ok += 1
+        else:
+            fail += 1
+            fails.append(f"[F2] 「{q}」期望含食堂全览={want}，实际={has}")
+        print(f"  {mark} 「{q}」 含食堂全览={has}（期望 {want}）｜注入 {len(ctx)} 字符")
+    print()
+
     print()
     print("=" * 72)
     print("G 组 · 路网寻路（OSM 派生·任意两点）")
@@ -395,6 +421,32 @@ def main():
             fails.append(f"open_now({name}, {at}) 期望 open={exp}，实际 {got}")
         tag = {True: "开放", False: "不开放", None: "未知(不猜)"}.get(got, "?")
         print(f"  {'✅' if good else '❌'} {name} @ {at[11:]} → {tag} ｜ {st.get('reason', '')}")
+
+    # I2 · 学期 / 假期双轨（2026-09-19）—— 反向验证落点：
+    #   把 campus.open_now 的 track 参数忽略掉（恒读 p["hours"]），下面第 1 条必须变红。
+    print("=" * 72)
+    print("I2 组 · 学期 / 假期双轨（同一地点两个 track 必须能给出不同答案）")
+    print("=" * 72)
+    _bath = campus.find_poi("公共浴室（南校区）")
+    _vac = campus.open_now(_bath, at="2026-01-20 14:00", track="vacation")
+    _trm = campus.open_now(_bath, at="2026-01-20 14:00", track="term")
+    _plain = campus.open_now(campus.find_poi("1100图书馆"), at="2026-01-20 14:00", track="vacation")
+    _cases = [
+        ("334 公共浴室 14:00 假期开放、学期未开（真差异，不是回落）",
+         _vac.get("open") is True and _trm.get("open") is False,
+         f"vacation={_vac.get('open')} term={_trm.get('open')}"),
+        ("无假期数据时返回 None（**不回落**学期值）",
+         _plain.get("open") is None and "未收录" in (_plain.get("reason") or ""),
+         f"open={_plain.get('open')}｜{_plain.get('reason')}"),
+        ("默认 track='term'，既有调用方零行为变化",
+         campus.open_now(_bath, at="2026-01-20 14:00").get("open") is False, ""),
+    ]
+    for _label, _good, _detail in _cases:
+        ok, fail = (ok + 1, fail) if _good else (ok, fail + 1)
+        if not _good:
+            fails.append(f"[I2] {_label}（{_detail}）")
+        print(f"  {'✅' if _good else '❌'} {_label}" + (f" ｜ {_detail}" if _detail else ""))
+    print()
 
     print()
     print("=" * 72)
@@ -548,6 +600,16 @@ def main():
     # 3) 排程口径不变：本部 ↔ 1100 的 route() 仍为 None（不插转场分钟）
     _check_j("route 跨组仍为 None（第一教学楼 → 申一教）",
              campus.route("第一教学楼", "申一教") is None)
+
+    # 3b) 2026-09-19：跨组问路要有**兜底话术** —— 此前 route() 返回 None 就一句话都不给，
+    #     用户拿到的是沉默。反向验证：把 campus.py 那段 route_cross_group 回退删掉 → 本条必红。
+    _ctx_x = campus.space_context("从第三教学楼到申一教怎么走")
+    _check_j("space_context 跨组有兜底话术（含『沿军工路』+「估算」标记）",
+             ("沿军工路" in _ctx_x) and ("估算" in _ctx_x),
+             f"注入 {len(_ctx_x)} 字符")
+    # 3c) 校内问路不得出现跨区话术（否则兜底会污染正常路径）
+    _ctx_i = campus.space_context("从三教到五食堂怎么走")
+    _check_j("space_context 校内问路不出现跨区话术", "沿军工路" not in _ctx_i)
 
     # 4) 但路网确实连通：跨组步行参考 ≈ 沿军工路 1.2~2.6 km
     for a, b in [("第一教学楼", "申一教"), ("516号校门", "1100图书馆")]:

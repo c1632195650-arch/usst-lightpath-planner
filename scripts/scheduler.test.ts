@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   activeInWeek, buildWeekPlan, campusOfName, describeDay, effectiveCourses, effectiveSlots, slotsOn,
 } from '../src/lib/planner/schedule.ts';
-import { campusOfPlace } from '../src/lib/planner/places.ts';
+import { campusFromLabel, campusOfPlace } from '../src/lib/planner/places.ts';
 import { customTemplate, DEFAULT_TEMPLATES, openAt } from '../src/lib/planner/templates.ts';
 import { toMinutes } from '../src/constants/time.ts';
 
@@ -362,7 +362,10 @@ test('campusOfPlace 用显式地点表判校区，覆盖关键字认不出的 PO
   assert.equal(campusOfPlace('第三教学楼'), 'JG516');
   assert.equal(campusOfPlace('图书馆（图文信息中心）'), 'JG516');
   assert.equal(campusOfPlace('第二学生公寓'), 'JG516');
-  assert.equal(campusOfPlace('第四食堂'), 'JG334');
+  // ⚠️ 2026-09-19 订正：第四食堂在 **1100 基础学院**（与 1100图书馆同栋：1 楼食堂 / 2 楼图书馆），
+  //    原期望 'JG334' 是错的 —— 而 templates.ts 的 meal-4 当时也标着 '南校'，
+  //    两处一起错、各自都很绿。证据：test_campus.py S 组「第四食堂 校区 = 1100（原误标南校）」。
+  assert.equal(campusOfPlace('第四食堂'), 'JG1100');
   assert.equal(campusOfPlace('思餐厅'), 'JG334');
   assert.equal(campusOfPlace('某个不存在的地方'), null);
 
@@ -429,6 +432,25 @@ test('模块库只列真实存在的校园地点，且带营业时段', () => {
   // 未核实的要如实标出来
   const 南校 = meals.filter((t) => t.campus === '南校');
   assert.ok(南校.every((t) => t.verified === false), '南校饭点是从「常规饭点」推断的，必须标未核实');
+
+  // 🔴 通用漂移守卫（2026-09-19）：模板里的 campus 必须与**显式地点表**给出的校区一致。
+  //    第四食堂那处静默错标（模板说南校 / 显式表说 1100）就是被这条抓的形态 ——
+  //    加这一条，同类漂移一次抓干净，不用再靠人肉比对。
+  const unresolvable: string[] = [];
+  for (const t of meals) {
+    const byTable = campusOfPlace(t.place!);
+    if (byTable === null) { unresolvable.push(t.place!); continue; }
+    assert.equal(
+      campusFromLabel(t.campus),
+      byTable,
+      `模板『${t.name}』的 campus='${t.campus}' 与显式地点表给的 ${byTable} 不一致`,
+    );
+  }
+  // 认不出就如实报出来，不静默跳过（否则这条守卫会慢慢变空）
+  assert.deepEqual(
+    unresolvable, [],
+    `这些食堂模块的 place 在显式地点表里认不出，本守卫对它们形同虚设：${unresolvable.join('、')}`,
+  );
 });
 
 test('openAt 会按营业时段拒绝「关门的时刻」', () => {

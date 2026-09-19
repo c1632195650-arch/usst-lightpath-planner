@@ -183,3 +183,24 @@ npm run probe:fact                           # 等价于第一条
 存在性问法不在意图关键词表 → 图谱没注入。修复 = `campus.py` 的品牌反向索引
 （`_brand_index`，实体命中优先、关键词兜底）+ `space_context` 的存在性事实块。
 
+### 空间数据质量怎么测（2026-09-19 起）
+
+四元素（位置精度 / 元质量 / 逻辑一致性 / 时间质量）+ 产品口径，各有**一条命令**：
+
+```bash
+npm run audit:quality              # ISO 19157 合规报告（含 --gate 趋势比较）
+npm run audit:quality -- --gate    # CI 门禁：① 只拦「新增 ❌」② 趋势不许回归
+npm run audit:quality:reverse      # 反向验证 11/11（把实现改坏，报告必须跟着变）
+npm run audit:quality:baseline     # 重写趋势基线（**放宽必须在提交信息里写明理由**）
+npm run vocab:check                # 校区词表 SSOT 自洽（A/B/C）
+npm run audit:readiness            # 产品口径：可答率 / 覆盖矩阵 / 场景模拟（不经 LLM）
+npm run audit:overlap              # GPS 轨迹 OA 工具自检（含「退化路线过多」守卫）
+npm run test:campus                # 空间层断言（含双轨 / 按需注入 / 跨组兜底守卫）
+```
+
+⚠️ **门禁只拦新增 + 趋势**，两条都要看：一个「永远红」的门禁等于没有门禁
+（所以已知不合格项登记在 `ACCEPTED_BAD`，趋势只门禁「只会变好或不变」的指标）。
+⚠️ **任何新断言都必须反向验证**：关掉实现 → 必须变红。本项目已抓到**多次**
+「跑得很好看但是假的」——最近一次是 `q_temporal()` 读两个**根本不存在的字段**
+（`date` / `anchor`），导致时间质量 2 项永久 ✅ 却不含任何检查。
+

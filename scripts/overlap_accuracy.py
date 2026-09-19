@@ -271,6 +271,7 @@ def _self_test(buffer_m, noise_m, seed=20260918):
           f"（判据 = 达到上限的 90%，即 ≥ {ceiling*0.9*100:.0f}%）")
     print("=" * 78)
     ok = 0
+    n_degenerate = 0
     for a, b in cases:
         r = campus.route(a, b, with_path=True)
         if not r:
@@ -294,11 +295,21 @@ def _self_test(buffer_m, noise_m, seed=20260918):
         # 退化路线（同栋楼）不计入成败；其余按「噪声上限的 90%」判
         good = m.get("degenerate") or m["oa"] >= ceiling * 0.9
         ok += 1 if good else 0
+        n_degenerate += 1 if m.get("degenerate") else 0
         print(f"  {'✅' if good else '❌'} {a} → {b}：OA {m['oa']*100:.0f}%"
               f" 覆盖 {m['coverage']*100:.0f}%  P90 {m['p90_dev_m']} m"
               f" 长度比 {m['length_ratio']} ｜ {verdict}")
     print()
-    print(f"自检结果：{ok}/{len(cases)} 通过（工具本身可用性）")
+    print(f"自检结果：{ok}/{len(cases)} 通过（工具本身可用性）｜退化路线 {n_degenerate}/{len(cases)}")
+
+    # 🔴 逃逸口守卫（2026-09-19）：`good = degenerate or ...` 意味着**退化路线无条件算通过**。
+    #    如果 6 条案例全退化成同栋楼，自检仍会 6/6 全绿 —— 而那恰恰是「工具失去分辨力」的样子
+    #    （本项目已抓到多次「自造假覆盖」）。所以给退化条数加个上限。
+    #    当前恰好 1 条（第四食堂 → 1100图书馆），是**刻意设计**的同栋退化案例。
+    if n_degenerate > 1:
+        print(f"🔴 退化路线过多（{n_degenerate}/{len(cases)}）：自检已失去分辨力 —— "
+              f"`good = degenerate or ...` 把它们全判过了。请检查案例或 1100/南校的定位。")
+        return 1
     if not ok:
         print("🔴 连「自己的路线加噪声」都认不出来 —— 说明评估函数写错了，别用它去评真实数据")
     return 0 if ok == len(cases) else 1

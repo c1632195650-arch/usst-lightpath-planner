@@ -16,6 +16,8 @@
 """
 import os, json, re as _re
 
+import campus_vocab as _vocab   # 校区词表唯一事实源（data/campus_vocab.json）
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 MAP_PATH = os.path.join(_HERE, "..", "data", "campus_map.json")
 
@@ -153,14 +155,11 @@ def nearby(place_name, max_min=15):
 # 分区口径：北校区 = 军工路 516 号（主校区）；南校区 = 军工路 334 号；
 #           两者合称「本部」，由海安路人行天桥连接。
 #           1100（基础学院）/ 580 / 复兴路 为独立校区，不参与本部日常排程。
-_CAMPUS_CN = {
-    "北校": "军工路 516 号（北校区·主校区）",
-    "南校": "军工路 334 号（南校区）",
-    "1100": "军工路 1100 号（基础学院）",
-    "580": "军工路 580 号",
-    "复兴路": "复兴中路 1195 号（中英国际学院）",
-    "连接": "南北校区连接点",
-}
+# 码 → 中文全称。⚠️ 2026-09-19 起**不再在此维护副本** —— 唯一事实源是
+# `data/campus_vocab.json`（见该文件 `_meta`）。本表 / `campus_network._WALK_GROUP` /
+# `audit_spatial_quality.SCOPE_IN` 三处 Python 副本已收敛到同一份，
+# 由 `campus_vocab.check_consistency()` 的 A/B/C 三条断言守住（可被 `--selftest` 反向验证）。
+_CAMPUS_CN = _vocab.CN
 # 仅北校↔南校是真实高频跨区场景；其余组合属「不在一个教学区」。
 # 2026-09-11：分钟数改为**OSM 路网实算**（经海安路人行天桥，见 campus_network.route）。
 #   实测区间：天桥两侧临近点（二公寓 ↔ 五公寓）约 6 分钟；
@@ -531,7 +530,7 @@ def _label_days(label):
     return days or None
 
 
-def open_now(p, at=None):
+def open_now(p, at=None, track="term"):
     """判断某地点此刻是否开放。返回 dict；**无法判断时如实返回 open=None**。
 
     只解析得出 `H:MM-H:MM` 的时段；『常规饭点』『长时（以现场为准）』这类
@@ -539,20 +538,36 @@ def open_now(p, at=None):
     `closed` 里含当天星期几时直接判为关闭（如第一食堂『周六休息』）。
     `hours` 的**标签**里若带星期（『周日至周五』『周六』『双休日及节假日』），
     只在当天命中时才计入 —— 见 `_label_days`。
+
+    `track` —— **学期 / 假期双轨**（2026-09-19 新增）：
+      · `"term"`（默认）读 `hours` / `closed`；**默认值保证 4 个既有调用方零行为变化**。
+      · `"vacation"` 读 `hours_vacation` / `closed_vacation`；**没录就返回 open=None**
+        （`reason="假期时间未收录，不做判断"`），**绝不回落**到学期值 ——
+        回落会把「寒假 13:00-23:00」这种真实差异抹平成学期口径的假答案。
+    为什么需要双轨：同一个地点学期值与假期值**确实不同**，不是可忽略的复杂度。
+      实测（data/usst_articles.db）：334 号公共浴室学期 15:00-23:00、假期 13:00-23:00；
+      南校教育超市学期 8:30-22:00、寒假 8:30-20:30。旧结构把这俩**合并成了一个值**。
     """
-    hours = p.get("hours") or {}
+    if track == "vacation" and not p.get("hours_vacation"):
+        _n = at if isinstance(at, _dt.datetime) else _dt.datetime.now()
+        return {"open": None, "period": None, "until": None, "next": None,
+                "track": "vacation",
+                "reason": "假期时间未收录，不做判断",
+                "checked_at": _n.strftime("%H:%M")}
+    hours = (p.get("hours_vacation") if track == "vacation" else p.get("hours")) or {}
     now = at or _dt.datetime.now()
     if at is not None and isinstance(at, str):
         try:
             now = _dt.datetime.strptime(at[:16], "%Y-%m-%d %H:%M")
         except ValueError:
-            return {"open": None, "reason": "时间格式无法解析", "period": None}
+            return {"open": None, "reason": "时间格式无法解析", "period": None,
+                    "track": track}
     cur = now.hour * 60 + now.minute
     today = _WEEKDAY_CN[now.weekday()]
 
-    closed = p.get("closed") or ""
+    closed = (p.get("closed_vacation") if track == "vacation" else p.get("closed")) or ""
     if closed and today in closed:
-        return {"open": False, "period": None, "until": None,
+        return {"open": False, "period": None, "until": None, "track": track,
                 "reason": f"{today}休息", "checked_at": now.strftime("%H:%M")}
 
     best = None
@@ -566,16 +581,16 @@ def open_now(p, at=None):
             if e <= s:      # 跨零点（如 22:00-01:00）
                 e += 24 * 60
             if s <= cur <= e:
-                return {"open": True, "period": label,
+                return {"open": True, "period": label, "track": track,
                         "until": f"{h2:02d}:{m2:02d}",
                         "reason": f"处于「{label}」时段", "checked_at": now.strftime("%H:%M")}
             if best is None or s < best[0]:
                 best = (s, label, f"{h1:02d}:{m1:02d}")
     if best is None:
-        return {"open": None, "period": None, "until": None,
+        return {"open": None, "period": None, "until": None, "track": track,
                 "reason": "开放时间未收录或表述不精确，不做判断",
                 "checked_at": now.strftime("%H:%M")}
-    return {"open": False, "period": None, "next": best[2],
+    return {"open": False, "period": None, "next": best[2], "track": track,
             "reason": f"下一个时段「{best[1]}」{best[2]} 开始",
             "checked_at": now.strftime("%H:%M")}
 
@@ -800,6 +815,30 @@ def match_entities(text):
     return hits
 
 
+# 吃意图闸门（2026-09-19）：食堂全览原先**无条件**附加，实测占注入体量 73%
+# （「第三教学楼在哪」共注入 2242 字符，其中食堂全览 1643）。问图书馆、问营业时间都会塞一份，
+# 后果有两层：白烧 token + 上下文里大量无关食堂信息会干扰模型判断。
+# 刻意**不放**「喝」这类过宽的词 ——「哪有开水」不是吃，实测正是靠它区分开的。
+_FOOD_HINTS = ("吃", "饭", "食堂", "餐厅", "饿", "好吃", "外卖", "早餐", "午餐",
+               "晚餐", "夜宵", "聚餐", "改善伙食", "烘焙", "咖啡", "水果")
+
+
+def _food_intent(text):
+    """问题是否真的与「吃」相关 —— 决定要不要附食堂全览（按需注入闸门）。
+
+    两道判据任一命中即可：① 口语词直击；② 检索到的 top 地点 type 落在餐饮类
+    （兜住「三教下课去哪吃」这类不含饭点词、但实体指向食堂的问法）。
+    """
+    if not text:
+        return False
+    if any(h in text for h in _FOOD_HINTS):
+        return True
+    for p, _s in rank_pois(text, limit=2, min_score=_SCORE_TYPE_EQ):
+        if p.get("type") in ("食堂", "餐厅", "烘焙/饮品"):
+            return True
+    return False
+
+
 def space_context(text):
     """
     生成给 LLM 的空间上下文。
@@ -881,19 +920,31 @@ def space_context(text):
                 blocks.append(seg)
 
     if not resolved:
-        blocks.append(
-            "\n（注意：用户提到的地点我还没有精确到分钟的步行数据，"
-            "**不要编造距离**。下面给出本部食堂全览，请结合就餐时间/口味帮 TA 选，"
-            "并可以自然地说一句『具体几步路你自己走两次就熟啦』。）"
-        )
-        blocks.append(canteen_overview())
-    else:
+        # 诚实兜底分支。⚠️ 2026-09-19：这里原先**无条件**附食堂全览 —— 于是「哪里有开水」
+        # 「学校有健身房吗」「取快递在哪」这类跟吃无关的问题也会被塞一份食堂清单。
+        # 现在只在问题真的与吃相关时给；否则给一句中性的「没收录」，绝不塞噪音。
+        if _food_intent(text):
+            blocks.append(
+                "\n（注意：用户提到的地点我还没有精确到分钟的步行数据，"
+                "**不要编造距离**。下面给出本部食堂全览，请结合就餐时间/口味帮 TA 选，"
+                "并可以自然地说一句『具体几步路你自己走两次就熟啦』。）"
+            )
+            blocks.append(canteen_overview())
+        else:
+            blocks.append(
+                "\n（注意：用户提到的地点我**没有收录**，或没有精确到分钟的步行数据。"
+                "**不要编造距离，也不要编造不存在的地点**；如实说明不确定，"
+                "并请 TA 说得更具体一些（问的是哪栋楼、哪个校区）。）"
+            )
+    elif _food_intent(text):
+        # 按需注入（2026-09-19）：只有问题真的与「吃」相关才带食堂全览。
         blocks.append("\n[本部食堂全览（备查）]")
         blocks.append(canteen_overview())
 
     # 用户同时提到两个地点 → 直接算两者之间的步行路径（并提示是否走校外更快）
     if len(hits) >= 2:
-        c = compare_paths(hits[0]["name"], hits[1]["name"])
+        _a, _b = hits[0]["name"], hits[1]["name"]
+        c = compare_paths(_a, _b)
         if c and c["fastest"]:
             f = c["fastest"]
             warn = "" if f["reliable"] else "（含估算成分，仅供参考）"
@@ -906,6 +957,27 @@ def space_context(text):
                     f"  ⚠️ 这条**走校外（沿军工路边）更快**：比只在校园里走省 "
                     f"{c['diff_minutes']:.0f} 分钟（仅校内需 {c['campus']['minutes']:.0f} 分钟）。"
                     f"请如实告诉用户两种走法，让 TA 自己选。"
+                )
+        else:
+            # 跨可步行分组（本部 ↔ 1100 基础学院）时 route() **按设计**返回 None，
+            # 于是「从三教到申一教怎么走」原本一句话都不给 —— 用户拿到的是沉默。
+            # 这里补一条带「估算」标记的兜底（2026-09-19）。
+            # ⚠️ 只用于**回答问路**；排程转场分钟仍走 route()/cross_campus 口径，
+            #    不因为这段兜底而放宽「就近不跨组」。
+            _net = network()
+            cr = _net.route_cross_group(_a, _b) if _net else None
+            if cr:
+                blocks.append(
+                    f"\n[跨教学区] {_a} 与 {_b} 分属不同教学区（{campus_cn(campus_of(_a))} ↔ "
+                    f"{campus_cn(campus_of(_b))}），不参与校内排程。若确实要走，"
+                    f"可沿军工路步行，约 {cr['meters']:.0f} 米 / "
+                    f"{max(1, round(cr['minutes']))} 分钟（**估算**，需出校门沿军工路；"
+                    f"请标明这是估算而非校内步行时长）。"
+                )
+            else:
+                blocks.append(
+                    f"\n[跨教学区] {_a} 与 {_b} 之间没有可用的步行路径数据，"
+                    f"**不要编造距离**，如实说明无法估算。"
                 )
 
     oc = m.get("off_campus", [])

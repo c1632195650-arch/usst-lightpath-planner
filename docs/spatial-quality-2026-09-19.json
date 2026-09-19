@@ -19,8 +19,8 @@
   "北校": "本部北区（军工路 516）",
   "南校": "本部南区（军工路 334）",
   "580": "军工路 580 号片区（校门 + 校门口业态）",
-  "1100": "1100 基础学院（远庆路），独立分组",
   "连接": "跨校区连接体（海安路人行天桥）—— 不属于任何单一校区，刻意保留",
+  "1100": "1100 基础学院（远庆路），独立分组",
   "复兴路": "复兴中路校区，独立分组（当前图谱 0 条，见完整性）"
  },
  "sections": [
@@ -41,7 +41,7 @@
      "value": "0（无）",
      "threshold": "0",
      "verdict": "✅",
-     "note": "范围内分组 = 北校、南校、580、1100、连接；6 条校外餐饮另计在 off_campus"
+     "note": "范围内分组 = 北校、南校、580、连接、1100；6 条校外餐饮另计在 off_campus"
     },
     {
      "sub": "范围声明 scope（不是缺口）",
@@ -49,12 +49,12 @@
      "value": "复兴路",
      "threshold": "—（声明即已管理）",
      "verdict": "⚪",
-     "note": "复兴路：明确不在本次范围（CY 2026-09-19 定）：不建图、不检核、不计缺口"
+     "note": "复兴路：不建图、不检核、不计缺口（CY 2026-09-19 定）"
     },
     {
      "sub": "遗漏 omission（未决登记）",
      "measure": "data/campus_map.json → needs_check 登记在册项",
-     "value": 11,
+     "value": 17,
      "threshold": "—（登记即在管理）",
      "verdict": "⚪",
      "note": "这是**活的开销账**：每条都还没定案，且会随时间过期（内容见 detail）"
@@ -105,9 +105,15 @@
       "七公寓的精确坐标待确认（CY 描述在 580 号校门/先进制造大楼旁；OSM 该区域只有无名 apartments，无匹配建筑）—— 现暂锚定 580 号校门，属近似值",
       "「工程实训中心」（金工实习上课地点）= 图谱「实训中心」？ 待核实（现按同一栋处理）",
       "「公共实验楼」的准确位置与楼号待确认（物理实验 / 模电实验上课地点）",
-      "「第七食堂」：官方《一卡通服务网点》列有该地点，但图谱无对应条目，且 OSM 155 个具名建筑里**没有**同名建筑 → 拿不到实锚。按「不猜」纪律**不建条目**，待实地确认位置/所属校区后补入。"
+      "「第七食堂」：官方《一卡通服务网点》列有该地点，但图谱无对应条目，且 OSM 155 个具名建筑里**没有**同名建筑 → 拿不到实锚。按「不猜」纪律**不建条目**，待实地确认位置/所属校区后补入。",
+      "【hours 缺口】第一浴室：616 公共浴室在**十二宿舍西北角**，《公共洗浴》运营表按宿舍楼逐条列（第五宿舍/七公寓/4公寓1号楼…）但**没有十二宿舍那一行** ⇒ 无法映射，待实地问询",
+      "【hours 缺口】菜鸟驿站：语料内未见营业时间；假期安排里的「快递中心」是否即菜鸟驿站**未定案** ⇒ 不推",
+      "【hours 缺口】1100教育超市：只有元旦假期口径（9:00-20:00），**学期口径无来源** ⇒ 学期值留空",
+      "【hours 缺口】南校区操场：《体育场馆全指南》只点名「北校区田径场」；南校场地未逐条列出 ⇒ 待核",
+      "【hours 缺口】室内体育馆：同上（「室内免费场馆 9:00-21:00」未标校区）⇒ 待核，不按北校口径照搬",
+      "【hours 缺口】教学楼：教学楼日常开放时间**语料内无硬来源**（只有假期关闭通知）⇒ 不推；这是 hours 冲 40 的主要缺口"
      ],
-     "n_needs_check": 11,
+     "n_needs_check": 17,
      "osm_named_buildings": 155,
      "osm_unmatched_in_graph": [
       "(原第四食堂)",
@@ -183,11 +189,11 @@
     },
     {
      "sub": "概念一致性 conceptual（与应用模式）",
-     "measure": "campus 值域是否与后端声明的口径一致",
-     "value": "6 种，源码声明一致",
-     "threshold": "—（一致性受检）",
-     "verdict": "⚪",
-     "note": "后端声明口径在 `server/campus.py` 的 `campus_of()` docstring（'北校'|'南校'|'1100'|'580'|'复兴路'|'连接'|None）与 `campus_network.py::_WALK_GROUP`（580/连接→本部）。⚠️ 前端另有一套 CampusId 词表（JG516/JG334/JG1100/FUXING/YINGKOU），走 `campusOfName()` 关键字推断而非读本字段 —— **两套词表无机器校验**，同属「580 是否与北校同组」这类语义靠人工保持同步，是漂移风险点"
+     "measure": "校区词表 SSOT 三条断言（A 映射指向合法 CampusId｜B 前端 CampusId 全覆盖｜C 分组唯一实现点）",
+     "value": "通过（后端 6 种码 ｜ 前端 6 个 CampusId）",
+     "threshold": "0 条不一致",
+     "verdict": "✅",
+     "note": "唯一事实源 = `data/campus_vocab.json`。Python 运行时导入；TS 侧保持硬编码（`places.ts:17` 明令不 import JSON）+ `tests/campus-vocab.test.ts` 逐条比对。此前三处副本零校验，活样本：`scheduler.test.ts` 断言 `第四食堂=JG334` 而数据是 `1100`，**两套测试同时是绿的**。｜✅ A/B/C 全过"
     },
     {
      "sub": "概念一致性 conceptual",
@@ -260,8 +266,8 @@
      "北校": "本部北区（军工路 516）",
      "南校": "本部南区（军工路 334）",
      "580": "军工路 580 号片区（校门 + 校门口业态）",
-     "1100": "1100 基础学院（远庆路），独立分组",
      "连接": "跨校区连接体（海安路人行天桥）—— 不属于任何单一校区，刻意保留",
+     "1100": "1100 基础学院（远庆路），独立分组",
      "复兴路": "复兴中路校区，独立分组（当前图谱 0 条，见完整性）"
     },
     "campus_distribution": {
@@ -301,6 +307,7 @@
      "value": "18.1 m（RMSE_r 10.5 m, n=5）",
      "threshold": "≤ 20 m",
      "verdict": "⚪",
+     "indicative": true,
      "note": "n=5 < 20，统计上不足以作为正式检定值；检核源自身精度 10 m 未达目标 20 m 的 1/3"
     },
     {
@@ -317,6 +324,7 @@
      "value": "20.0 m（RMSE_r 11.6 m, n=9）（peer 换算：差 16.4 / √2 = 11.6）",
      "threshold": "≤ 20 m",
      "verdict": "⚪",
+     "indicative": true,
      "note": "n=9 < 20，统计上不足以作为正式检定值；检核源自身精度 15 m 未达目标 20 m 的 1/3"
     },
     {
@@ -333,6 +341,7 @@
      "value": "115.5 m（RMSE_r 66.7 m, n=4）（peer 换算：差 94.4 / √2 = 66.7）",
      "threshold": "≤ 20 m",
      "verdict": "⚪",
+     "indicative": true,
      "note": "n=4 < 20，统计上不足以作为正式检定值；检核源自身精度 15 m 未达目标 20 m 的 1/3"
     },
     {
@@ -346,25 +355,26 @@
     {
      "sub": "相对（内部）精度 relative internal",
      "measure": "实锚占比（osm/keypoint 直接定位，非派生）",
-     "value": "116/145 = 80.0%",
+     "value": "117/145 = 80.7%",
      "threshold": "≥ 79%",
      "verdict": "✅",
      "note": "派生锚（near_landmark/zone/walk_minutes/approx）的误差会累积，且**未经实测**"
     },
     {
      "sub": "相对（内部）精度 relative internal",
-     "measure": "锚点塌缩组（同坐标不同地点）中「疑似缺陷」数",
-     "value": 8,
-     "threshold": "0（长期目标）｜当前容忍 8",
+     "measure": "锚点塌缩组（同坐标不同地点）中**未定性**组数",
+     "value": "0/7（已定性 7）",
+     "threshold": "0",
      "verdict": "✅",
-     "note": "合法同址（同楼 1 层食堂/2 层图书馆）不算缺陷；派生锚抄邻居坐标导致的 0 m 才是"
+     "note": "每组必须带 nature（合法同址 / 抄邻居坐标 / zone 质心 / 路段派生）+ 依据 + 处置，见 `ANCHOR_COLLAPSE_VERDICTS`。🔴 2026-09-19 改法：此前只报「可疑 8 组」**不做判定**，读者分不清「同楼 1 层食堂/2 层图书馆」与「真的抄错了坐标」"
     },
     {
      "sub": "绝对（外部）精度 —— 未覆盖部分",
      "measure": "派生锚（未实测）条目数",
-     "value": 29,
+     "value": 28,
      "threshold": "0（理想）",
      "verdict": "⚪",
+     "indicative": true,
      "note": "这部分**没有检核点证据**，其精度只能靠 GPS 轨迹外业补齐（见 docs/gps-trace-protocol.md）"
     }
    ],
@@ -415,8 +425,8 @@
      "caveat": "🔴 这一层**就是弱锚的代价**，也正是 P1-3「弱锚提锚」要打的靶子。它不该与实锚层混在一起算 RMSE —— 混算会把实锚的真实精度淹没。"
     },
     "anchor_sources": {
-     "osm": 111,
-     "walk_minutes": 6,
+     "osm": 112,
+     "walk_minutes": 5,
      "approx": 2,
      "near_landmark": 12,
      "keypoint": 5,
@@ -424,8 +434,114 @@
      "zone": 8
     },
     "collapse": {
-     "groups": 17,
-     "suspect_groups": 8
+     "groups": 18,
+     "suspect_groups": 7,
+     "suspect_members": [
+      [
+       "上理烘焙坊",
+       "咪昵餐厅",
+       "第一食堂"
+      ],
+      [
+       "第一教学楼",
+       "第二学生公寓",
+       "老图书馆",
+       "藏书阁宿舍"
+      ],
+      [
+       "580号校门",
+       "七公寓",
+       "民族餐厅（580号）"
+      ],
+      [
+       "动力二馆",
+       "菜鸟驿站"
+      ],
+      [
+       "学生活动中心",
+       "思晏堂"
+      ],
+      [
+       "傅科打印",
+       "毛主席像"
+      ],
+      [
+       "1906咖啡厅",
+       "心理健康中心",
+       "第五教学楼"
+      ]
+     ],
+     "unclassified": [],
+     "verdicts": [
+      {
+       "members": [
+        "动力二馆",
+        "菜鸟驿站"
+       ],
+       "nature": "copied-coords",
+       "evidence": "菜鸟驿站的 near_landmark 派生锚抄了动力二馆坐标（两者不是同一栋楼）",
+       "disposition": "外业第 6 组 OD（菜鸟驿站 → 动力二馆）实测定案；落差大即证实"
+      },
+      {
+       "members": [
+        "580号校门",
+        "七公寓",
+        "民族餐厅（580号）"
+       ],
+       "nature": "copied-coords",
+       "evidence": "七公寓的 approx 锚坐标与 580 号校门**完全相同**（approx 复用所致）；民族餐厅为 zone 质心，落进同一格",
+       "disposition": "已登记 ACCEPTED_BAD ＋ 外业第 1 组（七公寓 → 三教）；民族餐厅另有实测值，不单独误导"
+      },
+      {
+       "members": [
+        "1906咖啡厅",
+        "心理健康中心",
+        "第五教学楼"
+       ],
+       "nature": "zone-centroid",
+       "evidence": "三处都是 zone 质心锚 —— zone 表达的是「在这一片」而非「这一点」，同片区多点落到同一格属结构必然",
+       "disposition": "不修坐标（zone 锚的语义就是模糊的）；对精度的影响走「实锚率」与「派生锚计数」两条既有指标"
+      },
+      {
+       "members": [
+        "第一教学楼",
+        "老图书馆",
+        "第二学生公寓",
+        "藏书阁宿舍"
+       ],
+       "nature": "copied-coords",
+       "evidence": "老图书馆 / 藏书阁宿舍的 walk_minutes·near_landmark 派生锚抄了第一教学楼坐标；第二学生公寓另有 _campus_ok 边界误判疑点",
+       "disposition": "外业第 2、5 组（含跨校天桥与老图书馆 → 二公寓）定案；第二学生公寓见 CAMPUS_MISMATCH_HISTORY 待定项"
+      },
+      {
+       "members": [
+        "傅科打印",
+        "毛主席像"
+       ],
+       "nature": "zone-centroid",
+       "evidence": "两个 zone 质心锚重合",
+       "disposition": "外业第 7 组（傅科打印 → 毛主席像）—— 实测步行 > 5 min 即证两个质心锚都错"
+      },
+      {
+       "members": [
+        "学生活动中心",
+        "思晏堂"
+       ],
+       "nature": "derived-road",
+       "evidence": "思晏堂由 roads 路段派生，落在学生活动中心同一格",
+       "disposition": "roads 派生锚精度本来只到「路段级」；不修坐标，走实锚率指标"
+      },
+      {
+       "members": [
+        "第一食堂",
+        "上理烘焙坊",
+        "咪昵餐厅"
+       ],
+       "nature": "legit-co-located",
+       "evidence": "上理烘焙坊**就在第一食堂楼内**（两者均 osm 实锚，同址是正确的）；咪昵餐厅为 walk_minutes 派生锚落进同格",
+       "disposition": "无需处置 —— 合法同址。本条存在的意义是**证明判据不是「同坐标就算缺陷」**"
+      }
+     ]
     }
    }
   },
@@ -655,19 +771,19 @@
    "items": [
     {
      "sub": "时间有效性 temporal validity",
-     "measure": "锚点日期超龄条目数",
+     "measure": "证据日期超龄条目数（台帐 = 全部真实日期源）",
      "value": 0,
      "threshold": "≤ 0（> 365 天算超龄）",
      "verdict": "✅",
-     "note": "见 detail.stale"
+     "note": "台帐 9 条：key_points._meta / approx / quality_checkpoints._meta / campus_map._meta / hours_src_date。🔴 2026-09-19 自纠：原实现读 campus_map 的 `date`/`anchor` 字段，**那两个字段根本不存在**（145 条实测 0 个）→ 恒 0、永久 ✅，是假绿"
     },
     {
      "sub": "时间有效性 temporal validity",
-     "measure": "应带日期却缺失的条目数",
+     "measure": "应带日期却缺失的证据条目数",
      "value": 0,
      "threshold": "0",
      "verdict": "✅",
-     "note": "approx / near_landmark 锚必须带 date"
+     "note": "approx 锚必须带 date；新增 hours 必须带 hours_src_date"
     },
     {
      "sub": "证据完备度 evidence completeness",
@@ -785,13 +901,38 @@
   "representativity": "覆盖全校区（校门 + 交叉校验点）；但 47/145 条无实地/三方证据（verified 占比 67.6%）",
   "homogeneity": "检核点来自 2 个互相独立的来源（腾讯 POI / 高德系），但空间上集中在校园主干与校门；**弱锚片区（1100、580）与外业未覆盖区没有任何检核点**",
   "conclusion": "**位置精度目前只能给「指示性」结论，尚不构成正式检定值。**补齐路径：docs/gps-trace-protocol.md 的 5 人 × 10 条定向 OD 外业，使检核点 ≥ 20 且覆盖范围内的三个分组。",
-  "scope": "覆盖范围 = 北校、南校、580、1100、连接（军工路本部 + 1100 基础学院）；复兴路：明确不在本次范围（CY 2026-09-19 定）：不建图、不检核、不计缺口",
-  "gap": "1100 基础学院、580 片区、以及 29 条弱锚**没有任何检核点**。"
+  "scope": "覆盖范围 = 北校、南校、580、连接、1100（军工路本部 + 1100 基础学院）；复兴路：不建图、不检核、不计缺口（CY 2026-09-19 定）",
+  "gap": "1100 基础学院、580 片区、以及 29 条弱锚**没有任何检核点**。",
+  "confidence_level": 1,
+  "max_checkpoint_n": 9,
+  "n_checkpoint_sources": 3,
+  "verified_share": 0.6759,
+  "n_unverified": 47,
+  "hours_coverage": 0.1586,
+  "open_now_answerable": 18,
+  "strong_anchor_share": 0.8069,
+  "derived_anchor_count": 28,
+  "indicative_count": 4,
+  "scope_in": [
+   "北校",
+   "南校",
+   "580",
+   "连接",
+   "1100"
+  ],
+  "scope_out": {
+   "复兴路": "不建图、不检核、不计缺口（CY 2026-09-19 定）"
+  },
+  "gap_campuses_declared": [
+   "1100",
+   "580"
+  ]
  },
  "counts": {
-  "ok": 23,
+  "ok": 24,
   "warn": 1,
   "bad": 1,
-  "na": 12
+  "na": 11,
+  "indicative": 4
  }
 }
