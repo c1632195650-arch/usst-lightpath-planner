@@ -15,6 +15,7 @@
 不命中 → 返回 None，正常链路继续走，本模块不产生任何副作用。
 """
 import re
+import zlib
 
 import campus
 
@@ -40,6 +41,23 @@ _BLOCK = re.compile(
 _MAX_LEN = 30
 
 
+# ---- 语言模板库（2026-09-19《梨宝语言风格规范》：规则命中也拟人，但克制）----
+# 轮换种子 = crc32(问题+实体)：同问题恒定（确定性可测、回归可断言），不同问题自然错开。
+# 万能尾巴「还有想问的随时喊梨宝～」进变体池，不再每句必带（克制档=收尾即止）。
+_TAIL_POOL = [
+    "还有想问的随时喊梨宝～",
+    "要规划路线的话随时喊梨宝～",
+    "",   # 克制档
+]
+_OPEN_EXIST = ["有嗷宝子！", "有的宝子～", "有哦！"]
+_OPEN_WHERE = ["『{n}』在这儿", "{n}？位置给你指过去", "『{n}』在这里"]
+_OPEN_HOURS = ["『{n}』的时间梨宝给你摆出来", "{n}的档期记好", "『{n}』几点开？看这里"]
+
+
+def _pick(pool, seed_text):
+    return pool[zlib.crc32(seed_text.encode("utf-8")) % len(pool)]
+
+
 def _kind(q):
     """识别问法类型；hours 优先于 exist（"麦当劳几点开门"含"开"也含存在含义）。"""
     if _TRIG_HOURS.search(q):
@@ -51,12 +69,14 @@ def _kind(q):
     return None
 
 
-def _head(kind, name, brand):
+def _head(kind, name, brand, seed):
+    """开头句式按（问题+实体）稳定轮换——《梨宝语言风格规范》§四：同问题恒定，跨问题不同。"""
     if kind == "exist":
-        return f"有嗷宝子！{('『' + brand + '』就在' + name) if brand else ('咱上理有' + name)}"
+        core = f"『{brand}』就在{name}" if brand else f"咱上理有{name}"
+        return _pick(_OPEN_EXIST, seed) + core
     if kind == "where":
-        return f"『{name}』在这儿"
-    return f"『{name}』的时间梨宝给你摆出来"
+        return _pick(_OPEN_WHERE, seed).format(n=name)
+    return _pick(_OPEN_HOURS, seed).format(n=name)
 
 
 def _render(q, p, kind):
@@ -71,7 +91,8 @@ def _render(q, p, kind):
 
     loc = campus.campus_cn(p.get("campus"))
     zone = p.get("zone") or ""
-    lines = [_head(kind, name, brand) + " —— " + loc + (f"｜{zone}" if zone else "")]
+    seed = f"{q}|{name}"
+    lines = [_head(kind, name, brand, seed) + " —— " + loc + (f"｜{zone}" if zone else "")]
 
     if brand_ev:
         lines.append("· 图谱原文：" + brand_ev[:60])
@@ -96,7 +117,9 @@ def _render(q, p, kind):
     if nb:
         lines.append("· 周边：" + "、".join(f"步行 {mn} 分钟到 {tgt}" for tgt, mn, _ in nb))
 
-    lines.append("还有想问的随时喊梨宝～")
+    tail = _pick(_TAIL_POOL, seed + "|tail")
+    if tail:
+        lines.append(tail)
     return "\n".join(lines)
 
 

@@ -61,11 +61,16 @@ NEG = [
     ("三教附近有啥吃的", "无存在性/位置触发词"),
     ("我失恋了怎么办", "情感陪伴类"),
     ("宿舍晚上断电吗", "无限定实体（问题在「断电」而非「宿舍在哪」）"),
-    ("学校有没有瑞幸", "库里真没有 → 交由 agent 走诚实兜底"),
+    ("学校有没有星巴克", "库里真没有 → 交由 agent 走诚实兜底"),
     ("图书馆借书能借几本？能借多久？", "数值型提问，非三类问法"),
 ]
 for q, why in NEG:
     check(f"放行「{q}」", direct.try_direct(q) is None, why)
+
+# 2026-09-19 数据更新：瑞幸已入驻（思餐厅四楼，文证：后勤/学生会推文）→ 从放行反例转正为模板直答
+d_ru = direct.try_direct("学校有没有瑞幸")
+check("「学校有没有瑞幸」转正为模板直答（数据更新）",
+      bool(d_ru) and "思餐厅" in d_ru["answer"], str(d_ru)[:70] if d_ru else "None")
 
 print("\n== 边界 · 长句不拦（多跳问题交给 agent）==")
 long_q = "我上午在三教上课中午想去二食堂吃饭但下午还要赶去南校区开会，学校有没有第二食堂来着"
@@ -82,9 +87,9 @@ check("无上下文时同一追问不命中（不得凭空猜实体）",
 
 # ---- 2026-09-18 第二例（评测抓到，且是本轮改动自己引入的）：上下文劫持 ----
 print("\n== 上下文劫持守卫（跨轮实体不得顶掉当前问题）==")
-HISTORY = "用户：学校有没有瑞幸\n梨宝：咱上理咖啡只有 1906咖啡厅（军工路516号北校区西北角）"
-check("「学校有没有瑞幸」不被上文里的 1906 劫持",
-      direct.try_direct("学校有没有瑞幸", context=HISTORY) is None,
+HISTORY = "用户：学校有没有星巴克\n梨宝：咱上理咖啡只有 1906咖啡厅（军工路516号北校区西北角）"
+check("「学校有没有星巴克」不被上文里的 1906 劫持",
+      direct.try_direct("学校有没有星巴克", context=HISTORY) is None,
       "当前句无指代词 → 禁止借上下文实体")
 LONG_ANAPH = "那它这个食堂到底几点钟开门营业呢请问"      # 18 字，超 _ANAPHORA 的长度护栏
 check("长追问不借实体（>14 字护栏生效）",
@@ -98,6 +103,25 @@ print("\n== 推荐类问法必须放行（评测抓到：曾被 `有…吗` 误�
 for q in ["三教附近有啥近的食堂吗", "学校附近有没有麦当劳", "二食堂附近有啥好吃的吗"]:
     check(f"放行「{q}」", direct.try_direct(q) is None,
           "含附近/有啥 → 属于就近推荐，模板只答单个地点会答非所问")
+
+# ---- 2026-09-19 风格回归（《梨宝语言风格规范》：规则命中也拟人，但克制）----
+print("\n== 风格回归 · 多模板轮换 ==")
+STYLE_QS = ["学校有没有麦当劳", "学校有没有瑞幸", "学校有没有全家", "1906咖啡厅在哪",
+            "第二食堂在哪", "第一食堂几点开门", "第五食堂几点开门", "学校有没有库迪",
+            "学校里有一点点吗", "学校有没有蜜雪冰城"]
+s_ans = [direct.try_direct(q) for q in STYLE_QS]
+check("风格回归：10 问全部命中模板", all(s_ans),
+      str([q for q, a in zip(STYLE_QS, s_ans) if not a]))
+check("风格回归：无 markdown 强调符号（**）泄漏",
+      all("**" not in (a or {}).get("answer", "") for a in s_ans))
+d1 = direct.try_direct("学校有没有麦当劳")
+d2 = direct.try_direct("学校有没有麦当劳")
+check("风格回归：同问题两次回答逐字一致（轮换是确定性的，不是随机）", d1 == d2 and d1 is not None)
+heads = {(a["answer"].splitlines()[0])[:8] for a in s_ans if a}
+tails = {a["answer"].splitlines()[-1] for a in s_ans if a}
+check("风格回归：开头句式跨问题有变化（≥2 种）", len(heads) >= 2, f"实际 {len(heads)} 种：{sorted(heads)[:3]}")
+check("风格回归：收尾句跨问题有变化（≥2 种，含克制档收尾即止）", len(tails) >= 2,
+      f"实际 {len(tails)} 种")
 
 print("\n" + "=" * 60)
 print(f"汇总：{ok}/{ok + fail} 通过（{ok / (ok + fail) * 100:.1f}%）")

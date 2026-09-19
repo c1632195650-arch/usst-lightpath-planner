@@ -79,7 +79,8 @@
    "traffic": "北校区就餐人次最多，日均约4000人次",
    "features": [
     "内设上理烘焙坊",
-    "位置：志摩路与海远中路交叉口东南侧"
+    "位置：志摩路与海远中路交叉口东南侧",
+    "设继光香香鸡档口（文证：学生会推文《新品牌入驻》）"
    ],
    "good_for": [
     "三教下课顺路吃",
@@ -99,12 +100,15 @@
     "川湘菜",
     "酱鸭",
     "面食",
-    "饮品"
+    "饮品",
+    "继光香香鸡",
+    "香香鸡",
+    "炸鸡"
    ],
    "pyf": "diyishitang|yishitang|1shitang|yican",
    "pyi": "dyst|yst|1st|yc",
    "pyt": "shitang|st",
-   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|cf|zf|wf|cxc|jy|ms|yp"
+   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|jiguangxiangxiangji|xiangxiangji|zhaji|cf|zf|wf|cxc|jy|ms|yp|jgxxj|xxj|zj"
   },
   {
    "id": "bakery",
@@ -210,7 +214,8 @@
    "pyf": "diershitang|ershitang|2shitang|ercan|diershitangjiaogongshitang",
    "pyi": "dest|est|2st|ec|destjgst",
    "pyt": "shitang|st",
-   "pyg": "chifan|wufan|wanfan|jiaogongcanting|kuaican|cf|wf|jgct|kc"
+   "pyg": "chifan|wufan|wanfan|jiaogongcanting|kuaican|cf|wf|jgct|kc",
+   "note": "（同一建筑两层：二楼为阅餐厅（教工餐厅为主，学生亦可上二楼用餐）；麦当劳位于一楼。——CY 实地 2026-09-19）"
   },
   {
    "id": "yue",
@@ -295,7 +300,11 @@
    "features": [
     "一楼：麻辣烫、鱼粉、煎饼、铁板饭、咖喱鸡排饭、猪肚鸡、煲仔饭、水果捞、奶茶",
     "二楼：拉面、水饺、重庆小面、牛肉粉丝汤、猪脚饭、港式烧腊、石锅拌饭、咖啡吧",
-    "今年新上减脂餐（学校比你还努力系列）"
+    "今年新上减脂餐（学校比你还努力系列）",
+    "一楼设库迪咖啡（文证：学生会推文《新品牌入驻》）",
+    "二楼设七分甜（文证：学生会推文《新品牌入驻》）",
+    "一楼设 KFC 炸鸡兄弟档口（CY 实地 2026-09-19，待文证）",
+    "二楼设连杏双皮奶（CY 实地 2026-09-19，待文证）"
    ],
    "good_for": [
     "四公寓/图书馆自习出来吃",
@@ -313,12 +322,16 @@
     "午饭",
     "晚饭",
     "自选",
-    "聚餐"
+    "聚餐",
+    "库迪",
+    "七分甜",
+    "双皮奶",
+    "炸鸡"
    ],
    "pyf": "diwushitang|wushitang|5shitang|wucan",
    "pyi": "dwst|wst|5st|wc",
    "pyt": "shitang|st",
-   "pyg": "chifan|wufan|wanfan|zixuan|jucan|cf|wf|zx|jc"
+   "pyg": "chifan|wufan|wanfan|zixuan|jucan|kudi|qifentian|shuangpinai|zhaji|cf|wf|zx|jc|kd|qft|spn|zj"
   },
   {
    "id": "mini",
@@ -373,7 +386,8 @@
    "id": "sicanting",
    "name": "思餐厅",
    "alias": [
-    "南校区思餐厅"
+    "南校区思餐厅",
+    "思食堂"
    ],
    "type": "食堂",
    "zone": "南校区（334）·北侧",
@@ -402,12 +416,26 @@
     "吃饭",
     "午饭",
     "晚饭",
-    "南校吃饭"
+    "南校吃饭",
+    "瑞幸",
+    "蜜雪冰城",
+    "一点点",
+    "苹果花园",
+    "肯德基",
+    "KFC",
+    "肯悦"
    ],
-   "pyf": "sicanting|nanxiaoqusicanting",
-   "pyi": "sct|nxqsct",
+   "pyf": "sicanting|nanxiaoqusicanting|sishitang",
+   "pyi": "sct|nxqsct|sst",
    "pyt": "shitang|st",
-   "pyg": "chifan|wufan|wanfan|nanxiaochifan|cf|wf|nxcf"
+   "pyg": "chifan|wufan|wanfan|nanxiaochifan|ruixing|mixuebingcheng|yidiandian|pingguohuayuan|kendeji|kfc|kenyue|kafei|naicha|mianbaohongbei|cf|wf|nxcf|rx|mxbc|ydd|pghy|kdj|kfc|ky|kf|nc|mbhb",
+   "features": [
+    "四楼设瑞幸咖啡（文证：学生会推文《新品牌入驻》）",
+    "一楼设蜜雪冰城（文证：学生会推文《新品牌入驻》）",
+    "三楼设一点点（文证：学生会推文《新品牌入驻》）",
+    "三楼设苹果花园烘焙（文证：学生会推文《新品牌入驻》）",
+    "1-2 楼设肯德基 KFC（文证：后勤处推文 2026-09；楼梯口设肯悦咖啡——CY 实地 2026-09-19）"
+   ]
   },
   {
    "id": "canteen4",
@@ -637,14 +665,15 @@
    "zone": "南校区（334）·地下一楼",
    "near_landmark": [
     "五公寓",
-    "思餐厅"
+    "思餐厅",
+    "玻璃廊桥（南校区侧下行即达）"
    ],
    "good_for": [
     "南校区买水买零食"
    ],
    "verified": true,
    "campus": "南校",
-   "note": "学校自营教育超市（非全家），主营文具纸张（上理工信纸、作业本）与生活用品；写思想报告常来。注：教育超市在 334/1100/营口路 均有，此条指南校区（334 地下一楼）那家",
+   "note": "学校自营教育超市（非全家），主营文具纸张（上理工信纸、作业本）与生活用品；写思想报告常来。注：教育超市在 334/1100/营口路 均有，此条指南校区（334 地下一楼）那家（天桥店：南校区侧玻璃廊桥下行即达（军工路334号第5公寓2号楼地下一层，同层设茉莉奶白——CY 实地 2026-09-19，待文证））",
    "hours": {
     "营业": "8:30-22:00"
    },
@@ -1591,12 +1620,16 @@
     "羽毛球",
     "篮球",
     "体育课",
-    "健身房"
+    "健身房",
+    "Tims"
    ],
    "pyf": "tiyuguantiyuhuodongzhongxin|tiyuguan|tiyuhuodongzhongxin",
    "pyi": "tygtyhdzx|tyg|tyhdzx",
    "pyt": "yundong|yd",
-   "pyg": "daqiu|yumaoqiu|lanqiu|tiyuke|jianshenfang|dq|ymq|lq|tyk|jsf"
+   "pyg": "daqiu|yumaoqiu|lanqiu|tiyuke|jianshenfang|tims|dq|ymq|lq|tyk|jsf|tims",
+   "features": [
+    "门前设 Tims 天好咖啡（文证：后勤处推文 2026-09 官宣即将开业，开业状态以现场为准）"
+   ]
   },
   {
    "id": "dorm1",
