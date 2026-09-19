@@ -11,10 +11,9 @@
  *    `DEADLINES` 由**调用方注入**（不 import mock 数据模块），保持可测与可替换。
  *    锁与 churn 的工具函数在 `model.ts`（P1 的 evaluate 会消费它们）。
  */
-import type { CampusId, Course, PhasePolicy, RollingState, TimeBlock, WeekPlan } from '@/types';
+import type { CampusId, Course, PhasePolicy, TimeBlock, WeekPlan } from '@/types';
 import type { Commit, LockLevel, Place, Weights } from './model.ts';
 import { churnCost, churnMinutes, resolveLockLevel } from './model.ts';
-import { effectiveStudyMin, fatigueAdjustment } from './fatigue.ts';
 import { BUILTIN_PLACE_INDEX, campusOfPlace } from './places.ts';
 
 const DAY_MS = 86_400_000;
@@ -264,12 +263,6 @@ export interface EvalContext {
   previousPlan?: WeekPlan;
   /** 锁级别覆盖：blockId → LockLevel */
   lockLevels?: Record<string, LockLevel>;
-  /**
-   * 跨周滚动状态。给了就启用**疲劳 / 逐日可行性**调节，
-   * 且「自习缺口」的目标值必须随之调整 —— 否则把目标主动调低之后，
-   * 评分仍按原目标扣分，引擎会把一份合理计划判成差计划。
-   */
-  rolling?: RollingState;
 }
 
 /** 一个块是否「硬」（不可移动）：显式锁 `hard`，或来源为课程 */
@@ -408,10 +401,7 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
   const studyMin = plan.blocks
     .filter((b) => b.kind === 'study')
     .reduce((s, b) => s + (b.endMin - b.startMin), 0);
-  // 目标值与 `construct` **同口径**：逐日累加「有效自习目标」而不是 policy 的基准值
-  // （原因是这两个数字必须一致，否则调低目标会让「自习缺口」凭空变大）
-  const adj = fatigueAdjustment(policy, ctx.rolling);
-  const targetStudyMin = countableDays.reduce((n, d) => n + effectiveStudyMin(adj, d), 0);
+  const targetStudyMin = policy.dailyStudyMin * countableDays.length;
   const studyShortfallRaw = Math.max(0, targetStudyMin - studyMin);
 
   // —— ② 留白缺口 ——

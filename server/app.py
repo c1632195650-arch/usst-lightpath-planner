@@ -544,28 +544,6 @@ def api_route_batch(body: RouteBatchReq):
     return {"routes": out, "mode": mode}
 
 
-_TRACE_JSONL = os.environ.get("LIBAO_TRACE_JSONL", "")
-
-
-def _trace_jsonl(rec):
-    """把一轮 trace 落成 JSONL —— L4 线上监控的数据源（2026-09-18 加）。
-
-    为什么单独落文件：终端那行 trace 只能人眼看，做不了分位数、趋势与离线采样。
-    与终端 trace 同一开关（LIBAO_DEBUG=1），默认写到
-    `<repo>/evals/runs/trace_YYYYMMDD.jsonl`（已被 .gitignore 排除）。
-    **任何异常都吞掉** —— 观测层绝不能把正常对话搞挂。
-    """
-    try:
-        import datetime as _d
-        path = _TRACE_JSONL or os.path.join(
-            _HERE, "..", "evals", "runs", f"trace_{_d.date.today():%Y%m%d}.jsonl")
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
                 space_ctx, mem_ctx, profile_ctx, mode, answer, ms, tools=None):
     """把一轮对话的关键中间量压成**一行**日志（仅在 LIBAO_DEBUG 打开时调用）。
@@ -597,21 +575,6 @@ def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
             f"ans_len={len(answer)} ms={int(ms)}",
             flush=True,
         )
-        # 同一份数据再落一行 JSONL（供 report.py 做分位数/趋势/离线采样）
-        import datetime as _d
-        _trace_jsonl({
-            "ts": _d.datetime.now().isoformat(timespec="seconds"),
-            "rid": rid, "q": q, "route": route, "intent": intent,
-            "top_raw": round(float(top_raw), 4), "mode": mode,
-            "tools": list(tools or []),
-            "used_space": bool(space_ctx), "used_memory": bool(mem_ctx),
-            "used_profile": bool(profile_ctx),
-            "ans_len": len(answer), "ms": int(ms),
-            "src": [{"title": s.get("title", "")[:60],
-                     "score": s.get("score"), "raw_vec": s.get("raw_vec"),
-                     "snip_len": len(s.get("snippet") or "")}
-                    for s in (sources or [])[:4]],
-        })
     except Exception as e:      # 日志绝不能把正常对话搞挂
         print(f"[chat {rid}] trace 失败：{e}", flush=True)
 
@@ -678,13 +641,6 @@ def api_chat(body: ChatReq):
     da = None
     try:
         da = direct.try_direct(q)
-        if not da:
-            # 多轮指代（2026-09-18 评测抓到）：「那它几点开门」这类追问句里没有实体，
-            # 但上一轮有 —— 借最近几轮原话再解析一次实体，命中即仍走 L0（0 次 LLM）。
-            # 触发词只认当前句，实体允许来自上下文，避免把别的话题误当本题。
-            recent = " ".join(t for _, t in memory.recent_messages(body.session_id, 4))
-            if recent:
-                da = direct.try_direct(q, context=recent)
     except Exception as e:
         print("[direct] 异常：", e)
     if da:

@@ -23,7 +23,6 @@ export function emptyPlanState(now = ''): PlanPersistState {
     churnMin: 0,
     updatedAt: now,
     rolling: null,
-    rollingBase: null,
   };
 }
 
@@ -37,8 +36,6 @@ export function normalizePlanState(
     ...state,
     locks: state.locks ?? {},
     lockedPlacements: state.lockedPlacements ?? {},
-    rolling: state.rolling ?? null,
-    rollingBase: state.rollingBase ?? null,
   };
 }
 

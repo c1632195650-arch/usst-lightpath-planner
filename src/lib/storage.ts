@@ -69,7 +69,6 @@ export function migrate(raw: unknown): AppState {
     if (!isPlainObject(ps.locks)) ps.locks = {};
     if (!isPlainObject(ps.lockedPlacements)) ps.lockedPlacements = {};
     if (!isPlainObject(ps.rolling) && ps.rolling !== null) ps.rolling = null;
-    if (!isPlainObject(ps.rollingBase) && ps.rollingBase !== null) ps.rollingBase = null;
     if (typeof ps.churnMin !== 'number' || !Number.isFinite(ps.churnMin)) ps.churnMin = 0;
     if (typeof ps.updatedAt !== 'string') ps.updatedAt = '';
     if (typeof ps.version !== 'number') ps.version = 1;

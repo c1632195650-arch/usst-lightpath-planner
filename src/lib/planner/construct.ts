@@ -29,7 +29,6 @@ import { campusOfPlace, resolvePlace } from './places.ts';
 import { campusFallbackTransfer, campusOfName, type TransferProvider } from './campusLookup.ts';
 import { blockId, type Commit, type PlanRequest } from './model.ts';
 import { effectiveEffortMin, sortCommits } from './objective.ts';
-import { effectiveStudyMin, fatigueAdjustment, weeklyStudyTarget } from './fatigue.ts';
 import {
   buildWeekNotes, issueCourseConflict, issueCourseNoPlace, issueMealSkipped,
   issueTransferLate, issueTransferMissingPlace, issueTransferTight,
@@ -251,9 +250,6 @@ export interface ConstructResult {
  */
 export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructResult {
   const { schedule, weekNo, policy } = req;
-  // 跨周自适应（§4.4）：逐日有效自习目标。`rolling` 缺省时结果恒等于 policy 基准值，
-  // 即整条链路是 no-op —— golden 快照不受影响的前提。
-  const fatigue = fatigueAdjustment(policy, req.rolling);
   const templates = ctx.templates ?? DEFAULT_TEMPLATES;
   const tasks = ctx.tasks ?? req.tasks ?? [];
   const scenarios: ScenarioFields | null = req.scenarios ?? null;
@@ -435,12 +431,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.6 学习块（按阶段策略填充） --- */
-    // 目标取**有效**值（已含疲劳 / 逐日可行性）：`objective` 与 `explain` 用的是同一个
-    // `effectiveStudyMin()`，三处同口径才不会「按 96 排、按 120 扣分」。
-    const studyBudget = Math.min(
-      effectiveStudyMin(fatigue, day),
-      Math.max(0, usable - activityMin),
-    );
+    const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin));
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
       dayStartMin, dayEndMin,
@@ -461,7 +452,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   }
 
   /* --- 6.8 汇总 --- */
-  const shortfall = summaryStudyIssue(studyMin, weeklyStudyTarget(policy, fatigue), weekNo);
+  const shortfall = summaryStudyIssue(studyMin, policy, weekNo);
   if (shortfall) issues.push(shortfall);
 
   notes.push(...buildWeekNotes({
@@ -470,8 +461,6 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     effectiveCourseCount: effCourses.length,
     scenarios,
     unverifiedMeals,
-    // 文案与实际排法必须一致（否则计划按 96 排、却写着「目标 120」）
-    effectiveStudyMin: fatigue.adjustedDailyMin,
   }));
 
   return {

@@ -22,7 +22,6 @@ import { attachTransfers, construct, DAY_NAME, type ConstructCtx } from './const
 import type { TransferProvider } from './campusLookup.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 import { evaluate } from './objective.ts';
-import { fatigueAdjustment, weeklyStudyTarget } from './fatigue.ts';
 import { improve } from './improve.ts';
 import { explain, issueLockConflict } from './explain.ts';
 
@@ -294,8 +293,6 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   const t0 = performance.now();
   const n = normalize(req, ctx);
   const { weights, config } = n;
-  // 跨周自适应（§4.4）：构造 / 改进 / 评分 / 解释必须共用同一份目标
-  const adj = fatigueAdjustment(req.policy, req.rolling);
 
   // ③ 构造（必然可行）
   const built = construct(n.req, ctx);
@@ -324,7 +321,6 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
       lockLevels: req.lockLevels,
       previousPlan: req.previousPlan,
       config: req.config,
-      rolling: req.rolling,
     });
     plan = res.plan;
     iterations = res.iterations;
@@ -348,7 +344,6 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     commits: n.req.commits,
     previousPlan: req.previousPlan,
     lockLevels: req.lockLevels,
-    rolling: req.rolling,
   });
   const hard = countHardViolations(plan);
 
@@ -371,20 +366,9 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     },
     hardViolations: hard.total,
     churnMin: cost.raw.churnMin,
-    // 有滚动数据才带上：这样「没启用自适应」与「启用了但不需要调节」可区分
-    fatigue: req.rolling
-      ? {
-        factor: adj.factor,
-        baseDailyMin: adj.baseDailyMin,
-        observedDailyMin: adj.observedDailyMin,
-        weeklyTargetMin: weeklyStudyTarget(req.policy, adj),
-        softenedDays: adj.softenedDays,
-      }
-      : undefined,
   };
 
-  // 自适应说明排在求解器日志之前 —— 它解释的是「为什么目标变了」，优先级更高
-  const notes = [...ex.notes, ...adj.reasons];
+  const notes = [...ex.notes];
   if (iterations > 0) {
     notes.push(`求解器跑了 ${iterations} 轮改进，接受了 ${acceptedCount} 处调整（成本降到 ${cost.total.toFixed(1)}）`);
   }
