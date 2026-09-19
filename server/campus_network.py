@@ -29,6 +29,8 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+import campus_vocab as _vocab   # 校区词表唯一事实源（data/campus_vocab.json）
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OSM_DIR = os.path.join(ROOT, "data", "osm")
@@ -57,6 +59,28 @@ HW_NO = {"trunk", "trunk_link", "motorway", "motorway_link", "raceway", "bus_gui
 # 城市道路的步行折损：沿马路边走比校园步道慢一些，但不是不能走
 STREET_PENALTY = 1.15
 
+# ---------- 车行隧道：不可步行（2026-09-18 修）----------
+# 周家嘴路隧道（`tunnel=yes`, `layer=-2/-3`, `highway=primary`）此前被当作普通城市道路
+# 纳入路网 —— 行人根本进不了江底车行隧道。实测它正是「7 处碎片桥接」之一（缺口 4.4 m），
+# 也就是说我们把一条不可通行的隧道接进了步行图，还顺手用它连通了两块路网。
+# 规则收紧得**只针对城市道路**：`tunnel=yes` 的 footway/path 是**人行地道**，必须保留可走
+# （`tunnel=building_passage` 同理），所以不能一刀切。
+TUNNEL_CAR = {"yes", "culvert"}
+
+# ---------- 可穿越的开敞空间（广场）----------
+# OSM 用 `area=yes` + `highway=pedestrian` 表达**面状**步行空间：广场、楼间大空地。
+# 此前与普通道路一样按**折线**装载 —— 人只能沿周长绕，明明能斜穿却要绕边。
+# 只收 `pedestrian`（**语义上明确就是行人空间**）。实测过把 `service` 面（停车场/回车场）
+# 也算进来：多 229 条边，总绕行中位只从 1.510 降到 1.503 —— 收益 ~0.1%，
+# 却引入「车行场地上能否随意穿行」这个**无法证实**的假设。宁窄勿滥。
+# 依据（不臆造）：夏威夷大学 298 条实地 OD 研究指出校内步行无约束，
+# "on-campus walking is unrestricted and can deviate from discrete roadways or sidewalks"。
+# ⚠️ 实测结论也要如实写在体检报告里：**这一层对总绕行的改善很小（~0.5%）**，
+#    绕行系数偏高的主因不是「缺广场斜穿」，而是 OSM 上校园路径本身就稀疏。见 docs/。
+HW_AREA = {"pedestrian"}
+AREA_CHORD_MAX = 90.0   # 面内两点超过此距离不直连 —— 避免横穿整个大场（那不是「斜穿」）
+AREA_PENALTY = 1.10     # 穿空地略慢于铺装步道（避让、绕树、绕花坛）
+
 # 点状地图要素（amenity/shop/leisure…）——建筑面索引拿不到的点状设施。
 # 实例：1100 的「教育超市」(shop=supermarket)、「校医务室」(amenity=clinic)。
 NODE_TAG_KEYS = {"amenity", "shop", "leisure", "tourism", "office", "healthcare"}
@@ -73,7 +97,11 @@ NODE_TAG_KEYS = {"amenity", "shop", "leisure", "tourism", "office", "healthcare"
 #   独立 = 1100 基础学院 / 复兴路 —— **作为排程/就近推荐的口径保持独立**（不参与本部
 #          日常排程）。注：1100 的路网自 2026-09-16 起已接入（jichuxueyuan.osm），沿军工路
 #          实际步行可达 —— 跨组通行参考走 `route_cross_group()`，不放宽本口径。
-_WALK_GROUP = {"北校": "本部", "南校": "本部", "580": "本部", "连接": "本部"}
+# ⚠️ 2026-09-19：本表**不再是副本** —— 从唯一事实源 `data/campus_vocab.json` 派生
+#    （campus_vocab.WALK_GROUP 是全量映射，1100/复兴路 → 各自分组）。
+#    与旧写法的行为**完全一致**：旧版靠 `dict.get(campus, campus)` 的缺省回落，
+#    新版把那个回落显式写进表里，`walk_group()` 的取值逐条相同。
+_WALK_GROUP = _vocab.WALK_GROUP
 
 
 def walk_group(campus):
@@ -121,14 +149,22 @@ class Network:
         self.bld = {}          # OSM 建筑名/归一化名 -> (lat,lon)
         self.poi = {}          # POI 名 -> ((lat,lon), 线索来源)
         self.unlocated = []
-        self.bridged = []      # 桥接过的碎片：(缺口米数, 碎片节点数)
+        self.bridged = []      # 桥接过的碎片：[{gap_m, nodes, a, b}] —— 实为**校外**碎片的连接
+        self.bridge_edges = set()
+        self.area_edges = set()
+        self.area_polys = 0
+        self.skipped_tunnel = []
         self._load_osm()
         self._bridge_components()
+        self._dedupe_adj()
         self._locate_pois()
 
     # ---------- 路网 ----------
     def _load_osm(self):
         adj, bld, street_edges, node_poi = {}, {}, set(), {}
+        area_edges = set()      # 广场内部斜穿边（"校园"模式可用，"最快"模式也可用）
+        area_polys = 0          # 识别到的面状步行空间个数（诊断用）
+        skipped_tunnel = []     # 被剔除的车行隧道（诊断用）
         for fn in OSM_FILES:
             root = ET.parse(os.path.join(OSM_DIR, fn)).getroot()
             nodes, node_named, way_pts = {}, {}, {}
@@ -161,6 +197,10 @@ class Network:
                 h = tags.get("highway")
                 if h in HW_WALK or h in HW_STREET:
                     is_street = h in HW_STREET
+                    # 🔴 车行隧道不可步行（只拦城市道路 —— 人行地道是 footway/path，保留）
+                    if is_street and tags.get("tunnel") in TUNNEL_CAR:
+                        skipped_tunnel.append((tags.get("name") or el.get("id"), h, tags.get("tunnel")))
+                        continue
                     pen = STREET_PENALTY if is_street else 1.0
                     for i in range(len(pts) - 1):
                         a, b = pts[i], pts[i + 1]
@@ -171,6 +211,18 @@ class Network:
                         adj.setdefault(b, []).append((a, d * pen))
                         if is_street:
                             street_edges.add(frozenset((a, b)))
+                    # 面状步行空间：整条闭合折线记下来，稍后补「面内直连边」
+                    if tags.get("area") == "yes" and h in HW_AREA and len(pts) >= 3:
+                        area_polys += 1
+                        uniq = list(dict.fromkeys(pts))
+                        for i in range(len(uniq)):
+                            for j in range(i + 1, len(uniq)):
+                                d = hav(uniq[i], uniq[j])
+                                if 0 < d <= AREA_CHORD_MAX:
+                                    w = d * AREA_PENALTY
+                                    adj.setdefault(uniq[i], []).append((uniq[j], w))
+                                    adj.setdefault(uniq[j], []).append((uniq[i], w))
+                                    area_edges.add(frozenset((uniq[i], uniq[j])))
 
             # ③ 关系（multipolygon 建筑）—— 此前**整类被忽略**（只读 node 与 way）。
             #    OSM 里相当多的校园建筑是「若干个 way 拼成一个面」，用 relation 表达：
@@ -206,6 +258,7 @@ class Network:
                         bld.setdefault(key, []).append(c)
 
         self.adj, self.bld, self.street_edges, self.node_poi = adj, bld, street_edges, node_poi
+        self.area_edges, self.area_polys, self.skipped_tunnel = area_edges, area_polys, skipped_tunnel
         # 与至少一条步道相连的节点（用于「仅校内」模式下的吸附与寻路）
         self.campus_nodes = {
             n for n, lst in adj.items()
@@ -228,6 +281,12 @@ class Network:
 
         只桥接近距离缺口 —— 1100 校区、复兴路校区与主校区相距数公里，不会被误连。
         桥接边按直线距离 ×1.2 计（近似绕行）。
+
+        ⚠️ 2026-09-18 实测澄清（此前一直被当成「校内路网断成 7 截」）：
+        这 7 处**没有一处落在校园内部** —— 全在校外（控江路/图们路居民区内部路、
+        周家嘴路车行隧道、军工路 primary）。校内路网本来就是**一整块**。
+        所以桥接的性质是「给校外碎片留条路」，而不是「补校内的洞」；
+        它们是**精度最差的边**（直线 ×1.2 的猜法），记录端点供体检报告分类。
         """
         seen, comps = set(), []
         for n in self.adj:
@@ -262,8 +321,33 @@ class Network:
                 w = d * 1.2
                 self.adj.setdefault(a, []).append((b, w))
                 self.adj.setdefault(b, []).append((a, w))
+                self.bridge_edges.add(frozenset((a, b)))
                 main.update(comp)
-                self.bridged.append((round(d), len(comp)))
+                self.bridged.append({"gap_m": round(d), "nodes": len(comp), "a": a, "b": b})
+
+    def _dedupe_adj(self):
+        """同一对节点只保留**一条**边，权重取最小值。
+
+        为什么会有重复：一条 way 可能同时带 `highway=footway` 与 `highway=service`，
+        或者广场的**面内直连边**正好压在某条真实周长边上 —— 于是同一个节点对会被
+        写进邻接表两次，且**两次的惩罚系数不同**（步道 1.0 / 城市道路 1.15 /
+        穿广场 1.10）。2026-09-18 体检实测：2750 条边里有 **376 对**是重复的
+        （其中 148 对权重不一致）。
+
+        ⚠️ 这是**行为等价**的清理：`_dijkstra` 本来就对同一对节点松弛多次、
+        取最小的那个距离，所以「只留最小权重」得到的最短路与清理前**完全一致**
+        —— 只是少了 14% 的无效松弛。留最小也是正确的语义：一条路只要有一侧
+        算步道，就不该按机动车道的惩罚来走。
+        """
+        for n, lst in self.adj.items():
+            if len(lst) < 2:
+                continue
+            best = {}
+            for v, w in lst:
+                if v not in best or w < best[v]:
+                    best[v] = w
+            if len(best) != len(lst):
+                self.adj[n] = [(v, w) for v, w in best.items()]
 
     # ---------- POI 定位 ----------
     CAMPUS_CENTER = {"北校": (31.2950161, 121.5506739), "南校": (31.2906712, 121.5535545)}
@@ -467,27 +551,53 @@ class Network:
         return best, bd
 
     def _dijkstra(self, src, dst, mode="fastest"):
+        """最短路距离；不可达返回 None。"""
+        d, _prev = self._dijkstra_full(src, dst, mode)
+        return d
+
+    def _dijkstra_full(self, src, dst, mode="fastest"):
+        """最短路距离 + 前驱表，返回 (dist, prev)。
+
+        与 `_dijkstra` 的唯一差别是多记了一张 `prev` 表（供回溯折线用）。
+        遍历顺序、松弛规则、返回值口径都完全一致 —— 所以 `_dijkstra` 的结果不变。
+        折线的用途：GPS 轨迹比对（`scripts/overlap_accuracy.py`）与轨迹可视化。
+        """
         if src not in self.adj or dst not in self.adj:
-            return None
+            return None, {}
         campus_only = (mode == "campus")
         dist, pq, seen = {src: 0.0}, [(0.0, src)], set()
+        prev = {}
         while pq:
             d, u = heapq.heappop(pq)
             if u in seen:
                 continue
             seen.add(u)
             if u == dst:
-                return d
+                return d, prev
             for v, w in self.adj.get(u, ()):
-                if campus_only and frozenset((u, v)) in self.street_edges:
-                    continue   # 仅校内模式：跳过城市道路边
+                if campus_only and (frozenset((u, v)) in self.street_edges
+                                    or frozenset((u, v)) in self.bridge_edges):
+                    continue   # 仅校内模式：跳过城市道路边与碎片桥接边（桥接边全在校外）
                 nd = d + w
                 if nd < dist.get(v, 1e18):
                     dist[v] = nd
+                    prev[v] = u
                     heapq.heappush(pq, (nd, v))
-        return None
+        return None, prev
 
-    def route(self, a, b, mode="fastest", _cross_group=False):
+    @staticmethod
+    def _rebuild_path(prev, src, dst):
+        """从前驱表回溯出节点序列（含起终点）。"""
+        path, cur = [dst], dst
+        while cur != src:
+            cur = prev.get(cur)
+            if cur is None:
+                return None
+            path.append(cur)
+        path.reverse()
+        return path
+
+    def route(self, a, b, mode="fastest", _cross_group=False, with_path=False):
         """返回 dict 或 None（未定位 / 不连通 / 跨教学工作区）。
 
         mode:
@@ -511,14 +621,18 @@ class Network:
         c_only = (mode == "campus")
         sa, da = self._snap(pa[0], c_only)
         sb, db = self._snap(pb[0], c_only)
-        d = self._dijkstra(sa, sb, mode)
+        if with_path:
+            d, prev = self._dijkstra_full(sa, sb, mode)
+            nodes = self._rebuild_path(prev, sa, sb) if d is not None else None
+        else:
+            d, nodes = self._dijkstra(sa, sb, mode), None
         if d is None:
             return None
         total = d + da + db
         weak = ("zone", "campus", "global", "approx")
         reliable = (pa[1] not in weak and pb[1] not in weak
                     and hav(pa[0], pb[0]) > 5)
-        return {
+        res = {
             "from": a, "to": b,
             "mode": mode,
             "meters": total,
@@ -528,6 +642,11 @@ class Network:
             "locate": (pa[1], pb[1]),
             "reliable": reliable,
         }
+        if with_path:
+            # 折线 = POI 起点 → 吸附节点 → …路网… → 吸附节点 → POI 终点
+            # ⚠️ 只供内部计算/可视化。对外接口**不得**返回（含经纬度，合规红线）。
+            res["polyline"] = ([pa[0]] + (nodes or []) + [pb[0]])
+        return res
 
     def route_cross_group(self, a, b):
         """跨可步行分组的**步行参考**（本部 ↔ 1100 基础学院）。
@@ -567,7 +686,13 @@ class Network:
             "osm_files": list(OSM_FILES),
             "osm_poi_nodes": len(self.node_poi),
             "path_nodes": len(self.adj),
+            "path_edges": sum(len(v) for v in self.adj.values()) // 2,
             "osm_buildings": len({k for k in self.bld}),
+            "bridges": len(self.bridged),
+            "bridge_edges": len(self.bridge_edges),
+            "area_polys": self.area_polys,
+            "area_edges": len(self.area_edges),
+            "skipped_tunnel": self.skipped_tunnel,
             "poi_located": n,
             "by_source": dict(c),
             "unlocated": self.unlocated,
@@ -583,8 +708,11 @@ if __name__ == "__main__":
     print("校园路网 · POI 挂载诊断")
     print("=" * 66)
     print(f"  OSM 提取      : {'、'.join(st['osm_files'])}")
-    print(f"  路网节点      : {st['path_nodes']}")
+    print(f"  路网节点      : {st['path_nodes']}  ｜ 边: {st['path_edges']}")
     print(f"  OSM 建筑索引  : {st['osm_buildings']}  ｜ 点状设施: {st['osm_poi_nodes']}")
+    print(f"  可穿越空地    : {st['area_polys']} 块 ｜ 面内直连边 {st['area_edges']}")
+    print(f"  碎片桥接      : {st['bridges']} 处（全部在校外，见 docs/network-quality-*.md）")
+    print(f"  剔除的车行隧道: {st['skipped_tunnel']}")
     print(f"  POI 已定位    : {st['poi_located']}")
     for k, v in sorted(st["by_source"].items(), key=lambda x: -x[1]):
         print(f"      {k:14s}: {v}")

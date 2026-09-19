@@ -21,7 +21,10 @@ import type { BlockKind, ScenarioFields } from '@/types';
 import { toMinutes } from '../../constants/time.ts';
 
 export type ActivityCategory = 'meal' | 'study' | 'sport' | 'rest' | 'life' | 'custom';
-export type CampusName = '北校' | '南校' | '580' | 'any';
+// ⚠️ 2026-09-19 补 '1100'：此前这个类型**根本无法表达 1100** —— 于是 1100 的地点
+// （第四食堂）只能被塞进 '南校'，而 `campusOfPlace('第四食堂')` 走显式地点表给的是 JG1100，
+// 两处对同一条数据给出相反答案、却各自都很绿。类型层补上，才是根治。
+export type CampusName = '北校' | '南校' | '580' | '1100' | 'any';
 
 export interface ActivityWindow {
   startMin: number;
@@ -81,8 +84,10 @@ function wins(spec: Record<string, string>): ActivityWindow[] {
 
 const 北校三餐 = { 早餐: '06:30-09:30', 午餐: '10:45-13:30', 晚餐: '16:30-18:30' };
 const 北校三餐晚些 = { 早餐: '06:30-09:30', 午餐: '10:45-13:30', 晚餐: '16:30-19:30' };
-// ⚠️ 南校食堂原始数据只写了「常规饭点」，下面是按常规饭点推断的（标「(估)」）
-const 南校三餐 = { '早餐(估)': '06:30-09:00', '午餐(估)': '10:45-13:00', '晚餐(估)': '16:30-18:30' };
+// ⚠️ 未核实食堂的通用估算三餐（原叫「南校三餐」—— 2026-09-19 第四食堂归 1100 后，
+//    这个名字成了假话：它现在同时被南校与 1100 的未核实食堂使用，故改校区中立名。
+//    原始数据只写了「常规饭点」，下面是按常规饭点推断的，故每档都带「(估)」）
+const 估三餐 = { '早餐(估)': '06:30-09:00', '午餐(估)': '10:45-13:00', '晚餐(估)': '16:30-18:30' };
 
 /** 食堂 —— 覆盖 campus_map 里 11 个食堂 + 4 个餐厅 */
 const MEALS: ActivityTemplate[] = [
@@ -117,24 +122,26 @@ const MEALS: ActivityTemplate[] = [
   },
   {
     id: 'meal-4', name: '第四食堂', emoji: '🍛', category: 'meal', kind: 'meal',
-    durations: [40, 50], place: '第四食堂', campus: '南校',
-    windows: wins(南校三餐), priority: 70, verified: false,
+    durations: [40, 50], place: '第四食堂', campus: '1100',
+    windows: wins(估三餐), priority: 70, verified: true,
+    note: '在 1100 基础学院，与 1100图书馆同栋（1 楼食堂 / 2 楼图书馆）；'
+        + '原误标南校，2026-09-18 依校区修正回归（test_campus.py S 组）订正',
   },
   {
     id: 'meal-si', name: '思餐厅', emoji: '🍲', category: 'meal', kind: 'meal',
     durations: [40, 50], place: '思餐厅', campus: '南校',
-    windows: wins(南校三餐), priority: 76,
+    windows: wins(估三餐), priority: 76,
     note: '南校这一侧主要的就餐点', verified: false,
   },
   {
     id: 'meal-6', name: '第六食堂', emoji: '🍱', category: 'meal', kind: 'meal',
     durations: [40, 50], place: '第六食堂', campus: '南校',
-    windows: wins(南校三餐), priority: 66, verified: false,
+    windows: wins(估三餐), priority: 66, verified: false,
   },
   {
     id: 'meal-halal', name: '清真食堂（334）', emoji: '🕌', category: 'meal', kind: 'meal',
     durations: [40, 50], place: '清真食堂（334）', campus: '南校',
-    windows: wins(南校三餐), priority: 64, verified: false,
+    windows: wins(估三餐), priority: 64, verified: false,
   },
   {
     id: 'meal-580', name: '民族餐厅（580 号）', emoji: '🍢', category: 'meal', kind: 'meal',

@@ -171,7 +171,9 @@ def main():
         p["pyg"] = "|".join(gfulls + ginis)
 
     m["_meta"]["pinyin"] = NOTE
-    m["_meta"]["updated"] = "2026-09-16"
+    # 🔴 用**今天**，不要硬编码 —— 硬编码会让重新生成后 `_meta.updated` 反而变旧，
+    #    下游「时间质量」审计读到的日期于是与文件实际改动时间不符。
+    m["_meta"]["updated"] = __import__("datetime").date.today().isoformat()
 
     with open(MAP_PATH, "w", encoding="utf-8") as f:
         json.dump(m, f, ensure_ascii=False, indent=1)

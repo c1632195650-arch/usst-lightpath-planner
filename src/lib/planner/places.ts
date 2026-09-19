@@ -173,7 +173,7 @@ export function placesFromCampusMap(map: CampusMapJson): Place[] {
  *   而 `schedule.ts` 的 `campusOfName('国合楼')` 返回 `JG334` —— **两套表打架**。
  *   后果：`objective::placeMismatch` 会把「在卓越楼 / 国合楼上课」误判成跨校区而加罚。
  *
- * **数据来源**：`data/campus_map.json` 的 `landmarks` 中 `type === '教学楼'` 的**全部 26 条**
+ * **数据来源**：`data/campus_map.json` 的 `landmarks` 中 `type === '教学楼'` 的**全部 27 条**
  *   （每条都有**显式 `campus`**，不是推断）。本文件**明令不 import JSON**（Node 测试环境加载不了），
  *   故此处为**硬编码快照**。
  *
@@ -192,22 +192,25 @@ const CAMPUS_BUILDINGS: ReadonlyArray<{
   { name: '第一教学楼', campus: '北校', alias: ['一教', '1教'] },
   { name: '第三教学楼', campus: '北校', alias: ['三教', '3教', '新三教'] },
   { name: '第五教学楼', campus: '北校', alias: ['五教', '5教'] },
-  { name: '综合楼', campus: '北校', alias: ['中德学院综合楼'] },
+  { name: '综合楼', campus: '北校', alias: ['中德学院综合楼', '田家炳楼', '田家炳综合楼', '田家炳理学院'] },
   { name: '先进制造大楼', campus: '北校', alias: ['先进制造'] },
   { name: '大礼堂', campus: '北校', alias: ['礼堂'] },
   { name: '校史馆', campus: '北校', alias: ['校史馆（图文信息中心）'] },
-  { name: '中德学院', campus: '北校', alias: ['汉堡国际工程学院', '中德国际学院'] },
   { name: '动力馆', campus: '北校', alias: ['能源与动力工程学院'] },
   { name: '沪江美术馆', campus: '北校', alias: ['美术馆'] },
   { name: '音乐堂', campus: '北校' },
+  { name: '现代化教学中心', campus: '北校', alias: ['计算中心', '教学中心'] },
   { name: '创新实训中心', campus: '北校' },
   { name: '基础实验中心', campus: '北校' },
   { name: '实训中心', campus: '北校', alias: ['工程实训中心', '工程训练中心'] },
   { name: '公共实验楼', campus: '北校', alias: ['物理实验中心', '公共实验中心'] },
   // —— 南校区（军工路 334）——
   { name: '逸兴楼', campus: '南校', alias: ['第四教学楼', '四教'] },
-  { name: '卓越楼', campus: '南校', alias: ['卓越工程研究生院'] },
+  { name: '卓越楼', campus: '南校', alias: ['卓越工程研究生院', '健康科学与工程学院', '健康学院', '医疗器械与食品学院', '医疗器械学院', '食品学院'] },
   { name: '国合楼', campus: '南校', alias: ['国际合作大楼'] },
+  // 中德国际学院官网《联系我们》地址写「中德国际学院（从军工路334号门进入）」，
+  // 516 号只是 229 信箱的通信地址 → 南校区（2026-09-18 修正，原误标北校）
+  { name: '中德学院', campus: '南校', alias: ['汉堡国际工程学院', '中德国际学院'] },
   { name: '理学院楼', campus: '南校', alias: ['理学院'] },
   { name: '外语楼', campus: '南校', alias: ['外语学院'] },
   { name: '微创楼', campus: '南校', alias: ['微创中心'] },
