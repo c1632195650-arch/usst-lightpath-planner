@@ -30,18 +30,25 @@
     "eval:report": "python evals/report.py",
     "eval:judge": "python evals/judge.py --selftest",
     "eval:calibrate": "python evals/calibrate.py",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mutate": "stryker run",
+    "lint:a11y": "eslint src",
+    "contract:fuzz": "st run data/openapi_snapshot.json --url http://127.0.0.1:8000 --max-examples 15"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
     "@types/node": "^26.4.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/parser": "^8.70.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "fast-check": "^4.10.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
