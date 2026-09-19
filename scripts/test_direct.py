@@ -104,6 +104,25 @@ for q in ["三教附近有啥近的食堂吗", "学校附近有没有麦当劳",
     check(f"放行「{q}」", direct.try_direct(q) is None,
           "含附近/有啥 → 属于就近推荐，模板只答单个地点会答非所问")
 
+# ---- 2026-09-19 风格回归（《梨宝语言风格规范》：规则命中也拟人，但克制）----
+print("\n== 风格回归 · 多模板轮换 ==")
+STYLE_QS = ["学校有没有麦当劳", "学校有没有瑞幸", "学校有没有全家", "1906咖啡厅在哪",
+            "第二食堂在哪", "第一食堂几点开门", "第五食堂几点开门", "学校有没有库迪",
+            "学校里有一点点吗", "学校有没有蜜雪冰城"]
+s_ans = [direct.try_direct(q) for q in STYLE_QS]
+check("风格回归：10 问全部命中模板", all(s_ans),
+      str([q for q, a in zip(STYLE_QS, s_ans) if not a]))
+check("风格回归：无 markdown 强调符号（**）泄漏",
+      all("**" not in (a or {}).get("answer", "") for a in s_ans))
+d1 = direct.try_direct("学校有没有麦当劳")
+d2 = direct.try_direct("学校有没有麦当劳")
+check("风格回归：同问题两次回答逐字一致（轮换是确定性的，不是随机）", d1 == d2 and d1 is not None)
+heads = {(a["answer"].splitlines()[0])[:8] for a in s_ans if a}
+tails = {a["answer"].splitlines()[-1] for a in s_ans if a}
+check("风格回归：开头句式跨问题有变化（≥2 种）", len(heads) >= 2, f"实际 {len(heads)} 种：{sorted(heads)[:3]}")
+check("风格回归：收尾句跨问题有变化（≥2 种，含克制档收尾即止）", len(tails) >= 2,
+      f"实际 {len(tails)} 种")
+
 print("\n" + "=" * 60)
 print(f"汇总：{ok}/{ok + fail} 通过（{ok / (ok + fail) * 100:.1f}%）")
 if fails:
