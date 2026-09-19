@@ -64,7 +64,7 @@ provider 调用次数还是 improve 迭代变长。
 | # | 路径 | 状态 | 验收口径 |
 |---|---|---|---|
 | P1 | transferRisk 接真实分钟 + 可信度折扣 + 灰度开关 | ✅ **PR-A 已完成**（默认仍 legacy） | `tests/scoring-transfer.test.ts` 13/13（含 5 条冻结锚点、单调性、反向验证）；legacy 逐位等于快照 |
-| P2 | improve 对转场有感（算子里用真实分钟） | ⬜ **下一步**（已有实证说明必要性） | 新测试：构造"能省 10 分钟步行但需重排"的场景，断言确实重排；关掉剪枝必须变红 |
+| P2 | improve 对转场有感（算子里用真实分钟） | ✅ **PR-B 已完成** | `tests/improve-transfer.test.ts` 3/3（含反向验证：关掉 aware 开关必须变红） |
 | P3 | churn 落地（free 非零因子） | ⬜ | `tests/churn.test.ts` 扩：free 被挪 ⇒ churn>0；不动 ⇒ 0；`eval:l3 --repeat 3` pass^3=1.0 |
 | P4 | 两遍法性能（先 profile） | ⬜ | `eval:engine` transfers 档 p50 下降 ≥30% 且不变量全过 |
 | P5 | transferRisk 与 placeMismatch 分工 | ✅ 随 P1 解决 | 有真实分钟时不再用固定罚分 → 同一次跨校区不会"按次数再罚一遍"；placeMismatch 只管"整天校区一致性" |
@@ -86,6 +86,52 @@ provider 调用次数还是 improve 迭代变长。
 
 **为什么默认仍是 legacy**：`tests/golden/*.json` 是冻结语料，新口径会改 cost 数值。
 灰度档让新旧并存：legacy 保快照有效，新档另拍基线，验证充分后再翻默认。
+
+## 三·五、PR-B 具体做了什么（2026-09-19）
+
+`improve` 原来**三层都缺**，缺一层都不生效：
+
+1. **没有数据源** → `ImproveContext` 新增 `transfer?: TransferProvider`，由 `solver` 注入
+   （`n.req.transfer`；两遍法的 pass2 正好已把真实 provider 放进 req）
+2. **候选排序与路程无关** → `relocateCandidates` / `reassignCandidates` 在 aware 档改为
+   **按"与左右邻居的步行分钟"升序**再截断（`MAX_CANDIDATES_PER_BLOCK=6`，
+   原来是按时间顺序 / 按**字母序**取前 6 个地点），并把**走不到的位置直接剪掉**；
+   legacy 档一行不改（逐位保持）
+3. 🔴 **度量在搜索中"看不见"自己的移动** —— 最深的坑：
+   `evaluate` 是按块上的 `block.transfer.minutes` 打分的，而 improve 移动块后**没有任何地方重挂提示**
+   （`reattachTransfers` 只在 improve 结束后跑一次）。于是无论度量多准，**候选的分数都基于旧位置的数据**
+   → 一个移动都不会被接受。修法：aware 档在评估候选前先 `withFreshTransfers()`（复用 `construct.attachTransfers`，
+   并**给基线也重挂**一次，否则基线与候选口径不同，移动一律显得"更差"）。
+
+> 为什么 golden 语料测不出这个问题：那些语料里 `construct` 本身就是转场感知的，计划一开始就局部最优
+> （实测迭代数 = 1、接受 0 处）。所以本改动用**白盒构造"确实坏掉的初始计划"**（课在远楼、自习紧贴其后）
+> 来验证 —— 真实世界里这种坏计划来自「用户锁定块写回后 construct 看不见」或「第一遍用兜底估算」。
+>
+> 代价与取舍：`improve` 原本声明「与 `construct.ts` 无耦合」，PR-B 有意打破它（只为复用 `attachTransfers`），
+> 理由写在 import 处：抄一份必然漂移的副本更糟。
+
+## 三·五、PR-B 具体做了什么（2026-09-19）
+
+`improve` 原来**三层都缺**，缺一层都不生效：
+
+1. **没有数据源** → `ImproveContext` 新增 `transfer?: TransferProvider`，由 `solver` 注入
+   （`n.req.transfer`；两遍法的 pass2 正好已把真实 provider 放进 req）
+2. **候选排序与路程无关** → `relocateCandidates` / `reassignCandidates` 在 aware 档改为
+   **按"与左右邻居的步行分钟"升序**再截断（`MAX_CANDIDATES_PER_BLOCK=6`，
+   原来是按时间顺序 / 按**字母序**取前 6 个地点），并把**走不到的位置直接剪掉**；
+   legacy 档一行不改（逐位保持）
+3. 🔴 **度量在搜索中"看不见"自己的移动** —— 最深的坑：
+   `evaluate` 是按块上的 `block.transfer.minutes` 打分的，而 improve 移动块后**没有任何地方重挂提示**
+   （`reattachTransfers` 只在 improve 结束后跑一次）。于是无论度量多准，**候选的分数都基于旧位置的数据**
+   → 一个移动都不会被接受。修法：aware 档在评估候选前先 `withFreshTransfers()`（复用 `construct.attachTransfers`，
+   并**给基线也重挂**一次，否则基线与候选口径不同，移动一律显得"更差"）。
+
+> 为什么 golden 语料测不出这个问题：那些语料里 `construct` 本身就是转场感知的，计划一开始就局部最优
+> （实测迭代数 = 1、接受 0 处）。所以本改动用**白盒构造"确实坏掉的初始计划"**（课在远楼、自习紧贴其后）
+> 来验证 —— 真实世界里这种坏计划来自「用户锁定块写回后 construct 看不见」或「第一遍用兜底估算」。
+>
+> 代价与取舍：`improve` 原本声明「与 `construct.ts` 无耦合」，PR-B 有意打破它（只为复用 `attachTransfers`），
+> 理由写在 import 处：抄一份必然漂移的副本更糟。
 
 ## 四、发布到 engine beta 的验收清单
 

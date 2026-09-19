@@ -126,3 +126,51 @@
 
 **对外话术**："我们没有直接改评分口径上线，而是加了灰度开关：旧口径保住冻结基准，
 新口径先跑证据——实测把 90% 的代价从'换了几个地点'改成'这段路赶不赶得上'。"
+
+---
+
+## ADR-008 · improve 与 construct 的耦合，以及「候选评估前必须重挂转场提示」（2026-09-19，CY）
+
+**背景**：PR-A 把评分改成能看真实转场分钟后，实测发现 `legacy` 与 `transfer-aware` 产出的计划
+**逐块完全相同**。逐层排查出三个原因，缺一不可：
+
+1. `improve` 没有转场数据源（`ImproveContext` 里没有 provider）；
+2. 候选表的排序/截断与路程无关（`reassign` 按**字母序**取前 6 个地点、`relocate` 按时间顺序取空档）；
+3. 🔴 **`evaluate` 按块上的 `block.transfer.minutes` 打分，而移动块后全仓没有任何地方重挂提示**
+   （`reattachTransfers` 只在 improve 之后跑一次）→ 候选的分数基于旧位置的数据，搜索"看不见"自己。
+
+**决定**
+- `ImproveContext` 增 `transfer`，由 solver 注入；aware 档（`scoring='transfer-aware'` 且有 provider）
+  候选按步行分钟升序、剪掉走不到的位置；legacy 档逐位不变。
+- **评估候选前先重挂提示**（复用 `construct.ts::attachTransfers`），**基线也要重挂**
+  （否则基线与候选口径不同，任何移动都会被算成更差）。
+- 有意打破 `improve.ts` 顶部「与 construct.ts 无耦合」的声明 —— 只为复用 `attachTransfers`；
+  抄一份会漂移的副本更糟。理由写在 import 处。
+
+**验收**：`tests/improve-transfer.test.ts` 3/3，其中主命题用**白盒构造的坏计划**（课在远楼、
+自习紧贴其后）断言 aware 会重排而 legacy 不会；反向验证（把 `awareOf` 改恒 false）→ 必红。
+`tests/` 109 全绿、`scripts/` 153 全绿、typecheck 0 错、golden 快照逐位不变。
+
+---
+
+## ADR-008 · improve 与 construct 的耦合，以及「候选评估前必须重挂转场提示」（2026-09-19，CY）
+
+**背景**：PR-A 把评分改成能看真实转场分钟后，实测发现 `legacy` 与 `transfer-aware` 产出的计划
+**逐块完全相同**。逐层排查出三个原因，缺一不可：
+
+1. `improve` 没有转场数据源（`ImproveContext` 里没有 provider）；
+2. 候选表的排序/截断与路程无关（`reassign` 按**字母序**取前 6 个地点、`relocate` 按时间顺序取空档）；
+3. 🔴 **`evaluate` 按块上的 `block.transfer.minutes` 打分，而移动块后全仓没有任何地方重挂提示**
+   （`reattachTransfers` 只在 improve 之后跑一次）→ 候选的分数基于旧位置的数据，搜索"看不见"自己。
+
+**决定**
+- `ImproveContext` 增 `transfer`，由 solver 注入；aware 档（`scoring='transfer-aware'` 且有 provider）
+  候选按步行分钟升序、剪掉走不到的位置；legacy 档逐位不变。
+- **评估候选前先重挂提示**（复用 `construct.ts::attachTransfers`），**基线也要重挂**
+  （否则基线与候选口径不同，任何移动都会被算成更差）。
+- 有意打破 `improve.ts` 顶部「与 construct.ts 无耦合」的声明 —— 只为复用 `attachTransfers`；
+  抄一份会漂移的副本更糟。理由写在 import 处。
+
+**验收**：`tests/improve-transfer.test.ts` 3/3，其中主命题用**白盒构造的坏计划**（课在远楼、
+自习紧贴其后）断言 aware 会重排而 legacy 不会；反向验证（把 `awareOf` 改恒 false）→ 必红。
+`tests/` 109 全绿、`scripts/` 153 全绿、typecheck 0 错、golden 快照逐位不变。

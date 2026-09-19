@@ -20,12 +20,18 @@
  *    不改动入参 `plan`。**硬块（课程 / locked / lockLevels='hard'）永不被移动**。
  * ⚠️ 与 `construct.ts` 无耦合：本文件只消费一个已存在的 `WeekPlan`，因此可在构造重构完成前独立开工。
  */
-import type { PhasePolicy, RollingState, TimeBlock, WeekPlan } from '@/types';
+import type { PhasePolicy, PlanIssue, RollingState, TimeBlock, WeekPlan } from '@/types';
 import type { Commit, LockLevel, Place, ScoringMode, SolverConfig, Weights } from './model.ts';
 import { DEFAULT_SOLVER_CONFIG, DEFAULT_WEIGHTS, resolveLockLevel } from './model.ts';
 import { BUILTIN_PLACE_INDEX, campusOfPlace } from './places.ts';
 import { evaluate } from './objective.ts';
 import type { EvalContext } from './objective.ts';
+import type { TransferProvider } from './campusLookup.ts';
+// ⚠️ 原设计声明「本文件与 construct.ts 无耦合」。PR-B 有意打破它，且只为一件事：
+//    转场感知评分要看**真实分钟**，而分钟挂在块上的 `transfer` 提示里，移动块后必须重挂
+//    （否则 `evaluate` 看到的是旧位置的数据）。重挂逻辑已在 `construct.ts::attachTransfers`
+//    实现并有测试覆盖，这里 import 复用，而不是抄一份必然会漂移的副本。
+import { attachTransfers } from './construct.ts';
 
 const EPS = 1e-9;
 const DAY_START_DEFAULT = 7 * 60;
@@ -64,6 +70,12 @@ export interface ImproveContext {
   scoring?: ScoringMode;
   /** 转场数据可信度折扣；缺省 `TRANSFER_TRUST` */
   transferTrust?: number;
+  /**
+   * 转场数据源（PR-B）。**此前 improve 完全没有它** —— 于是「为了少走 10 分钟而重排」
+   * 这类改进根本不在候选表里，`transfer-aware` 评分再准也没用（实测：只改度量时计划逐块不变）。
+   * 只在 `scoring === 'transfer-aware'` 且本字段存在时启用，legacy 逐位不变。
+   */
+  transfer?: TransferProvider;
   dayStartMin?: number;
   dayEndMin?: number;
   config?: Partial<SolverConfig>;
@@ -219,33 +231,131 @@ interface Candidate {
 /** 每算子、每块最多生成多少候选（防止邻域爆炸；顺序固定 → 截断也确定） */
 const MAX_CANDIDATES_PER_BLOCK = 6;
 
+/* ============================================================
+ * 三·五、转场感知的邻域辅助（PR-B）
+ *
+ * 为什么必须加：主循环是 **first-improvement**（取第一个严格下降的移动），
+ * 候选表被 `MAX_CANDIDATES_PER_BLOCK` 截断。因此**候选的排序/剪枝决定了搜索"看不看得见"好棋**。
+ * 而原实现里 `reassign` 是按**字母序**取前 6 个地点、`relocate` 是按时间顺序取前 6 个空档
+ * —— 与"这段路要多久"毫无关系。实测后果：把转场成本设为 25 分钟时，
+ * `legacy` 与 `transfer-aware` 两档产出的计划**逐块完全相同**（度量说差 66 分，搜索却纹丝不动）。
+ * ========================================================== */
+
+/** 是否启用转场感知邻域：**两者都要满足**，否则保持 legacy 的逐位行为 */
+function awareOf(ctx: ImproveContext): boolean {
+  return (ctx.scoring ?? 'legacy') === 'transfer-aware' && typeof ctx.transfer === 'function';
+}
+
+/**
+ * 转场感知模式下，把候选计划的**转场提示重算一遍**（PR-B 的关键一步）。
+ *
+ * 为什么非做不可：`evaluate` 是按块上的 `block.transfer.minutes` 打分的，而 improve 移动块后
+ * **没有任何地方重挂提示**（`reattachTransfers` 只在 improve 结束后跑一次）。于是搜索过程中
+ * 度量看到的始终是"旧位置算出来的分钟数"—— 度量说这份计划差 66 分，搜索却完全看不见
+ * 自己的移动会带来什么，这就是"只改度量时计划逐块不变"的最后一块拼图。
+ *
+ * 代价：每个候选重算一次，但 provider 是 O(1) 查表（pass2 已预取），块数 ~40 → 可接受。
+ * 只在 transfer-aware 档调用；legacy 路径一行都不碰。
+ */
+function withFreshTransfers(plan: WeekPlan, ctx: ImproveContext): WeekPlan {
+  const provider = ctx.transfer as TransferProvider;
+  const scratch: PlanIssue[] = [];          // 只借 attachTransfers 的挂提示能力，issue 丢弃
+  const blocks = plan.blocks.map((b) => ({ ...b }));
+  const byDay = new Map<number, TimeBlock[]>();
+  for (const b of blocks) byDay.set(b.dayOfWeek, [...(byDay.get(b.dayOfWeek) ?? []), b]);
+  for (const [day, list] of byDay) {
+    list.sort((a, b) => a.startMin - b.startMin);
+    for (const b of list) delete b.transfer;   // 旧提示一律作废（位置变了就不再有效）
+    attachTransfers(list, provider, `周${day}`, scratch);
+  }
+  return { ...plan, blocks };
+}
+/**
+ * 把块放在 `(day, startMin, dur)` 时，与当天左右邻居的步行分钟合计。
+ * 同时判定**可行性**：与任一侧的间隔小于步行分钟 ⇒ 这个位置根本走不到（剪掉，别占邻居候选位）。
+ * 取不到数据（provider 返回 null）时按 0 计 —— 不猜、不罚。
+ */
+function localWalk(
+  plan: WeekPlan,
+  ctx: ImproveContext,
+  day: number,
+  startMin: number,
+  dur: number,
+  place: string | undefined,
+  excludeIds: Set<string>,
+): { minutes: number; infeasible: boolean } {
+  const provider = ctx.transfer as TransferProvider;
+  const end = startMin + dur;
+  let prev: TimeBlock | undefined;
+  let next: TimeBlock | undefined;
+  for (const b of plan.blocks) {
+    if (b.dayOfWeek !== day || excludeIds.has(b.id)) continue;
+    if (b.endMin <= startMin && (!prev || b.endMin > prev.endMin)) prev = b;
+    if (b.startMin >= end && (!next || b.startMin < next.startMin)) next = b;
+  }
+  let minutes = 0;
+  let infeasible = false;
+  const legs: Array<[string | undefined, string | undefined, number | null]> = [
+    [prev?.place, place, prev ? startMin - prev.endMin : null],
+    [place, next?.place, next ? next.startMin - end : null],
+  ];
+  for (const [from, to, gap] of legs) {
+    if (!from || !to || from === to) continue;
+    const info = provider(from, to);
+    const m = info && typeof info.minutes === 'number' && info.minutes >= 0 ? info.minutes : 0;
+    minutes += m;
+    if (gap != null && gap < m) infeasible = true;
+  }
+  return { minutes, infeasible };
+}
+
 function relocateCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
   const out: Candidate[] = [];
+  const aware = awareOf(ctx);
   const days = allowedDays(ctx.policy);
   for (const b of movableBlocks(plan, ctx)) {
     const dur = b.endMin - b.startMin;
     if (dur <= 0) continue;
-    let made = 0;
+    const exclude = new Set([b.id]);
+    const entries: Array<{ cand: Candidate; walk: number; key: string }> = [];
+
     for (const day of days) {
-      if (made >= MAX_CANDIDATES_PER_BLOCK) break;
-      const gaps = freeGaps(ctx, plan, day, new Set([b.id]));
+      const gaps = freeGaps(ctx, plan, day, exclude);
       for (const g of gaps) {
-        if (made >= MAX_CANDIDATES_PER_BLOCK) break;
         if (g.endMin - g.startMin < dur) continue;
         if (day === b.dayOfWeek && g.startMin === b.startMin) continue; // no-op
         const moved: TimeBlock = { ...b, dayOfWeek: day as TimeBlock['dayOfWeek'], startMin: g.startMin, endMin: g.startMin + dur };
         if (!respectsPolicy(moved, ctx)) continue;
         const others = plan.blocks.filter((x) => x.id !== b.id);
         if (overlapsAny(moved, others)) continue;
-        out.push({
-          op: 'relocate',
-          blockIds: [b.id],
-          note: `${b.title} 周${b.dayOfWeek} ${fmt(b.startMin)} → 周${day} ${fmt(g.startMin)}`,
-          plan: replaceBlocks(plan, [moved]),
+
+        let walk = 0;
+        if (aware) {
+          const lw = localWalk(plan, ctx, day, g.startMin, dur, b.place, exclude);
+          if (lw.infeasible) continue;   // 走不到的位置不进候选表（省下的名额给能到的）
+          walk = lw.minutes;
+        }
+        entries.push({
+          cand: {
+            op: 'relocate',
+            blockIds: [b.id],
+            note: `${b.title} 周${b.dayOfWeek} ${fmt(b.startMin)} → 周${day} ${fmt(g.startMin)}`,
+            plan: replaceBlocks(plan, [moved]),
+          },
+          walk,
+          key: `${day}-${g.startMin}`,
         });
-        made += 1;
+        // legacy 语义：边生成边截断（顺序即优先级）
+        if (!aware && entries.length >= MAX_CANDIDATES_PER_BLOCK) break;
       }
+      if (!aware && entries.length >= MAX_CANDIDATES_PER_BLOCK) break;
     }
+
+    if (aware) {
+      // transfer-aware：先按「与左右邻居的步行分钟」升序（同价按时间顺序稳定），再截断
+      entries.sort((x, y) => x.walk - y.walk || x.key.localeCompare(y.key));
+    }
+    for (const e of entries.slice(0, MAX_CANDIDATES_PER_BLOCK)) out.push(e.cand);
   }
   return out;
 }
@@ -283,21 +393,35 @@ function reassignCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
   const index = ctx.places ?? BUILTIN_PLACE_INDEX;
   const pool = ctx.candidatePlaces
     ?? [...new Set([...index.values()].map((p) => p.name))].sort();
+  const aware = awareOf(ctx);
   for (const b of movableBlocks(plan, ctx)) {
     if (!ASSIGNABLE_KINDS.has(b.kind)) continue;
-    let made = 0;
+    const dur = b.endMin - b.startMin;
+    const exclude = new Set([b.id]);
+    const entries: Array<{ cand: Candidate; walk: number }> = [];
     for (const name of pool) {
-      if (made >= MAX_CANDIDATES_PER_BLOCK) break;
       if (name === (b.place ?? '')) continue;
-      const swapped: TimeBlock = { ...b, place: name };
-      out.push({
-        op: 'reassign',
-        blockIds: [b.id],
-        note: `${b.title} 地点 ${b.place ?? '(无)'} → ${name}`,
-        plan: replaceBlocks(plan, [swapped]),
+      let walk = 0;
+      if (aware) {
+        // 原地换地点（时间不变）→ 看与左右邻居的步行合计；走不到的直接剪掉。
+        // ⚠️ 原实现是按**字母序**取前 6 个地点 —— 与路程完全无关，等于随机换地方。
+        const lw = localWalk(plan, ctx, b.dayOfWeek, b.startMin, dur, name, exclude);
+        if (lw.infeasible) continue;
+        walk = lw.minutes;
+      }
+      entries.push({
+        cand: {
+          op: 'reassign',
+          blockIds: [b.id],
+          note: `${b.title} 地点 ${b.place ?? '(无)'} → ${name}`,
+          plan: replaceBlocks(plan, [{ ...b, place: name }]),
+        },
+        walk,
       });
-      made += 1;
+      if (!aware && entries.length >= MAX_CANDIDATES_PER_BLOCK) break;
     }
+    if (aware) entries.sort((x, y) => x.walk - y.walk || x.cand.note.localeCompare(y.cand.note));
+    for (const e of entries.slice(0, MAX_CANDIDATES_PER_BLOCK)) out.push(e.cand);
   }
   return out;
 }
@@ -440,8 +564,13 @@ export function improve(input: WeekPlan, ctx: ImproveContext): ImproveResult {
   const budgetMs = config.budgetMs ?? null;
   const acceptWorse = config.acceptWorse ?? false;
   const rng = mulberry32(config.seed ?? 0x5eed_1234);
+  const aware = awareOf(ctx);   // transfer-aware 且拿到了 provider 才启用转场感知邻域
 
   let plan = clonePlan(input, input.blocks.map(cloneBlock));
+  // ⚠️ 关键一致性：aware 档必须先给**基线**也重挂转场提示，否则基线用的是旧/缺失的分钟数、
+  //    候选用的是新算的 —— 两边口径不同，任何移动都会被算成"更差"，搜索直接瘫掉。
+  //    （实测踩过：只在候选侧重挂时，aware 档一个移动都不接受。）
+  if (aware) plan = withFreshTransfers(plan, ctx);
   let cost = evaluate(plan, evalCtx).total;
   const costBefore = cost;
   const accepted: AcceptedMove[] = [];
@@ -458,10 +587,13 @@ export function improve(input: WeekPlan, ctx: ImproveContext): ImproveResult {
     outer:
     for (const op of OP_ORDER) {
       for (const cand of candidatesOf(op, plan, ctx)) {
-        if (!planIsValid(cand.plan, ctx)) continue;
-        const delta = evaluate(cand.plan, evalCtx).total - cost;
+        // transfer-aware：候选先重挂转场提示，否则 evaluate 看到的是旧位置的分钟数，
+        // 搜索就"看不见"自己移动的效果（实测：这正是计划逐块不变的原因）
+        const evalPlan = aware ? withFreshTransfers(cand.plan, ctx) : cand.plan;
+        if (!planIsValid(evalPlan, ctx)) continue;
+        const delta = evaluate(evalPlan, evalCtx).total - cost;
         if (delta < -EPS) {
-          best = { cand, delta };
+          best = { cand: { ...cand, plan: evalPlan }, delta };
           break outer;
         }
       }
@@ -480,7 +612,8 @@ export function improve(input: WeekPlan, ctx: ImproveContext): ImproveResult {
     const T = 1 + 9 * (1 - iterations / maxIterations);
     const flat = OP_ORDER.flatMap((op) => candidatesOf(op, plan, ctx)).filter((c) => planIsValid(c.plan, ctx));
     if (flat.length === 0) break;
-    const pick = flat[Math.floor(rng() * flat.length)];
+    const pickRaw = flat[Math.floor(rng() * flat.length)];
+    const pick = aware ? { ...pickRaw, plan: withFreshTransfers(pickRaw.plan, ctx) } : pickRaw;
     const d = evaluate(pick.plan, evalCtx).total - cost;
     if (d < 0 || rng() < Math.exp(-d / T)) {
       plan = pick.plan;
