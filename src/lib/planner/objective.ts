@@ -293,13 +293,18 @@ export function isHardBlock(
   return resolveLockLevel(block, lockLevels) === 'hard';
 }
 
-/** 认知主体键：优先 `courseId`，退回标题 */
-function subjectKey(b: TimeBlock): string {
+/**
+ * 认知主体键：优先 `courseId`，退回标题。
+ * 2026-09-19 导出给 `improve` 的**候选级剪枝**用：剪枝要算「当天相邻对代价」的精确增量，
+ * 必须与这里**同一套口径**（否则下界不是下界）。**不要在别处复制这份逻辑** ——
+ * 复制必然漂移，而漂移会让剪枝变成"错误地跳过好棋"。
+ */
+export function subjectKey(b: TimeBlock): string {
   return b.courseId ?? b.title;
 }
 
-/** 「学习族」：认知切换只在学习类块之间计价（避免误伤三餐，规格书 §5.4 说明） */
-function isStudyFamily(b: TimeBlock): boolean {
+/** 「学习族」：认知切换只在学习类块之间计价（避免误伤三餐，规格书 §5.4 说明）。导出理由同上。 */
+export function isStudyFamily(b: TimeBlock): boolean {
   return b.kind === 'study' || b.kind === 'course';
 }
 

@@ -221,6 +221,14 @@ interface Candidate {
   blockIds: string[];
   note: string;
   plan: WeekPlan;
+  /**
+   * 本候选**实际改动的块**。当前**没有任何地方消费它** —— 保留是因为两轮实验都用它做过手脚，
+   * 而两次的结论都是"不要启用"（详见 `docs/engine-optimization-paths.md` §三·七/§三·八）：
+   *   · P8 候选级校验：结果不变但慢 ~2×（整份校验在此充当**便宜的早退**）
+   *   · P4 候选级剪枝：净亏 ~24%（大多数候选是跨天/改地点的，剪枝覆盖不到）
+   * 若将来 construct 产出「可改进」的计划，这两条会重新变得有意义 —— 届时从这里接。
+   */
+  patched?: TimeBlock[];
 }
 
 /** 每算子、每块最多生成多少候选（防止邻域爆炸；顺序固定 → 截断也确定） */
@@ -313,6 +321,7 @@ function relocateCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
             blockIds: [b.id],
             note: `${b.title} 周${b.dayOfWeek} ${fmt(b.startMin)} → 周${day} ${fmt(g.startMin)}`,
             plan: replaceBlocks(plan, [moved]),
+            patched: [moved],
           },
           walk,
           key: `${day}-${g.startMin}`,
@@ -357,6 +366,7 @@ function swapCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
         blockIds: [a.id, b.id],
         note: `${a.title} ⇄ ${b.title}（周${a.dayOfWeek}）`,
         plan: replaceBlocks(plan, [na, nb]),
+        patched: [na, nb],
       });
     }
   }
@@ -391,6 +401,7 @@ function reassignCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
           blockIds: [b.id],
           note: `${b.title} 地点 ${b.place ?? '(无)'} → ${name}`,
           plan: replaceBlocks(plan, [reassigned]),
+          patched: [reassigned],
         },
         walk,
       });
@@ -421,6 +432,7 @@ function resplitCandidates(plan: WeekPlan, ctx: ImproveContext): Candidate[] {
         blockIds: [a.id, b.id],
         note: `合并自习 ${a.title}+${b.title} → ${a.startMin}–${b.endMin}（周${a.dayOfWeek}）`,
         plan: withExtraBlock(plan, merged, [a.id, b.id]),
+        patched: [merged],
       });
     }
   }
@@ -462,6 +474,7 @@ function reschedulePlaceCandidates(plan: WeekPlan, ctx: ImproveContext): Candida
             blockIds: [b.id],
             note: `${commit.title} 拉入窗口 ${fmt(commit.window.fromMin)}–${fmt(commit.window.toMin)}`,
             plan: replaceBlocks(plan, [shifted]),
+            patched: [shifted],
           });
         }
       }
@@ -477,6 +490,7 @@ function reschedulePlaceCandidates(plan: WeekPlan, ctx: ImproveContext): Candida
           blockIds: [b.id],
           note: `${commit.title} 迁到首选地点 ${place.name}`,
           plan: replaceBlocks(plan, [movedPlace]),
+          patched: [movedPlace],
         });
       }
     }
@@ -573,6 +587,14 @@ export function improve(input: WeekPlan, ctx: ImproveContext): ImproveResult {
         //    真正该警惕的是：将来若 construct 产出「**可改进**」的计划，这个恒 false 的校验
         //    会**静默**把改进阶段关掉。届时按 ADR-010 的方案（候选级校验 + 保留整份兜底）改，
         //    并**重拍 golden 快照**。
+        // ⚠️ 保持**整份计划**的合法性校验（现状语义）。已实验验证两点：
+        //   ① 改成"只看被改动的块"并不会改变结果（这些计划本就局部最优），但会慢 ~2×
+        //      —— 因为整份校验在这里等价于一个**便宜的早退**（construct 的计划含周末三餐软块
+        //      ⇒ 整份校验恒 false ⇒ 候选根本不进 evaluate）；
+        //   ② 候选级剪枝（同天同地点时用当天相邻对代价做精确下界）也**净亏 ~24%**，
+        //      因为绝大多数候选是跨天/改地点的，剪枝救不到它们，只留下开销。
+        //   ⇒ 真正的开销在**评分本身**（aware 档每个候选都要逐对问 provider），
+        //      正确的优化点是 provider 记忆化（见 `memoizeTransferProvider`），而不是改校验/剪枝。
         if (!planIsValid(cand.plan, ctx)) continue;
         const delta = evaluate(cand.plan, evalCtx).total - cost;
         if (delta < -EPS) {

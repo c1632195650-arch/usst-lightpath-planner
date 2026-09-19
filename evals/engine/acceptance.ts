@@ -25,6 +25,7 @@
  *   python evals/run.py --suite engine         # 由台架统一调用（npm run eval:engine）
  */
 import { buildWeekPlan, toPlanRequest } from '@/lib/planner/schedule.ts';
+import { DEFAULT_SOLVER_CONFIG } from '@/lib/planner/model.ts';
 import { planWeek } from '@/lib/planner/planWeek.ts';
 import { GOLDEN_INPUTS, buildGoldenInput } from '../../tests/golden-inputs.ts';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
@@ -217,7 +218,8 @@ for (const { spec, variant } of jobs) {
 }
 
 let totalBad = 0;
-console.log(`\n🧪 排程引擎独立验收｜场景 ${GOLDEN_INPUTS.length} × ${VARIANTS.length} 档 = ${results.length} 次验收｜每档跑 ${RUNS} 次\n`);
+console.log(`\n🧪 排程引擎独立验收｜场景 ${GOLDEN_INPUTS.length} × ${VARIANTS.length} 档 = ${results.length} 次验收`
+  + `｜每档跑 ${RUNS} 次｜评分口径 ${DEFAULT_SOLVER_CONFIG.scoring}\n`);
 for (const r of results) {
   const n = r.violations?.length ?? 0;
   totalBad += n;
@@ -238,6 +240,9 @@ for (const r of results) {
 
 const payload = {
   ts: new Date().toISOString(),
+  // ⚠️ 记录**评分口径**：aware 档每次求解比 legacy 慢 ~2.7×（评测要逐对问 provider），
+  // 基线里的毫秒数**只在同一口径下可比** —— 不记这个字段，下次对比就是苹果比橘子。
+  scoring: DEFAULT_SOLVER_CONFIG.scoring,
   runs: RUNS,
   variants: VARIANTS,
   results,
@@ -252,6 +257,7 @@ const payload = {
 
 const cur = {
   ts: payload.ts,
+  scoring: payload.scoring,   // 基线必须自带口径标记（毫秒只在同口径下可比）
   perScenario: Object.fromEntries(results.map((r) => [`${r.name}[${r.variant}]`, r.metrics ?? null])),
   totals: payload.totals,
 };

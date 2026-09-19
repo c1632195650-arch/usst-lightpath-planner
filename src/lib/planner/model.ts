@@ -165,7 +165,19 @@ export const DEFAULT_WEIGHTS: Weights = {
  */
 export type ScoringMode = 'legacy' | 'transfer-aware';
 
-export const DEFAULT_SCORING: ScoringMode = 'legacy';
+/**
+ * 默认口径 = `transfer-aware`（2026-09-19 翻转，灰度期结束）。
+ *
+ * 为什么可以翻：golden 快照与它们的比对走的是 **`buildWeekPlan` → `construct`**（旧 7 步），
+ * **根本不经过 `solveWeek`/`evaluate`** ⇒ 快照与默认口径无关、逐位有效（已核实）。
+ * `legacy` 仍可通过 `config.scoring` 显式指定，且 5 条**冻结锚点测试**（literal cost）
+ * 继续钉住 legacy 的行为，防止它悄悄漂移。
+ *
+ * 代价（如实）：aware 档每次求解比 legacy 慢约 2.7×（实测 ~19ms → ~53ms），
+ * 因为评分要逐对向 provider 问分钟数。三条降本尝试（候选级校验 / 候选剪枝 / provider 记忆化）
+ * 都**经实测否决**（详见 `docs/engine-optimization-paths.md` §三·八）。
+ */
+export const DEFAULT_SCORING: ScoringMode = 'transfer-aware';
 
 /**
  * 转场数据的**可信度折扣**（transfer-aware 才生效）。

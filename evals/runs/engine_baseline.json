@@ -1,5 +1,6 @@
 {
- "ts": "2026-09-17T18:50:22.752Z",
+ "ts": "2026-09-19T08:11:37.869Z",
+ "scoring": "transfer-aware",
  "perScenario": {
   "week-04-typical[as-is]": {
    "blocks": 43,
@@ -17,11 +18,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 0.41,
-    "p95": 2.48,
-    "max": 2.48
+    "p50": 0.35,
+    "p95": 2.3,
+    "max": 2.3
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-04-typical[campus]": {
    "blocks": 43,
@@ -39,11 +41,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 0.23,
-    "p95": 0.71,
-    "max": 0.71
+    "p50": 0.22,
+    "p95": 0.4,
+    "max": 0.4
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-04-typical[transfers]": {
    "blocks": 41,
@@ -61,11 +64,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 7.61,
-    "p95": 13.51,
-    "max": 13.51
+    "p50": 22.44,
+    "p95": 32.08,
+    "max": 32.08
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-06-practice[as-is]": {
    "blocks": 43,
@@ -83,11 +87,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 0.16,
-    "p95": 0.29,
-    "max": 0.29
+    "p50": 0.17,
+    "p95": 0.22,
+    "max": 0.22
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-06-practice[campus]": {
    "blocks": 43,
@@ -105,11 +110,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 0.14,
-    "p95": 0.29,
-    "max": 0.29
+    "p50": 0.18,
+    "p95": 0.27,
+    "max": 0.27
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-06-practice[transfers]": {
    "blocks": 41,
@@ -127,11 +133,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 7.41,
-    "p95": 8.09,
-    "max": 8.09
+    "p50": 20.28,
+    "p95": 23.99,
+    "max": 23.99
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-12-crosscampus[as-is]": {
    "blocks": 49,
@@ -150,10 +157,11 @@
    },
    "ms": {
     "p50": 0.23,
-    "p95": 0.41,
-    "max": 0.41
+    "p95": 0.44,
+    "max": 0.44
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-12-crosscampus[campus]": {
    "blocks": 49,
@@ -171,11 +179,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 0.21,
-    "p95": 0.4,
-    "max": 0.4
+    "p50": 0.2,
+    "p95": 0.41,
+    "max": 0.41
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-12-crosscampus[transfers]": {
    "blocks": 49,
@@ -193,11 +202,12 @@
     "info": 2
    },
    "ms": {
-    "p50": 8.88,
-    "p95": 9.86,
-    "max": 9.86
+    "p50": 31.29,
+    "p95": 32.09,
+    "max": 32.09
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-19-exam[as-is]": {
    "blocks": 38,
@@ -215,11 +225,12 @@
     "info": 0
    },
    "ms": {
-    "p50": 0.13,
-    "p95": 0.32,
-    "max": 0.32
+    "p50": 0.11,
+    "p95": 0.2,
+    "max": 0.2
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-19-exam[campus]": {
    "blocks": 38,
@@ -237,11 +248,12 @@
     "info": 0
    },
    "ms": {
-    "p50": 0.1,
-    "p95": 0.24,
-    "max": 0.24
+    "p50": 0.11,
+    "p95": 0.16,
+    "max": 0.16
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-19-exam[transfers]": {
    "blocks": 38,
@@ -259,11 +271,12 @@
     "info": 0
    },
    "ms": {
-    "p50": 5.32,
-    "p95": 6.23,
-    "max": 6.23
+    "p50": 19.87,
+    "p95": 20.25,
+    "max": 20.25
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-04-usertasks[as-is]": {
    "blocks": 45,
@@ -281,11 +294,12 @@
     "info": 8
    },
    "ms": {
-    "p50": 0.16,
-    "p95": 0.48,
-    "max": 0.48
+    "p50": 0.25,
+    "p95": 0.58,
+    "max": 0.58
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-04-usertasks[campus]": {
    "blocks": 45,
@@ -303,11 +317,12 @@
     "info": 8
    },
    "ms": {
-    "p50": 0.14,
+    "p50": 0.16,
     "p95": 0.37,
     "max": 0.37
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   },
   "week-04-usertasks[transfers]": {
    "blocks": 45,
@@ -325,11 +340,12 @@
     "info": 8
    },
    "ms": {
-    "p50": 5.41,
-    "p95": 6.19,
-    "max": 6.19
+    "p50": 20.08,
+    "p95": 24.9,
+    "max": 24.9
    },
-   "determinism": true
+   "determinism": true,
+   "slow": false
   }
  },
  "totals": {
