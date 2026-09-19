@@ -562,14 +562,17 @@ export function improve(input: WeekPlan, ctx: ImproveContext): ImproveResult {
     outer:
     for (const op of OP_ORDER) {
       for (const cand of candidatesOf(op, plan, ctx)) {
-        // ⚠️ 用**整份计划**的合法性校验（现状语义，逐位不变）。
-        //    但它盯的是「全计划遵守阶段策略（周末/晚间）」，而 construct 排出的计划本身就含
-        //    周末三餐块 → 于是**每个候选都被判非法** ⇒ improve 在这 5 份语料上**全是空转**
-        //    （这解释了长期观察到的"迭代 1、接受 0"）。
-        //    🔬 2026-09-19 实测：把校验改成"只看候选改动的块"后，legacy 口径下耗时 11.7ms→23.8ms
-        //    （**第一次真的评估候选**），但接受数仍为 0 ⇒ 说明真正该做的是
-        //    ①修正校验粒度 ②顺带做候选级剪枝。这属**行为级变更**，要动冻结快照 → 留待决策，见
-        //    `docs/engine-optimization-paths.md` 的 P8。本行保持现状不动。
+        // 用**整份计划**的合法性校验（现状语义）。
+        //    ⚠️ 已查清的**事实**（2026-09-19，P8）：construct 排出的计划含 8~10 个周末三餐软块，
+        //    而 `respectsPolicy` 对 study/meal/activity 要求「周末需 weekendWork、18 点后需
+        //    eveningAllowed」——5 份 golden 语料的 policy 都不允许 ⇒ **整份校验恒 false**
+        //    ⇒ 每个候选都被判非法，`improve` 在这些语料上**从未评估过任何候选**。
+        //    但**不要因此改这里**：实测把校验改成"只看被改动的块"后，候选确实被评估了，
+        //    结果**接受数仍为 0、计划逐块不变**（说明这些计划本就局部最优），
+        //    代价却是运行时间 ~2×。⇒ 现状的"空转"没有质量问题，只是**掩盖**而非致因。
+        //    真正该警惕的是：将来若 construct 产出「**可改进**」的计划，这个恒 false 的校验
+        //    会**静默**把改进阶段关掉。届时按 ADR-010 的方案（候选级校验 + 保留整份兜底）改，
+        //    并**重拍 golden 快照**。
         if (!planIsValid(cand.plan, ctx)) continue;
         const delta = evaluate(cand.plan, evalCtx).total - cost;
         if (delta < -EPS) {
