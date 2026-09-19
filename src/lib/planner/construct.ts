@@ -29,6 +29,7 @@ import { campusOfPlace, resolvePlace } from './places.ts';
 import { campusFallbackTransfer, campusOfName, type TransferProvider } from './campusLookup.ts';
 import { blockId, type Commit, type PlanRequest } from './model.ts';
 import { effectiveEffortMin, sortCommits } from './objective.ts';
+import { effectiveStudyMin, fatigueAdjustment, weeklyStudyTarget } from './fatigue.ts';
 import {
   buildWeekNotes, issueCourseConflict, issueCourseNoPlace, issueMealSkipped,
   issueTransferLate, issueTransferMissingPlace, issueTransferTight,
@@ -41,7 +42,8 @@ import {
  * ========================================================== */
 
 const DAY_ORDER: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 7];
-const DAY_NAME: Record<number, string> = {
+/** 星期几的中文名（`solver` 重挂转场时也要用，故导出） */
+export const DAY_NAME: Record<number, string> = {
   1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日',
 };
 
@@ -158,6 +160,18 @@ function pickDuration(durations: number[], availableMin: number): number | null 
   return usable.length ? usable[usable.length - 1] : null;
 }
 
+/**
+ * 把数组从 offset 处轮转（确定性：同一 offset 必得同一顺序，**不引入随机数**）。
+ *
+ * 用途：自习点轮换。不轮转时「喜欢图书馆」会被理解成「每次都去同一个图书馆」，
+ * 引擎按固定顺序取候选 → 整周每个自习块都落在同一个点。真实的人不会这样。
+ */
+function rotateFrom<T>(arr: T[], offset: number): T[] {
+  if (arr.length <= 1) return arr;
+  const k = ((offset % arr.length) + arr.length) % arr.length;
+  return [...arr.slice(k), ...arr.slice(0, k)];
+}
+
 function sortBlocks(blocks: TimeBlock[]): TimeBlock[] {
   return [...blocks].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin);
 }
@@ -237,6 +251,9 @@ export interface ConstructResult {
  */
 export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructResult {
   const { schedule, weekNo, policy } = req;
+  // 跨周自适应（§4.4）：逐日有效自习目标。`rolling` 缺省时结果恒等于 policy 基准值，
+  // 即整条链路是 no-op —— golden 快照不受影响的前提。
+  const fatigue = fatigueAdjustment(policy, req.rolling);
   const templates = ctx.templates ?? DEFAULT_TEMPLATES;
   const tasks = ctx.tasks ?? req.tasks ?? [];
   const scenarios: ScenarioFields | null = req.scenarios ?? null;
@@ -380,7 +397,13 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     totalFree += freeTotal;
     // 留白是「下限」：至少留下 blankRatio 的空档不被占用
     const usable = Math.max(0, freeTotal - Math.round(freeTotal * policy.blankRatio));
-    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4));
+    // 事件准备块（有截止日期）是硬需求：单独留出预算，不与日常活动抢额度。
+    // 「光电杯明天截止」比「今天少自习一小时」严重得多 —— 少了这一项，
+    // 日程一满，备考/交材料的块会被日常活动预算静默挤掉，用户完全看不出来。
+    const essentialMin = floatingTasks
+      .filter((t) => t.essential && taskActive(t) && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .reduce((n, t) => n + (t.durationMin ?? 60), 0);
+    const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4)) + essentialMin;
 
     /* --- 6.4b 提交项填充（EDF × urgency 择序，贪心填空档）--- */
     const commitBlocks = placeCommits({
@@ -412,7 +435,12 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.6 学习块（按阶段策略填充） --- */
-    const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin));
+    // 目标取**有效**值（已含疲劳 / 逐日可行性）：`objective` 与 `explain` 用的是同一个
+    // `effectiveStudyMin()`，三处同口径才不会「按 96 排、按 120 扣分」。
+    const studyBudget = Math.min(
+      effectiveStudyMin(fatigue, day),
+      Math.max(0, usable - activityMin),
+    );
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
       dayStartMin, dayEndMin,
@@ -433,7 +461,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   }
 
   /* --- 6.8 汇总 --- */
-  const shortfall = summaryStudyIssue(studyMin, policy, weekNo);
+  const shortfall = summaryStudyIssue(studyMin, weeklyStudyTarget(policy, fatigue), weekNo);
   if (shortfall) issues.push(shortfall);
 
   notes.push(...buildWeekNotes({
@@ -442,6 +470,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     effectiveCourseCount: effCourses.length,
     scenarios,
     unverifiedMeals,
+    // 文案与实际排法必须一致（否则计划按 96 排、却写着「目标 120」）
+    effectiveStudyMin: fatigue.adjustedDailyMin,
   }));
 
   return {
@@ -700,7 +730,7 @@ function studyCandidates(
   policy: PhasePolicy,
   dayCampus: string,
   templates: ActivityTemplate[],
-): ActivityTemplate[] {
+): { preferred: ActivityTemplate[]; fallback: ActivityTemplate[] } {
   const wanted = policy.studyPlaces.map((p, i) => {
     const hit = templates.find((t) => t.place === p && t.category === 'study');
     if (hit) return hit;
@@ -721,14 +751,15 @@ function studyCandidates(
       verified: true,
     };
   });
-  // 补充候选：同校区的其它自习点。
+  // 补充候选：同校区的其它自习点。**只作兜底，不参与轮换** ——
+  // 见 fillStudy 的 rotated()：轮换只在画像给的偏好池内做。
   // 校区来自**显式地点表**（旧实现靠 campusOfName 关键字猜 + 默认北校）——行为等价但不再猜
-  const extra = templates.filter(
+  const fallback = templates.filter(
     (t) => t.category === 'study'
       && campusOfPlace(t.place ?? '') === dayCampus
       && !wanted.some((w) => w.place === t.place),
   );
-  return [...wanted, ...extra];
+  return { preferred: wanted, fallback };
 }
 
 function fillStudy(args: {
@@ -751,15 +782,25 @@ function fillStudy(args: {
   if (isWeekend && !policy.weekendWork) return []; // 这个阶段不占周末
   if (budget < MIN_CHUNK) return [];
 
-  const cands = studyCandidates(policy, dayCampus, templates);
+  const { preferred, fallback } = studyCandidates(policy, dayCampus, templates);
   const blocks: TimeBlock[] = [];
   let remaining = budget;
+
+  /**
+   * 轮换**只在画像偏好池内**做 —— 兜底点（同校区其它自习点）接在**队尾**，
+   * 不参与轮换，所以「说喜欢图书馆」的人不会因为轮换被轮到宿舍去。
+   *
+   * 偏移随「星期几 + 今天第几块」平移，是确定性的（不用随机数，测试可复现）。
+   * 不轮换时 `studyPlaces` 的顺序固定 → 整周每个自习块都落在池首那一个点。
+   */
+  const rotated = () => [...rotateFrom(preferred, day + blocks.length), ...fallback];
 
   // 每次都重新算空档：放完一块后布局变了，下一块的走路时间也要跟着重算
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
+    const cands = rotated();
 
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);
@@ -921,7 +962,7 @@ function placeCommits(args: {
  * ⚠️ 只对**硬约束**报警：课程 / 用餐 / 用户锁定的块迟到了才是真问题；
  * 自习与活动块（引擎自己排的软块）晚几分钟无所谓，刷一屏警告只会让人无视警告。
  */
-function attachTransfers(
+export function attachTransfers(
   dayBlocks: TimeBlock[],
   transfer: TransferProvider,
   dayName: string,

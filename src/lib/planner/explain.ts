@@ -97,6 +97,7 @@ export function issueCourseConflict(
   dayName: string, a: TimeBlock, b: TimeBlock,
 ): PlanIssue {
   return {
+    code: 'time-conflict',
     level: 'error',
     blockId: b.id,
     message: `${dayName}「${a.title}」与「${b.title}」时间冲突`,
@@ -106,6 +107,7 @@ export function issueCourseConflict(
 /** 课程没地点 → 转场算不出来（旧问题 #17：**不按 0 分钟糊过去**） */
 export function issueCourseNoPlace(dayName: string, courseName: string): PlanIssue {
   return {
+    code: 'course-no-place',
     level: 'info',
     message: `「${courseName}」还没有上课地点，${dayName}的转场时间无法计算（记得补上）`,
   };
@@ -113,12 +115,14 @@ export function issueCourseNoPlace(dayName: string, courseName: string): PlanIss
 
 /** 某一餐没排上 */
 export function issueMealSkipped(dayName: string, reason: string): PlanIssue {
-  return { level: 'info', message: `${dayName}：${reason}` };
+  return {
+    code: 'meal-skipped', level: 'info', message: `${dayName}：${reason}` };
 }
 
 /** 本周自习没达标 */
 export function issueStudyShortfall(studyMin: number, wantMin: number): PlanIssue {
   return {
+    code: 'study-shortfall',
     level: 'info',
     message: `本周自习 ${humanizeMinutes(studyMin)}，低于目标 ${humanizeMinutes(wantMin)}`
       + '（课太满或留白比例偏高，可以把「留白」调低一点）',
@@ -128,6 +132,7 @@ export function issueStudyShortfall(studyMin: number, wantMin: number): PlanIssu
 /** 有环节缺地点 → 该段转场是盲区（汇总成一条，不逐对刷屏） */
 export function issueTransferMissingPlace(dayName: string, names: string[]): PlanIssue {
   return {
+    code: 'transfer-no-place',
     level: 'info',
     message: `${dayName}：有环节缺地点（${names.join('、')}），这几段转场时间算不出来，别按「刚好来得及」安排`,
   };
@@ -138,6 +143,7 @@ export function issueTransferLate(
   dayName: string, prev: TimeBlock, next: TimeBlock, minutes: number, gap: number, slackMin: number,
 ): PlanIssue {
   return {
+    code: 'transfer-late',
     level: 'error',
     blockId: next.id,
     message: `${dayName}：${prev.title} → ${next.title} 要走 ${Math.round(minutes)} 分钟，`
@@ -150,10 +156,26 @@ export function issueTransferTight(
   dayName: string, prev: TimeBlock, next: TimeBlock, minutes: number, slackMin: number,
 ): PlanIssue {
   return {
+    code: 'transfer-tight',
     level: 'warn',
     blockId: next.id,
     message: `${dayName}：${prev.title} → ${next.title} 走 ${Math.round(minutes)} 分钟，`
       + `只剩 ${slackMin} 分钟余量，偏紧`,
+  };
+}
+
+/**
+ * 用户锁定的块没能回到原位（与新课或新安排冲突）。
+ *
+ * ⚠️ 这条**必须存在**：锁的语义是「你确认过的安排不会被跑掉」，
+ *    一旦跑不掉（比如那天新加了一门课），必须**如实告诉用户**，
+ *    绝不能悄悄把它挪走 —— 那正是「不让用户花心思纠错」的反面。
+ */
+export function issueLockConflict(dayName: string, title: string, reason: string): PlanIssue {
+  return {
+    level: 'warn',
+    code: 'lock-conflict',
+    message: `${dayName}：你锁定的「${title}」没能放回原位（${reason}），本次按重新安排处理 —— 解开锁定或调整该天的其他安排都可以`,
   };
 }
 
@@ -169,6 +191,11 @@ export interface WeekNotesInput {
   scenarios: ScenarioFields | null;
   /** 排到「未核实」食堂的顿数 */
   unverifiedMeals: number;
+  /**
+   * 本周的**有效**自习目标（已含疲劳/可行性调节）。省略 = 用 `policy.dailyStudyMin`。
+   * 不传它的后果是文案与实际排法不一致：计划按 96 分钟排，却写着「每天自习目标 120 分钟」。
+   */
+  effectiveStudyMin?: number;
 }
 
 /**
@@ -177,7 +204,6 @@ export interface WeekNotesInput {
 export function buildWeekNotes(input: WeekNotesInput): string[] {
   const { weekNo, policy, effectiveCourseCount, scenarios, unverifiedMeals } = input;
   const notes: string[] = [];
-
   if (effectiveCourseCount === 0) {
     notes.push(`第 ${weekNo} 周没有课（已结课或处在考试周），整天都可以自己安排`);
   } else {
@@ -189,8 +215,13 @@ export function buildWeekNotes(input: WeekNotesInput): string[] {
     notes.push('你运动是「有人约才去」，所以没主动给你排运动块 —— 有人约时现成用空档就行');
   }
 
+  // 目标值取**有效**目标（含疲劳/可行性调节）；调节说明由 `solver` 另外补一条更详细的
+  const targetMin = input.effectiveStudyMin ?? policy.dailyStudyMin;
+  const adjusted = targetMin !== policy.dailyStudyMin
+    ? `（阶段策略 ${policy.dailyStudyMin} 分，已按最近负荷下调）`
+    : '';
   notes.push(
-    `每天自习目标 ${policy.dailyStudyMin} 分钟｜单块上限 ${policy.maxBlockMin} 分钟`
+    `每天自习目标 ${targetMin} 分钟${adjusted}｜单块上限 ${policy.maxBlockMin} 分钟`
     + `｜刻意留白 ${Math.round(policy.blankRatio * 100)}%`,
   );
 
@@ -211,13 +242,17 @@ export function buildWeekNotes(input: WeekNotesInput): string[] {
   return notes;
 }
 
-/** 「本周自习未达标」这一条（依赖统计结果，故单独一个函数） */
+/**
+ * 「本周自习未达标」这一条（依赖统计结果，故单独一个函数）。
+ *
+ * `wantMin` 由调用方按**有效**目标算好传进来（见 `fatigue.weeklyStudyTarget`）——
+ * 本函数刻意不再自己乘 `policy.dailyStudyMin`：目标被跨周自适应调低之后，
+ * 若还用基准值卡阈值，一份本来合理的计划会被冤枉成「未达标」。
+ */
 export function summaryStudyIssue(
-  studyMin: number, policy: PhasePolicy, weekNo: number,
+  studyMin: number, wantMin: number, weekNo: number,
 ): PlanIssue | null {
   // weekNo 保留在签名里便于将来按周差异化阈值；当前阈值：
-  const studyDays = policy.weekendWork ? 7 : 5;
-  const wantMin = policy.dailyStudyMin * studyDays;
   if (studyMin >= wantMin * 0.8) return null;
   void weekNo;
   return issueStudyShortfall(studyMin, wantMin);

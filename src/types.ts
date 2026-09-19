@@ -250,7 +250,8 @@ export type PlanIssueCode =
   | 'study-shortfall'     // 自习总量低于阶段目标
   | 'transfer-late'       // 转场时间不够，会迟到
   | 'transfer-tight'      // 转场余量偏紧
-  | 'transfer-no-place';  // 有环节缺地点，转场时间算不出来
+  | 'transfer-no-place'   // 有环节缺地点，转场时间算不出来
+  | 'lock-conflict';      // 用户锁定的块没能回到原位（与新课/新安排冲突）
 
 /** 转场提示：由 route() 实测标注，通用日历给不出这个 */
 export interface TransferHint {
@@ -329,12 +330,37 @@ export interface WeekPlan {
  * 定义在这里、由引擎 re-export，是唯一不产生「同名两份定义」的位置。
  */
 export interface RollingState {
-  /** 最近若干周的实际负荷（分钟），越靠后越近 */
+  /**
+   * 逐日负荷的**跨周滚动平均**（分钟），下标 0..6 = 周一..周日。
+   *
+   * ⚠️ 它不是「本次排出来的值」：`nextRollingFrom` 产出的原始形态是**本周计划**的
+   *    逐日负荷；应用层必须先用真实执行记录覆盖（某天有反馈就用实际、没反馈退回计划值），
+   *    再做一次 EWMA 才写回这里。
+   *    直接把计划值原地写回，会让引擎活在自己的上一版计划里 ——
+   *    「排得满 → 以为你累 → 排得更空 → 更以为你累」是反馈闭环最经典的失效方式。
+   */
   recentLoad: number[];
   /** 即将到来的交期（供紧迫度排序） */
   upcoming: Array<{ id: string; title: string; dueAtWeek: number; urgency: number }>;
-  /** 按星期几累计的负荷（长度 8；下标 1–7 有效，0 位留空） */
+  /**
+   * **本周计划**的逐日负荷（分钟）：下标 1–7 有效，0 位留空。
+   * 与 `recentLoad` 的区别：这个是「引擎自己排了什么」（自指），
+   * 只用于诊断，以及缺反馈时的兜底来源；不直接参与疲劳建模。
+   */
   loadByDow: number[];
+  /**
+   * 逐日可行性（0.6–1，下标 0..6 = 周一..周日）：某天计划的自习反复没做，
+   * 就对该天的自习目标打折（见 `planner/fatigue.ts`）。缺省 / 全 1 = 不调节。
+   */
+  feasibleByDow?: number[];
+  /**
+   * **知识截止周** —— 这份滚动状态反映到第几周为止。
+   *
+   * 为什么需要它：滚动状态用来排「下一周」，而它又是从「某一周」的经验里长出来的。
+   * UI 可以查看任意周；若不做区分，本周自己排出来的值会立刻回头影响本周的排法，
+   * 形成自指。规则：只有 `throughWeek < 被排的周次` 时才把它喂给引擎。
+   */
+  throughWeek?: number | null;
 }
 
 /**
@@ -353,10 +379,46 @@ export interface PlanPersistState {
   locks: Record<string, LockLevel>;
   /** 累计扰动分钟数，用于「最小扰动」目标 */
   churnMin: number;
+  /**
+   * 被锁块的位置快照 —— **只存被锁的块，不是整周计划**。
+   *
+   * 为什么必须有它：`construct` 每一步都从头排，**完全不读 `lockLevels`**；
+   * `improve` 只是「不主动移动 hard 块」。所以只把锁级别传进去，
+   * 块一旦被构造阶段排到别处，就**没有任何机制把它带回来** —— 锁会变成假功能。
+   * 位置快照让 `solver` 在构造之后能把 hard 块写回原位。
+   *
+   * 之所以不违反「不存整周计划」：这里只有用户**显式锁定**的那几块，
+   * 且不含 reason / transfer 等派生字段，体量很小（通常个位数条）。
+   */
+  lockedPlacements: Record<string, LockedPlacement>;
   /** ISO 时间戳，用于判断状态新鲜度 */
   updatedAt: string;
   /** 跨周负荷；null = 尚未积累 */
   rolling: RollingState | null;
+  /**
+   * 沉淀**当前周**滚动状态时所用的历史基线（= 上一周的 `rolling`）。
+   *
+   * 为什么必须单独存一份：沉淀是「按周」做的，而用户会在同一周里反复操作
+   * （标记做了/没做都会重算一次）。若每次都拿 `rolling` 当基线，就会在自己的
+   * 上一次输出上再叠一层 EWMA —— 同一周内点两次「没做」，负荷会被算两次。
+   * 存下基线后，本周内任意次重算都从同一个起点出发，结果**幂等**。
+   * 进入下一周后基线就完成了使命（那时 `rolling.throughWeek < 新的周次`，直接用 `rolling`）。
+   */
+  rollingBase: RollingState | null;
+}
+
+/** 被锁块的最小位置快照（重排时用来把块写回原位） */
+export interface LockedPlacement {
+  dayOfWeek: number;
+  startMin: number;
+  endMin: number;
+  place?: string;
+  room?: string;
+  /**
+   * 块名 —— 只为「没能放回原位」时能指名道姓地告诉用户是哪一块。
+   * 没有它，冲突提示只能报 id（`w4-d1-study-study-lib-2`），用户看不懂。
+   */
+  title?: string;
 }
 
 /* ============================================================

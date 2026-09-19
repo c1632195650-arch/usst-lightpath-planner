@@ -3,7 +3,9 @@ import type { Course, CourseTimeSlot, PersonaProfile, Schedule } from '@/types';
 import { LIFE_MODES } from '@/data/usst';
 import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
-import { lbaoRecommend, type LbaoPlan } from '@/lib/lbao';
+import { lbaoShell, type LbaoPlan } from '@/lib/lbao';
+import { toLbaoPlan } from '@/features/libao/lbaoPlanFromEngine';
+import { planWeekForChat } from '@/features/libao/weekPlanForChat';
 import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
 import { categoryColor } from '@/constants/chartColors';
 
@@ -29,6 +31,8 @@ const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1)
 export function WeekView(props: Props) {
   const { weekMonday, weekNo, schedule, selectedDays, persona, onBack, onShiftWeek } = props;
   const [lbao, setLbao] = useState<LbaoPlan | null>(null);
+  /** 生成中（引擎是异步的：要问后端路网算转场）—— 不给反馈会让人以为按钮没反应 */
+  const [busy, setBusy] = useState(false);
 
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
   const selectedSet = useMemo(() => new Set(selectedDays), [selectedDays]);
@@ -47,10 +51,27 @@ export function WeekView(props: Props) {
     schedule.courses.some((c) => c.slots.some((s) =>
       s.dayOfWeek === dow && s.startPeriod < p && s.endPeriod >= p && activeThisWeek(s, weekNo)));
 
-  const runLbao = () => {
-    if (!persona) return;
+  /**
+   * 「生成建议」—— **并轨真引擎**（原先调的是 `lib/lbao.ts` 里那套硬编码时段的模板）。
+   *
+   * 关键差别：模板给的是「08:00 上课 / 11:45 午餐」这种与你的课表无关的样板；
+   * 现在走 `planWeekForChat()` → `planWeek()`，拿到的是**真的排过的**周计划：
+   * 真实节次时间、真实转场分钟、校历事件准备块、以及「为什么排在这儿」。
+   *
+   * 因此它变成**异步**的（两遍法要问后端路网）；取不到时降级为单遍估算，
+   * 不会抛错也不会空白。呈现层次仍与周计划页分工：那边铺时间轴，这边给一屏卡片。
+   */
+  const runLbao = async () => {
+    if (!persona || busy) return;
     const daysForPlan = selectedDays.length > 0 ? selectedDays : days;
-    setLbao(lbaoRecommend(persona, schedule, daysForPlan, props.lifeMode));
+    setBusy(true);
+    try {
+      const plan = await planWeekForChat(schedule, persona, weekNo);
+      if (!plan) { setLbao(null); return; }
+      setLbao(toLbaoPlan(plan, lbaoShell(persona, props.lifeMode), daysForPlan));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const weekRange = `${shortCN(days[0])} – ${shortCN(days[6])}`;
@@ -198,10 +219,10 @@ export function WeekView(props: Props) {
             </div>
             <button
               onClick={runLbao}
-              disabled={!persona}
+              disabled={!persona || busy}
               className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45"
             >
-              生成建议
+              {busy ? '正在排程…' : lbao ? '重新生成' : '生成建议'}
             </button>
           </div>
 

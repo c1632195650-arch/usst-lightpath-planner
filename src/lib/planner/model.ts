@@ -19,7 +19,7 @@
  *   · 本文件内所有函数都是**确定性**的（同输入同输出）。
  */
 import type {
-  BlockKind, CampusId, DayOfWeek, LockLevel, PhasePolicy, RollingState,
+  BlockKind, CampusId, DayOfWeek, LockLevel, LockedPlacement, PhasePolicy, RollingState,
   Schedule, TimeBlock, WeekPlan, PersonaProfile, ScenarioFields,
 } from '@/types';
 // ⚠️ 依赖下沉：`campusLookup.ts` 不依赖任何 planner 模块，故此处不会成环
@@ -238,6 +238,15 @@ export interface PlanRequest {
   previousPlan?: WeekPlan;
   /** 锁级别覆盖：blockId -> LockLevel */
   lockLevels?: Record<string, LockLevel>;
+  /**
+   * 被锁块的位置快照 —— `solver` 在构造之后据此把 hard 块**写回原位**。
+   *
+   * 为什么必须显式传：`construct` 不读 `lockLevels`（它每步都从头排），
+   * `improve` 只保证「不主动移动 hard 块」。两者叠加的结果是 ——
+   * **块一旦被构造阶段排到别处，就没人把它带回来**。
+   * 少了这个字段，`lockLevels` 只是半个功能（UI 显示「已定住」但块照样跑）。
+   */
+  lockedPlacements?: Record<string, LockedPlacement>;
   /** 当前分钟；给定则只排 [fromNow, dayEnd] */
   fromNow?: number;
   /** 上一周传来的滚动状态 */
@@ -254,6 +263,22 @@ export interface Diagnostics {
   hardViolations: number;
   /** 与上一版计划的差异分钟数 */
   churnMin: number;
+  /**
+   * 跨周自适应（疲劳 / 逐日可行性）。**没有滚动数据时为 `undefined`** ——
+   * 这保证「无自适应」与「自适应无效果」在诊断上可区分，而不是都表现为 1.0。
+   */
+  fatigue?: {
+    /** 全局疲劳系数（0.75–1） */
+    factor: number;
+    /** 阶段策略给的基准目标（分钟） */
+    baseDailyMin: number;
+    /** 用于算疲劳的工作日日均占用（分钟）；无数据 null */
+    observedDailyMin: number | null;
+    /** 整周自习目标（=∑ 逐日有效目标，分钟） */
+    weeklyTargetMin: number;
+    /** 因可行性被下调的日子（1..7） */
+    softenedDays: number[];
+  };
 }
 
 export interface PlanResult {
@@ -316,7 +341,17 @@ export function lockFactorOf(level: LockLevel): number {
   return 0;
 }
 
-/** 计划差异的**未加权**分钟数（供 Diagnostics.churnMin） */
+/**
+ * 「改动量」的**未加权**分钟数（供 `Diagnostics.churnMin`）。
+ *
+ * ⚠️ **只计「上一版就有、这一版被挪动或被删掉」的块，新增块不计。**
+ *    实测（2026-09-18）：往周三 14:00 加一个 60 分钟的固定任务，既有块
+ *    **一个都没动**（挪动 0、删除 0），而旧口径报 churnMin = 60 ——
+ *    因为把新增块本身也算成了扰动。界面于是说「本次挪动 60 分钟」，
+ *    可用户看到的是：什么都没动，只是多了一件事。
+ *    用户主动加的东西是**他要的变化**，不是**被打扰**；把它算进 churn，
+ *    等于惩罚用户做他本来就想做的事。
+ */
 export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan): number {
   if (!previousPlan) return 0;
   const prev = new Map(previousPlan.blocks.map((b) => [b.id, b]));
@@ -324,10 +359,7 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
   let total = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    if (!p) {
-      total += b.endMin - b.startMin; // 新增块
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) total += Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
   }
   for (const [id, p] of prev) {
@@ -337,8 +369,14 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
 }
 
 /**
- * 计划扰动代价（规格书 §5.5 的 churn 项）——P1 的 `evaluate()` 直接消费本函数。
+ * 计划扰动代价（规格书 §5.5 的 churn 项）——`evaluate()` 直接消费本函数。
  * `cost = w.churn * Σ lockFactor(block) * changedMinutes(block)`
+ *
+ * 与 `churnMinutes` 同口径：**新增块不计代价**（理由见该函数）。
+ * 顺带消掉一个数量级问题：用户 fixed 的块 `lockFactorOf('hard') = 100`，
+ * 旧口径下「新增一个 60 分钟的固定任务」会凭空产生
+ * `0.8 × 100 × 60 = 4800` 的代价 —— 比整周其余成本（约 78）高两个数量级，
+ * 会让界面上的「质量分」完全失去可比性。
  */
 export function churnCost(
   previousPlan: WeekPlan | undefined,
@@ -352,12 +390,9 @@ export function churnCost(
   let cost = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
-    if (!p) {
-      cost += weights.churn * factor * (b.endMin - b.startMin);
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) {
+      const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
       cost += weights.churn * factor * Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
     }
   }
