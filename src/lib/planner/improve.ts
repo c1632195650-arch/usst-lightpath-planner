@@ -20,8 +20,8 @@
  *    不改动入参 `plan`。**硬块（课程 / locked / lockLevels='hard'）永不被移动**。
  * ⚠️ 与 `construct.ts` 无耦合：本文件只消费一个已存在的 `WeekPlan`，因此可在构造重构完成前独立开工。
  */
-import type { PhasePolicy, TimeBlock, WeekPlan } from '@/types';
-import type { Commit, LockLevel, Place, SolverConfig, Weights } from './model.ts';
+import type { PhasePolicy, RollingState, TimeBlock, WeekPlan } from '@/types';
+import type { Commit, LockLevel, Place, ScoringMode, SolverConfig, Weights } from './model.ts';
 import { DEFAULT_SOLVER_CONFIG, DEFAULT_WEIGHTS, resolveLockLevel } from './model.ts';
 import { BUILTIN_PLACE_INDEX, campusOfPlace } from './places.ts';
 import { evaluate } from './objective.ts';
@@ -58,6 +58,12 @@ export interface ImproveContext {
   lockLevels?: Record<string, LockLevel>;
   /** 上一版计划（churn） */
   previousPlan?: WeekPlan;
+  /** 跨周滚动状态（疲劳 / 逐日可行性）—— 必须与 `construct` 用同一份，否则两边目标不一致 */
+  rolling?: RollingState;
+  /** 评分口径（PR-A）；必须与 `solver` 组装 `evaluate` 时用的一致，否则"改进"会朝错方向爬 */
+  scoring?: ScoringMode;
+  /** 转场数据可信度折扣；缺省 `TRANSFER_TRUST` */
+  transferTrust?: number;
   dayStartMin?: number;
   dayEndMin?: number;
   config?: Partial<SolverConfig>;
@@ -402,6 +408,9 @@ function evalContextOf(ctx: ImproveContext): EvalContext {
     dayEndMin: ctx.dayEndMin,
     previousPlan: ctx.previousPlan,
     lockLevels: ctx.lockLevels,
+    rolling: ctx.rolling,
+    scoring: ctx.scoring,
+    transferTrust: ctx.transferTrust,
   };
 }
 

@@ -11,9 +11,10 @@
  *    `DEADLINES` 由**调用方注入**（不 import mock 数据模块），保持可测与可替换。
  *    锁与 churn 的工具函数在 `model.ts`（P1 的 evaluate 会消费它们）。
  */
-import type { CampusId, Course, PhasePolicy, TimeBlock, WeekPlan } from '@/types';
-import type { Commit, LockLevel, Place, Weights } from './model.ts';
-import { churnCost, churnMinutes, resolveLockLevel } from './model.ts';
+import type { CampusId, Course, PhasePolicy, RollingState, TimeBlock, WeekPlan } from '@/types';
+import type { Commit, LockLevel, Place, ScoringMode, Weights } from './model.ts';
+import { ESTIMATE_TRUST, TRANSFER_TRUST, churnCost, churnMinutes, resolveLockLevel } from './model.ts';
+import { effectiveStudyMin, fatigueAdjustment } from './fatigue.ts';
 import { BUILTIN_PLACE_INDEX, campusOfPlace } from './places.ts';
 
 const DAY_MS = 86_400_000;
@@ -263,6 +264,19 @@ export interface EvalContext {
   previousPlan?: WeekPlan;
   /** 锁级别覆盖：blockId → LockLevel */
   lockLevels?: Record<string, LockLevel>;
+  /**
+   * 跨周滚动状态。给了就启用**疲劳 / 逐日可行性**调节，
+   * 且「自习缺口」的目标值必须随之调整 —— 否则把目标主动调低之后，
+   * 评分仍按原目标扣分，引擎会把一份合理计划判成差计划。
+   */
+  rolling?: RollingState;
+  /**
+   * 评分口径（2026-09-19，PR-A）：缺省 `legacy`。
+   * `transfer-aware` 才用真实转场分钟 —— 详见 `ScoringMode` 与 `transferPenalty`。
+   */
+  scoring?: ScoringMode;
+  /** 转场数据可信度折扣（`transfer-aware` 用）；缺省 `TRANSFER_TRUST` */
+  transferTrust?: number;
 }
 
 /** 一个块是否「硬」（不可移动）：显式锁 `hard`，或来源为课程 */
@@ -287,12 +301,46 @@ function isStudyFamily(b: TimeBlock): boolean {
  * 通勤风险惩罚（规格书 §5.4）。
  * 只依赖时间算术，不需要路网 —— 同地点 0；会迟到 10；偏紧 3；正常 1。
  */
-export function transferPenalty(prev: TimeBlock, next: TimeBlock): number {
+/**
+ * 「地点变了」的固定罚分 —— **只在拿不到真实转场分钟时使用**（legacy 口径 / 数据缺失）。
+ *
+ * ⚠️ 2026-09-19 复核：此前**所有**相邻对都走这里，于是 transferRisk 占了总代价 90%，
+ *    且实测 170/170 个"地点变化对"全是固定罚 1 —— 与距离、校区、真实步行时间**全都无关**。
+ *    换句话说：它罚的是"换了几次地点"，不是"这段路赶不赶得上"。
+ *    真正危险的跨校区排布会被淹没（1km 与 100m 同价）。
+ */
+export function transferPenalty(prev: TimeBlock, next: TimeBlock, minutes?: number | null): number {
   if ((prev.place ?? '') === (next.place ?? '')) return 0;
   const slackMin = next.startMin - prev.endMin;
+
+  // —— 有真实分钟数（transfer-aware）→ 按"赶不赶得上"分级，距离越远越贵 ——
+  if (typeof minutes === 'number' && minutes > 0) {
+    if (slackMin < minutes) return 10;            // 走不到：必须避免
+    if (slackMin < minutes + 5) return 3;         // 踩点（铁律②的 5min 缓冲）
+    if (minutes > 12) return 2;                   // 路程本身长：仍不如就近换点
+    return 1;                                     // 短距离、余量足：保留一个下限，
+  }                                               //   避免优化器为了省 0.0 分把日程切碎
+
+  // —— 无数据 → 退回旧的固定档（保证离线/单测/legacy 行为完全不变）——
   if (slackMin < 0) return 10;
   if (slackMin < 5) return 3;
   return 1;
+}
+
+/**
+ * 取出这一对相邻块可用的**有效转场分钟**（已含可信度折扣）。
+ *
+ * 语义（2026-09-18 核对过）：`block.transfer` 描述的是**进入本块**的转场
+ * （`fromPlace` = 上一处、`toPlace` = 本块），所以只看 `next.transfer`，不能回退到 `prev`。
+ */
+export function effectiveTransferMinutes(
+  next: TimeBlock | undefined,
+  trust = 1,
+): number | null {
+  const t = next?.transfer;
+  if (!t || typeof t.minutes !== 'number' || t.minutes <= 0) return null;
+  if (t.tight === true) return t.minutes;          // 已被判紧张：不再打折，保持警示
+  return t.reliable === false ? t.minutes * trust * ESTIMATE_TRUST : t.minutes * trust;
 }
 
 /** 多数票校区；**投不出票（全为未知）→ null**（§12.5.8：不猜、不罚） */
@@ -382,6 +430,9 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
   const dayStart = ctx.dayStartMin ?? DAY_START_DEFAULT;
   const dayEnd = ctx.dayEndMin ?? DAY_END_DEFAULT;
   const { policy } = ctx;
+  // 评分口径：legacy 逐位保持旧行为（冻结快照依赖它）；transfer-aware 才花力气取真实分钟
+  const scoring: ScoringMode = ctx.scoring ?? 'legacy';
+  const trust = ctx.transferTrust ?? TRANSFER_TRUST;
 
   // —— 按天分组并按时间排序（相邻对判定用）——
   const byDay = new Map<number, TimeBlock[]>();
@@ -401,7 +452,10 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
   const studyMin = plan.blocks
     .filter((b) => b.kind === 'study')
     .reduce((s, b) => s + (b.endMin - b.startMin), 0);
-  const targetStudyMin = policy.dailyStudyMin * countableDays.length;
+  // 目标值与 `construct` **同口径**：逐日累加「有效自习目标」而不是 policy 的基准值
+  // （原因是这两个数字必须一致，否则调低目标会让「自习缺口」凭空变大）
+  const adj = fatigueAdjustment(policy, ctx.rolling);
+  const targetStudyMin = countableDays.reduce((n, d) => n + effectiveStudyMin(adj, d), 0);
   const studyShortfallRaw = Math.max(0, targetStudyMin - studyMin);
 
   // —— ② 留白缺口 ——
@@ -430,7 +484,11 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
         if (placeChanged) c += w.switchCost * 0.5;
         switchCost += c;
       }
-      transferRisk += w.transferRisk * transferPenalty(prev, next);
+      transferRisk += w.transferRisk * transferPenalty(
+        prev,
+        next,
+        scoring === 'transfer-aware' ? effectiveTransferMinutes(next, trust) : null,
+      );
     }
   }
 

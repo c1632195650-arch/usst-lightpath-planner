@@ -152,10 +152,44 @@ export const DEFAULT_WEIGHTS: Weights = {
   placeMismatch: 3.0,
 };
 
+/**
+ * 评分口径（2026-09-19，PR-A）。
+ *
+ * 为什么需要灰度开关：`tests/golden/*.json` 是**冻结语料**（拍一次就不再改），
+ * 而 transfer-aware 会改变 cost 数值 → 新口径上线必然让旧快照"失效"。
+ * 因此默认仍是 `legacy`（**逐位保持与快照一致**），新口径显式开启、另拍基线，
+ * 等验证充分后再把默认翻过来。
+ *
+ * · `legacy`         —— 地点一变就按固定 3 档罚分（同地点 0 / slack<0 罚 10 / <5 罚 3 / 其余罚 1）
+ * · `transfer-aware` —— 用**真实转场分钟**分级：拿不到分钟数时才退回上面那 3 档
+ */
+export type ScoringMode = 'legacy' | 'transfer-aware';
+
+export const DEFAULT_SCORING: ScoringMode = 'legacy';
+
+/**
+ * 转场数据的**可信度折扣**（transfer-aware 才生效）。
+ *
+ * 依据（可复现）：`npm run audit:transfer` 实测我方 OSM 路网**系统性偏长**
+ * —— 8/8 矛盾全是"路网 > 真值"，平均相对偏差 161%（如 二公寓→思餐厅 595m vs 高德 288m）。
+ * 若直接把这些偏长的分钟数喂给评分，引擎会**过度保守**（把日程排得更松、宁可少排也不冒险）。
+ * 故在数据修好之前给一个**明确的、可撤销的**补偿：×0.8。
+ * 路网修复后应回到 1.0（改这一个常量即可）。
+ */
+export const TRANSFER_TRUST = 0.8;
+
+/** 粗粒度兜底估算（`source: 'campus-estimate'`, `reliable: false`）再打一档折扣：
+ *  它只是"跨校区缓冲常数"，比 OSM 距离更不可信 —— 两档折扣相乘。 */
+export const ESTIMATE_TRUST = 0.75;
+
 /** 求解器配置 */
 export interface SolverConfig {
   /** 灰度开关：'greedy' 走旧引擎；'lns' 构造 + 改进 */
   solver: 'greedy' | 'lns';
+  /** 评分口径；缺省 `legacy`（保住冻结快照）。见 `ScoringMode` */
+  scoring?: ScoringMode;
+  /** 转场数据可信度折扣（transfer-aware 用）；缺省 `TRANSFER_TRUST` */
+  transferTrust?: number;
   /** 随机种子；缺省 = 确定性纯爬山（不用随机数） */
   seed?: number;
   /** 最大迭代轮数（默认 2000） */
@@ -168,6 +202,8 @@ export interface SolverConfig {
 
 export const DEFAULT_SOLVER_CONFIG: Required<Omit<SolverConfig, 'seed'>> & { seed?: number } = {
   solver: 'lns',
+  scoring: DEFAULT_SCORING,
+  transferTrust: TRANSFER_TRUST,
   maxIterations: 2000,
   budgetMs: 200,
   acceptWorse: false,
@@ -263,6 +299,22 @@ export interface Diagnostics {
   hardViolations: number;
   /** 与上一版计划的差异分钟数 */
   churnMin: number;
+  /**
+   * 跨周自适应（疲劳 / 逐日可行性）。**没有滚动数据时为 `undefined`** ——
+   * 这保证「无自适应」与「自适应无效果」在诊断上可区分，而不是都表现为 1.0。
+   */
+  fatigue?: {
+    /** 全局疲劳系数（0.75–1） */
+    factor: number;
+    /** 阶段策略给的基准目标（分钟） */
+    baseDailyMin: number;
+    /** 用于算疲劳的工作日日均占用（分钟）；无数据 null */
+    observedDailyMin: number | null;
+    /** 整周自习目标（=∑ 逐日有效目标，分钟） */
+    weeklyTargetMin: number;
+    /** 因可行性被下调的日子（1..7） */
+    softenedDays: number[];
+  };
 }
 
 export interface PlanResult {
@@ -325,7 +377,17 @@ export function lockFactorOf(level: LockLevel): number {
   return 0;
 }
 
-/** 计划差异的**未加权**分钟数（供 Diagnostics.churnMin） */
+/**
+ * 「改动量」的**未加权**分钟数（供 `Diagnostics.churnMin`）。
+ *
+ * ⚠️ **只计「上一版就有、这一版被挪动或被删掉」的块，新增块不计。**
+ *    实测（2026-09-18）：往周三 14:00 加一个 60 分钟的固定任务，既有块
+ *    **一个都没动**（挪动 0、删除 0），而旧口径报 churnMin = 60 ——
+ *    因为把新增块本身也算成了扰动。界面于是说「本次挪动 60 分钟」，
+ *    可用户看到的是：什么都没动，只是多了一件事。
+ *    用户主动加的东西是**他要的变化**，不是**被打扰**；把它算进 churn，
+ *    等于惩罚用户做他本来就想做的事。
+ */
 export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan): number {
   if (!previousPlan) return 0;
   const prev = new Map(previousPlan.blocks.map((b) => [b.id, b]));
@@ -333,10 +395,7 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
   let total = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    if (!p) {
-      total += b.endMin - b.startMin; // 新增块
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) total += Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
   }
   for (const [id, p] of prev) {
@@ -346,8 +405,14 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
 }
 
 /**
- * 计划扰动代价（规格书 §5.5 的 churn 项）——P1 的 `evaluate()` 直接消费本函数。
+ * 计划扰动代价（规格书 §5.5 的 churn 项）——`evaluate()` 直接消费本函数。
  * `cost = w.churn * Σ lockFactor(block) * changedMinutes(block)`
+ *
+ * 与 `churnMinutes` 同口径：**新增块不计代价**（理由见该函数）。
+ * 顺带消掉一个数量级问题：用户 fixed 的块 `lockFactorOf('hard') = 100`，
+ * 旧口径下「新增一个 60 分钟的固定任务」会凭空产生
+ * `0.8 × 100 × 60 = 4800` 的代价 —— 比整周其余成本（约 78）高两个数量级，
+ * 会让界面上的「质量分」完全失去可比性。
  */
 export function churnCost(
   previousPlan: WeekPlan | undefined,
@@ -361,12 +426,9 @@ export function churnCost(
   let cost = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
-    if (!p) {
-      cost += weights.churn * factor * (b.endMin - b.startMin);
-      continue;
-    }
+    if (!p) continue; // 新增块：不计（见上）
     if (moved(p, b)) {
+      const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
       cost += weights.churn * factor * Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
     }
   }
