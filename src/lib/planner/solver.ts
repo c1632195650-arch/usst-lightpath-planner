@@ -357,6 +357,7 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     rolling: req.rolling,
     scoring: config.scoring,
     transferTrust: config.transferTrust,
+    transfer: n.req.transfer ?? undefined,
   });
   const hard = countHardViolations(plan);
 

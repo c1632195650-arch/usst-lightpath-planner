@@ -66,7 +66,8 @@ provider 调用次数还是 improve 迭代变长。
 | P1 | transferRisk 接真实分钟 + 可信度折扣 + 灰度开关 | ✅ **PR-A 已完成**（默认仍 legacy） | `tests/scoring-transfer.test.ts` 13/13（含 5 条冻结锚点、单调性、反向验证）；legacy 逐位等于快照 |
 | P2 | improve 对转场有感（算子里用真实分钟） | ✅ **PR-B 已完成** | `tests/improve-transfer.test.ts` 3/3（含反向验证：关掉 aware 开关必须变红） |
 | P3 | churn 落地（free 非零因子） | ✅ **PR-C 已完成**（规格 §5.5 已修订） | `tests/churn.test.ts`：free 被挪 ⇒ churn>0；`p0-check` / `objective-evaluate` 同步更新并注明修订 |
-| P4 | 两遍法性能（先 profile） | ⬜ | `eval:engine` transfers 档 p50 下降 ≥30% 且不变量全过 |
+| P4 | 两遍法性能（先 profile） | 🟡 **已做结构性优化，量化待稳定环境复测** | 行为指纹逐字一致 + 全量套件绿；**本机噪声 ±7×，不能下性能结论**（见下） |
+| **P8** | 🔴 **improve 校验粒度**（新发现，**待决策**） | ⬜ **需要拍板** | 5 份语料 `planIsValid` 恒 false ⇒ improve 空转；修它要动冻结快照 |
 | P5 | transferRisk 与 placeMismatch 分工 | ✅ 随 P1 解决 | 有真实分钟时不再用固定罚分 → 同一次跨校区不会"按次数再罚一遍"；placeMismatch 只管"整天校区一致性" |
 | P6 | 「自习/空白已饱和」结论固化 | ✅ 本文档（发现 4） | — |
 | P7 | 数据可信度折扣（可撤销） | ✅ 随 P1 实现 | `TRANSFER_TRUST = 0.8`（OSM 系统性偏长 30~100%，见 `audit:transfer`）、估算再 × `ESTIMATE_TRUST = 0.75`；路网修好后改回 1.0 |
@@ -147,6 +148,47 @@ provider 调用次数还是 improve 迭代变长。
 - 测试同步：`tests/churn.test.ts` 断言翻转（free 被挪 ⇒ churn > 0）、
   `tests/p0-check.ts` 期望值更新（`free = 0.08`）、
   `tests/objective-evaluate.test.ts` 改为三级秩序 hard ≫ soft ≫ free > 0，三处都注明「本次修订」。
+
+## 三·七、PR-D（P4）做了什么 —— 以及一个更重要的发现（P8）
+
+### 已完成（行为逐字不变，已用 10 用例指纹对拍 + 109/153 套件验证）
+
+1. **干掉「每个候选重挂一遍转场提示」**：PR-B 时为让评分看见候选的新位置，我在每个候选上调用
+   `withFreshTransfers()`（整份计划克隆 + 按天排序 + 重挂提示，O(n log n)）。改为让 `objective`
+   **直接向 provider 现算分钟数**（`EvalContext.transfer`）→ 候选评估不再需要任何重挂，
+   也**彻底消灭了「提示过期」这一整类问题**（提示只留给 UI 展示用）。
+2. 无损微优化：`relocate` 的 `others` 提到候选循环外；`swap` 改为先按天建表（原来每对都要
+   `filter` 全表并展开成新数组）。
+
+### 🔴 更重要的发现（P8）：`improve` 在这 5 份语料上**根本没在工作**
+
+排查性能时做了定点二分，结果反转了结论：**保留 `planIsValid` 比换成"只看被改块"快 2.2×**
+（5.3ms vs 11.7ms）—— 因为 `planIsValid` **把每一个候选都判为非法**，于是根本不进 `evaluate`。
+
+**证据**（`_probe_p8.ts`，可复现）：
+
+| 语料 | weekendWork | 周末软块（违规） | 整份计划校验 |
+|---|---|---|---|
+week-04-typical / week-06-practice / week-19-exam / week-04-usertasks | false | **8（违规 8）** | ❌ false |
+week-12-crosscampus | false | **10（违规 10）** | ❌ false |
+
+`respectsPolicy` 只对 study/meal/activity 生效，检查「周末 / 18 点后」——而 `construct` 排出的计划
+**本来就含周末三餐块**（8~10 个）⇒ 任何候选（哪怕只动一个周三的自习）都会被判非法
+⇒ **improve 迭代 1、接受 0 处**。此前那条「常规周已局部最优，接受 0 是正常的」的解释**不成立**：
+真实原因是**被校验挡死**。
+
+**为什么不当场修**：修法是把校验改成「只看候选改动的块」（`Candidate.patched` + 廉价检查，
+我已写好并验证：legacy 下耗时 11.7→23.8ms，说明**第一次真的开始评估候选**），但
+① 这会**启用改进阶段** → 计划可能变化 → 5 份冻结 golden 快照需要重新拍基线；
+② 属于**行为级变更**，不该混在"性能优化"里悄悄上线。
+→ 已登记为 **P8（待决策）**，实现要点与证据都留在 `improve.ts` 主循环的注释里。
+
+### 量化说明（诚实版）
+
+本机当前计时**极不稳定**：同一份代码连续两次跑差到 **7×**（`_eng_check` 的 transfer-aware
+一次 64ms、一次 9.8ms）。因此 **P4 的性能数字不予采信**；能确定的只有结构性事实
+（每候选 O(n log n) → 0）与行为不变（指纹逐字一致）。**验收应在空载机器上复测**，
+口径见本文档「计时口径」小节。
 
 ## 四、发布到 engine beta 的验收清单
 

@@ -277,6 +277,12 @@ export interface EvalContext {
   scoring?: ScoringMode;
   /** 转场数据可信度折扣（`transfer-aware` 用）；缺省 `TRANSFER_TRUST` */
   transferTrust?: number;
+  /**
+   * 转场数据源（PR-D）。**给了它就用它现算**，不再读块上的 `block.transfer` 提示 ——
+   * 这样彻底消灭「移动块后提示过期」这类问题（搜索过程中提示没人重挂，
+   * 度量就会拿着旧位置的分钟数打分）。缺省时退回提示/固定档，legacy 行为不变。
+   */
+  transfer?: import('./campusLookup.ts').TransferProvider;
 }
 
 /** 一个块是否「硬」（不可移动）：显式锁 `hard`，或来源为课程 */
@@ -325,6 +331,22 @@ export function transferPenalty(prev: TimeBlock, next: TimeBlock, minutes?: numb
   if (slackMin < 0) return 10;
   if (slackMin < 5) return 3;
   return 1;
+}
+
+/**
+ * 从 provider 现算这一对的**有效转场分钟**（含可信度折扣）。
+ * 拿不到数据（provider 返回 null）时返回 null → 调用方退回固定档（不猜、不罚）。
+ */
+export function transferMinutesFromProvider(
+  provider: import('./campusLookup.ts').TransferProvider,
+  from: string | undefined,
+  to: string | undefined,
+  trust = 1,
+): number | null {
+  if (!from || !to || from === to) return null;
+  const info = provider(from, to);
+  if (!info || typeof info.minutes !== 'number' || info.minutes <= 0) return null;
+  return info.reliable === false ? info.minutes * trust * ESTIMATE_TRUST : info.minutes * trust;
 }
 
 /**
@@ -484,11 +506,13 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
         if (placeChanged) c += w.switchCost * 0.5;
         switchCost += c;
       }
-      transferRisk += w.transferRisk * transferPenalty(
-        prev,
-        next,
-        scoring === 'transfer-aware' ? effectiveTransferMinutes(next, trust) : null,
-      );
+      // 优先现算（provider 在 → 永远是最新位置的数据）；否则退回块上的提示；再否则固定档
+      const minutes = scoring === 'transfer-aware'
+        ? (ctx.transfer
+            ? transferMinutesFromProvider(ctx.transfer, prev.place, next.place, trust)
+            : effectiveTransferMinutes(next, trust))
+        : null;
+      transferRisk += w.transferRisk * transferPenalty(prev, next, minutes);
     }
   }
 
