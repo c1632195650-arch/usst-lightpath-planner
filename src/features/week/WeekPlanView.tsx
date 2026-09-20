@@ -233,10 +233,16 @@ function BlockCard({
   return (
     <div
       draggable={block.kind !== 'course' && block.source !== 'course'}
+      onMouseDown={(e) => {
+        // 🔴 抓块时冻结页面惯性滚动（2026-09-20）：滚动进行中浏览器会把
+        //    「拖」判成「滚」而取消 dragstart —— 「有时拖不动」的机制①。
+        if (e.button === 0) window.scrollTo(window.scrollX, window.scrollY);
+      }}
       onDragStart={(e) => {
         // dataTransfer 里带 id 是给**跨天**用的：目标列靠它知道拖过来的是哪一块
         e.dataTransfer.setData('text/plain', block.id);
         e.dataTransfer.effectAllowed = 'move';
+        console.debug('[drag] start', block.id); // 诊断：拖不动时看这条是否出现
         onDragStartCard(block);
       }}
       onDragEnd={onDragEndCard}
@@ -1870,7 +1876,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                           onEditBlock={handleEditBlock}
                           onRevertEdit={handleRevertEdit}
                           dragging={draggingId === b.id}
-                          onDragStartCard={(blk) => { setDraggingId(blk.id); clearPreview(); }}
+                          onDragStartCard={(blk) => {
+                          // 🔴 setDraggingId 推迟到下一帧（2026-09-20）：
+                          //    dragstart 同步帧内的重渲染会让 Chrome 偶发**静默取消拖拽**
+                          //    —— 「有时拖不动」的机制②。第一个 dragover 紧随其后，
+                          //    状态就位，视觉上无感知差异。
+                          window.setTimeout(() => { setDraggingId(blk.id); clearPreview(); }, 0);
+                        }}
                           onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
                           isNew={!!newTaskId}
                           onDismissNew={newTaskId ? () => setRecentTaskIds((prev) => prev.filter((tid) => tid !== newTaskId)) : undefined}
