@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """校园路网 + POI 挂载 —— 提供任意两点的步行路径。
 
-数据源：data/osm/junchanglu.osm（© OpenStreetMap contributors，ODbL 1.0）
+数据源：data/osm/junchanglu.osm（本部，© OpenStreetMap contributors，ODbL 1.0）
+        + data/osm/jichuxueyuan.osm（1100 基础学院及周边，同一 OSM 快照）
         + data/campus_map.json 的语义线索（roads 路段 / near_landmark / walk_minutes / zone）
 
 设计：
   · 路网来自 OSM 的真实几何（footway/service/residential 等），Dijkstra 求最短路
+  · 两份 OSM 提取来自同一快照 —— 367 个节点坐标**完全重合**，按 (lat,lon) 直接拼接成
+    一张图；实测本部 ↔ 1100 沿军工路连通（516 校门 → 1100 教学楼 ≈ 1.5 km / 20 分钟）
   · 每个 POI 按**多轮传播**定位，线索优先级：
       A. OSM 具名建筑（含别名匹配）        —— 最准
       B. near_landmark 邻居坐标均值
@@ -28,7 +31,9 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-OSM_FILE = os.path.join(ROOT, "data", "osm", "junchanglu.osm")
+OSM_DIR = os.path.join(ROOT, "data", "osm")
+# 复兴路校区（fuxinglu.osm）暂不接入：图谱里没有复兴路 POI，也无内部路网语义锚点。
+OSM_FILES = ("junchanglu.osm", "jichuxueyuan.osm")
 KEY_FILE = os.path.join(ROOT, "data", "osm", "key_points.json")
 MAP_FILE = os.path.join(ROOT, "data", "campus_map.json")
 
@@ -52,16 +57,22 @@ HW_NO = {"trunk", "trunk_link", "motorway", "motorway_link", "raceway", "bus_gui
 # 城市道路的步行折损：沿马路边走比校园步道慢一些，但不是不能走
 STREET_PENALTY = 1.15
 
+# 点状地图要素（amenity/shop/leisure…）——建筑面索引拿不到的点状设施。
+# 实例：1100 的「教育超市」(shop=supermarket)、「校医务室」(amenity=clinic)。
+NODE_TAG_KEYS = {"amenity", "shop", "leisure", "tourism", "office", "healthcare"}
+
 
 # ---------- 可步行分组（校区隔离的唯一口径）----------
 # 为什么需要它：`_locate_pois` 的 near_landmark / zone / global 档位原先**不校验校区**，
 # 于是独立校区的地点会被本部地标吸附 —— 实测 `1100教育超市`、`申一教`、`申二教`、
 # `1100图书馆` 曾全部塌缩到北校「学生活动中心」坐标，进而算出「三教 → 1100教育超市 4.5 分钟」
-# 这种离谱结果（两处实际相距约 600 米以上、且本路网未收录 1100 的路）。
+# 这种离谱结果（两处实际相距约 600 米以上）。
 # 口径与 campus.py 的 `_CAMPUS_CN` / `_meta.notes` 一致：
 #   本部 = 北校（军工路 516）＋ 南校（军工路 334），由海安路人行天桥相连；
 #          580 号（军工路 580，北校西北角同一片街区，七公寓/民族餐厅在此）并入本部，可步行。
-#   独立 = 1100 基础学院 / 复兴路 —— 相距较远，且 jichuxueyuan.osm / fuxinglu.osm 未进本路网。
+#   独立 = 1100 基础学院 / 复兴路 —— **作为排程/就近推荐的口径保持独立**（不参与本部
+#          日常排程）。注：1100 的路网自 2026-09-16 起已接入（jichuxueyuan.osm），沿军工路
+#          实际步行可达 —— 跨组通行参考走 `route_cross_group()`，不放宽本口径。
 _WALK_GROUP = {"北校": "本部", "南校": "本部", "580": "本部", "连接": "本部"}
 
 
@@ -117,41 +128,49 @@ class Network:
 
     # ---------- 路网 ----------
     def _load_osm(self):
-        root = ET.parse(OSM_FILE).getroot()
-        nodes = {}
-        for el in root:
-            if el.tag == "node":
-                nodes[el.get("id")] = (float(el.get("lat")), float(el.get("lon")))
+        adj, bld, street_edges, node_poi = {}, {}, set(), {}
+        for fn in OSM_FILES:
+            root = ET.parse(os.path.join(OSM_DIR, fn)).getroot()
+            nodes, node_named = {}, {}
+            for el in root:
+                if el.tag != "node":
+                    continue
+                p = (float(el.get("lat")), float(el.get("lon")))
+                nodes[el.get("id")] = p
+                tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
+                name = tags.get("name")
+                if name and NODE_TAG_KEYS & tags.keys():
+                    node_named.setdefault(name.strip(), []).append(p)
+            node_poi.update(node_named)   # 同名时后者覆盖前者（同快照坐标一致，无实际影响）
 
-        adj, bld, street_edges = {}, {}, set()
-        for el in root:
-            if el.tag != "way":
-                continue
-            tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-            pts = [nodes[r] for r in (nd.get("ref") for nd in el.findall("nd")) if r in nodes]
-            if not pts:
-                continue
-            name = tags.get("name")
-            if "building" in tags and name:
-                c = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
-                # 同名建筑可能有南北两栋（如「室内体育馆」），全部保留按校区挑
-                for key in {name.strip(), norm(name)}:
-                    if key:
-                        bld.setdefault(key, []).append(c)
-            h = tags.get("highway")
-            if h in HW_WALK or h in HW_STREET:
-                is_street = h in HW_STREET
-                pen = STREET_PENALTY if is_street else 1.0
-                for i in range(len(pts) - 1):
-                    a, b = pts[i], pts[i + 1]
-                    d = hav(a, b)
-                    if d <= 0:
-                        continue
-                    adj.setdefault(a, []).append((b, d * pen))
-                    adj.setdefault(b, []).append((a, d * pen))
-                    if is_street:
-                        street_edges.add(frozenset((a, b)))
-        self.adj, self.bld, self.street_edges = adj, bld, street_edges
+            for el in root:
+                if el.tag != "way":
+                    continue
+                tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
+                pts = [nodes[r] for r in (nd.get("ref") for nd in el.findall("nd")) if r in nodes]
+                if not pts:
+                    continue
+                name = tags.get("name")
+                if "building" in tags and name:
+                    c = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+                    # 同名建筑可能有南北两栋（如「室内体育馆」），全部保留按校区挑
+                    for key in {name.strip(), norm(name)}:
+                        if key:
+                            bld.setdefault(key, []).append(c)
+                h = tags.get("highway")
+                if h in HW_WALK or h in HW_STREET:
+                    is_street = h in HW_STREET
+                    pen = STREET_PENALTY if is_street else 1.0
+                    for i in range(len(pts) - 1):
+                        a, b = pts[i], pts[i + 1]
+                        d = hav(a, b)
+                        if d <= 0:
+                            continue
+                        adj.setdefault(a, []).append((b, d * pen))
+                        adj.setdefault(b, []).append((a, d * pen))
+                        if is_street:
+                            street_edges.add(frozenset((a, b)))
+        self.adj, self.bld, self.street_edges, self.node_poi = adj, bld, street_edges, node_poi
         # 与至少一条步道相连的节点（用于「仅校内」模式下的吸附与寻路）
         self.campus_nodes = {
             n for n, lst in adj.items()
@@ -214,13 +233,27 @@ class Network:
     # ---------- POI 定位 ----------
     CAMPUS_CENTER = {"北校": (31.2950161, 121.5506739), "南校": (31.2906712, 121.5535545)}
 
+    # 1100 基础学院片区的纬度分界。⚠️ 窗口极窄（~36 m），两头的界标都实测过：
+    #   本部最北 OSM 建筑 = 第五食堂 31.298419；1100 最南 OSM 要素 = 校区西南
+    #   service 路 31.29874 —— 取中点 31.2986。若 OSM 更新后两边有新要素
+    #   越过此线，请以「(本部最北 + 1100最南)/2」重新取值。
+    # 用途：OSM 命中点的校区归属校验 —— 1100 片区里的同名设施（如「教育超市」节点
+    # 在本部南校与 1100 各有一个）不允许被本部 POI 认领，反之亦然。
+    _LAT_1100 = 31.2986
+
     def _campus_ok(self, coord, campus):
         """OSM 命中点的所在校区是否与图谱标注一致。
 
         防止「南校五公寓」被同名 OSM 建筑（在北校）带偏 —— 曾导致
         「第二学生公寓 ↔ 第五学生公寓」算出 3 分钟（跨校区实际约 15 分钟）。
         无 campus 标注（如『连接』）则不校验。
+        2026-09-16 新增 1100 片区校验：jichuxueyuan.osm 的 bbox 覆盖本部到 1100
+        沿线，同名设施必须按纬度分界隔离（本部南校与 1100 各有一个「教育超市」）。
         """
+        if coord[0] >= self._LAT_1100:
+            return campus == "1100"          # 1100 片区的点只归 1100 认领
+        if campus == "1100":
+            return False                     # 1100 的 POI 不许认领片区外的点
         if campus not in self.CAMPUS_CENTER:
             return True
         d_n = hav(coord, self.CAMPUS_CENTER["北校"])
@@ -228,8 +261,11 @@ class Network:
         return (d_n < d_s) == (campus == "北校")
 
     def _pick(self, key, campus):
-        """从同名候选里挑出与图谱校区相符的那个。"""
+        """从同名候选里挑出与图谱校区相符的那个（先建筑面，后点状设施）。"""
         for cc in self.bld.get(key, []):
+            if self._campus_ok(cc, campus):
+                return cc
+        for cc in self.node_poi.get(key, []):
             if self._campus_ok(cc, campus):
                 return cc
         return None
@@ -260,9 +296,13 @@ class Network:
                     c = tuple(kp)
                     src = "approx" if p["name"] in self.approx_names else "keypoint"
 
-                # A. OSM 建筑（命中点须与图谱标注的校区一致）
+                # A. OSM 建筑 / 点状设施（命中点须与图谱标注的校区一致）
+                #    match_osm = 数据侧显式指认的 OSM 要素名（图谱不落坐标，只落名字，
+                #    合规口径不变）。用在 OSM 名与图谱名对不上的场合，如
+                #    「1100图书馆」↔ OSM「1L清真食堂和第四食堂2L图书馆」（楼层合名）。
                 if c is None:
-                    for cand in [p["name"]] + list(p.get("alias", [])):
+                    for cand in ([p["name"]] + list(p.get("alias", []))
+                                 + list(p.get("match_osm", []))):
                         hit = self._pick(cand, p.get("campus")) or self._pick(norm(cand), p.get("campus"))
                         if hit:
                             c, src = hit, "osm"
@@ -412,7 +452,7 @@ class Network:
                     heapq.heappush(pq, (nd, v))
         return None
 
-    def route(self, a, b, mode="fastest"):
+    def route(self, a, b, mode="fastest", _cross_group=False):
         """返回 dict 或 None（未定位 / 不连通 / 跨教学工作区）。
 
         mode:
@@ -422,14 +462,16 @@ class Network:
         或两端坐标几乎重合 —— 此时距离仅供参考。
 
         ⚠️ 两端若**分属不同的可步行分组**（本部 vs 1100 基础学院 / 复兴路），
-        本路网没有它们之间的道路数据，一律返回 None ——
-        让上层用 `cross_campus()` 说明「分属不同教学区」，而不是编一个步行分钟。
+        按产品口径返回 None —— 跨教学区不参与本部日常排程，让上层用
+        `cross_campus()` 说明，而不是给一个会被当成转场分钟的数字。
+        （1100 的路网数据其实已接入且沿军工路连通 —— 跨组步行参考走
+        `route_cross_group()`，只用于回答「怎么走」类问题，不进排程。）
         """
         a, b = self.resolve(a), self.resolve(b)
         if not a or not b:
             return None
         pa, pb = self.poi[a], self.poi[b]
-        if not same_walk_group(self._campus_of[a], self._campus_of[b]):
+        if not _cross_group and not same_walk_group(self._campus_of[a], self._campus_of[b]):
             return None
         c_only = (mode == "campus")
         sa, da = self._snap(pa[0], c_only)
@@ -451,6 +493,16 @@ class Network:
             "locate": (pa[1], pb[1]),
             "reliable": reliable,
         }
+
+    def route_cross_group(self, a, b):
+        """跨可步行分组的**步行参考**（本部 ↔ 1100 基础学院）。
+
+        与 route() 的区别：不按可步行分组阻断 —— 因为两校区沿军工路确实
+        步行可达（OSM 路网已连通，实测 516 校门 → 1100 教学楼 ≈ 1.5 km）。
+        用途限定：回答「从本部到基础学院怎么走」这类问题；
+        **不得**把结果喂给排程当转场分钟（那要走 route()/cross_campus 口径）。
+        """
+        return self.route(a, b, _cross_group=True)
 
     def compare(self, a, b):
         """多路径对比：全路网（最快）vs 仅校内。返回 dict 或 None。
@@ -477,6 +529,8 @@ class Network:
         from collections import Counter
         c = Counter(v[1] for v in self.poi.values())
         return {
+            "osm_files": list(OSM_FILES),
+            "osm_poi_nodes": len(self.node_poi),
             "path_nodes": len(self.adj),
             "osm_buildings": len({k for k in self.bld}),
             "poi_located": n,
@@ -493,8 +547,9 @@ if __name__ == "__main__":
     print("=" * 66)
     print("校园路网 · POI 挂载诊断")
     print("=" * 66)
+    print(f"  OSM 提取      : {'、'.join(st['osm_files'])}")
     print(f"  路网节点      : {st['path_nodes']}")
-    print(f"  OSM 建筑索引  : {st['osm_buildings']}")
+    print(f"  OSM 建筑索引  : {st['osm_buildings']}  ｜ 点状设施: {st['osm_poi_nodes']}")
     print(f"  POI 已定位    : {st['poi_located']}")
     for k, v in sorted(st["by_source"].items(), key=lambda x: -x[1]):
         print(f"      {k:14s}: {v}")
@@ -504,9 +559,18 @@ if __name__ == "__main__":
     print("  实测样例：")
     for a, b in [("第三教学楼", "第五食堂"), ("第一教学楼", "第三教学楼"),
                  ("南校区第一宿舍", "清真食堂（334）"), ("刘湛恩故居", "第一食堂"),
-                 ("第二学生公寓", "第五学生公寓")]:
+                 ("第二学生公寓", "第五学生公寓"),
+                 ("申一教", "1100图书馆"), ("申一教", "1100教育超市")]:
         r = net.route(a, b)
         if r:
             print(f"    {a} → {b}: {r['meters']:.0f} 米 / {r['minutes']:.1f} 分钟  (定位 {r['locate'][0]}/{r['locate'][1]})")
         else:
             print(f"    {a} → {b}: 无法计算（未定位或不连通）")
+    print()
+    print("  跨教学区步行参考（不进排程）：")
+    for a, b in [("第一教学楼", "申一教"), ("516号校门", "1100图书馆")]:
+        r = net.route_cross_group(a, b)
+        if r:
+            print(f"    {a} → {b}: {r['meters']:.0f} 米 / {r['minutes']:.1f} 分钟  [{'可信' if r['reliable'] else '参考'}]")
+        else:
+            print(f"    {a} → {b}: 无法计算")
