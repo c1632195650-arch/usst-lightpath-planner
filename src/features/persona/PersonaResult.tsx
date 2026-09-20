@@ -3,6 +3,7 @@ import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { BASIC_INFO_FIELDS, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
 import { Radar } from '@/components/Radar';
+import { makeEpithet, pickBlurb } from './personaCopy';
 
 interface Props {
   profile: PersonaProfile;
@@ -60,6 +61,9 @@ function BasicInfoCard() {
 /** 将 35 题的输出收束为可用于排程的个人信号，而不是一张“人格报告”。 */
 export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   const { primary, secondary } = profile.archetype;
+  // E3：一句话 blurb（按周轮换）+ 趣味称呼。挂载时算一次，重渲染不换台词。
+  const [blurb] = useState(() => pickBlurb(profile));
+  const [epithet] = useState(() => makeEpithet(profile, loadBasicInfo()));
   /** 场景题保留原始语义，让学生知道这些答案会影响哪些推荐。 */
   const scenarioEntries = Object.entries(SCENARIO_META).map(([key, meta]) => ({
     key,
@@ -75,6 +79,8 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">YOUR PLANNING PROFILE</p>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">你的节奏，已经有了轮廓。</h1>
+              <p className="mt-3 text-base font-medium text-brand-light">「{epithet}」</p>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75">{blurb}</p>
               {primary ? (
                 <>
                   <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
