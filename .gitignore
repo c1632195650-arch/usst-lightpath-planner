@@ -1,0 +1,84 @@
+# 依赖
+node_modules/
+.package-lock.json
+
+# 设计脑暴样张（本地过程产物）
+.superpowers/
+
+.spec-workflow/
+
+# 构建产物
+dist/
+dist-ssr/
+
+# 环境变量（API Key 绝不进仓库）
+.env
+.env.local
+.env.*.local
+
+# 远程验收循环的干净检出目录（临时产物，可重建）
+_eng_check/
+
+# 评测系统：数据集进仓库（golden 是 CI 唯一依赖），
+# 中间产物与运行记录不进（可复现，别把仓库撑大）
+evals/silver/*.jsonl
+evals/runs/run_*.json
+evals/runs/engine_[0-9]*.json
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.recommended
+.idea/
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Vite 临时产物
+vite.config.ts.timestamp-*.mjs
+
+# 变异测试 / 契约模糊测试产物（2026-09-19）
+.stryker-tmp/
+stryker-incremental.json
+reports/mutation/
+st_out.txt
+
+# 日志
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# 临时文件
+*.tmp
+~$*.docx
+
+# 下划线开头 = 临时工作产物（工作脚本/临时输出/截图），一律不进仓库。
+# 这条规矩是踩坑换来的：`git add -A` 会把它们一起提交，
+# 曾两次把工作脚本本身提交进仓库（fdbd825、3d3f11d）。
+_*
+
+# CY 的个人课表（含课程与教师信息，属个人信息，不进公开仓库）
+public/my_schedule.json
+
+# 数据采集过程日志（过程产物，不进仓库）
+data/*_log.txt
+
+# 本地损坏的 git 残留（勿提交）
+.git.broken/
+
+# 微信推文图片原始抓取（25MB，脚本可重新生成，不进仓库）
+_wx_raw/
+
+_wx_raw2/
+
+_wx_raw3/
+_wx_raw4/
+data/libao_memory.db
+docs/_coverage_stat.json
+data/*.bak-*
+
+# Playwright 产物（视觉基线快照 e2e/**-snapshots 进仓库，运行产物不进）
+test-results/
+playwright-report/

@@ -1,0 +1,4677 @@
+{
+ "_meta": {
+  "campus": "军工路校区（本部=516 北校区 + 334 南校区）｜1100 基础学院｜580 号｜复兴路校区",
+  "updated": "2026-09-15",
+  "sources": [
+   "上海理工大学官网·食堂导览 https://www.usst.edu.cn/jgl516hxq/main.psp",
+   "官方《军工路校区及校区道路名称》iso.usst.edu.cn/2014/0709/c1161a11098/page.htm（17 条路段·建筑相邻关系的权威骨架）",
+   "基建处招标文件「军工路516号第一、第三教学楼」（证实三教存在且与一教同批）",
+   "上理球知道《自习攻略》（三教/一教/综合楼/卓越楼/国合楼/申一申二教位置与自习点开放时间）",
+   "公众号「上理指南/上理小分队/掌上校园」校园地图推文（1-121 号 POI 编号全景图，2026-09-08 图片识别）",
+   "校园自媒体食堂攻略，交叉验证一致",
+   "后勤管理处《自动除颤仪（AED）》配置表（官方标注北校区/南校区 19 处点位）",
+   "公众号「上理指南」校园地图推文 1-121 号 POI 编号表（北校区 1-87 / 南校区 88-121）",
+   "公众号「上理小喇叭」宿舍指南（01 本部北校区 / 02 本部南校区 分组）",
+   "后勤管理处《公共洗浴》浴室分布与运营表（逐条标注 516/334/1100，权威分区依据）",
+   "后勤管理处《报修服务流程》（列第二公寓一号楼/二号楼/三号楼）",
+   "后勤管理处《校园商超》（分列「教育超市（334/1100）」与「Familymart 全家便利连锁超市」）",
+   "CY 实地指认：全家在操场跑道围栏外、通往菜鸟驿站的那条路上（2026-09-11）",
+   "CY 提供高德地图截图 14 张（2026-09-11，含步行导航实测与 POI 标注，用于校准步行时间与位置）",
+   "OpenStreetMap 建筑数据（data/osm/junchanglu.osm，© OpenStreetMap contributors，ODbL 1.0）—— 用于补充宿舍/学院/文化设施等具名建筑",
+   "口语同义词/功能分类（tags/func/emoji）由本项目自行整理（2026-09-15），参考校园通用说法与上理语境；未使用任何第三方站点数据。"
+  ],
+  "notes": "【分区口径】北校区=军工路 516 号（主校区）；南校区=军工路 334 号；两者合称『本部』，由海安路人行天桥连接（步行 10-15 分钟）。1100 基础学院 / 580 号 / 复兴路校区为独立校区，不参与本部课程排程。verified=true 表示官方来源或≥2 个独立来源交叉确认；步行分钟数带 est 为按道路相邻关系估算，需在校生体感校正。不存测绘坐标，只用相对位置。\n【知识层·2026-09-15】新增 tags（口语同义词/学生黑话，供梨宝「说人话」检索）、func（五类功能：teach 教学 / office 办公 / life 生活 / sport 运动 / transport 交通）、emoji（视觉编码）。tags 由本项目自行整理，未采用任何第三方站点的字段内容；泛类别词（宿舍/食堂/教学楼…）刻意不入 tags，由 type 字段承担，避免同义泛滥。**本文件依旧不含任何经纬度坐标**（守 needs-check-list §一）。",
+  "func_legend": {
+   "teach": "教学",
+   "office": "办公",
+   "life": "生活",
+   "sport": "运动",
+   "transport": "交通"
+  },
+  "pinyin": "【拼音检索·2026-09-15】`pyf` / `pyi` / `pyt` 为**离线生成**的拼音索引（名字与各别名的全拼 / 首字母、类型拼音、口语同义词拼音；`|` 分隔），由 `scripts/build_pinyin_index.py` 产出。生成需 `pypinyin`，**运行时不需要任何依赖** —— 检索只是查字符串。匹配只做「整段相等」与「前缀」，不做子串（子串假命中太多）。"
+ },
+ "zones": {
+  "北校区·西北角": "先进制造大楼、第五教学楼、七公寓、学生处/武装部/心理健康中心、体育活动中心、体育馆、材料学院、工程实训中心、光仪所、1906咖啡厅（体育活动中心西侧）",
+  "北校区·中北部": "光电楼（光电信息与计算机工程学院）、机械楼、图文信息中心（图书馆总馆）、计算中心、勤业楼、第三教学楼（勤勉大道×海晏路口北）",
+  "北校区·历史核心区": "湛恩大道沿线：格致堂、思晏堂（校办）、大礼堂、毛主席像、老图书馆、音乐堂、沪江国际文化园（德美英法日澳北欧中心）、一办/二办、环建楼",
+  "北校区·运动区": "运动场（大操场）、灯光篮球场、体育馆、体育部、健身房",
+  "北校区·生活区（湛恩大道以东）": "第一食堂、第二食堂、咪昵餐厅、阅餐厅、暖屋超市、红塔打印、小花园、一公寓/二公寓/七宿舍/九宿舍/十宿舍；菜鸟驿站近二公寓",
+  "北校区·东北角（春江路）": "五食堂、第四学生公寓1-4号楼、后勤发展中心",
+  "北校区·东部（花园旁）": "三公寓1-3号楼、江边网球场、校医室、保卫处、第十学生宿舍、第八学生公寓",
+  "南校区（334）": "卓越楼、思餐厅、教工食堂、第四食堂、清真食堂、第六食堂、管理学院A/B栋、外语学院、理学院、国合楼、逸兴楼（第四教学楼）、南校区图书馆、五公寓/六公寓/南校区1-10宿舍、南校区操场",
+  "1100基础学院": "大一通识教学区：申一教、申二教（申二楼）、1100图书馆（四食堂二楼）、教育超市、A/B/C区宿舍、菜鸟驿站",
+  "580号": "体育健身中心、民族餐厅（清真）",
+  "复兴路校区": "复兴中路1195号，中英国际学院，非本部日常区",
+  "北校区·南侧（近海安路天桥）": "第二学生公寓（二公寓1-3号楼：1、3号楼男生，2号楼女生）、留学生公寓1-2号楼、第十二宿舍；楼下有教育超市与『上理宝盒』快递柜，翻天桥（新/老天桥）即达南校区思餐厅",
+  "营口路校区": "军工路营口路一带；已知有教育超市（营业 9:00-20:00 区间，见后勤假期通知）。信息较少，待补"
+ },
+ "pois": [
+  {
+   "id": "canteen1",
+   "name": "第一食堂",
+   "alias": [
+    "一食堂",
+    "1食堂",
+    "一餐"
+   ],
+   "type": "食堂",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "第三教学楼（同在海远中路沿线，官方路段）",
+    "第一学生公寓",
+    "公共服务中心",
+    "咪昵餐厅",
+    "第十宿舍（楼上）"
+   ],
+   "hours": {
+    "早餐": "6:30-9:30",
+    "午餐": "10:45-13:30",
+    "晚餐": "16:30-19:30"
+   },
+   "closed": "周六休息",
+   "signature": [
+    "特色酱鸭（校园十大美食）",
+    "川湘菜系",
+    "各类面食+浇头",
+    "扎肉"
+   ],
+   "seats": 600,
+   "traffic": "北校区就餐人次最多，日均约4000人次",
+   "features": [
+    "内设上理烘焙坊",
+    "位置：志摩路与海远中路交叉口东南侧",
+    "设继光香香鸡档口（文证：学生会推文《新品牌入驻》）"
+   ],
+   "good_for": [
+    "三教下课顺路吃",
+    "想吃川湘菜"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "早饭",
+    "午饭",
+    "晚饭",
+    "川湘菜",
+    "酱鸭",
+    "面食",
+    "饮品",
+    "继光香香鸡",
+    "香香鸡",
+    "炸鸡"
+   ],
+   "pyf": "diyishitang|yishitang|1shitang|yican",
+   "pyi": "dyst|yst|1st|yc",
+   "pyt": "shitang|st",
+   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|jiguangxiangxiangji|xiangxiangji|zhaji|cf|zf|wf|cxc|jy|ms|yp|jgxxj|xxj|zj"
+  },
+  {
+   "id": "bakery",
+   "name": "上理烘焙坊",
+   "alias": [
+    "烘焙坊",
+    "面包房",
+    "一食堂烘焙坊"
+   ],
+   "type": "烘焙/饮品",
+   "zone": "第一食堂内·大厅最南侧",
+   "near_landmark": [
+    "第一食堂"
+   ],
+   "hours": {
+    "全天": "6:30-22:00"
+   },
+   "closed": "周六休息",
+   "signature": [
+    "华夫饼（强推）",
+    "鲜榨果汁",
+    "蛋糕甜点",
+    "意面/牛排/披萨"
+   ],
+   "good_for": [
+    "下午茶",
+    "赶时间买面包",
+    "想喝咖啡"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "☕",
+   "tags": [
+    "面包",
+    "蛋糕",
+    "甜点",
+    "早点",
+    "烘焙"
+   ],
+   "pyf": "shanglihongbeifang|hongbeifang|mianbaofang|yishitanghongbeifang",
+   "pyi": "slhbf|hbf|mbf|ysthbf",
+   "pyt": "hongbeiyinpin|hbyp",
+   "pyg": "mianbao|dangao|tiandian|zaodian|hongbei|mb|dg|td|zd|hb"
+  },
+  {
+   "id": "canteen2",
+   "name": "第二食堂",
+   "alias": [
+    "二食堂",
+    "2食堂",
+    "二餐",
+    "第二食堂 / 教工食堂"
+   ],
+   "type": "食堂",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "红塔（西侧）",
+    "第一教学楼（官方：最靠近一教的食堂）",
+    "农业银行ATM"
+   ],
+   "hours": {
+    "早餐": "6:30-9:30",
+    "午餐": "10:45-13:30",
+    "晚餐": "16:30-18:30"
+   },
+   "closed": "周日休息",
+   "signature": [
+    "肉糜蒸蛋（王牌）",
+    "虎皮尖椒（王牌）",
+    "油爆虾",
+    "红烧肉",
+    "本帮菜系",
+    "上海特色早点四大金刚"
+   ],
+   "seats": 224,
+   "traffic": "日均约2800人次",
+   "features": [
+    "有专门打包/外卖窗口，赶时间首选",
+    "左侧有麦当劳（6:30-22:00）",
+    "位置：思尚路转盘路北"
+   ],
+   "good_for": [
+    "一教下课就近吃",
+    "赶时间打包",
+    "想吃本帮菜"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "午饭",
+    "晚饭",
+    "教工餐厅",
+    "快餐"
+   ],
+   "pyf": "diershitang|ershitang|2shitang|ercan|diershitangjiaogongshitang",
+   "pyi": "dest|est|2st|ec|destjgst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|jiaogongcanting|kuaican|cf|wf|jgct|kc",
+   "note": "（同一建筑两层：二楼为阅餐厅（教工餐厅为主，学生亦可上二楼用餐）；麦当劳位于一楼。——CY 实地 2026-09-19）"
+  },
+  {
+   "id": "yue",
+   "name": "阅餐厅",
+   "alias": [
+    "二食堂二楼",
+    "教师餐厅"
+   ],
+   "type": "食堂",
+   "zone": "第二食堂二楼",
+   "near_landmark": [
+    "第二食堂",
+    "尚理汇咖啡吧"
+   ],
+   "hours": {
+    "午餐": "11:00-13:00（仅教职工）",
+    "晚餐": "16:30-18:30"
+   },
+   "closed": "周六休息",
+   "signature": [
+    "自选餐品",
+    "浇头面"
+   ],
+   "features": [
+    "吃饭+学习+休闲多功能空间",
+    "版艺学院师生设计改建",
+    "非饭点可自习（周日至周五 13:30-15:00、18:30-21:00 开放）"
+   ],
+   "good_for": [
+    "想边吃边自习",
+    "想吃得不吵"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "聚餐",
+    "小炒",
+    "二食堂二楼"
+   ],
+   "pyf": "yuecanting|ershitangerlou|jiaoshicanting",
+   "pyi": "yct|estel|jsct",
+   "pyt": "shitang|st",
+   "pyg": "chifan|jucan|xiaochao|ershitangerlou|cf|jc|xc|estel"
+  },
+  {
+   "id": "canteen5",
+   "name": "第五食堂",
+   "alias": [
+    "五食堂",
+    "5食堂",
+    "五餐"
+   ],
+   "type": "食堂",
+   "zone": "北校区·东北角（春江路）",
+   "near_landmark": [
+    "第四学生公寓一至四号楼",
+    "图书馆总馆（思勉路：图书馆—四公寓1号楼—五食堂）",
+    "后勤发展中心"
+   ],
+   "hours": {
+    "早餐": "6:30-9:30",
+    "午餐": "10:45-13:30",
+    "晚餐": "16:30-18:30"
+   },
+   "closed": "周日休息",
+   "signature": [
+    "战斧猪排（校园十大美食）",
+    "猪肚鸡",
+    "麻辣烫",
+    "鱼粉",
+    "煲仔饭",
+    "港式烧腊",
+    "石锅拌饭"
+   ],
+   "seats": 796,
+   "traffic": "日均约1300人次",
+   "features": [
+    "一楼：麻辣烫、鱼粉、煎饼、铁板饭、咖喱鸡排饭、猪肚鸡、煲仔饭、水果捞、奶茶",
+    "二楼：拉面、水饺、重庆小面、牛肉粉丝汤、猪脚饭、港式烧腊、石锅拌饭、咖啡吧",
+    "今年新上减脂餐（学校比你还努力系列）",
+    "一楼设库迪咖啡（文证：学生会推文《新品牌入驻》）",
+    "二楼设七分甜（文证：学生会推文《新品牌入驻》）",
+    "一楼设 KFC 炸鸡兄弟档口（CY 实地 2026-09-19，待文证）",
+    "二楼设连杏双皮奶（CY 实地 2026-09-19，待文证）"
+   ],
+   "good_for": [
+    "四公寓/图书馆自习出来吃",
+    "想换花样",
+    "想吃得清淡/减脂"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "午饭",
+    "晚饭",
+    "自选",
+    "聚餐",
+    "库迪",
+    "七分甜",
+    "双皮奶",
+    "炸鸡"
+   ],
+   "pyf": "diwushitang|wushitang|5shitang|wucan",
+   "pyi": "dwst|wst|5st|wc",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|zixuan|jucan|kudi|qifentian|shuangpinai|zhaji|cf|wf|zx|jc|kd|qft|spn|zj"
+  },
+  {
+   "id": "mini",
+   "name": "咪昵餐厅",
+   "alias": [
+    "咪呢餐厅",
+    "mini餐厅"
+   ],
+   "type": "餐厅",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "第十宿舍",
+    "第一食堂背后",
+    "暖屋超市"
+   ],
+   "hours": {
+    "早餐": "6:30-9:30",
+    "午晚餐": "10:00-22:00",
+    "夜宵": "18:30-22:00"
+   },
+   "closed": "无（营业到22点，最晚）",
+   "signature": [
+    "特色鸡腿饭",
+    "盖浇饭",
+    "米粉",
+    "面条",
+    "炒饭"
+   ],
+   "good_for": [
+    "晚下课",
+    "想吃夜宵",
+    "错过饭点"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍽️",
+   "tags": [
+    "吃饭",
+    "小炒",
+    "聚会",
+    "点菜"
+   ],
+   "pyf": "minicanting|minecanting",
+   "pyi": "mnct|minict",
+   "pyt": "canting|ct",
+   "pyg": "chifan|xiaochao|juhui|diancai|cf|xc|jh|dc"
+  },
+  {
+   "id": "sicanting",
+   "name": "思餐厅",
+   "alias": [
+    "南校区思餐厅",
+    "思食堂"
+   ],
+   "type": "食堂",
+   "zone": "南校区（334）·北侧",
+   "near_landmark": [
+    "卓越楼",
+    "教工食堂",
+    "第五学生公寓",
+    "南校区操场"
+   ],
+   "hours": {
+    "午晚餐": "常规饭点"
+   },
+   "signature": [
+    "南校区主食堂"
+   ],
+   "good_for": [
+    "南校区上课/管理学院的学生吃饭"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "午饭",
+    "晚饭",
+    "南校吃饭",
+    "瑞幸",
+    "蜜雪冰城",
+    "一点点",
+    "苹果花园",
+    "肯德基",
+    "KFC",
+    "肯悦"
+   ],
+   "pyf": "sicanting|nanxiaoqusicanting|sishitang",
+   "pyi": "sct|nxqsct|sst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|wufan|wanfan|nanxiaochifan|ruixing|mixuebingcheng|yidiandian|pingguohuayuan|kendeji|kfc|kenyue|kafei|naicha|mianbaohongbei|cf|wf|nxcf|rx|mxbc|ydd|pghy|kdj|kfc|ky|kf|nc|mbhb",
+   "features": [
+    "四楼设瑞幸咖啡（文证：学生会推文《新品牌入驻》）",
+    "一楼设蜜雪冰城（文证：学生会推文《新品牌入驻》）",
+    "三楼设一点点（文证：学生会推文《新品牌入驻》）",
+    "三楼设苹果花园烘焙（文证：学生会推文《新品牌入驻》）",
+    "1-2 楼设肯德基 KFC（文证：后勤处推文 2026-09；楼梯口设肯悦咖啡——CY 实地 2026-09-19）"
+   ]
+  },
+  {
+   "id": "canteen4",
+   "name": "第四食堂",
+   "alias": [
+    "四食堂"
+   ],
+   "type": "食堂",
+   "zone": "南校区（334）·南侧",
+   "near_landmark": [
+    "管理学院大楼",
+    "南校区宿舍区"
+   ],
+   "hours": {
+    "午晚餐": "常规饭点"
+   },
+   "good_for": [
+    "南校区南侧宿舍就近吃"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "南校吃饭"
+   ],
+   "pyf": "disishitang|sishitang",
+   "pyi": "dsst|sst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|nanxiaochifan|cf|nxcf"
+  },
+  {
+   "id": "qingzhen334",
+   "name": "清真食堂（334）",
+   "alias": [
+    "南校区清真食堂",
+    "清真餐厅"
+   ],
+   "type": "食堂",
+   "zone": "南校区（334）",
+   "near_landmark": [
+    "第六食堂",
+    "第十宿舍、第七宿舍（同在尚理路沿线）",
+    "南校区操场（海志南路）"
+   ],
+   "hours": {
+    "午晚餐": "常规饭点"
+   },
+   "good_for": [
+    "清真饮食"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "清真",
+    "穆斯林",
+    "南校吃饭"
+   ],
+   "pyf": "qingzhenshitang334|nanxiaoquqingzhenshitang|qingzhencanting",
+   "pyi": "qzst334|nxqqzst|qzct",
+   "pyt": "shitang|st",
+   "pyg": "chifan|qingzhen|musilin|nanxiaochifan|cf|qz|msl|nxcf"
+  },
+  {
+   "id": "canteen6",
+   "name": "第六食堂",
+   "alias": [
+    "六食堂"
+   ],
+   "type": "食堂",
+   "zone": "南校区（334）",
+   "near_landmark": [
+    "第五学生公寓3号楼",
+    "理学院楼、外语楼（同在海学南路沿线）"
+   ],
+   "hours": {
+    "午晚餐": "常规饭点"
+   },
+   "good_for": [
+    "南校区东侧宿舍就近吃"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "南校吃饭",
+    "六食堂"
+   ],
+   "pyf": "diliushitang|liushitang",
+   "pyi": "dlst|lst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|nanxiaochifan|liushitang|cf|nxcf|lst"
+  },
+  {
+   "id": "minzu580",
+   "name": "民族餐厅（580号）",
+   "alias": [
+    "民族餐厅",
+    "580清真"
+   ],
+   "type": "食堂",
+   "zone": "580号",
+   "hours": {
+    "午餐": "10:30-13:00",
+    "晚餐": "16:30-19:00"
+   },
+   "signature": [
+    "拉面",
+    "煲仔饭",
+    "西北风味面",
+    "牛肉粉丝汤",
+    "川渝八大碗"
+   ],
+   "good_for": [
+    "想吃西北风味"
+   ],
+   "verified": true,
+   "campus": "580",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "清真",
+    "穆斯林",
+    "580"
+   ],
+   "pyf": "minzucanting580hao|minzucanting|580qingzhen",
+   "pyi": "mzct580h|mzct|580qz",
+   "pyt": "shitang|st",
+   "pyg": "chifan|qingzhen|musilin|580|cf|qz|msl|580"
+  },
+  {
+   "id": "nuanwu",
+   "name": "暖屋超市",
+   "alias": [
+    "暖屋",
+    "暖屋爱心超市",
+    "暖屋爱心超市 (东堂)"
+   ],
+   "type": "超市/便利店",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "教工活动中心",
+    "第三学生公寓2号楼",
+    "小花园（同在志摩路沿线）",
+    "咪昵餐厅"
+   ],
+   "hours": {
+    "营业": "长时（以现场为准）"
+   },
+   "good_for": [
+    "买水买零食",
+    "应急日用品"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "note": "（暖屋≠教育超市：暖屋是校内生活超市，教育超市是学校自营文具纸张店，勿混）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛒",
+   "tags": [
+    "买水",
+    "买零食",
+    "买东西",
+    "泡面",
+    "日用品"
+   ],
+   "pyf": "nuanwuchaoshi|nuanwu|nuanwuaixinchaoshi|nuanwuaixinchaoshidongtang",
+   "pyi": "nwcs|nw|nwaxcs|nwaxcsdt",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|ms|mls|mdx|pm|ryp"
+  },
+  {
+   "id": "nuanwu_fresh",
+   "name": "暖屋超市生鲜店",
+   "alias": [
+    "暖屋生鲜"
+   ],
+   "type": "超市/便利店",
+   "zone": "北校区·一公寓北楼",
+   "near_landmark": [
+    "一公寓北楼（同楼还有理发店、洗衣店、尚学书屋、礼品鲜花店）"
+   ],
+   "good_for": [
+    "买水果生鲜"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛒",
+   "tags": [
+    "买菜",
+    "水果",
+    "生鲜",
+    "买水果"
+   ],
+   "pyf": "nuanwuchaoshishengxiandian|nuanwushengxian",
+   "pyi": "nwcssxd|nwsx",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maicai|shuiguo|shengxian|maishuiguo|mc|sg|sx|msg"
+  },
+  {
+   "id": "edu_market_s",
+   "name": "南校区教育超市",
+   "alias": [
+    "334超市",
+    "教育超市"
+   ],
+   "type": "超市/便利店",
+   "zone": "南校区（334）·地下一楼",
+   "near_landmark": [
+    "五公寓",
+    "思餐厅",
+    "玻璃廊桥（南校区侧下行即达）"
+   ],
+   "good_for": [
+    "南校区买水买零食"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "note": "学校自营教育超市（非全家），主营文具纸张（上理工信纸、作业本）与生活用品；写思想报告常来。注：教育超市在 334/1100/营口路 均有，此条指南校区（334 地下一楼）那家（天桥店：南校区侧玻璃廊桥下行即达（军工路334号第5公寓2号楼地下一层，同层设茉莉奶白——CY 实地 2026-09-19，待文证））",
+   "hours": {
+    "营业": "8:30-22:00"
+   },
+   "func": [
+    "life"
+   ],
+   "emoji": "🛒",
+   "tags": [
+    "买文具",
+    "文具",
+    "买水",
+    "笔记本"
+   ],
+   "pyf": "nanxiaoqujiaoyuchaoshi|334chaoshi|jiaoyuchaoshi",
+   "pyi": "nxqjycs|334cs|jycs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maiwenju|wenju|maishui|bijiben|mwj|wj|ms|bjb"
+  },
+  {
+   "id": "edu_market_1100",
+   "name": "1100教育超市",
+   "alias": [
+    "基础学院超市"
+   ],
+   "type": "超市/便利店",
+   "zone": "1100基础学院",
+   "near_landmark": [
+    "浴室2",
+    "学生活动中心"
+   ],
+   "good_for": [
+    "大一买日用品"
+   ],
+   "verified": true,
+   "campus": "1100",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛒",
+   "tags": [
+    "买文具",
+    "文具",
+    "基础学院"
+   ],
+   "pyf": "1100jiaoyuchaoshi|jichuxueyuanchaoshi",
+   "pyi": "1100jycs|jcxycs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maiwenju|wenju|jichuxueyuan|mwj|wj|jcxy"
+  },
+  {
+   "id": "cainiao",
+   "name": "菜鸟驿站",
+   "alias": [
+    "快递驿站",
+    "快递点"
+   ],
+   "type": "快递/服务",
+   "zone": "北校区·生活区南缘",
+   "near_landmark": [
+    "二公寓1/2号楼",
+    "篮球场",
+    "动力二馆"
+   ],
+   "good_for": [
+    "取快递"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "📦",
+   "tags": [
+    "取快递",
+    "寄快递",
+    "快递",
+    "拿包裹",
+    "物流"
+   ],
+   "pyf": "cainiaoyizhan|kuaidiyizhan|kuaididian",
+   "pyi": "cnyz|kdyz|kdd",
+   "pyt": "kuaidifuwu|kdfw",
+   "pyg": "qukuaidi|jikuaidi|kuaidi|nabaoguo|wuliu|qkd|jkd|kd|nbg|wl"
+  },
+  {
+   "id": "print_hongta",
+   "name": "红塔打印",
+   "alias": [
+    "北校红塔打印"
+   ],
+   "type": "打印",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "第二食堂/阅餐厅（编号34一带）"
+   ],
+   "good_for": [
+    "打资料",
+    "交作业前冲刺打印"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🖨️",
+   "tags": [
+    "打印",
+    "复印",
+    "彩印",
+    "论文装订"
+   ],
+   "pyf": "hongtadayin|beixiaohongtadayin",
+   "pyi": "htdy|bxhtdy",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd"
+  },
+  {
+   "id": "print_fuke",
+   "name": "傅科打印",
+   "alias": [
+    "格致堂打印"
+   ],
+   "type": "打印",
+   "zone": "北校区·历史核心区",
+   "near_landmark": [
+    "格致堂"
+   ],
+   "good_for": [
+    "教学区就近打印"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🖨️",
+   "tags": [
+    "打印",
+    "复印",
+    "格致堂"
+   ],
+   "pyf": "fukedayin|gezhitangdayin",
+   "pyi": "fkdy|gztdy",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|gezhitang|dy|fy|gzt"
+  },
+  {
+   "id": "print_south",
+   "name": "南校区红塔打印",
+   "alias": [
+    "334打印店"
+   ],
+   "type": "打印",
+   "zone": "南校区（334）",
+   "near_landmark": [
+    "南校区4宿舍"
+   ],
+   "good_for": [
+    "南校区打印"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🖨️",
+   "tags": [
+    "打印",
+    "复印",
+    "南校打印"
+   ],
+   "pyf": "nanxiaoquhongtadayin|334dayindian",
+   "pyi": "nxqhtdy|334dyd",
+   "pyt": "dayin|dy",
+   "pyg": "dayin|fuyin|nanxiaodayin|dy|fy|nxdy"
+  },
+  {
+   "id": "coffee1906",
+   "name": "1906咖啡厅",
+   "alias": [
+    "1906"
+   ],
+   "type": "烘焙/饮品",
+   "zone": "北校区·西北角",
+   "near_landmark": [
+    "体育活动中心西侧（勤勉大道旁）"
+   ],
+   "hours": {
+    "全天": "10:00-21:30"
+   },
+   "good_for": [
+    "自习",
+    "小组讨论",
+    "约会"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "☕",
+   "tags": [
+    "咖啡",
+    "奶茶",
+    "喝咖啡",
+    "自习"
+   ],
+   "pyf": "1906kafeiting",
+   "pyi": "1906kft",
+   "pyt": "hongbeiyinpin|hbyp",
+   "pyg": "kafei|naicha|hekafei|zixi|kf|nc|hkf|zx"
+  },
+  {
+   "id": "bath1",
+   "name": "第一浴室",
+   "alias": [
+    "北校浴室",
+    "浴室"
+   ],
+   "type": "生活服务",
+   "zone": "北校区",
+   "near_landmark": [
+    "第十二宿舍西北角",
+    "北校区第八宿舍",
+    "第一食堂"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "note": "516 公共浴室位于十二宿舍西北角；另有新体育中心负一层男浴室（2025-10 启用）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🚿",
+   "tags": [
+    "洗澡",
+    "淋浴",
+    "热水",
+    "浴室"
+   ],
+   "pyf": "diyiyushi|beixiaoyushi|yushi",
+   "pyi": "dyys|bxys|ys",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xizao|linyu|reshui|yushi|xz|ly|rs|ys"
+  },
+  {
+   "id": "bath_s",
+   "name": "公共浴室（南校区）",
+   "alias": [
+    "334浴室",
+    "浴室"
+   ],
+   "type": "生活服务",
+   "zone": "南校区（334）·思餐厅东侧",
+   "near_landmark": [
+    "思餐厅",
+    "南校区第一宿舍"
+   ],
+   "verified": true,
+   "campus": "南校",
+   "note": "南校区公共浴室在思餐厅东边新浴室 1-2 楼（1F 男浴室 / 2F 女浴室）；原「六公寓3号楼一带」有误，依后勤处《公共洗浴》修正",
+   "hours": {
+    "开放": "15:00-23:00"
+   },
+   "func": [
+    "life"
+   ],
+   "emoji": "🚿",
+   "tags": [
+    "洗澡",
+    "淋浴",
+    "南校洗澡"
+   ],
+   "pyf": "gonggongyushinanxiaoqu|334yushi|yushi",
+   "pyi": "ggysnxq|334ys|ys",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz"
+  },
+  {
+   "id": "atm_abc",
+   "name": "农业银行ATM",
+   "alias": [
+    "ATM",
+    "取款机"
+   ],
+   "type": "生活服务",
+   "zone": "北校区·生活区",
+   "near_landmark": [
+    "第二食堂/阅餐厅（编号34一带）"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏧",
+   "tags": [
+    "取钱",
+    "ATM",
+    "取款",
+    "农行",
+    "转账"
+   ],
+   "pyf": "nongyeyinhangatm|qukuanji",
+   "pyi": "nyyhatm|qkj",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "quqian|atm|qukuan|nonghang|zhuanzhang|qq|atm|qk|nh|zz"
+  },
+  {
+   "id": "clinic",
+   "name": "校医室（卫生科）",
+   "alias": [
+    "校医院",
+    "卫生科"
+   ],
+   "type": "生活服务",
+   "zone": "北校区·东部（花园旁）",
+   "near_landmark": [
+    "保卫处",
+    "三公寓"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏥",
+   "tags": [
+    "看病",
+    "校医院",
+    "开药",
+    "配药",
+    "体检",
+    "医务室"
+   ],
+   "pyf": "xiaoyishiweishengke|xiaoyiyuan|weishengke",
+   "pyi": "xyswsk|xyy|wsk",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|yiwushi|kb|xyy|ky|py|tj|yws"
+  },
+  {
+   "id": "pscenter",
+   "name": "心理健康中心",
+   "alias": [
+    "心理中心"
+   ],
+   "type": "生活服务",
+   "zone": "北校区·西北角",
+   "near_landmark": [
+    "学生处、武装部（同楼，五教一带）"
+   ],
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "💗",
+   "tags": [
+    "心理咨询",
+    "心理预约",
+    "树洞",
+    "倾诉",
+    "心理辅导"
+   ],
+   "pyf": "xinlijiankangzhongxin|xinlizhongxin",
+   "pyi": "xljkzx|xlzx",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "xinlizixun|xinliyuyue|shudong|qingsu|xinlifudao|xlzx|xlyy|sd|qs|xlfd"
+  },
+  {
+   "id": "familymart",
+   "name": "全家便利店",
+   "alias": [
+    "全家",
+    "Familymart",
+    "全家超市",
+    "全家便利连锁超市"
+   ],
+   "type": "超市/便利店",
+   "zone": "北校区·南缘（第二学生公寓东北·第六期学生公寓一带）",
+   "campus": "北校",
+   "near_landmark": [
+    "第二学生公寓",
+    "第六期学生公寓",
+    "海安路师生专用通道",
+    "菜鸟驿站"
+   ],
+   "hours": {
+    "营业": "6:00-24:00"
+   },
+   "signature": [
+    "全家水吧（10:00-23:00）"
+   ],
+   "note": "高德地图标注：北校区南缘、第二学生公寓2号楼东北、第六期学生公寓一带（即操场围栏外通往菜鸟驿站那条路上）；商业连锁便利店（Familymart），官方《校园商超》单列；516 校区全家超市 6:00-24:00，有全家水吧",
+   "good_for": [
+    "深夜买东西",
+    "买水买零食",
+    "夜宵"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛒",
+   "tags": [
+    "买水",
+    "便利店",
+    "饭团",
+    "早饭",
+    "买零食",
+    "24小时"
+   ],
+   "pyf": "quanjiabianlidian|quanjia|quanjiachaoshi|quanjiabianliliansuochaoshi",
+   "pyi": "qjbld|qj|qjcs|qjbllscs",
+   "pyt": "chaoshibianlidian|csbld",
+   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|ms|bld|ft|zf|mls|24xs"
+  }
+ ],
+ "landmarks": [
+  {
+   "id": "teach1",
+   "name": "第一教学楼",
+   "alias": [
+    "一教",
+    "1教"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·运动区西北侧（湛恩大道旁）",
+   "note": "官方自习攻略：靠近操场和沪江学院，桌椅崭新、全套数字化教室；二食堂是最靠近它的食堂",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "自习",
+    "一教上课"
+   ],
+   "pyf": "diyijiaoxuelou|yijiao|1jiao",
+   "pyi": "dyjxl|yj|1j",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|yijiaoshangke|sk|zx|yjsk"
+  },
+  {
+   "id": "teach3",
+   "name": "第三教学楼",
+   "alias": [
+    "三教",
+    "3教",
+    "新三教"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·中北部",
+   "note": "AED 表官方标注『北校区第三教学楼一楼入口处』；教学楼关闭通知中与一教/五教/综合楼并列。编号表未单列（编号 16/17/60-63/82 缺失），故位置依官方路段+自习攻略推定",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "自习",
+    "三教上课"
+   ],
+   "pyf": "disanjiaoxuelou|sanjiao|3jiao|xinsanjiao",
+   "pyi": "dsjxl|sj|3j|xsj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|sanjiaoshangke|sk|zx|sjsk"
+  },
+  {
+   "id": "teach5",
+   "name": "第五教学楼",
+   "alias": [
+    "五教",
+    "5教"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·西北角",
+   "note": "编号地图2号，先进制造大楼旁",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "自习",
+    "五教上课"
+   ],
+   "pyf": "diwujiaoxuelou|wujiao|5jiao",
+   "pyi": "dwjxl|wj|5j",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|wujiaoshangke|sk|zx|wjsk"
+  },
+  {
+   "id": "yixing",
+   "name": "逸兴楼",
+   "alias": [
+    "第四教学楼",
+    "四教"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）·西南",
+   "note": "官方自习攻略：沿南校操场走到底；今年刚修缮，走廊有书柜沙发座椅可自习",
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "四教上课"
+   ],
+   "pyf": "yixinglou|disijiaoxuelou|sijiao",
+   "pyi": "yxl|dsjxl|sj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|sijiaoshangke|sk|sjsk"
+  },
+  {
+   "id": "zonghe",
+   "name": "综合楼",
+   "alias": [
+    "中德学院综合楼"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·西南（近470校门）",
+   "note": "分A/B/C/D四个区，上理重要教学楼，几乎每个上理人都在这上过课；课下适合拍照/滑板/撸猫",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach",
+    "office"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "自习",
+    "中德"
+   ],
+   "pyf": "zonghelou|zhongdexueyuanzonghelou",
+   "pyi": "zhl|zdxyzhl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|zhongde|sk|zx|zd"
+  },
+  {
+   "id": "zhuoyue",
+   "name": "卓越楼",
+   "alias": [
+    "卓越工程研究生院"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）·西侧",
+   "note": "天桥过后右转一直走到底；崭新现代化，研究生院所在",
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "自习",
+    "研究生课"
+   ],
+   "pyf": "zhuoyuelou|zhuoyuegongchengyanjiushengyuan",
+   "pyi": "zyl|zygcyjsy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zixi|yanjiushengke|sk|zx|yjsk"
+  },
+  {
+   "id": "guohe",
+   "name": "国合楼",
+   "alias": [
+    "国际合作大楼"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）·进门左手边",
+   "note": "中德学院教师办公楼，许多课程会议在此",
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "国际合作",
+    "自习"
+   ],
+   "pyf": "guohelou|guojihezuodalou",
+   "pyi": "ghl|gjhzdl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|guojihezuo|zixi|sk|gjhz|zx"
+  },
+  {
+   "id": "shen1",
+   "name": "申一教",
+   "alias": [
+    "申一",
+    "1100一教"
+   ],
+   "type": "教学楼",
+   "zone": "1100基础学院",
+   "note": "与图书馆/基础学院办公室/计算中心同一建筑群；非教学时间可自习",
+   "verified": true,
+   "campus": "1100",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "基础学院"
+   ],
+   "pyf": "shenyijiao|shenyi|1100yijiao",
+   "pyi": "syj|sy|1100yj",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|jichuxueyuan|sk|jcxy"
+  },
+  {
+   "id": "shen2",
+   "name": "申二教",
+   "alias": [
+    "申二楼",
+    "1100二教"
+   ],
+   "type": "教学楼",
+   "zone": "1100基础学院",
+   "note": "1100校区第二教学楼；非教学时间可自习",
+   "verified": true,
+   "campus": "1100",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "基础学院"
+   ],
+   "pyf": "shenerjiao|shenerlou|1100erjiao",
+   "pyi": "sej|sel|1100ej",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|jichuxueyuan|sk|jcxy"
+  },
+  {
+   "id": "guangdian",
+   "name": "光电楼",
+   "alias": [
+    "光电大楼",
+    "光电信息与计算机工程学院"
+   ],
+   "type": "学院楼",
+   "zone": "北校区·中北部",
+   "note": "编号地图10号，光仪所旁；本部中北部大橙色建筑，北邻勤业楼/图文信息中心",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "上课",
+    "光电学院",
+    "辅导员",
+    "办事"
+   ],
+   "pyf": "guangdianlou|guangdiandalou|guangdianxinxiyujisuanjigongchengxueyuan",
+   "pyi": "gdl|gddl|gdxxyjsjgcxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|guangdianxueyuan|fudaoyuan|banshi|sk|gdxy|fdy|bs"
+  },
+  {
+   "id": "jidian",
+   "name": "机械楼",
+   "alias": [
+    "机械工程学院"
+   ],
+   "type": "学院楼",
+   "zone": "北校区·中北部",
+   "note": "编号地图9号，沿海志北路与三教、图文信息中心一线",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "上课",
+    "机械学院"
+   ],
+   "pyf": "jixielou|jixiegongchengxueyuan",
+   "pyi": "jxl|jxgcxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|jixiexueyuan|sk|jxxy"
+  },
+  {
+   "id": "huanjian",
+   "name": "环建楼",
+   "alias": [
+    "环境与建筑学院"
+   ],
+   "type": "学院楼",
+   "zone": "北校区·历史核心区西",
+   "note": "编号地图66号",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "上课",
+    "环建学院"
+   ],
+   "pyf": "huanjianlou|huanjingyujianzhuxueyuan",
+   "pyi": "hjl|hjyjzxy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|huanjianxueyuan|sk|hjxy"
+  },
+  {
+   "id": "glA",
+   "name": "管理学院大楼",
+   "alias": [
+    "管理学院",
+    "管院"
+   ],
+   "type": "学院楼",
+   "zone": "南校区（334）",
+   "note": "A栋（116）+B栋（117，与南校区图书馆同楼）",
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "上课",
+    "管院"
+   ],
+   "pyf": "guanlixueyuandalou|guanlixueyuan|guanyuan",
+   "pyi": "glxydl|glxy|gy",
+   "pyt": "xueyuanlou|xyl",
+   "pyg": "shangke|guanyuan|sk|gy"
+  },
+  {
+   "id": "lib",
+   "name": "图书馆（图文信息中心）",
+   "alias": [
+    "图书馆",
+    "图文信息中心",
+    "图书馆总馆"
+   ],
+   "type": "自习点",
+   "zone": "北校区·中北部",
+   "hours": {
+    "开放": "8:00-23:00",
+    "借还书": "8:00-21:45"
+   },
+   "note": "馆内有自习区、咖啡休闲区、电子文化长廊、瀑布流屏幕",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📖",
+   "tags": [
+    "自习",
+    "借书",
+    "看书",
+    "学习",
+    "占座",
+    "图文",
+    "图书馆总馆"
+   ],
+   "pyf": "tushuguantuwenxinxizhongxin|tushuguan|tuwenxinxizhongxin|tushuguanzongguan",
+   "pyi": "tsgtwxxzx|tsg|twxxzx|tsgzg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|xuexi|zhanzuo|tuwen|tushuguanzongguan|zx|js|ks|xx|zz|tw|tsgzg"
+  },
+  {
+   "id": "zhanen_lib",
+   "name": "湛恩纪念图书馆",
+   "alias": [
+    "湛恩图书馆",
+    "北校区图书馆"
+   ],
+   "type": "自习点",
+   "zone": "北校区（校史馆旁，思勉路西北侧）",
+   "hours": {
+    "自修室": "7:00-23:00",
+    "八楼自习室": "周一到周日 7:30-23:00"
+   },
+   "note": "早起党自习圣地，比总馆开门早一小时",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📖",
+   "tags": [
+    "自习",
+    "借书",
+    "看书",
+    "湛恩",
+    "图书馆"
+   ],
+   "pyf": "zhanenjiniantushuguan|zhanentushuguan|beixiaoqutushuguan",
+   "pyi": "zejntsg|zetsg|bxqtsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|zhanen|tushuguan|zx|js|ks|ze|tsg"
+  },
+  {
+   "id": "old_lib",
+   "name": "老图书馆",
+   "alias": [],
+   "type": "自习点",
+   "zone": "北校区（毛主席像和一教后方，湛恩大道与海志中路交叉口东南侧）",
+   "hours": {
+    "开放": "6:00-23:00"
+   },
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📖",
+   "tags": [
+    "自习",
+    "考研自习",
+    "图书馆"
+   ],
+   "pyf": "laotushuguan",
+   "pyi": "ltsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|kaoyanzixi|tushuguan|zx|kyzx|tsg"
+  },
+  {
+   "id": "lib334",
+   "name": "南校区图书馆",
+   "alias": [
+    "334图书馆"
+   ],
+   "type": "自习点",
+   "zone": "南校区（334，管理学院B栋同楼）",
+   "hours": {
+    "开放": "7:00-23:00"
+   },
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📖",
+   "tags": [
+    "自习",
+    "借书",
+    "看书",
+    "南校自习"
+   ],
+   "pyf": "nanxiaoqutushuguan|334tushuguan",
+   "pyi": "nxqtsg|334tsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|jieshu|kanshu|nanxiaozixi|zx|js|ks|nxzx"
+  },
+  {
+   "id": "lib1100",
+   "name": "1100图书馆",
+   "alias": [
+    "基础学院图书馆"
+   ],
+   "type": "自习点",
+   "zone": "1100基础学院（远庆路四食堂二楼）",
+   "hours": {
+    "周日至周五": "8:00-21:45",
+    "周六": "8:00-16:45"
+   },
+   "verified": true,
+   "campus": "1100",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📖",
+   "tags": [
+    "自习",
+    "看书",
+    "基础学院"
+   ],
+   "pyf": "1100tushuguan|jichuxueyuantushuguan",
+   "pyi": "1100tsg|jcxytsg",
+   "pyt": "zixidian|zxd",
+   "pyg": "zixi|kanshu|jichuxueyuan|zx|ks|jcxy"
+  },
+  {
+   "id": "ground",
+   "name": "运动场",
+   "alias": [
+    "操场",
+    "大操场"
+   ],
+   "type": "运动",
+   "zone": "北校区·运动区",
+   "note": "一教在其西北侧，灯光篮球场在其北侧",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏃",
+   "tags": [
+    "跑步",
+    "打球",
+    "操场",
+    "夜跑",
+    "体测",
+    "校园跑"
+   ],
+   "pyf": "yundongchang|caochang|dacaochang",
+   "pyi": "ydc|cc|dcc",
+   "pyt": "yundong|yd",
+   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp"
+  },
+  {
+   "id": "gym",
+   "name": "体育馆/体育活动中心",
+   "alias": [
+    "体育馆",
+    "体育活动中心"
+   ],
+   "type": "运动",
+   "zone": "北校区·西北角",
+   "note": "编号地图5号；1906咖啡厅在其西侧",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏸",
+   "tags": [
+    "打球",
+    "羽毛球",
+    "篮球",
+    "体育课",
+    "健身房",
+    "Tims"
+   ],
+   "pyf": "tiyuguantiyuhuodongzhongxin|tiyuguan|tiyuhuodongzhongxin",
+   "pyi": "tygtyhdzx|tyg|tyhdzx",
+   "pyt": "yundong|yd",
+   "pyg": "daqiu|yumaoqiu|lanqiu|tiyuke|jianshenfang|tims|dq|ymq|lq|tyk|jsf|tims",
+   "features": [
+    "门前设 Tims 天好咖啡（文证：后勤处推文 2026-09 官宣即将开业，开业状态以现场为准）"
+   ]
+  },
+  {
+   "id": "dorm1",
+   "name": "第一学生公寓",
+   "alias": [
+    "1公寓",
+    "一公寓"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·生活区",
+   "note": "北楼同楼：理发店、洗衣店（干洗/修拉链/配钥匙）、尚学书屋、礼品鲜花店、暖屋生鲜店；海聆路沿线（湛恩大道观江台—一公寓—小花园—勤勉大道）",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "diyixueshenggongyu|1gongyu|yigongyu",
+   "pyi": "dyxsgy|1gy|ygy",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm2",
+   "name": "第二学生公寓",
+   "alias": [
+    "2公寓",
+    "二公寓",
+    "第二学生公寓 1 号楼",
+    "第二学生公寓 2 号楼",
+    "第二学生公寓 3 号楼"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·南缘（近海安路天桥）",
+   "note": "二公寓1、2、3号楼均在516北校区（三源验证：宿舍指南「01本部北校区」+ 后勤处《公共洗浴》运营表逐条标516号 + 报修流程列三栋）；1、3号楼男生，2号楼女生，上床下桌四人间带独卫阳台；楼下有「上理宝盒」快递柜与全家便利店；老天桥/新天桥在其南侧连南校区，过桥即334",
+   "verified": true,
+   "campus": "北校",
+   "near_landmark": [
+    "菜鸟驿站（一号楼西侧）",
+    "上理宝盒快递",
+    "海安路人行天桥",
+    "北校操场",
+    "第一教学楼",
+    "全家便利店"
+   ],
+   "features": [
+    "楼内自习室：一号楼3楼+7楼、三号楼5楼+6楼、二号楼5楼",
+    "落地即天桥，跨区到334最近"
+   ],
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "dierxueshenggongyu|2gongyu|ergongyu|dierxueshenggongyu1haolou|dierxueshenggongyu2haolou|dierxueshenggongyu3haolou",
+   "pyi": "dexsgy|2gy|egy|dexsgy1hl|dexsgy2hl|dexsgy3hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm3",
+   "name": "第三学生公寓",
+   "alias": [
+    "3公寓",
+    "三公寓",
+    "第三学生公寓 1 号楼",
+    "第三学生公寓 2 号楼",
+    "第三学生公寓 3 号楼"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·东部（花园旁）",
+   "note": "1-3号楼，近江边网球场、暖屋超市（志摩路）",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "disanxueshenggongyu|3gongyu|sangongyu|disanxueshenggongyu1haolou|disanxueshenggongyu2haolou|disanxueshenggongyu3haolou",
+   "pyi": "dsxsgy|3gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm4",
+   "name": "第四学生公寓",
+   "alias": [
+    "4公寓",
+    "四公寓",
+    "第四学生公寓 1 号楼",
+    "第四学生公寓 2 号楼",
+    "第四学生公寓 3 号楼",
+    "第四学生公寓 4 号楼"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·东北角（春江路）",
+   "note": "1-4号楼；思勉路沿线（图书馆—四公寓1号楼—五食堂）",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "disixueshenggongyu|4gongyu|sigongyu|disixueshenggongyu1haolou|disixueshenggongyu2haolou|disixueshenggongyu3haolou|disixueshenggongyu4haolou",
+   "pyi": "dsxsgy|4gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl|dsxsgy4hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm5n",
+   "name": "第五学生公寓",
+   "alias": [
+    "5公寓",
+    "五公寓",
+    "五公寓1-4号楼",
+    "第五学生公寓 1 号楼",
+    "第五学生公寓 2 号楼",
+    "第五学生公寓 3 号楼",
+    "第五学生公寓 4 号楼"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·北侧（近卓越楼）",
+   "note": "五公寓2号楼男生、4号楼女生；上床下桌+大阳台+独卫+电梯。原数据误标为北校区，2026-09-11 依宿舍指南与编号表修正。",
+   "verified": true,
+   "near_landmark": [
+    "卓越楼",
+    "思餐厅",
+    "南校区教育超市",
+    "南校区操场"
+   ],
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "diwuxueshenggongyu|5gongyu|wugongyu|wugongyu14haolou|diwuxueshenggongyu1haolou|diwuxueshenggongyu2haolou|diwuxueshenggongyu3haolou|diwuxueshenggongyu4haolou",
+   "pyi": "dwxsgy|5gy|wgy|wgy14hl|dwxsgy1hl|dwxsgy2hl|dwxsgy3hl|dwxsgy4hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm6",
+   "name": "第六学生公寓",
+   "alias": [
+    "6公寓",
+    "六公寓",
+    "六公寓1-3号楼"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·东北（近外语楼）",
+   "note": "六公寓1号楼男生（11层）、2号楼女生（16层），有电梯。原数据误标为北校区，2026-09-11 修正。",
+   "verified": true,
+   "near_landmark": [
+    "外语学院",
+    "理学院楼",
+    "第六食堂",
+    "教育超市"
+   ],
+   "campus": "南校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "diliuxueshenggongyu|6gongyu|liugongyu|liugongyu13haolou",
+   "pyi": "dlxsgy|6gy|lgy|lgy13hl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm9",
+   "name": "第九宿舍",
+   "alias": [
+    "九宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·生活区（第一食堂楼上）",
+   "note": "北校区九/十宿舍（九宿舍在一食堂3楼、十宿舍在其近旁）。注意：南校区另有同名『南校区第九/第十宿舍』，勿混。",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "dijiusushe|jiusushe",
+   "pyi": "djss|jss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "dorm10",
+   "name": "第十宿舍",
+   "alias": [
+    "十宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·生活区（第一食堂楼上）",
+   "note": "北校区九/十宿舍（九宿舍在一食堂3楼、十宿舍在其近旁）。注意：南校区另有同名『南校区第九/第十宿舍』，勿混。",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "dishisushe|shisushe",
+   "pyi": "dsss|sss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "star",
+   "name": "毛主席像",
+   "alias": [
+    "毛像"
+   ],
+   "type": "地标",
+   "zone": "北校区·历史核心区",
+   "note": "老图书馆在其与一教后方；校园几何中心参照物",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🗿",
+   "tags": [
+    "打卡",
+    "毛像"
+   ],
+   "pyf": "maozhuxixiang|maoxiang",
+   "pyi": "mzxx|mx",
+   "pyt": "dibiao|db",
+   "pyg": "daka|maoxiang|dk|mx"
+  },
+  {
+   "id": "siyan",
+   "name": "思晏堂",
+   "alias": [],
+   "type": "地标",
+   "zone": "北校区·历史核心区",
+   "note": "校长办公室/校办；尚思路沿线（沪江文化园—研究生院—大礼堂—思晏堂—第七宿舍）",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "打卡",
+    "老建筑"
+   ],
+   "pyf": "siyantang",
+   "pyi": "syt",
+   "pyt": "dibiao|db",
+   "pyg": "daka|laojianzhu|dk|ljz"
+  },
+  {
+   "id": "gate516",
+   "name": "516号校门",
+   "alias": [
+    "正门",
+    "本部校门"
+   ],
+   "type": "校门",
+   "zone": "北校区·西南（军工路）",
+   "note": "进门即湛恩大道，直通黄浦江（对岸复兴岛）",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "transport"
+   ],
+   "emoji": "🚪",
+   "tags": [
+    "打车",
+    "公交",
+    "门口",
+    "出门",
+    "正门"
+   ],
+   "pyf": "516haoxiaomen|zhengmen|benbuxiaomen",
+   "pyi": "516hxm|zm|bbxm",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|gongjiao|menkou|chumen|zhengmen|dc|gj|mk|cm|zm"
+  },
+  {
+   "id": "gate470",
+   "name": "470号校门",
+   "alias": [
+    "470门"
+   ],
+   "type": "校门",
+   "zone": "北校区·西（军工路）",
+   "note": "近综合楼；校办财务发票开票点在此附近",
+   "verified": true,
+   "campus": "北校",
+   "func": [
+    "transport"
+   ],
+   "emoji": "🚪",
+   "tags": [
+    "打车",
+    "门口",
+    "出门"
+   ],
+   "pyf": "470haoxiaomen|470men",
+   "pyi": "470hxm|470m",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|dc|mk|cm"
+  },
+  {
+   "id": "gate580",
+   "name": "580号校门",
+   "alias": [
+    "580门"
+   ],
+   "type": "校门",
+   "zone": "580号",
+   "note": "基建处/保卫处旁；校外小吃（老盛昌等）集中",
+   "verified": true,
+   "campus": "580",
+   "func": [
+    "transport"
+   ],
+   "emoji": "🚪",
+   "tags": [
+    "打车",
+    "门口",
+    "出门",
+    "580"
+   ],
+   "pyf": "580haoxiaomen|580men",
+   "pyi": "580hxm|580m",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|580|dc|mk|cm|580"
+  },
+  {
+   "id": "gate334",
+   "name": "334号校门",
+   "alias": [
+    "南校区校门"
+   ],
+   "type": "校门",
+   "zone": "南校区·西南（军工路）",
+   "note": "进门左手边国合楼",
+   "verified": true,
+   "campus": "南校",
+   "func": [
+    "transport"
+   ],
+   "emoji": "🚪",
+   "tags": [
+    "打车",
+    "门口",
+    "出门",
+    "南校门口"
+   ],
+   "pyf": "334haoxiaomen|nanxiaoquxiaomen",
+   "pyi": "334hxm|nxqxm",
+   "pyt": "xiaomen|xm",
+   "pyg": "dache|menkou|chumen|nanxiaomenkou|dc|mk|cm|nxmk"
+  },
+  {
+   "id": "bridge",
+   "name": "海安路人行天桥",
+   "alias": [
+    "天桥",
+    "师生专用通道",
+    "新天桥",
+    "海安路师生专用通道",
+    "老天桥"
+   ],
+   "type": "地标",
+   "zone": "北校区南缘↔南校区",
+   "note": "北校区（516）与南校区（334）的唯一步行走廊，高德标注为『上海理工大学海安路师生专用通道』；过桥步行约 10-15 分钟",
+   "verified": true,
+   "campus": "连接",
+   "func": [
+    "transport",
+    "life"
+   ],
+   "emoji": "🌉",
+   "tags": [
+    "过马路",
+    "去南校",
+    "南北校区",
+    "天桥",
+    "通道"
+   ],
+   "pyf": "haianlurenxingtianqiao|tianqiao|shishengzhuanyongtongdao|xintianqiao|haianlushishengzhuanyongtongdao|laotianqiao",
+   "pyi": "halrxtq|tq|sszytd|xtq|halsszytd|ltq",
+   "pyt": "dibiao|db",
+   "pyg": "guomalu|qunanxiao|nanbeixiaoqu|tianqiao|tongdao|gml|qnx|nbxq|tq|td"
+  },
+  {
+   "name": "南校区第一宿舍",
+   "alias": [
+    "南1宿舍",
+    "南校区1宿舍",
+    "南一宿舍",
+    "南一"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·西南",
+   "campus": "南校",
+   "near_landmark": [
+    "国合楼",
+    "思餐厅",
+    "南校区操场"
+   ],
+   "note": "男生宿舍，上下床四人间；位于南校区最僻静角落，距南校操场几步路",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudiyixiushe|nan1sushe|nanxiaoqu1sushe|nanyixiushe|nanyi",
+   "pyi": "nxqdyxs|n1ss|nxq1ss|nyxs|ny",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第二宿舍",
+   "alias": [
+    "南2宿舍",
+    "南校区2宿舍",
+    "南二宿舍",
+    "南二"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·西",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区操场",
+    "思餐厅"
+   ],
+   "note": "女生宿舍，红墙复古建筑；周边树木成荫",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudiersushe|nan2sushe|nanxiaoqu2sushe|nanersushe|naner",
+   "pyi": "nxqdess|n2ss|nxq2ss|ness|ne",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第三宿舍",
+   "alias": [
+    "南3宿舍",
+    "南校区3宿舍",
+    "南三宿舍",
+    "南三"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·西北",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区操场",
+    "思餐厅",
+    "南校区室内篮球场"
+   ],
+   "note": "女生宿舍，上床下桌四人间；靠近南校区大操场",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudisansushe|nan3sushe|nanxiaoqu3sushe|nansansushe|nansan",
+   "pyi": "nxqdsss|n3ss|nxq3ss|nsss|ns",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第七宿舍",
+   "alias": [
+    "南7宿舍",
+    "南七宿舍",
+    "南七"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·南（尚理路沿线）",
+   "campus": "南校",
+   "near_landmark": [
+    "清真食堂",
+    "第六食堂",
+    "南校区第十宿舍"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudiqisushe|nan7sushe|nanqisushe|nanqi",
+   "pyi": "nxqdqss|n7ss|nqss|nq",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第八宿舍",
+   "alias": [
+    "南8宿舍",
+    "南八宿舍",
+    "南八"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·南",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区操场"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudibasushe|nan8sushe|nanbasushe|nanba",
+   "pyi": "nxqdbss|n8ss|nbss|nb",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第九宿舍",
+   "alias": [
+    "南9宿舍",
+    "南九宿舍",
+    "南九"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·南",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区操场"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudijiusushe|nan9sushe|nanjiusushe|nanjiu",
+   "pyi": "nxqdjss|n9ss|njss|nj",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第十宿舍",
+   "alias": [
+    "南10宿舍",
+    "南十宿舍",
+    "南十"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·南（尚理路沿线）",
+   "campus": "南校",
+   "near_landmark": [
+    "清真食堂",
+    "南校区第七宿舍"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudishisushe|nan10sushe|nanshisushe|nanshi",
+   "pyi": "nxqdsss|n10ss|nsss|ns",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "北校区第三宿舍",
+   "alias": [
+    "北3宿舍",
+    "3宿舍",
+    "第三宿舍 (思裴堂)"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·生活区",
+   "campus": "北校",
+   "near_landmark": [
+    "暖屋超市",
+    "小花园"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "beixiaoqudisansushe|bei3sushe|3sushe|disansushesipeitang",
+   "pyi": "bxqdsss|b3ss|3ss|dsssspt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "北校区第四宿舍",
+   "alias": [
+    "北4宿舍",
+    "4宿舍",
+    "第四宿舍 (思伊堂)"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·生活区",
+   "campus": "北校",
+   "near_landmark": [
+    "暖屋超市",
+    "第一食堂"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "beixiaoqudisisushe|bei4sushe|4sushe|disisushesiyitang",
+   "pyi": "bxqdsss|b4ss|4ss|dssssyt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "北校区第五宿舍",
+   "alias": [
+    "北5宿舍",
+    "5宿舍",
+    "第五宿舍 (怀德堂)"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·运动区东侧",
+   "campus": "北校",
+   "near_landmark": [
+    "灯光篮球场",
+    "第一教学楼",
+    "第二食堂"
+   ],
+   "note": "女生宿舍，上下床4-6人；距第一教学楼不到百米，大一常在此上课",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "beixiaoqudiwusushe|bei5sushe|5sushe|diwusushehuaidetang",
+   "pyi": "bxqdwss|b5ss|5ss|dwsshdt",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "北校区第七宿舍",
+   "alias": [
+    "北7宿舍",
+    "7宿舍",
+    "第七宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·历史核心区（尚思路沿线）",
+   "campus": "北校",
+   "near_landmark": [
+    "思晏堂",
+    "第七宿舍"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "beixiaoqudiqisushe|bei7sushe|7sushe|diqisushe",
+   "pyi": "bxqdqss|b7ss|7ss|dqss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "北校区第八宿舍",
+   "alias": [
+    "北8宿舍",
+    "8宿舍",
+    "第八宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·东部（花园平台旁）",
+   "campus": "北校",
+   "near_landmark": [
+    "第一浴室",
+    "第一食堂",
+    "花园平台"
+   ],
+   "note": "女生宿舍，上床下桌四人间；旁有花园平台小木椅，适合晨读",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "beixiaoqudibasushe|bei8sushe|8sushe|dibasushe",
+   "pyi": "bxqdbss|b8ss|8ss|dbss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "第十二宿舍",
+   "alias": [
+    "12宿舍",
+    "十二宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·最东",
+   "campus": "北校",
+   "near_landmark": [
+    "第一浴室",
+    "北校操场",
+    "灯光篮球场"
+   ],
+   "note": "男生宿舍，八床（一般住6人）；楼下即第一浴室，距洗衣店近",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "dishiersushe|12sushe|shiersushe",
+   "pyi": "dsess|12ss|sess",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "启明楼宿舍",
+   "alias": [
+    "启明楼"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·中北部",
+   "campus": "北校",
+   "near_landmark": [
+    "第三教学楼",
+    "图文信息中心"
+   ],
+   "note": "空调租赁走本楼宿管（军工路516校区特殊名单之一）",
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍",
+    "启明楼"
+   ],
+   "pyf": "qiminglousushe|qiminglou",
+   "pyi": "qmlss|qml",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|qiminglou|hss|qml"
+  },
+  {
+   "name": "留学生公寓",
+   "alias": [
+    "留学生公寓1号楼",
+    "留学生公寓2号楼",
+    "第六宿舍 (留学生公寓) (馥赉堂)"
+   ],
+   "type": "宿舍",
+   "zone": "北校区",
+   "campus": "北校",
+   "near_landmark": [
+    "第一浴室"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍",
+    "留学生",
+    "国际学生"
+   ],
+   "pyf": "liuxueshenggongyu|liuxueshenggongyu1haolou|liuxueshenggongyu2haolou|diliususheliuxueshenggongyufulaitang",
+   "pyi": "lxsgy|lxsgy1hl|lxsgy2hl|dlsslxsgyflt",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|liuxuesheng|guojixuesheng|hss|lxs|gjxs"
+  },
+  {
+   "name": "藏书阁宿舍",
+   "alias": [
+    "藏书阁"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·历史核心区",
+   "campus": "北校",
+   "near_landmark": [
+    "老图书馆"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍",
+    "藏书阁"
+   ],
+   "pyf": "cangshugesushe|cangshuge",
+   "pyi": "csgss|csg",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|cangshuge|hss|csg"
+  },
+  {
+   "name": "南校区操场",
+   "alias": [
+    "南校操场",
+    "南校区大操场"
+   ],
+   "type": "运动",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区第一宿舍",
+    "南校区第二宿舍",
+    "思餐厅"
+   ],
+   "verified": true,
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏃",
+   "tags": [
+    "跑步",
+    "打球",
+    "操场",
+    "南校跑步"
+   ],
+   "pyf": "nanxiaoqucaochang|nanxiaocaochang|nanxiaoqudacaochang",
+   "pyi": "nxqcc|nxcc|nxqdcc",
+   "pyt": "yundong|yd",
+   "pyg": "paobu|daqiu|caochang|nanxiaopaobu|pb|dq|cc|nxpb"
+  },
+  {
+   "name": "南校区室内篮球场",
+   "alias": [
+    "334篮球场"
+   ],
+   "type": "运动",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "逸兴楼（第四教学楼）"
+   ],
+   "verified": true,
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏀",
+   "tags": [
+    "打球",
+    "篮球",
+    "室内"
+   ],
+   "pyf": "nanxiaoqushineilanqiuchang|334lanqiuchang",
+   "pyi": "nxqsnlqc|334lqc",
+   "pyt": "yundong|yd",
+   "pyg": "daqiu|lanqiu|shinei|dq|lq|sn"
+  },
+  {
+   "name": "教工食堂",
+   "alias": [
+    "南校区教工食堂"
+   ],
+   "type": "食堂",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "思餐厅",
+    "卓越楼"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭",
+    "教工"
+   ],
+   "pyf": "jiaogongshitang|nanxiaoqujiaogongshitang",
+   "pyi": "jgst|nxqjgst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|jiaogong|cf|jg"
+  },
+  {
+   "name": "先进制造大楼",
+   "alias": [
+    "先进制造"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·西北角",
+   "campus": "北校",
+   "near_landmark": [
+    "第五教学楼",
+    "工程实训中心"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "先进制造"
+   ],
+   "pyf": "xianjinzhizaodalou|xianjinzhizao",
+   "pyi": "xjzzdl|xjzz",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|xianjinzhizao|sk|xjzz"
+  },
+  {
+   "name": "大礼堂",
+   "alias": [
+    "礼堂"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·历史核心区（海志中路沿线）",
+   "campus": "北校",
+   "near_landmark": [
+    "思晏堂",
+    "运动场",
+    "篮球场"
+   ],
+   "verified": true,
+   "func": [
+    "life",
+    "teach"
+   ],
+   "emoji": "🎪",
+   "tags": [
+    "活动",
+    "演出",
+    "开学典礼",
+    "讲座",
+    "晚会"
+   ],
+   "pyf": "dalitang|litang",
+   "pyi": "dlt|lt",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "huodong|yanchu|kaixuedianli|jiangzuo|wanhui|hd|yc|kxdl|jz|wh"
+  },
+  {
+   "name": "校史馆",
+   "alias": [
+    "校史馆（图文信息中心）"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·中北部",
+   "campus": "北校",
+   "near_landmark": [
+    "图文信息中心",
+    "湛恩纪念图书馆"
+   ],
+   "note": "与图文信息中心同址（编号 11 合并标注『校史馆、图文信息中心』）",
+   "verified": true,
+   "func": [
+    "life",
+    "teach"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "参观",
+    "校史",
+    "讲解"
+   ],
+   "pyf": "xiaoshiguan|xiaoshiguantuwenxinxizhongxin",
+   "pyi": "xsg|xsgtwxxzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "canguan|xiaoshi|jiangjie|cg|xs|jj"
+  },
+  {
+   "name": "水母楼",
+   "alias": [
+    "公共服务中心",
+    "教务处",
+    "财务处"
+   ],
+   "type": "服务",
+   "zone": "北校区·生活区南缘",
+   "campus": "北校",
+   "near_landmark": [
+    "第一食堂",
+    "第二食堂"
+   ],
+   "note": "教务处/财务处/房管科/公共服务中心所在地；办证明、缴费常来此楼",
+   "verified": true,
+   "func": [
+    "office",
+    "life"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "办事",
+    "一站式",
+    "教务处",
+    "财务处",
+    "公共服务中心",
+    "打印成绩单"
+   ],
+   "pyf": "shuimulou|gonggongfuwuzhongxin|jiaowuchu|caiwuchu",
+   "pyi": "sml|ggfwzx|jwc|cwc",
+   "pyt": "fuwu|fw",
+   "pyg": "banshi|yizhanshi|jiaowuchu|caiwuchu|gonggongfuwuzhongxin|dayinchengjidan|bs|yzs|jwc|cwc|ggfwzx|dycjd"
+  },
+  {
+   "name": "学生卡卡务中心",
+   "alias": [
+    "卡务中心",
+    "补办校园卡"
+   ],
+   "type": "服务",
+   "zone": "北校区·东部",
+   "campus": "北校",
+   "near_landmark": [
+    "第一浴室",
+    "北校区第八宿舍"
+   ],
+   "note": "校园卡补办/充值在此（异地补卡约 20 元）",
+   "verified": true,
+   "func": [
+    "office"
+   ],
+   "emoji": "💳",
+   "tags": [
+    "补卡",
+    "校园卡",
+    "充值",
+    "挂失",
+    "卡务中心"
+   ],
+   "pyf": "xueshengkakawuzhongxin|kawuzhongxin|bubanxiaoyuanka",
+   "pyi": "xskkwzx|kwzx|bbxyk",
+   "pyt": "fuwu|fw",
+   "pyg": "buka|xiaoyuanka|chongzhi|guashi|kawuzhongxin|bk|xyk|cz|gs|kwzx"
+  },
+  {
+   "name": "中德学院",
+   "alias": [
+    "汉堡国际工程学院",
+    "中德国际学院"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·历史核心区",
+   "campus": "北校",
+   "near_landmark": [
+    "格致堂",
+    "国合楼（南校区，部分课程）"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "中德"
+   ],
+   "pyf": "zhongdexueyuan|hanbaoguojigongchengxueyuan|zhongdeguojixueyuan",
+   "pyi": "zdxy|hbgjgcxy|zdgjxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|zhongde|sk|zd"
+  },
+  {
+   "name": "动力馆",
+   "alias": [
+    "能源与动力工程学院"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·中北部",
+   "campus": "北校",
+   "near_landmark": [
+    "机械楼"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "能动"
+   ],
+   "pyf": "dongliguan|nengyuanyudongligongchengxueyuan",
+   "pyi": "dlg|nyydlgcxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|nengdong|sk|nd"
+  },
+  {
+   "name": "沪江美术馆",
+   "alias": [
+    "美术馆"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·历史核心区",
+   "campus": "北校",
+   "near_landmark": [
+    "音乐堂"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "🖼️",
+   "tags": [
+    "看展",
+    "美术馆",
+    "艺术"
+   ],
+   "pyf": "hujiangmeishuguan|meishuguan",
+   "pyi": "hjmsg|msg",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "kanzhan|meishuguan|yishu|kz|msg|ys"
+  },
+  {
+   "name": "音乐堂",
+   "alias": [],
+   "type": "教学楼",
+   "zone": "北校区·历史核心区（海学路沿线）",
+   "campus": "北校",
+   "near_landmark": [
+    "运动场",
+    "湛恩大道"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "🎵",
+   "tags": [
+    "演出",
+    "音乐会",
+    "活动"
+   ],
+   "pyf": "yinyuetang",
+   "pyi": "yyt",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "yanchu|yinyuehui|huodong|yc|yyh|hd"
+  },
+  {
+   "name": "理学院楼",
+   "alias": [
+    "理学院"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）·东（海学南路沿线）",
+   "campus": "南校",
+   "near_landmark": [
+    "外语楼",
+    "第六食堂",
+    "第五学生公寓3号楼"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "理学院"
+   ],
+   "pyf": "lixueyuanlou|lixueyuan",
+   "pyi": "lxyl|lxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|lixueyuan|sk|lxy"
+  },
+  {
+   "name": "外语楼",
+   "alias": [
+    "外语学院"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）·东（海学南路沿线）",
+   "campus": "南校",
+   "near_landmark": [
+    "理学院楼",
+    "第六食堂"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "外语学院"
+   ],
+   "pyf": "waiyulou|waiyuxueyuan",
+   "pyi": "wyl|wyxy",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|waiyuxueyuan|sk|wyxy"
+  },
+  {
+   "name": "微创楼",
+   "alias": [
+    "微创中心"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区图书馆"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课",
+    "微创"
+   ],
+   "pyf": "weichuanglou|weichuangzhongxin",
+   "pyi": "wcl|wczx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|weichuang|sk|wc"
+  },
+  {
+   "name": "理科实验中心",
+   "alias": [
+    "理科实验楼"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "逸兴楼"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "做实验",
+    "实验课",
+    "理科实验"
+   ],
+   "pyf": "likeshiyanzhongxin|likeshiyanlou",
+   "pyi": "lksyzx|lksyl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|likeshiyan|zsy|syk|lksy"
+  },
+  {
+   "name": "中德学院实验中心",
+   "alias": [
+    "中德实验中心"
+   ],
+   "type": "教学楼",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区室内篮球场"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "做实验",
+    "实验课"
+   ],
+   "pyf": "zhongdexueyuanshiyanzhongxin|zhongdeshiyanzhongxin",
+   "pyi": "zdxysyzx|zdsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|zsy|syk"
+  },
+  {
+   "name": "朝花夕拾书店",
+   "alias": [
+    "南校区书店"
+   ],
+   "type": "服务",
+   "zone": "南校区（334）·六公寓旁",
+   "campus": "南校",
+   "near_landmark": [
+    "第六学生公寓",
+    "南校区教育超市"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "📕",
+   "tags": [
+    "买书",
+    "书店",
+    "教材",
+    "旧书"
+   ],
+   "pyf": "chaohuaxishishudian|nanxiaoqushudian",
+   "pyi": "chxssd|nxqsd",
+   "pyt": "fuwu|fw",
+   "pyg": "maishu|shudian|jiaocai|jiushu|ms|sd|jc|js"
+  },
+  {
+   "name": "南校区第四宿舍",
+   "alias": [
+    "南4宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·南（尚理路沿线）",
+   "campus": "南校",
+   "near_landmark": [
+    "清真食堂",
+    "第六食堂"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudisisushe|nan4sushe",
+   "pyi": "nxqdsss|n4ss",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区第五宿舍",
+   "alias": [
+    "南5宿舍",
+    "南五宿舍",
+    "南五"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·北（思餐厅旁）",
+   "campus": "南校",
+   "near_landmark": [
+    "思餐厅",
+    "公共浴室（南校区）"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqudiwusushe|nan5sushe|nanwusushe|nanwu",
+   "pyi": "nxqdwss|n5ss|nwss|nw",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "name": "南校区科技大楼",
+   "alias": [],
+   "type": "教学楼",
+   "zone": "南校区（334）·东",
+   "campus": "南校",
+   "near_landmark": [
+    "南校区图书馆",
+    "理学院楼",
+    "管理学院大楼"
+   ],
+   "verified": true,
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "上课"
+   ],
+   "pyf": "nanxiaoqukejidalou",
+   "pyi": "nxqkjdl",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|sk"
+  },
+  {
+   "name": "南校区教工宿舍",
+   "alias": [
+    "334教工宿舍",
+    "教工宿舍"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）·西北",
+   "campus": "南校",
+   "near_landmark": [
+    "卓越楼",
+    "动力二馆",
+    "菜鸟驿站"
+   ],
+   "verified": true,
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "教工宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanxiaoqujiaogongsushe|334jiaogongsushe|jiaogongsushe",
+   "pyi": "nxqjgss|334jgss|jgss",
+   "pyt": "sushe|ss",
+   "pyg": "jiaogongsushe|huisushe|jgss|hss"
+  },
+  {
+   "id": "osm-001",
+   "name": "(原第四食堂)",
+   "alias": [],
+   "type": "食堂",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🍜",
+   "tags": [
+    "吃饭"
+   ],
+   "pyf": "yuandisishitang",
+   "pyi": "ydsst",
+   "pyt": "shitang|st",
+   "pyg": "chifan|cf"
+  },
+  {
+   "id": "osm-002",
+   "name": "上海光学仪器研究所",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "研究所"
+   ],
+   "pyf": "shanghaiguangxueyiqiyanjiusuo",
+   "pyi": "shgxyqyjs",
+   "pyt": "qita|qt",
+   "pyg": "yanjiusuo|yjs"
+  },
+  {
+   "id": "osm-003",
+   "name": "上海理工大学继续教育学院",
+   "alias": [],
+   "type": "学院",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🎓",
+   "tags": [
+    "继续教育",
+    "成教",
+    "专升本"
+   ],
+   "pyf": "shanghailigongdaxuejixujiaoyuxueyuan",
+   "pyi": "shlgdxjxjyxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "jixujiaoyu|chengjiao|zhuanshengben|jxjy|cj|zsb"
+  },
+  {
+   "id": "osm-004",
+   "name": "仪表二馆",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "上课",
+    "仪表"
+   ],
+   "pyf": "yibiaoerguan",
+   "pyi": "ybeg",
+   "pyt": "qita|qt",
+   "pyg": "shangke|yibiao|sk|yb"
+  },
+  {
+   "id": "osm-005",
+   "name": "体育部 (艾德蒙堂)",
+   "alias": [],
+   "type": "体育设施",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏀",
+   "tags": [
+    "体育课",
+    "体测",
+    "体育部"
+   ],
+   "pyf": "tiyubuaidemengtang",
+   "pyi": "tybadmt",
+   "pyt": "tiyusheshi|tyss",
+   "pyg": "tiyuke|tice|tiyubu|tyk|tc|tyb"
+  },
+  {
+   "id": "osm-006",
+   "name": "保卫处",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🚨",
+   "tags": [
+    "报警",
+    "办证",
+    "保卫",
+    "失物招领"
+   ],
+   "pyf": "baoweichu",
+   "pyi": "bwc",
+   "pyt": "bangonglou|bgl",
+   "pyg": "baojing|banzheng|baowei|shiwuzhaoling|bj|bz|bw|swzl"
+  },
+  {
+   "id": "osm-007",
+   "name": "刘湛恩故居",
+   "alias": [],
+   "type": "文化设施",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life",
+    "teach"
+   ],
+   "emoji": "🏠",
+   "tags": [
+    "参观",
+    "校史",
+    "打卡",
+    "故居"
+   ],
+   "pyf": "liuzhanenguju",
+   "pyi": "lzegj",
+   "pyt": "wenhuasheshi|whss",
+   "pyg": "canguan|xiaoshi|daka|guju|cg|xs|dk|gj"
+  },
+  {
+   "id": "osm-008",
+   "name": "创业楼",
+   "alias": [],
+   "type": "其他",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "创业",
+    "孵化"
+   ],
+   "pyf": "chuangyelou",
+   "pyi": "cyl",
+   "pyt": "qita|qt",
+   "pyg": "chuangye|fuhua|cy|fh"
+  },
+  {
+   "id": "osm-009",
+   "name": "创意设计实践基地",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "设计",
+    "实践"
+   ],
+   "pyf": "chuangyishejishijianjidi",
+   "pyi": "cysjsjjd",
+   "pyt": "qita|qt",
+   "pyg": "sheji|shijian|sj"
+  },
+  {
+   "id": "osm-010",
+   "name": "创新实训中心",
+   "alias": [],
+   "type": "教学楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "实训",
+    "创新"
+   ],
+   "pyf": "chuangxinshixunzhongxin",
+   "pyi": "cxsxzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shixun|chuangxin|sx|cx"
+  },
+  {
+   "id": "osm-011",
+   "name": "动力二馆",
+   "alias": [],
+   "type": "其他",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "上课",
+    "能动"
+   ],
+   "pyf": "donglierguan",
+   "pyi": "dleg",
+   "pyt": "qita|qt",
+   "pyg": "shangke|nengdong|sk|nd"
+  },
+  {
+   "id": "osm-012",
+   "name": "勤工俭学中心 (红塔)",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "勤工助学",
+    "兼职",
+    "助学"
+   ],
+   "pyf": "qingongjianxuezhongxinhongta",
+   "pyi": "qgjxzxht",
+   "pyt": "bangonglou|bgl",
+   "pyg": "qingongzhuxue|jianzhi|zhuxue|qgzx|jz|zx"
+  },
+  {
+   "id": "osm-013",
+   "name": "北欧文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "beiouwenhuajiaoliuzhongxin",
+   "pyi": "bowhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-014",
+   "name": "医务室（南校区）",
+   "alias": [
+    "医务室"
+   ],
+   "type": "生活服务",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏥",
+   "tags": [
+    "看病",
+    "校医院",
+    "开药",
+    "南校看病"
+   ],
+   "pyf": "yiwushinanxiaoqu|yiwushi",
+   "pyi": "ywsnxq|yws",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|nanxiaokanbing|kb|xyy|ky|nxkb"
+  },
+  {
+   "id": "osm-015",
+   "name": "医务室（北校区）",
+   "alias": [
+    "医务室"
+   ],
+   "type": "生活服务",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏥",
+   "tags": [
+    "看病",
+    "校医院",
+    "开药",
+    "北校看病"
+   ],
+   "pyf": "yiwushibeixiaoqu|yiwushi",
+   "pyi": "ywsbxq|yws",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|beixiaokanbing|kb|xyy|ky|bxkb"
+  },
+  {
+   "id": "osm-023",
+   "name": "南六宿舍",
+   "alias": [
+    "南六"
+   ],
+   "type": "宿舍",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "宿舍",
+    "回宿舍"
+   ],
+   "pyf": "nanliusushe|nanliu",
+   "pyi": "nlss|nl",
+   "pyt": "sushe|ss",
+   "pyg": "sushe|huisushe|ss|hss"
+  },
+  {
+   "id": "osm-025",
+   "name": "基础实验中心",
+   "alias": [],
+   "type": "教学楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "做实验",
+    "实验课",
+    "基础实验"
+   ],
+   "pyf": "jichushiyanzhongxin",
+   "pyi": "jcsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|shiyanke|jichushiyan|zsy|syk|jcsy"
+  },
+  {
+   "id": "osm-026",
+   "name": "学子公寓",
+   "alias": [],
+   "type": "宿舍",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍"
+   ],
+   "pyf": "xuezigongyu",
+   "pyi": "xzgy",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|hss"
+  },
+  {
+   "id": "osm-027",
+   "name": "学生活动中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🎪",
+   "tags": [
+    "社团",
+    "活动",
+    "大活"
+   ],
+   "pyf": "xueshenghuodongzhongxin",
+   "pyi": "xshdzx",
+   "pyt": "qita|qt",
+   "pyg": "shetuan|huodong|dahuo|st|hd|dh"
+  },
+  {
+   "id": "osm-028",
+   "name": "实训中心",
+   "alias": [
+    "工程实训中心",
+    "工程训练中心"
+   ],
+   "type": "教学楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "实训",
+    "工程训练",
+    "金工实习"
+   ],
+   "pyf": "shixunzhongxin|gongchengshixunzhongxin|gongchengxunlianzhongxin",
+   "pyi": "sxzx|gcsxzx|gcxlzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shixun|gongchengxunlian|jingongshixi|sx|gcxl|jgsx"
+  },
+  {
+   "id": "osm-029",
+   "name": "室内体育馆",
+   "alias": [],
+   "type": "体育设施",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "sport"
+   ],
+   "emoji": "🏀",
+   "tags": [
+    "打球",
+    "羽毛球",
+    "南校"
+   ],
+   "pyf": "shineitiyuguan",
+   "pyi": "sntyg",
+   "pyt": "tiyusheshi|tyss",
+   "pyg": "daqiu|yumaoqiu|nanxiao|dq|ymq|nx"
+  },
+  {
+   "id": "osm-030",
+   "name": "微创工程中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "南校区（334）",
+   "campus": "南校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "微创",
+    "工程"
+   ],
+   "pyf": "weichuanggongchengzhongxin",
+   "pyi": "wcgczx",
+   "pyt": "qita|qt",
+   "pyg": "weichuang|gongcheng|wc|gc"
+  },
+  {
+   "id": "osm-031",
+   "name": "德国文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "deguowenhuajiaoliuzhongxin",
+   "pyi": "dgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-032",
+   "name": "思福堂",
+   "alias": [],
+   "type": "文化设施",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "打卡",
+    "老建筑"
+   ],
+   "pyf": "sifutang",
+   "pyi": "sft",
+   "pyt": "wenhuasheshi|whss",
+   "pyg": "daka|laojianzhu|dk|ljz"
+  },
+  {
+   "id": "osm-033",
+   "name": "成教楼",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "成教",
+    "继续教育"
+   ],
+   "pyf": "chengjiaolou",
+   "pyi": "cjl",
+   "pyt": "qita|qt",
+   "pyg": "chengjiao|jixujiaoyu|cj|jxjy"
+  },
+  {
+   "id": "osm-034",
+   "name": "招生办",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "📝",
+   "tags": [
+    "招生",
+    "录取",
+    "咨询",
+    "报考"
+   ],
+   "pyf": "zhaoshengban",
+   "pyi": "zsb",
+   "pyt": "bangonglou|bgl",
+   "pyg": "zhaosheng|luqu|zixun|baokao|zs|lq|zx|bk"
+  },
+  {
+   "id": "osm-035",
+   "name": "教工之家",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "教工",
+    "活动"
+   ],
+   "pyf": "jiaogongzhijia",
+   "pyi": "jgzj",
+   "pyt": "bangonglou|bgl",
+   "pyg": "jiaogong|huodong|jg|hd"
+  },
+  {
+   "id": "osm-036",
+   "name": "新专家楼",
+   "alias": [],
+   "type": "宿舍",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "专家楼",
+    "回宿舍"
+   ],
+   "pyf": "xinzhuanjialou",
+   "pyi": "xzjl",
+   "pyt": "sushe|ss",
+   "pyg": "zhuanjialou|huisushe|zjl|hss"
+  },
+  {
+   "id": "osm-037",
+   "name": "日本文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "ribenwenhuajiaoliuzhongxin",
+   "pyi": "rbwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-038",
+   "name": "材料科学与工程学院",
+   "alias": [],
+   "type": "学院",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🎓",
+   "tags": [
+    "上课",
+    "材料学院"
+   ],
+   "pyf": "cailiaokexueyugongchengxueyuan",
+   "pyi": "clkxygcxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "shangke|cailiaoxueyuan|sk|clxy"
+  },
+  {
+   "id": "osm-039",
+   "name": "校长办公室",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "校办",
+    "校长"
+   ],
+   "pyf": "xiaozhangbangongshi",
+   "pyi": "xzbgs",
+   "pyt": "bangonglou|bgl",
+   "pyg": "xiaoban|xiaozhang|xb|xz"
+  },
+  {
+   "id": "osm-040",
+   "name": "汽车试验中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "汽车",
+    "试验"
+   ],
+   "pyf": "qicheshiyanzhongxin",
+   "pyi": "qcsyzx",
+   "pyt": "qita|qt",
+   "pyg": "qiche|shiyan|qc|sy"
+  },
+  {
+   "id": "osm-041",
+   "name": "沪江学院",
+   "alias": [],
+   "type": "学院",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🎓",
+   "tags": [
+    "上课",
+    "沪江学院"
+   ],
+   "pyf": "hujiangxueyuan",
+   "pyi": "hjxy",
+   "pyt": "xueyuan|xy",
+   "pyg": "shangke|hujiangxueyuan|sk|hjxy"
+  },
+  {
+   "id": "osm-042",
+   "name": "法国文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "faguowenhuajiaoliuzhongxin",
+   "pyi": "fgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-043",
+   "name": "澳大利亚文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "aodaliyawenhuajiaoliuzhongxin",
+   "pyi": "adlywhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-044",
+   "name": "玄德居",
+   "alias": [],
+   "type": "宿舍",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍"
+   ],
+   "pyf": "xuandeju",
+   "pyi": "xdj",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|hss"
+  },
+  {
+   "id": "osm-045",
+   "name": "研究生部",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🎓",
+   "tags": [
+    "研究生",
+    "研招",
+    "研工"
+   ],
+   "pyf": "yanjiushengbu",
+   "pyi": "yjsb",
+   "pyt": "bangonglou|bgl",
+   "pyg": "yanjiusheng|yanzhao|yangong|yjs|yz|yg"
+  },
+  {
+   "id": "osm-046",
+   "name": "第一办公楼 (思雷堂)",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "办公楼",
+    "行政"
+   ],
+   "pyf": "diyibangonglousileitang",
+   "pyi": "dybglslt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
+  },
+  {
+   "id": "osm-047",
+   "name": "第二办公楼 (思孟堂)",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "办公楼",
+    "行政"
+   ],
+   "pyf": "dierbangonglousimengtang",
+   "pyi": "debglsmt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
+  },
+  {
+   "id": "osm-048",
+   "name": "第五办公楼",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏢",
+   "tags": [
+    "办公楼",
+    "行政"
+   ],
+   "pyf": "diwubangonglou",
+   "pyi": "dwbgl",
+   "pyt": "bangonglou|bgl",
+   "pyg": "bangonglou|xingzheng|bgl|xz"
+  },
+  {
+   "id": "osm-049",
+   "name": "美国文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "meiguowenhuajiaoliuzhongxin",
+   "pyi": "mgwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-050",
+   "name": "老专家楼",
+   "alias": [],
+   "type": "宿舍",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "专家楼",
+    "回宿舍"
+   ],
+   "pyf": "laozhuanjialou",
+   "pyi": "lzjl",
+   "pyt": "sushe|ss",
+   "pyg": "zhuanjialou|huisushe|zjl|hss"
+  },
+  {
+   "id": "osm-051",
+   "name": "老年活动室",
+   "alias": [],
+   "type": "生活服务",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "life"
+   ],
+   "emoji": "🧺",
+   "tags": [
+    "老年",
+    "活动室"
+   ],
+   "pyf": "laonianhuodongshi",
+   "pyi": "lnhds",
+   "pyt": "shenghuofuwu|shfw",
+   "pyg": "laonian|huodongshi|ln|hds"
+  },
+  {
+   "id": "osm-052",
+   "name": "英国文化交流中心",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "国际交流",
+    "交流中心"
+   ],
+   "pyf": "yingguowenhuajiaoliuzhongxin",
+   "pyi": "ygwhjlzx",
+   "pyt": "qita|qt",
+   "pyg": "guojijiaoliu|jiaoliuzhongxin|gjjl|jlzx"
+  },
+  {
+   "id": "osm-053",
+   "name": "行政服务中心 (格致堂)",
+   "alias": [],
+   "type": "办公楼",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "office",
+    "life"
+   ],
+   "emoji": "🏛️",
+   "tags": [
+    "办事",
+    "一站式",
+    "盖章",
+    "证明",
+    "行政"
+   ],
+   "pyf": "xingzhengfuwuzhongxingezhitang",
+   "pyi": "xzfwzxgzt",
+   "pyt": "bangonglou|bgl",
+   "pyg": "banshi|yizhanshi|gaizhang|zhengming|xingzheng|bs|yzs|gz|zm|xz"
+  },
+  {
+   "id": "osm-054",
+   "name": "高地实验室",
+   "alias": [],
+   "type": "其他",
+   "zone": "北校区",
+   "campus": "北校",
+   "verified": false,
+   "src": "osm",
+   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "func": [
+    "teach"
+   ],
+   "emoji": "🏗️",
+   "tags": [
+    "实验室"
+   ],
+   "pyf": "gaodishiyanshi",
+   "pyi": "gdsys",
+   "pyt": "qita|qt",
+   "pyg": "shiyanshi|sys"
+  },
+  {
+   "id": "dorm7",
+   "name": "七公寓",
+   "alias": [
+    "7公寓",
+    "第七公寓"
+   ],
+   "type": "宿舍",
+   "zone": "北校区·西北角",
+   "campus": "北校",
+   "verified": false,
+   "src": "manual",
+   "note": "西北角宿舍（CY 描述：几乎就在 580 号校门附近、先进制造大楼旁边）。此前只出现在 zones 描述文字里、没有独立 POI，导致问「七公寓到X」会失答。精确坐标与门牌待确认。",
+   "func": [
+    "life"
+   ],
+   "emoji": "🛏️",
+   "tags": [
+    "回宿舍",
+    "580",
+    "校门旁"
+   ],
+   "pyf": "qigongyu|7gongyu|diqigongyu",
+   "pyi": "qgy|7gy|dqgy",
+   "pyt": "sushe|ss",
+   "pyg": "huisushe|580|xiaomenpang|hss|580|xmp"
+  },
+  {
+   "name": "公共实验楼",
+   "alias": [
+    "物理实验中心",
+    "公共实验中心"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·中",
+   "campus": "北校",
+   "near_landmark": [
+    "基础实验中心",
+    "第五教学楼",
+    "第三教学楼"
+   ],
+   "verified": false,
+   "src": "manual",
+   "note": "来源：CY 2026-2027-1 课表的「校区/场地:公共实验楼4楼」「公共实验楼305室」（大学物理实验、模拟电子技术实验）。OSM 无此建筑名，具体位置待核实 —— 现靠相邻建筑推定，转场时间为近似值。",
+   "func": [
+    "teach"
+   ],
+   "emoji": "📚",
+   "tags": [
+    "做实验",
+    "物理实验",
+    "实验课"
+   ],
+   "pyf": "gonggongshiyanlou|wulishiyanzhongxin|gonggongshiyanzhongxin",
+   "pyi": "ggsyl|wlsyzx|ggsyzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "zuoshiyan|wulishiyan|shiyanke|zsy|wlsy|syk"
+  }
+ ],
+ "roads": [
+  {
+   "road": "海远中路",
+   "line": "公共服务中心 → 第一学生公寓 → 第一食堂 → 第三教学楼",
+   "campus": "北校区"
+  },
+  {
+   "road": "海志北路",
+   "line": "第三教学楼 → 机械学院 → 图文信息中心",
+   "campus": "北校区"
+  },
+  {
+   "road": "海晏路",
+   "line": "湛恩大道 → 格致堂 → 思晏堂 → 学生活动中心 → 勤勉大道",
+   "campus": "北校区"
+  },
+  {
+   "road": "海志中路",
+   "line": "运动场 → 篮球场 → 大礼堂 → 思晏堂",
+   "campus": "北校区"
+  },
+  {
+   "road": "海学路",
+   "line": "仁义大道 → 运动场 → 音乐堂 → 湛恩大道",
+   "campus": "北校区"
+  },
+  {
+   "road": "海聆路",
+   "line": "湛恩大道观江台 → 第一学生公寓 → 小花园 → 勤勉大道",
+   "campus": "北校区"
+  },
+  {
+   "road": "志摩路",
+   "line": "暖屋爱心超市 → 教工活动中心 → 第三学生公寓2号楼 → 小花园",
+   "campus": "北校区"
+  },
+  {
+   "road": "思勉路",
+   "line": "图书馆 → 第四学生公寓1号楼 → 第五食堂",
+   "campus": "北校区"
+  },
+  {
+   "road": "海学北路",
+   "line": "勤勉大道 → 体育活动中心东侧",
+   "campus": "北校区"
+  },
+  {
+   "road": "尚思路",
+   "line": "沪江国际文化园 → 研究生院 → 大礼堂 → 思晏堂 → 思斐堂/思伊堂 → 第七宿舍",
+   "campus": "北校区"
+  },
+  {
+   "road": "海学南路",
+   "line": "第五学生公寓3号楼 → 第六食堂 → 理学院楼 → 外语楼",
+   "campus": "南校区"
+  },
+  {
+   "road": "海志南路",
+   "line": "清真食堂 → 南校区运动场 → 管理学院",
+   "campus": "南校区"
+  },
+  {
+   "road": "尚理路",
+   "line": "第六食堂 → 清真食堂 → 第十宿舍 → 第七宿舍",
+   "campus": "南校区"
+  }
+ ],
+ "walk_minutes": [
+  {
+   "from": "第一教学楼",
+   "to": "第二食堂",
+   "minutes": 3,
+   "note": "官方：最靠近一教的食堂，下课首选",
+   "verified": true
+  },
+  {
+   "from": "第一教学楼",
+   "to": "麦当劳（二食堂左侧）",
+   "minutes": 3,
+   "verified": true
+  },
+  {
+   "from": "第一教学楼",
+   "to": "第三教学楼",
+   "minutes": 6,
+   "note": "高德导航实测：451米 / 6分钟（向东北，途经研究生院·工会·第一食堂一带）",
+   "verified": true
+  },
+  {
+   "from": "第一教学楼",
+   "to": "老图书馆",
+   "minutes": 2,
+   "note": "毛像和一教后方",
+   "verified": true
+  },
+  {
+   "from": "第一教学楼",
+   "to": "运动场",
+   "minutes": 1,
+   "verified": true
+  },
+  {
+   "from": "第三教学楼",
+   "to": "第一食堂",
+   "minutes": 3,
+   "note": "官方路段：同在海远中路沿线（第一学生公寓—第一食堂—三教）",
+   "verified": true
+  },
+  {
+   "from": "第三教学楼",
+   "to": "图文信息中心（图书馆）",
+   "minutes": 3,
+   "note": "官方路段：海志北路沿线（三教—机械学院—图文信息中心）",
+   "verified": true
+  },
+  {
+   "from": "第三教学楼",
+   "to": "咪昵餐厅",
+   "minutes": 6,
+   "note": "est：生活区在南侧，沿路直走",
+   "verified": false
+  },
+  {
+   "from": "第三教学楼",
+   "to": "第二食堂",
+   "minutes": 6,
+   "note": "est",
+   "verified": false
+  },
+  {
+   "from": "第三教学楼",
+   "to": "光电楼",
+   "minutes": 4,
+   "note": "est：同在中北部",
+   "verified": false
+  },
+  {
+   "from": "第一食堂",
+   "to": "咪昵餐厅",
+   "minutes": 1,
+   "note": "第一食堂背后",
+   "verified": true
+  },
+  {
+   "from": "第一食堂",
+   "to": "第九宿舍",
+   "minutes": 1,
+   "note": "就在一食堂楼上",
+   "verified": true
+  },
+  {
+   "from": "第一食堂",
+   "to": "第十宿舍",
+   "minutes": 2,
+   "verified": true
+  },
+  {
+   "from": "第一食堂",
+   "to": "暖屋超市",
+   "minutes": 3,
+   "note": "est：志摩路沿线",
+   "verified": false
+  },
+  {
+   "from": "第二食堂",
+   "to": "阅餐厅",
+   "minutes": 1,
+   "verified": true
+  },
+  {
+   "from": "第二食堂",
+   "to": "红塔打印",
+   "minutes": 1,
+   "verified": true
+  },
+  {
+   "from": "第四学生公寓",
+   "to": "第五食堂",
+   "minutes": 3,
+   "verified": true
+  },
+  {
+   "from": "图书馆（图文信息中心）",
+   "to": "第五食堂",
+   "minutes": 4,
+   "note": "高德导航实测：0.3km / 4分15秒（路径：向正南→右转→直行178m→右转→左转）",
+   "verified": true
+  },
+  {
+   "from": "图书馆（图文信息中心）",
+   "to": "第三教学楼",
+   "minutes": 3,
+   "verified": true
+  },
+  {
+   "from": "湛恩纪念图书馆",
+   "to": "校史馆",
+   "minutes": 1,
+   "verified": true
+  },
+  {
+   "from": "咪昵餐厅",
+   "to": "暖屋超市",
+   "minutes": 2,
+   "verified": true
+  },
+  {
+   "from": "二公寓",
+   "to": "菜鸟驿站",
+   "minutes": 2,
+   "verified": true
+  },
+  {
+   "from": "运动场",
+   "to": "第一食堂",
+   "minutes": 6,
+   "note": "est：生活区在运动场东侧",
+   "verified": false
+  },
+  {
+   "from": "1906咖啡厅",
+   "to": "体育馆",
+   "minutes": 1,
+   "note": "体育活动中心西侧",
+   "verified": true
+  },
+  {
+   "from": "综合楼",
+   "to": "470号校门",
+   "minutes": 2,
+   "verified": true
+  },
+  {
+   "from": "334号校门",
+   "to": "国合楼",
+   "minutes": 1,
+   "note": "进门左手边",
+   "verified": true
+  },
+  {
+   "from": "卓越楼",
+   "to": "思餐厅",
+   "minutes": 4,
+   "note": "est",
+   "verified": false
+  },
+  {
+   "from": "逸兴楼（四教）",
+   "to": "南校区操场",
+   "minutes": 1,
+   "note": "沿南校操场走到底",
+   "verified": true
+  },
+  {
+   "from": "第五学生公寓",
+   "to": "卓越楼",
+   "minutes": 2,
+   "note": "五公寓离卓越楼近在咫尺（宿舍指南原话）",
+   "verified": false
+  },
+  {
+   "from": "第五学生公寓",
+   "to": "思餐厅",
+   "minutes": 5,
+   "note": "est：南校区北侧，步行数分钟",
+   "verified": false
+  },
+  {
+   "from": "第五学生公寓",
+   "to": "南校区教育超市",
+   "minutes": 2,
+   "note": "宿舍指南：周边有教育超市",
+   "verified": false
+  },
+  {
+   "from": "第六学生公寓",
+   "to": "第六食堂",
+   "minutes": 3,
+   "note": "est：南校区东北侧",
+   "verified": false
+  },
+  {
+   "from": "第六学生公寓",
+   "to": "外语楼",
+   "minutes": 4,
+   "note": "est：海学南路沿线",
+   "verified": false
+  },
+  {
+   "from": "第六学生公寓",
+   "to": "朝花夕拾书店",
+   "minutes": 1,
+   "note": "宿舍指南：六公寓旁",
+   "verified": false
+  },
+  {
+   "from": "国合楼",
+   "to": "南校区第一宿舍",
+   "minutes": 3,
+   "note": "est：南校区西南角",
+   "verified": false
+  },
+  {
+   "from": "南校区操场",
+   "to": "思餐厅",
+   "minutes": 4,
+   "note": "est：南校操场旁",
+   "verified": false
+  },
+  {
+   "from": "逸兴楼（四教）",
+   "to": "思餐厅",
+   "minutes": 4,
+   "note": "est：南校区内",
+   "verified": false
+  },
+  {
+   "from": "334号校门",
+   "to": "南校区第一宿舍",
+   "minutes": 3,
+   "note": "est：进门后向西南",
+   "verified": false
+  },
+  {
+   "from": "全家便利店",
+   "to": "菜鸟驿站",
+   "minutes": 1,
+   "note": "同在操场围栏外那条路上",
+   "verified": false
+  },
+  {
+   "from": "全家便利店",
+   "to": "第二学生公寓",
+   "minutes": 3,
+   "note": "est",
+   "verified": false
+  },
+  {
+   "from": "全家便利店",
+   "to": "运动场",
+   "minutes": 1,
+   "note": "跑道围栏外",
+   "verified": false
+  },
+  {
+   "from": "二公寓",
+   "to": "思餐厅",
+   "minutes": 4,
+   "verified": true,
+   "note": "高德导航实测：288米 / 4分钟，途经『上过街天桥』（海安路师生专用通道）"
+  }
+ ],
+ "off_campus": [
+  {
+   "name": "老盛昌汤包馆",
+   "where": "580校门口出去直走，小江西水果店右手边",
+   "signature": [
+    "苏式汤面",
+    "苏州汤包（偏甜）",
+    "蟹黄汤包（应季）",
+    "夏天有冷面"
+   ],
+   "verified": true
+  },
+  {
+   "name": "山东水饺 + 世界茶饮",
+   "where": "老盛昌附近",
+   "signature": [
+    "水饺",
+    "石锅拌饭",
+    "奶茶"
+   ],
+   "verified": true
+  },
+  {
+   "name": "上海小菜 & 川菜馆",
+   "where": "通往334门口的路上",
+   "signature": [
+    "适合宿舍聚餐",
+    "有大小桌",
+    "价格实惠"
+   ],
+   "verified": true
+  },
+  {
+   "name": "老田烧烤",
+   "where": "334门口出去左拐走约5分钟",
+   "signature": [
+    "烤串",
+    "夜宵"
+   ],
+   "verified": true
+  },
+  {
+   "name": "上理烧烤",
+   "where": "1100号校区出门松花江路",
+   "signature": [
+    "十年老店",
+    "烤串"
+   ],
+   "verified": true
+  },
+  {
+   "name": "220辣肉面馆",
+   "where": "松花江路，离上理烧烤很近",
+   "signature": [
+    "辣肉面（其实不太辣）"
+   ],
+   "verified": true
+  }
+ ],
+ "needs_check": [
+  "高德地图有『北校区外语学院』(军工路516号) 与『南校区外语学院』两个 POI —— 图谱现只收南校区外语楼；北校区那处疑为标注偏差，待 CY 核实",
+  "北校区（516）是否有『教育超市』（文具纸张类）：官方《校园商超》只列了 334/1100 的教育超市，516 侧列的是全家便利店；但宿舍指南称二公寓楼下有教育超市 —— 待 CY 确认",
+  "『二公寓3号楼』归属已确认：**516 北校区**（后勤处《公共洗浴》运营表 + 宿舍指南 + 报修流程三源一致；「上理指南」编号表把它列入南校区段有误）",
+  "带 est 的步行分钟数为估算值，请在校生体感校正（尤其：一教↔三教、三教↔生活区食堂）",
+  "第二教学楼：官方编号表与 AED 表均未单列，若实际存在请补充其校区与位置",
+  "南校区第四/第六/清真食堂的详细营业时间与招牌菜（官网食堂导览未覆盖 334）",
+  "南校区各宿舍楼的精确楼栋编号与床位类型（现据宿舍指南聚合描述）",
+  "七公寓的精确坐标待确认（CY 描述在 580 号校门/先进制造大楼旁；OSM 该区域只有无名 apartments，无匹配建筑）—— 现暂锚定 580 号校门，属近似值",
+  "「工程实训中心」（金工实习上课地点）= 图谱「实训中心」？ 待核实（现按同一栋处理）",
+  "「公共实验楼」的准确位置与楼号待确认（物理实验 / 模电实验上课地点）"
+ ]
+}

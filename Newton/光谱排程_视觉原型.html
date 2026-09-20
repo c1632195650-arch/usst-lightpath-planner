@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="9IltBAP6bt1tbvAH3fYdyd">
+<head data-page-node-id="cHYgIUYNDgBcdsNXb8yaP0">
+<meta charset="UTF-8" data-page-node-id="SJ8VMQAlGQ8flS8n7gNojP">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="QZhAw2HvBexDbbFVM63IVA">
+<title>光谱排程 · 视觉原型</title>
+<style>
+  body { margin:0; background:#070a12; color:#e8eaf0;
+         font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 24px 20px 48px; }
+  h1 { font-size: 21px; font-weight: 500; margin: 0 0 6px; letter-spacing: .5px; }
+  .sub { font-size: 13px; color:#8b93a7; margin-bottom: 18px; line-height: 1.7; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+  button { padding:9px 15px; border-radius:9px; border:1px solid #2a3348;
+           background:#141a2b; color:#c8d0e0; cursor:pointer; font-size:13px;
+           transition: all .18s; font-family: inherit; }
+  button:hover { background:#1c2440; }
+  button.active { background:#2a3550; border-color:#5a6d9c; color:#fff; }
+  canvas { width:100%; border-radius:14px; display:block; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+  .note { margin-top:20px; font-size:12.5px; color:#8b93a7; line-height:1.9; }
+  .note b { color:#c8d0e0; font-weight:500; }
+  .warn { color:#ffa502; }
+</style>
+</head>
+<body data-page-node-id="5TOVAPr6XUgpT7Ge6u6JVa">
+<div class="wrap" data-page-node-id="qnRAL86iyIb5MjYyZE7V3Q">
+  <h1 data-page-node-id="ZSBCwCPTTnSpJSUDHdld3J">光谱排程 · 视觉原型（第 1 步：先看像不像光）</h1>
+  <div class="sub" data-page-node-id="c8D2GQUOH0WaCzbHGUbuV1">
+    白光入射 → 聚焦 → 穿过棱镜 → 色散成一天的光谱。下方色带中，<b data-page-node-id="9sSs9C3kYHlxSJVPo46F5M">宽度 = 体验密度</b>（不是物理时长），<b data-page-node-id="1a0t9UGFnAdZZEhu7PjpYn">颜色 = 活动色温</b>。<br data-page-node-id="N5FVZ5glmDxL4EfSAW6UrD">
+    点上方按钮切换配色方案，重点看：光有没有「亮起来」、色散是否自然、色带宽度差异是否读得懂。
+  </div>
+
+  <div class="controls" id="ctrls" data-page-node-id="F66QkDakjpVza8yCL13a4u"></div>
+  <canvas id="cv" data-page-node-id="ty7UdzdRm3DHHcd7i43rIM"></canvas>
+
+  <div class="note" id="note" data-page-node-id="1b9HvLFWj7hPKKP3kQu9Cg"></div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = 960, H = 640;
+cv.width = W; cv.height = H;
+
+/* ---------- 五个配色方案 ---------- */
+const schemes = [
+  {
+    name: '暗箱光谱（牛顿七色）',
+    bg: '#070a12',
+    bgGrad: ['#0d1220', '#05070d'],
+    glass: 'rgba(170,195,255,0.16)',
+    glassEdge: 'rgba(200,220,255,0.75)',
+    spectrum: ['#ff4757','#ff7f50','#ffa502','#7bed9f','#70a1ff','#3742fa','#a55eea'],
+    glow: 22,
+    beamCore: 'rgba(255,255,255,0.95)',
+    band: { course:'#4d7fe8', meal:'#ff9f1a', rest:'#9b6ef3', study:'#3ddc97', sport:'#2ed573', free:'#5a6478' },
+    text: '#e8eaf0', dim: '#7a8399',
+    note: '推荐：纯暗底 + 高饱和七色，最接近真实棱镜暗箱实验，光的「亮度」最强。'
+  },
+  {
+    name: '深海冷光',
+    bg: '#05101c',
+    bgGrad: ['#0a1f38', '#03080f'],
+    glass: 'rgba(140,200,255,0.15)',
+    glassEdge: 'rgba(180,230,255,0.7)',
+    spectrum: ['#00d2ff','#3a7bd5','#7f5af0','#5eead4','#38bdf8','#818cf8','#c084fc'],
+    glow: 26,
+    beamCore: 'rgba(230,245,255,0.95)',
+    band: { course:'#38bdf8', meal:'#fbbf24', rest:'#818cf8', study:'#5eead4', sport:'#34d399', free:'#64748b' },
+    text: '#e0f2fe', dim: '#7c96b0',
+    note: '科技感最强，冷色为主，适合「智能助手」调性；但暖色活动（吃饭）会稍显跳脱。'
+  },
+  {
+    name: '暖阳棱镜',
+    bg: '#150d08',
+    bgGrad: ['#241408', '#0b0603'],
+    glass: 'rgba(255,220,180,0.16)',
+    glassEdge: 'rgba(255,235,200,0.7)',
+    spectrum: ['#ff6b35','#f7b32b','#ffd23f','#ff9f1c','#ff7b54','#ffb997','#ff4d6d'],
+    glow: 20,
+    beamCore: 'rgba(255,250,240,0.95)',
+    band: { course:'#f7b32b', meal:'#ff6b35', rest:'#ffb997', study:'#ffd23f', sport:'#ff9f1c', free:'#8a7a68' },
+    text: '#fff3e0', dim: '#a08f7d',
+    note: '温暖治愈，和你现有「卡通奶油风」最接近；缺点是冷暖对比弱，活动类型不易区分。'
+  },
+  {
+    name: '柔雾霓虹',
+    bg: '#12101a',
+    bgGrad: ['#1e1a2e', '#0a0810'],
+    glass: 'rgba(220,200,255,0.14)',
+    glassEdge: 'rgba(235,220,255,0.6)',
+    spectrum: ['#ff8fab','#fb8500','#ffd166','#8ecae6','#b8c0ff','#e0aaff','#c77dff'],
+    glow: 16,
+    beamCore: 'rgba(250,245,255,0.9)',
+    band: { course:'#b8c0ff', meal:'#ffd166', rest:'#c77dff', study:'#8ecae6', sport:'#8ac926', free:'#6c7086' },
+    text: '#f0eaff', dim: '#8f88a8',
+    note: '柔和耐看，长时间注视不刺眼；光感偏弱，没有前两个「惊艳」。'
+  },
+  {
+    name: '浅色玻璃（对照组）',
+    bg: '#f4f1ea',
+    bgGrad: ['#fbf9f4', '#ece8de'],
+    glass: 'rgba(120,150,200,0.18)',
+    glassEdge: 'rgba(90,120,170,0.45)',
+    spectrum: ['#e5533d','#f08c3a','#f2c14e','#7fb069','#4a8fc0','#4361a8','#8b5fbf'],
+    glow: 8,
+    beamCore: 'rgba(255,255,255,0.85)',
+    band: { course:'#4a8fc0', meal:'#f08c3a', rest:'#8b5fbf', study:'#7fb069', sport:'#5aa469', free:'#9aa0aa' },
+    text: '#2c2c2a', dim: '#7a7367',
+    note: 'warn:这就是我说的「坑」——浅底上光几乎不发光，看起来只是彩色纸条。放这里给你对比。'
+  }
+];
+
+let cur = 0;
+
+/* ---------- 一天的 mock 数据（宽度=密度，不是时长） ---------- */
+const day = [
+  { t:'08:00', name:'高数',   type:'course', density:0.95 },
+  { t:'10:00', name:'C语言',  type:'course', density:0.90 },
+  { t:'12:00', name:'午饭',   type:'meal',   density:0.50 },
+  { t:'13:00', name:'午休',   type:'rest',   density:0.30 },
+  { t:'14:00', name:'自习',   type:'study',  density:0.85 },
+  { t:'16:00', name:'运动',   type:'sport',  density:0.70 },
+  { t:'18:00', name:'晚饭',   type:'meal',   density:0.45 },
+  { t:'19:00', name:'自由',   type:'free',   density:0.25 },
+];
+
+/* ---------- 绘制 ---------- */
+function draw() {
+  const s = schemes[cur];
+  ctx.clearRect(0,0,W,H);
+
+  // 背景
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, s.bgGrad[0]);
+  bg.addColorStop(1, s.bgGrad[1]);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  const cy = 250;          // 棱镜中心高度
+  const px = 300;          // 棱镜中心 x
+
+  /* 1. 入射白光束（聚光：左宽右窄） */
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const inGrad = ctx.createLinearGradient(0,0,px,0);
+  inGrad.addColorStop(0,'rgba(255,255,255,0.05)');
+  inGrad.addColorStop(0.75,'rgba(255,255,255,0.5)');
+  inGrad.addColorStop(1,'rgba(255,255,255,0.95)');
+  ctx.fillStyle = inGrad;
+  ctx.shadowColor = s.beamCore;
+  ctx.shadowBlur = s.glow;
+  ctx.beginPath();
+  ctx.moveTo(0, cy-46); ctx.lineTo(px-52, cy-11);
+  ctx.lineTo(px-52, cy+11); ctx.lineTo(0, cy+46);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  /* 2. 棱镜（玻璃三角） */
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(px, cy-72);
+  ctx.lineTo(px+62, cy+40);
+  ctx.lineTo(px-62, cy+40);
+  ctx.closePath();
+  const gGrad = ctx.createLinearGradient(px-62, cy-72, px+62, cy+40);
+  gGrad.addColorStop(0,'rgba(255,255,255,0.30)');
+  gGrad.addColorStop(0.45, s.glass);
+  gGrad.addColorStop(1,'rgba(255,255,255,0.10)');
+  ctx.fillStyle = gGrad;
+  ctx.fill();
+  ctx.strokeStyle = s.glassEdge;
+  ctx.lineWidth = 1.6;
+  ctx.shadowColor = s.glassEdge;
+  ctx.shadowBlur = 14;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // 玻璃高光斜条
+  ctx.save();
+  ctx.clip();
+  ctx.globalAlpha = 0.30;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(px-40, cy-72); ctx.lineTo(px-16, cy-72);
+  ctx.lineTo(px+16, cy+40); ctx.lineTo(px-8, cy+40);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // 内部反射光线
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = s.beamCore;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(px-30, cy+4); ctx.lineTo(px+18, cy+30); ctx.lineTo(px+52, cy+8);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  /* 3. 出射色散（七彩光束向右下散开） */
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  s.spectrum.forEach((col, i) => {
+    const spread = (i - 3) * 0.052;          // 色散角度
+    const y0 = cy + 6;
+    const ex = W - 30;
+    const ey = y0 + Math.tan(spread) * (ex - px) + i * 2.2;
+    const grad = ctx.createLinearGradient(px, y0, ex, ey);
+    grad.addColorStop(0, hexA(col, 0.85));
+    grad.addColorStop(0.6, hexA(col, 0.32));
+    grad.addColorStop(1, hexA(col, 0));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 15;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = col;
+    ctx.shadowBlur = s.glow * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(px + 40, y0 - 4);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  /* 4. 一天的光谱色带（宽度 = 体验密度） */
+  const bandY = 470, bandH = 74;
+  let x = 92;
+  const unit = 150;
+  ctx.save();
+  day.forEach(b => {
+    const w = Math.max(18, b.density * unit);
+    const col = s.band[b.type];
+    const grad = ctx.createLinearGradient(x, bandY, x, bandY + bandH);
+    grad.addColorStop(0, hexA(col, 0.95));
+    grad.addColorStop(1, hexA(col, 0.62));
+    ctx.fillStyle = grad;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = Math.min(s.glow, 18);
+    roundRect(x, bandY, w, bandH, 7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // 名称
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '500 13px system-ui, "PingFang SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.96;
+    ctx.fillText(b.name, x + w/2, bandY + 33);
+    ctx.globalAlpha = 0.72;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText('密度 ' + b.density.toFixed(2), x + w/2, bandY + 52);
+    ctx.globalAlpha = 1;
+
+    // 时间刻度
+    ctx.fillStyle = s.dim;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText(b.t, x + w/2, bandY + bandH + 20);
+
+    x += w + 7;
+  });
+  ctx.restore();
+
+  /* 5. 标注文字 */
+  ctx.fillStyle = s.dim;
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('白光入射（聚焦）', 40, cy - 62);
+  ctx.fillText('棱镜 · 色散', px - 26, cy + 66);
+  ctx.textAlign = 'right';
+  ctx.fillText('一天的光谱 →', W - 30, cy - 62);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = s.text;
+  ctx.font = '500 13px system-ui, "PingFang SC", sans-serif';
+  ctx.fillText('同一天：宽 = 体验密度高（心流），窄 = 密度低（摸鱼）', 92, bandY - 22);
+}
+
+function roundRect(x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function hexA(hex, a) {
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16);
+  const g = parseInt(h.substring(2,4),16);
+  const b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ---------- 控件 ---------- */
+const ctrls = document.getElementById('ctrls');
+const note = document.getElementById('note');
+schemes.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.name;
+  b.onclick = () => { cur = i; render(); };
+  ctrls.appendChild(b);
+});
+
+function render() {
+  [...ctrls.children].forEach((b,i) => b.classList.toggle('active', i === cur));
+  const s = schemes[cur];
+  note.innerHTML = (s.note.startsWith('warn:')
+      ? '<span class="warn">⚠ ' + s.note.slice(5) + '</span>'
+      : '<b>' + s.name + '：</b>' + s.note);
+  draw();
+}
+
+render();
+</script>
+</body>
+</html>

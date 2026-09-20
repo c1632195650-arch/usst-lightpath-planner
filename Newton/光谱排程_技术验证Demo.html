@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="Fao1qsknMVbjkspOTN2tUU">
+<head data-page-node-id="lH1n54pJQGRt6B29GaGxlC">
+<meta charset="UTF-8" data-page-node-id="bPJaWAYD8cXuEuDaOP7Q7O">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="keiyMLo9fhWxQE1R5LB7sK">
+<title>光谱排程 · v5 投影幕（排程被光投出来）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; background: #0a0b10; }
+  body { font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #e8eaf0; }
+  #stage { position: fixed; inset: 0; display: block; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+
+  .hud { position: fixed; left: 24px; top: 20px; z-index: 10; pointer-events: none;
+         text-shadow: 0 2px 14px rgba(0,0,0,.8); }
+  .hud h1 { font-size: 16px; font-weight: 500; color: #f0e6d0; }
+  .hud p  { font-size: 12px; color: #c5bdaa; margin-top: 5px; line-height: 1.7; max-width: 420px; }
+  .hud b  { color: #ffd09a; font-weight: 500; }
+
+  .panel { position: fixed; right: 20px; top: 20px; z-index: 10; width: 226px;
+           padding: 13px 15px; background: rgba(13,12,18,.55);
+           border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+           backdrop-filter: blur(14px); }
+  .panel h3 { font-size: 11px; font-weight: 500; color: #a29788; letter-spacing: 1px; margin: 0 0 9px; }
+  .ctrl { margin-bottom: 9px; }
+  .ctrl label { display: flex; justify-content: space-between; font-size: 11px; color: #c5bdaa; margin-bottom: 3px; }
+  .ctrl label .v { color: #ffd09a; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: #e0a060; height: 13px; }
+  .btn { width: 100%; margin-top: 2px; padding: 8px 0; border-radius: 9px; border: 1px solid rgba(255,200,140,.25);
+         background: rgba(255,180,110,.10); color: #ffd09a; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: rgba(255,180,110,.18); }
+  .tag { margin-top: 8px; text-align: center; font-size: 11px; color: #8f8576; }
+
+  .tip { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10;
+         font-size: 11.5px; color: #c5bdaa; background: rgba(13,12,18,.6);
+         padding: 6px 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,.06);
+         backdrop-filter: blur(8px); pointer-events: none; }
+</style>
+</head>
+<body data-page-node-id="RA2FcoHboeFiDSVBUDytXE">
+<canvas id="stage" data-page-node-id="2gsXmw28o6y2SBPJHNRJcq"></canvas>
+
+<div class="hud" data-page-node-id="AUSOx6Ds142qackqVhK8jC">
+  <h1 data-page-node-id="ONenbIGqSKXtdtdPL81sd2">光溯 · 投影幕排程</h1>
+  <p data-page-node-id="9bVVizCkCGuejtlqRa6iAQ">悬空的<b data-page-node-id="elzECEbruZK7pFTzVAVQQL">棱镜</b>是排程控制器——光穿过它投射到幕布上，<br data-page-node-id="RFoz27gPshp3ZQzE6QA6wa">
+     拖拽棱镜 → 光束随之摆动但仍落幕上；点「切换排程」→ 棱镜转动，光流过幕布换一版日程。</p>
+</div>
+
+<div class="panel" data-page-node-id="jySJFx2WVl6bgzk5HPz0LK">
+  <h3 data-page-node-id="DtBxAAa21mhMcYtV1u856j">LIGHT CONTROL</h3>
+  <div class="ctrl" data-page-node-id="EvNeZrZabVtRgx3wqLfFrO">
+    <label data-page-node-id="TjmzJfAP5e5x0L3CVyiCCo">色散张角 <span class="v" id="vSpread" data-page-node-id="aXPsCaTJQRCQGnZmCCGU4I">1.00</span></label>
+    <input type="range" id="spread" min="0.3" max="1.8" step="0.01" value="1" data-page-node-id="kWEkozWy380KdfTACYp6dO">
+  </div>
+  <div class="ctrl" data-page-node-id="ZgqH72BpTVrAlA1ONKzqkG">
+    <label data-page-node-id="iDr39y7Skf1HUBjs0f3XbA">色光亮度 <span class="v" id="vBeam" data-page-node-id="8OIWrE2f5PPJzdpFln3B9V">0.9</span></label>
+    <input type="range" id="beam" min="0.2" max="1.6" step="0.01" value="0.9" data-page-node-id="0E3i6dFAJdLUyb1DL6OJnB">
+  </div>
+  <div class="ctrl" data-page-node-id="3v0L81Ort4IQSMc23VFsYk">
+    <label data-page-node-id="b9HX2VhzVckgLyLtOxf8rX">幕布辉光 <span class="v" id="vGlow" data-page-node-id="h8FAKRMsbhzfYbt1YT8UIn">0.85</span></label>
+    <input type="range" id="glow" min="0.05" max="1.6" step="0.01" value="0.85" data-page-node-id="gaRni2JsOqA7rcgeOIgSMI">
+  </div>
+  <div class="ctrl" data-page-node-id="NJcO0FA05zBCOyNx42C6Sn">
+    <label data-page-node-id="xLkCtEp6pXukGz103cFGSn">曝光 <span class="v" id="vExp" data-page-node-id="fhvjNhcIaT3LWkUGzqWsx4">1.00</span></label>
+    <input type="range" id="exp" min="0.6" max="1.6" step="0.01" value="1.0" data-page-node-id="P2cEcJn4r29sjE2002RVHD">
+  </div>
+  <button class="btn" id="nextBtn" data-page-node-id="W4rXgyUZs0FCQZ085mGMv0">切换排程 · 转动棱镜</button>
+  <div class="tag" id="verTag" data-page-node-id="WoA7JweYmDGKBIqMM3xmwk">当前：冲刺日</div>
+</div>
+
+<div class="tip" data-page-node-id="MzO9FvAVXUxEfHr0AQ5WHh">拖拽棱镜微调 · 点按钮切换排程</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+/* ================= 排程版本（幕布上被"光投出"的内容） ================= */
+const SCHEDULE = [
+  {
+    name: '冲刺日',
+    blocks: [
+      { t:'08', n:'高数',   c:'#7fa6ff', d:0.92 },
+      { t:'10', n:'C语言',  c:'#7fa6ff', d:0.88 },
+      { t:'12', n:'午饭',   c:'#ffb45e', d:0.40 },
+      { t:'13', n:'自习',   c:'#63e6a8', d:0.88 },
+      { t:'15', n:'实验',   c:'#7fa6ff', d:0.70 },
+      { t:'17', n:'运动',   c:'#5fd97a', d:0.55 },
+      { t:'18', n:'晚饭',   c:'#ffb45e', d:0.38 },
+      { t:'19', n:'自习',   c:'#63e6a8', d:0.75 },
+      { t:'21', n:'自由',   c:'#6a7288', d:0.30 },
+    ],
+  },
+  {
+    name: '平衡日',
+    blocks: [
+      { t:'08', n:'早读',   c:'#ffd27a', d:0.42 },
+      { t:'09', n:'高数',   c:'#7fa6ff', d:0.78 },
+      { t:'11', n:'午休',   c:'#b08ae8', d:0.45 },
+      { t:'12', n:'午饭',   c:'#ffb45e', d:0.55 },
+      { t:'14', n:'自习',   c:'#63e6a8', d:0.60 },
+      { t:'16', n:'社团',   c:'#ff8f9e', d:0.65 },
+      { t:'18', n:'晚饭',   c:'#ffb45e', d:0.50 },
+      { t:'19', n:'运动',   c:'#5fd97a', d:0.60 },
+      { t:'21', n:'自由',   c:'#6a7288', d:0.55 },
+    ],
+  },
+  {
+    name: '轻松日',
+    blocks: [
+      { t:'09', n:'早课',   c:'#7fa6ff', d:0.55 },
+      { t:'11', n:'闲逛',   c:'#ff8f9e', d:0.45 },
+      { t:'12', n:'午饭',   c:'#ffb45e', d:0.60 },
+      { t:'14', n:'刷题',   c:'#63e6a8', d:0.50 },
+      { t:'16', n:'打球',   c:'#5fd97a', d:0.80 },
+      { t:'18', n:'晚饭',   c:'#ffb45e', d:0.60 },
+      { t:'19', n:'电影',   c:'#b08ae8', d:0.70 },
+      { t:'22', n:'睡觉',   c:'#4a4f61', d:0.85 },
+    ],
+  },
+];
+let verIdx = 0;
+const $ = id => document.getElementById(id);   // 提前定义（buildBeams/滑块均需用）
+
+/* ============ 幕布 Canvas 贴图（排程 + 辉光 + 扫描切版） ============ */
+const SC_W = 1024, SC_H = 640;
+const sCanvas = document.createElement('canvas'); sCanvas.width = SC_W; sCanvas.height = SC_H;
+const sCtx = sCanvas.getContext('2d');
+
+function hexA(hex, a) {
+  const h = hex.replace('#',''); const r=parseInt(h.slice(0,2),16);
+  const g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+// 柔和辉光圆（用 lighter 叠加）
+function glowDot(x, y, r, color) {
+  const g = sCtx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, hexA(color, 0.5));
+  g.addColorStop(1, hexA(color, 0));
+  sCtx.fillStyle = g;
+  sCtx.fillRect(x-r, y-r, r*2, r*2);
+}
+// scan 0~1：新内容从左侧像光一样扫入。返回 [{cxPx, wPx, color}] 供光束对准模块
+function drawSchedule(ver, scan = 1) {
+  // 幕布暗底（介于纯黑与白幕之间，模拟"投影幕上的暗部"）
+  sCtx.fillStyle = '#171b26';
+  sCtx.fillRect(0, 0, SC_W, SC_H);
+  sCtx.save();
+  sCtx.beginPath();
+  sCtx.rect(0, 0, SC_W * scan, SC_H);
+  sCtx.clip();
+  const gap = 0;
+  const bandH = SC_H * 0.46;
+  const topY  = SC_H * 0.14;
+  const total = ver.blocks.reduce((s,b)=>s+b.d,0);
+  const unit  = (SC_W * 0.90) / total;
+  let x = SC_W * 0.05;
+  const layout = [];
+  ver.blocks.forEach(b => {
+    const w = Math.max(10, b.d * unit) - gap;
+    const cx = x + w/2;
+    layout.push({ cxPx: cx, wPx: w, color: b.c, name: b.n, time: b.t });
+    // 色带辉光底（光晕，模拟"光在幕上散开"）
+    glowDot(cx, topY + bandH/2, w*0.95, b.c);
+    glowDot(cx, topY + bandH/2, w*0.55, b.c);
+    // 主体：上亮下暗（像被顶部光斑照亮的模块）
+    const g = sCtx.createLinearGradient(x, topY, x, topY+bandH);
+    g.addColorStop(0, hexA(b.c,0.98)); g.addColorStop(0.75, hexA(b.c,0.7)); g.addColorStop(1, hexA(b.c,0.45));
+    sCtx.fillStyle = g;
+    sCtx.beginPath();
+    const r = 14;
+    sCtx.moveTo(x+r, topY);
+    sCtx.arcTo(x+w, topY, x+w, topY+bandH, r);
+    sCtx.arcTo(x+w, topY+bandH, x, topY+bandH, r);
+    sCtx.arcTo(x, topY+bandH, x, topY, r);
+    sCtx.arcTo(x, topY, x+w, topY, r);
+    sCtx.fill();
+    // 顶部受光条：模块顶缘一道亮边（投影灯照射高光）
+    sCtx.fillStyle = 'rgba(255,255,255,0.20)';
+    sCtx.fillRect(x+6, topY, w-12, bandH*0.07);
+    // 底部投影：模块底缘渐深 → 模块"立"在幕上
+    const sh = sCtx.createLinearGradient(0, topY+bandH*0.72, 0, topY+bandH);
+    sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.42)');
+    sCtx.fillStyle = sh;
+    sCtx.beginPath();
+    sCtx.arcTo(x, topY+bandH*0.72, x, topY+bandH, 2); sCtx.arcTo(x, topY+bandH, x+4, topY+bandH, 2);
+    sCtx.rect(x, topY+bandH*0.72, w, bandH*0.28); sCtx.fill();
+    // 课程名 + 时间
+    sCtx.fillStyle = 'rgba(18,16,26,0.88)';
+    sCtx.font = '600 44px system-ui, "PingFang SC", sans-serif';
+    sCtx.fillText(b.n, cx, topY + bandH/2 - 8);
+    sCtx.fillStyle = 'rgba(255,255,255,0.7)';
+    sCtx.font = '24px system-ui, sans-serif';
+    sCtx.fillText(b.t + ':00', cx, topY + bandH - 34);
+    // 模块描边 → 边界整齐可读
+    sCtx.strokeStyle = 'rgba(255,255,255,0.16)';
+    sCtx.lineWidth = 2;
+    sCtx.strokeRect(x, topY, w, bandH);
+    x += w + gap + 4;
+  });
+  sCtx.restore();
+  // 整体"被投影光映照"染色：右下暖、左上微冷，极淡（不影响可读性）
+  const wash = sCtx.createLinearGradient(SC_W, SC_H, 0, 0);
+  wash.addColorStop(0, 'rgba(255,196,128,0.05)');
+  wash.addColorStop(0.5, 'rgba(255,255,255,0.015)');
+  wash.addColorStop(1, 'rgba(140,170,255,0.035)');
+  sCtx.fillStyle = wash;
+  sCtx.fillRect(0, 0, SC_W, SC_H);
+  sCtx.fillStyle = 'rgba(255,255,255,0.05)';
+  sCtx.font = '22px system-ui, sans-serif';
+  sCtx.textAlign = 'center';
+  sCtx.fillText('width = 体验密度', SC_W*0.5, SC_H - 30);
+  return layout;
+}
+
+/* ================= 基础 ================= */
+const canvas = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0b10);
+scene.fog = new THREE.FogExp2(0x0a0b10, 0.05);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, 0.05, 80);
+const camBase = new THREE.Vector3(0, 1.8, 5.0);     // 略前移 → 幕墙更大
+camera.position.copy(camBase);
+camera.lookAt(-0.4, 1.92, -3.1);                     // 视线对准左移后的幕墙中心
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
+
+/* ================= 环境 ================= */
+scene.add(new THREE.HemisphereLight(0x93a2bb, 0x151219, 0.32));
+const fill = new THREE.DirectionalLight(0x9fb2d0, 0.10);
+fill.position.set(-4.8, 5.2, 7.4);
+scene.add(fill);
+
+/* ================= 房间 ================= */
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x22212a, roughness: 0.92, metalness: 0.02 });
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x121216, roughness: 0.5, metalness: 0.18 });
+const mkWall = (w,h,pos,ry=0,rx=0) => { const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),wallMat);
+  m.position.copy(pos); m.rotation.set(rx,ry,0); scene.add(m); return m; };
+mkWall(12, 5.2, new THREE.Vector3(0, 2.4, -4.6));     // 后墙
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(12,12), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.y = 0; scene.add(floor);
+mkWall(10, 5.2, new THREE.Vector3(-5.6, 2.4, 0),  Math.PI/2);
+mkWall(10, 5.2, new THREE.Vector3( 5.6, 2.4, 0), -Math.PI/2);
+const ceil = new THREE.Mesh(new THREE.PlaneGeometry(12,10),
+  new THREE.MeshStandardMaterial({ color: 0x16161d, roughness: 0.94 }));
+ceil.rotation.x = Math.PI/2; ceil.position.y = 4.8; scene.add(ceil);
+
+/* ================= 幕墙（大投影屏，正对用户居中） ================= */
+drawSchedule(SCHEDULE[0], 1);
+const boardTex = new THREE.CanvasTexture(sCanvas);
+boardTex.colorSpace = THREE.SRGBColorSpace;
+const board = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 2.9),
+  new THREE.MeshStandardMaterial({
+    color: 0x000000,                    // 黑基色，颜色完全由 emissiveMap 决定
+    roughness: 1.0, metalness: 0,
+    emissive: 0xffffff,
+    emissiveMap: boardTex, emissiveIntensity: 0.92,
+  }));
+board.position.set(-0.4, 1.92, -3.1);    // 更大：x ∈ [-3.15, 2.35]
+board.rotation.y = 0;
+scene.add(board);
+// 幕墙黑框
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x121318, roughness: 0.45, metalness: 0.5 });
+const frame = new THREE.Mesh(new THREE.BoxGeometry(5.74, 3.14, 0.05), frameMat);
+frame.position.set(-0.4, 1.92, -3.155);
+scene.add(frame);
+// 落地小基座
+const footMat = new THREE.MeshStandardMaterial({ color: 0x0c0d12, roughness: 0.4, metalness: 0.55 });
+const base = new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.07, 0.7), footMat);
+base.position.set(-0.4, 0.33, -3.2);
+scene.add(base);
+
+/* ================= 棱镜（清晰本体：玻璃折射 + 边缘高光） ================= */
+const prismGroup = new THREE.Group();
+const prismBase = new THREE.Vector3(0.95, 1.55, 1.8);   // 画面右下内侧（保证本体清晰可见）
+prismGroup.position.copy(prismBase);
+const prism = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.46, 3),
+  new THREE.MeshPhysicalMaterial({
+    color: 0x9fb4d4,
+    metalness: 0, roughness: 0.06,
+    transmission: 0.72, thickness: 1.3, ior: 1.6,
+    clearcoat: 0.7, clearcoatRoughness: 0.08,
+    envMapIntensity: 0.75,
+    attenuationColor: 0x5a7cc0, attenuationDistance: 0.8,
+  }));
+prismGroup.add(prism);
+// 边缘高光：亮轮廓线（棱镜本体清晰可见的关键）
+prismGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(prism.geometry),
+  new THREE.LineBasicMaterial({ color: 0xdfe8ff, transparent: true, opacity: 0.85 })));
+scene.add(prismGroup);
+// 棱镜内部光路（单条静态细线 = 玻璃内折射示意）
+function mkInnerSeg() {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending,
+    depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.05), mat);
+  mesh.renderOrder = 10;
+  scene.add(mesh);
+  return { mesh, mat };
+}
+const innerSeg1 = mkInnerSeg();
+const innerSeg2 = mkInnerSeg();
+const innerSeg3 = mkInnerSeg();
+innerSeg2.mat.opacity = 0;   // 只显示一段内光路（克制）
+innerSeg3.mat.opacity = 0;
+const innerCore = innerSeg1.mesh, innerCoreMat = innerSeg1.mat;
+const innerSeg2M = innerSeg2.mat, innerSeg3M = innerSeg3.mat;
+
+/* ================= 光照（无可见顶灯；光源从画面右下入射） ================= */
+const srcLight = new THREE.PointLight(0xffe2c0, 1, 5, 2);
+srcLight.power = 20;
+srcLight.position.set(1.65, 0.85, 3.4);   // 与入射光口 SRC 对齐
+scene.add(srcLight);
+// 棱镜区域弱冷光 → 浮空玻璃通透（克制）
+const prismFill = new THREE.PointLight(0xcfe0ff, 1, 3.0, 2);
+prismFill.power = 10;
+prismGroup.add(prismFill);
+
+/* ================= 光束 v9：光学演示 · 静态投影示意（无摆动/呼吸/粒子飘落） ================= */
+const BOARD_C = new THREE.Vector3(-0.4, 1.92, -3.1);
+const BOARD_W = 5.5, BOARD_H = 2.9;
+const BOARD_LEFT = BOARD_C.x - BOARD_W/2;
+const BOARD_FRONT = -3.055;
+const SRC = new THREE.Vector3(1.65, 0.85, 3.4);   // 右下入射光口（屏内右下角附近）
+const P_R = 0.32;
+
+// 光束 shader（静态柔和光：无 flick，纯 core+halo+lenf）
+function lightShader(color, { core, halo, headK = 0, baseMix } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) }, uIntensity: { value: 0.5 } },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uIntensity;
+      varying vec2 vUv;
+      void main(){
+        float yc = vUv.y-0.5;
+        float coreF = exp(-pow(yc/${(+core).toFixed(3)},2.0));
+        float haloF = exp(-pow(yc/${(+halo).toFixed(3)},2.0))*0.10;
+        float lenf = smoothstep(0.0,0.20,vUv.x)*(1.0-smoothstep(0.92,1.0,vUv.x));   // 起点淡入 → 棱镜侧不堆叠
+        float headF = ${headK>0 ? `exp(-pow((vUv.x-0.95)/0.05,2.0))*exp(-pow(yc/0.20,2.0))*${(+headK).toFixed(3)};` : '0.0;'}
+        float a = (coreF+haloF)*lenf*uIntensity + headF*uIntensity;
+        vec3 c = mix(vec3(1.0), uColor, ${(+baseMix).toFixed(3)})*(0.40+coreF*0.75);
+        gl_FragColor = vec4(c,a);
+      }`,
+    transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+}
+
+// 入射白光（右下光口 → 棱镜表面）
+const inMat = lightShader(0xfff2da, { core: 0.16, halo: 0.5, baseMix: 0.12 });
+inMat.uniforms.uIntensity.value = 0.5;
+const inMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.10), inMat);
+scene.add(inMesh);
+
+// 入射光口 glow（静态柔和小光晕，模拟光源孔）
+const srcGlowMat = new THREE.SpriteMaterial({
+  color: 0xffe6c4, transparent: true, opacity: 0.6, depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  map: (() => { const c=document.createElement('canvas'); c.width=c.height=128;
+    const g=c.getContext('2d'); const r=g.createRadialGradient(64,64,0,64,64,64);
+    r.addColorStop(0,'rgba(255,248,232,1)'); r.addColorStop(0.22,'rgba(255,228,184,.5)');
+    r.addColorStop(0.6,'rgba(255,190,120,.12)'); r.addColorStop(1,'rgba(255,150,90,0)');
+    g.fillStyle=r; g.fillRect(0,0,128,128);
+    const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+  })(),
+});
+const srcGlow = new THREE.Sprite(srcGlowMat);
+srcGlow.position.copy(SRC);
+srcGlow.scale.set(0.20, 0.20, 1);
+scene.add(srcGlow);
+
+// 出射"投影示意光束"：3 条宽淡光，终点全部在幕布画面外侧/下方（绝不越过幕布、不挡课表）
+const beams = [];          // {mesh, mat, color}
+const GROUND_Y = 0.12;     // 地面终点的 y（远低于幕布底缘 0.47）
+const beamLayout = [
+  { w: 0.50, end: new THREE.Vector3(-2.3, 0.05, -2.0) },   // 远左  → 地面（左下）
+  { w: 0.40, end: new THREE.Vector3( 0.2, 0.20, -1.2) },   // 中     → 地面（板正下偏右）
+  { w: 0.34, end: new THREE.Vector3( 1.5, 0.08, -0.4) },   // 近右  → 地面（屏右下）
+];
+function buildBeams(layoutPx = []) {
+  beams.forEach(b => { scene.remove(b.mesh); b.mat.dispose(); });
+  beams.length = 0;
+  // 取当前版本前 3 个模块色作为投影示意色（随排程版本改变）
+  const cols = layoutPx.slice(0, 3).map(m => m.color);
+  const fills = cols.length >= 3 ? cols : ['#ffcf7a', '#ff9a5e', '#8fb4ff'];
+  beamLayout.forEach((bl, i) => {
+    const mat = lightShader(fills[i % fills.length], { core: 0.42, halo: 1.4, baseMix: 0.32 });
+    mat.uniforms.uIntensity.value = 0.26;
+    const geo = new THREE.PlaneGeometry(1, bl.w);
+    const mesh = new THREE.Mesh(geo, mat);
+    scene.add(mesh);
+    beams.push({ mesh, mat, end: bl.end, color: fills[i % fills.length], geo });
+  });
+}
+
+// 幕布外沿"彩色投影光晕"：一圈低透明 sprite 贴在幕布框外的后墙上，
+// 中间被幕布本体遮挡 → 只在外沿渗出柔光（不干扰表格画面）
+const haloTex = (() => { const c=document.createElement('canvas'); c.width=c.height=128;
+  const g=c.getContext('2d'); const r=g.createRadialGradient(64,64,0,64,64,64);
+  r.addColorStop(0,'rgba(255,255,255,0.85)'); r.addColorStop(0.55,'rgba(255,240,220,0.28)');
+  r.addColorStop(1,'rgba(255,230,200,0)');
+  g.fillStyle=r; g.fillRect(0,0,128,128);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+})();
+const haloSprites = [];
+function setHaloColor(hex) {
+  const col = new THREE.Color(hex);
+  haloSprites.forEach(s => s.material.color.copy(col).multiplyScalar(0.5).add(new THREE.Color(0x554433)));
+}
+(() => {
+  const haloPos = [
+    { x: BOARD_LEFT - 0.9, y: 1.92, s: 1.7 },          // 左外
+    { x: BOARD_LEFT + BOARD_W + 0.9, y: 1.92, s: 1.7 },// 右外
+    { x: -0.4, y: 3.37 + 0.7, s: 1.9 },                // 上外
+    { x: -0.4, y: -0.10, s: 1.5 },                     // 下外（基座附近）
+  ];
+  for (const h of haloPos) {
+    const m = new THREE.SpriteMaterial({
+      color: 0xffcf7a, transparent: true, opacity: 0.20, depthWrite: false,
+      blending: THREE.AdditiveBlending, map: haloTex });
+    const s = new THREE.Sprite(m);
+    s.position.set(h.x, h.y, -3.35);   // 幕布后（被幕布挡中间 → 外沿渗出）
+    s.scale.set(h.s, h.s, 1);
+    scene.add(s);
+    haloSprites.push(s);
+  }
+})();
+
+// 静态尘埃颗粒（无运动：模拟空气感，不做飘落）
+const dustGeo = new THREE.BufferGeometry();
+{
+  const N = 140, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    pos[i*3]   = (Math.random() - 0.35) * 6.5;      // x：偏左中
+    pos[i*3+1] = Math.random() * 3.2;
+    pos[i*3+2] = -3.8 + Math.random() * 6.2;        // z：房间前部
+    const a = 0.5 + Math.random() * 0.5;
+    col[i*3] = a; col[i*3+1] = a; col[i*3+2] = a;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  dustGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+}
+const dustMat = new THREE.PointsMaterial({
+  size: 0.012, transparent: true, opacity: 0.85, depthWrite: false,
+  vertexColors: true, sizeAttenuation: true });
+const dustPts = new THREE.Points(dustGeo, dustMat);
+scene.add(dustPts);
+
+let lastLayoutPx = drawSchedule(SCHEDULE[0], 1);
+buildBeams(lastLayoutPx);
+setHaloColor(beams[0] ? beams[0].color : '#ffcf7a');
+
+// 一次性摆放光路（静态）：入射→棱镜内直线→三条示意光束（起点沿棱镜表面分散开，不遮棱镜本体）
+function layoutLightPath() {
+  const P = prismGroup.position;
+  const dIn = P.clone().sub(SRC); const lIn = dIn.length(); dIn.normalize();
+  const ENTER = P.clone().addScaledVector(dIn, -P_R);
+  orientBeam(inMesh, SRC, ENTER, lIn - P_R);
+  const toBoard = BOARD_C.clone().sub(P).normalize();
+  const dMid = dIn.clone().multiplyScalar(0.45).addScaledVector(toBoard, 0.55).normalize();
+  // 出射起点：每束沿棱镜三个面方向略偏移，避免共点遮挡棱镜本体
+  const perp = new THREE.Vector3().crossVectors(dMid, new THREE.Vector3(0,1,0));
+  if (perp.lengthSq() < 1e-6) perp.set(0,0,1); else perp.normalize();
+  const upV = new THREE.Vector3(0,1,0);
+  for (let i = 0; i < beams.length; i++) {
+    const b = beams[i];
+    const ang = (i - 1) * 0.42;          // -0.42, 0, +0.42 → 三面散开
+    const off = dMid.clone().multiplyScalar(P_R * 1.6)
+      .addScaledVector(perp, Math.cos(ang) * 0.22)
+      .addScaledVector(upV,  Math.sin(ang) * 0.16);
+    const beamStart = P.clone().add(off);
+    const dir = b.end.clone().sub(beamStart);
+    const len = dir.length(); dir.normalize();
+    b.mesh.scale.set(len, 1, 1);
+    b.mesh.position.copy(beamStart).addScaledVector(dir, len/2);
+    b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1,0,0), dir);
+  }
+  // 棱镜内部单条细光路（玻璃内折射段，克制）
+  orientBeam(innerCore, ENTER.clone().addScaledVector(dIn, P_R*0.20),
+              P.clone().addScaledVector(dMid, P_R*0.55), 0.40);
+  innerCoreMat.opacity = 0.55;
+  innerSeg2M.opacity = 0; innerSeg3M.opacity = 0;
+}
+function orientBeam(mesh, a, b, len) {
+  const d = b.clone().sub(a).normalize();
+  mesh.scale.set(len, 1, 1);
+  mesh.position.copy(a).addScaledVector(d, len/2);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1,0,0), d);
+}
+layoutLightPath();
+
+/* ================= Post-processing（Bloom 让光更透） ================= */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.6, 0.85);   // 极弱泛光，仅让光束微微发光
+composer.addPass(bloom);
+
+/* ================= 交互 ================= */
+let dragging = false, lastX = 0, lastY = 0;
+let prismYaw = 0.9, prismPitch = 0;
+const parallax = { x:0,y:0,tx:0,ty:0 };
+canvas.addEventListener('pointerdown', e => { dragging = true; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  parallax.tx = e.clientX/innerWidth - 0.5; parallax.ty = e.clientY/innerHeight - 0.5;
+  if (!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  prismYaw += dx*0.011;
+  prismPitch = THREE.MathUtils.clamp(prismPitch + dy*0.006, -0.3, 0.3);
+});
+addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging');
+  layoutLightPath(); });   // 拖动结束后按棱镜姿态重排光路（保持"光从棱镜出来"）
+
+/* ================= 切换排程（棱镜转一圈 + 幕布流光） ================= */
+let transitioning = false;
+$('nextBtn').addEventListener('click', nextSchedule);
+function nextSchedule() {
+  if (transitioning) return;
+  transitioning = true;
+  verIdx = (verIdx + 1) % SCHEDULE.length;
+  $('verTag').textContent = '当前：' + SCHEDULE[verIdx].name;
+  // 动画：棱镜转 + 幕布 scan
+  const t0 = performance.now(), dur = 1400;
+  const oldYaw = prismYaw;
+  let beamsSynced = false;               // 新版扫入时同步一次光束（颜色/位置随版换）
+  function step(now) {
+    const p = Math.min((now - t0) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    prismYaw = oldYaw + ease * Math.PI * 2;
+    // 前半溶解旧版 → 后半扫入新版
+    if (p < 0.5) {
+      drawSchedule(SCHEDULE[verIdx], 0.0001);      // 清屏淡出（闪暗）
+    } else {
+      const scan = (p - 0.5) * 2;
+      const ly = drawSchedule(SCHEDULE[verIdx], scan);
+      if (!beamsSynced && scan > 0.05) {
+        lastLayoutPx = ly; buildBeams(lastLayoutPx);
+        setHaloColor(beams[0] ? beams[0].color : '#ffcf7a');
+        layoutLightPath();
+        beamsSynced = true;
+      }
+    }
+    boardTex.needsUpdate = true;
+    if (p < 1) requestAnimationFrame(step);
+    else transitioning = false;
+  }
+  requestAnimationFrame(step);
+}
+
+/* ================= 控件 ================= */
+$('spread').addEventListener('input', e => { $('vSpread').textContent = (+e.target.value).toFixed(2);
+  buildBeams(lastLayoutPx); setHaloColor(beams[0] ? beams[0].color : '#ffcf7a'); layoutLightPath(); });
+$('beam').addEventListener('input', e => { const k=+e.target.value; $('vBeam').textContent=k.toFixed(2);
+  beams.forEach(b => b.mat.uniforms.uIntensity.value = 0.26*k); });
+$('glow').addEventListener('input', e => { board.material.emissiveIntensity = +e.target.value; $('vGlow').textContent = (+e.target.value).toFixed(2); });
+$('exp').addEventListener('input', e => { renderer.toneMappingExposure = +e.target.value; $('vExp').textContent = (+e.target.value).toFixed(2); });
+
+/* ================= 主循环 ================= */
+const clock = new THREE.Clock();
+function loop() {
+  const t = clock.getElapsedTime();
+  // v9：光路静态（只在切版/拖动棱镜时重排）。棱镜本体姿态由交互维护。
+  prismGroup.rotation.set(prismPitch, prismYaw, 0);
+  prismGroup.position.y = prismBase.y;                 // 无上下浮动
+  parallax.x += (parallax.tx - parallax.x)*0.03;
+  parallax.y += (parallax.ty - parallax.y)*0.03;
+  camera.position.set(camBase.x+parallax.x*0.5, camBase.y-parallax.y*0.32, camBase.z);
+  camera.lookAt(-0.4, 1.92, -3.1);
+  composer.render();
+  requestAnimationFrame(loop);
+}
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  composer.setSize(innerWidth, innerHeight);
+  bloom.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+loop();
+</script>
+</body>
+</html>

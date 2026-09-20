@@ -1,0 +1,28 @@
+# Python 后端依赖（梨宝 FastAPI + RAG + 数据工程脚本）
+# 安装：pip install -r requirements.txt
+# 用 venv 安装更佳：python -m venv .venv && source .venv/bin/activate（Windows: .venv\Scripts\activate）
+
+# ---- 梨宝问答后端 (server/app.py) ----
+fastapi
+uvicorn
+pydantic
+requests
+
+# ---- 检索 / 向量 (scripts/rag.py) ----
+jieba
+fastembed          # bge-small-zh-v1.5 CPU/ONNX；首次建索引会下载模型缓存
+
+# ---- 数据采集 (scripts/collector.py 等) ----
+beautifulsoup4
+
+# ---- 数据生成（**可选**，运行时不需要）----
+# pypinyin 只在「重新生成拼音索引」时用到：python scripts/build_pinyin_index.py
+# 生成结果已作为纯数据写进 data/campus_map.json（pyf/pyi/pyt/pyg 字段），
+# 所以**部署与运行后端都不需要装它**。
+pypinyin
+
+# ---- 幻觉一致性门禁（**可选**，scripts/hhem_gate.py 用）----
+# HHEM-2.1-Open 的远程代码与 transformers 5.x 不兼容（缺 all_tied_weights_keys），
+# **必须钉 <5**（2026-09-19 实测；模型权重首次经代理从 huggingface.co 下载，约 3GB）。
+torch
+transformers<5
