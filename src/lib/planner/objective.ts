@@ -29,9 +29,34 @@ function parseIsoUtc(iso: string): number {
 
 /* ============================================================
  * 一、日期 → 周次（交期换算的基础）
+ * ============================================================
+ * 🔴 2026-09-20 复核结论（**不要**把它们接进 `evaluate`）：
+ *   本节的 `weekNoOfDate` / `collectDeadlineBoosts` / `urgencyBoostForWeek`
+ *   在 `src/` 里**没有生产调用者**，因为它们的设计已被
+ *   `src/lib/planner/events.ts` **取代**：
+ *
+ *     交期 → 决策 的真实链路 = `expandDeadlines`（+ `expandExamPrep`）
+ *       DEADLINES / Course.examDate ──► UserTask ──► req.tasks
+ *       ──► construct（按 EDF/priority 选位）──► 块 ──► §5.6 的 dueOverdue 计分
+ *
+ *   也就是说「交期进入决策」这条支柱是**活的**，只是走 `tasks` 通道而不是
+ *   「给评分加一个 urgency 加成项」。
+ *
+ *   ⚠️ **若把它们再接进 `evaluate`，同一份 DEADLINES 会变成「既生成块、又加成」
+ *   的双重计权**，而且会给 `CostBreakdown` 引入第 8 项 —— 破坏
+ *   「7 项之和 === total」这个被验收断言钉住的恒等式（见本文件 §5.5 注释）。
+ *   要改变口径，先改 `events.ts`（唯一实现）并同步周页 / 对话页两处调用。
+ *
+ *   处置：**保留导出、标注 superseded**（删除属引擎实现域，由 B/Ray 决定）。
  * ========================================================== */
 
-/** ISO 日期 → 学期第几周（1-based）；解析失败返回 null（不猜） */
+/** ISO 日期 → 学期第几周（1-based）；解析失败返回 null（不猜）
+ *
+ * ⚠️ 只接受**纯日期** `YYYY-MM-DD`（函数内部自己拼 `T00:00:00Z`）。
+ *    传完整 ISO（含时间）会二次拼接 → NaN → 返回 null。
+ *    生产链路已改用 `src/lib/date.ts::currentWeekNo`（`events.ts` 在用）。
+ * @deprecated superseded by `planner/events.ts` + `lib/date.ts::currentWeekNo`（无生产调用者）
+ */
 export function weekNoOfDate(dateIso: string, termStart: string): number | null {
   const a = parseIsoUtc(termStart);
   const b = parseIsoUtc(dateIso);
@@ -142,6 +167,10 @@ export interface DeadlineBoostInput {
 /**
  * 把校园时间节点与课程考试日期统一转成「周次 + 权重」的加成条目。
  * 落在学期范围外的节点会被丢弃（无意义的交期不应影响排程）。
+ *
+ * @deprecated superseded by `planner/events.ts`（`expandDeadlines` / `expandExamPrep`）——
+ *   交期已通过 `req.tasks` 进入决策；本函数无生产调用者，**不要**接进 `evaluate`
+ *   （会和 tasks 通道双重计权，理由见本文件「一、日期 → 周次」上方红字）。
  */
 export function collectDeadlineBoosts(input: DeadlineBoostInput): DeadlineBoost[] {
   const { termStart, totalWeeks, deadlines = [], courses = [] } = input;
@@ -178,6 +207,11 @@ export function collectDeadlineBoosts(input: DeadlineBoostInput): DeadlineBoost[
 /**
  * 某一周能拿到的交期加成（0–1）：节点越近加成越大。
  * 只看**本周及未来 `lookahead` 周**内的节点；过期节点不再加成（已由 urgency 兜）。
+ *
+ * ⚠️ 语义是**取最大**（`if (cand > best) best = cand`），不是求和 —— 若将来要接进评分，
+ *    这一点必须被测试钉住（多节点时求和会把加成抬到 1.0，抹掉远近差异）。
+ *
+ * @deprecated superseded by `planner/events.ts`（无生产调用者；不要接进 `evaluate`）
  */
 export function urgencyBoostForWeek(
   boosts: DeadlineBoost[],

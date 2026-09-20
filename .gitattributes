@@ -1,0 +1,35 @@
+# 二进制文件：禁止 diff / merge / 文本过滤
+# ============================================================
+# 🔴 2026-09-20：本文件是**补的**。此前仓库缺失它，两个二进制文件已被 CRLF 归一化损坏：
+#   · data/usst_articles.db —— SQLite 报 "database disk image is malformed"（任何人 clone 都拿不到可用语料）
+#   · e2e/smoke.spec.ts-snapshots/entry-chromium-win32.png —— Playwright 报 "Could not decode expected image as PNG"
+# 症状特征：文件头签名仍合法（PNG 的 89 50 4E 47 / SQLite 的 "SQLite format 3"），
+#          但内容被换行替换过 → 压缩流/页结构损坏。加本文件后 git 侧不再做任何换行处理；
+#          另注意工具侧（`_gh_api_push.py::read_lf`）也已修正为对二进制原样上传。
+#
+# `binary` 是 git 内置宏 = `-diff -merge -text`，比逐项写三个属性更不易漏。
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.avif  binary
+*.bmp   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.db    binary
+*.sqlite binary
+*.sqlite3 binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.mp3   binary
+*.mp4   binary
+*.webm  binary
+*.wav   binary
+*.wasm  binary

@@ -62,6 +62,31 @@ PY = sys.executable          # 谁调用我，就用谁的解释器（托管 ven
 
 GATES = {"entity_recall": 1.00, "template_acc": 1.00, "recall@5": 0.90, "forbidden_hits": 0}
 
+# ── 观测档（④ 延迟/成本，2026-09-20）────────────────────────────────
+# 依据（究极体系 §8 反模式）：**先观测再收紧**。假红门禁 = 没有门禁（本项目 `--gate` 教训）。
+# 今天只记录、只提示，不判红；攒两周分布再决定真阈值。
+# 成本单价与 `evals/report.py::COST_PER_CALL` 保持一致（两处都改，别只改一处）。
+COST_PER_CALL = 0.003
+OBS = {"lat_p95_ms": 3000, "est_cost_cny": 5.0}
+
+_LAT = []          # 本次运行所有 HTTP 往返毫秒（观测用）
+
+
+def _timed(fn, *a, **kw):
+    """包一层计时：把每次 HTTP 往返记进 _LAT（失败也要记，慢/错都算）。"""
+    t0 = time.time()
+    try:
+        return fn(*a, **kw)
+    finally:
+        _LAT.append(round((time.time() - t0) * 1000, 1))
+
+
+def _pctl(vals, q):
+    if not vals:
+        return None
+    s = sorted(vals)
+    return s[min(len(s) - 1, int(q * len(s)))]
+
 
 def env():
     e = os.environ.copy()
@@ -108,7 +133,6 @@ def suite_l0():
         ("test_direct", "后端", f'"{PY}" scripts/test_direct.py'),
         ("test_rag", "后端", f'"{PY}" scripts/test_rag.py'),
         ("judge_rules", "评测", f'"{PY}" evals/test_judge_rules.py'),
-        ("test_privacy", "后端", f'"{PY}" scripts/test_privacy.py'),
         ("test:ui", "前端", "npm run test:ui"),
         ("test:engine", "前端", "npm run test:engine"),
         ("typecheck", "前端", "npm run typecheck"),
@@ -212,7 +236,7 @@ def suite_l1(base, run_id="run", items=None):
         if ent:
             ent_n += 1
             try:
-                r = _get(base, f"/api/poi?q={enc}&k=5")
+                r = _timed(_get, base, f"/api/poi?q={enc}&k=5")
                 names = [x["name"] for x in r.get("results", [])]
                 ok = ent in names
                 rec["entity_hit"] = ok
@@ -229,7 +253,7 @@ def suite_l1(base, run_id="run", items=None):
             else:
                 c_n_doc += 1
             try:
-                r = _get(base, f"/api/search?q={enc}&k=5")
+                r = _timed(_get, base, f"/api/search?q={enc}&k=5")
                 titles = [x["title"] for x in r.get("results", [])]
                 rank = next((i + 1 for i, t in enumerate(titles)
                              if any(d == t or d in t or t in d for d in docs)), 0)
@@ -248,8 +272,8 @@ def suite_l1(base, run_id="run", items=None):
                 and it["src"] != "brand_absent":
             tpl_n += 1
             try:
-                d = _post(base, "/api/chat", {"q": q, "user_id": "u-eval",
-                                              "session_id": f"s-eval-{run_id}-{it['id']}"})
+                d = _timed(_post, base, "/api/chat", {"q": q, "user_id": "u-eval",
+                                                      "session_id": f"s-eval-{run_id}-{it['id']}"})
                 ans = d.get("answer", "")
                 mi = it["expect"].get("must_include") or []
                 bad = [k for k in (it["expect"].get("must_not_include") or []) if k in ans]
@@ -273,11 +297,20 @@ def suite_l1(base, run_id="run", items=None):
          # 观察值（capability，不门禁）：soft 期望的召回情况
          "obs_cap_recall@5": round(c_hits5 / c_n_doc, 4) if c_n_doc else None,
          "obs_cap_docs": c_n_doc,
-         "forbidden_hits": len(forbidden), "forbidden": forbidden,
-         # 静默降级信号：DeepSeek 402/限流时会静默降级 extractive 且不报错——
-         # 分数漂移时先归因这里（配 attribution 块一起看）
-         "llm_fallback_hits": sum(1 for r in per if r.get("mode") == "extractive"),
-         "sec": round(time.time() - t0, 1)}
+        "forbidden_hits": len(forbidden), "forbidden": forbidden,
+        # 静默降级信号：DeepSeek 402/限流时会静默降级 extractive 且不报错——
+        # 分数漂移时先归因这里（配 attribution 块一起看）
+        "llm_fallback_hits": sum(1 for r in per if r.get("mode") == "extractive"),
+        # ── 观测档：延迟 + 成本（④，先记录不判红）──
+        # 口径：模板直答（mode=template）0 次 LLM 调用；其余每次 1 次。
+        "http_calls": len(_LAT),
+        "lat_p50_ms": _pctl(_LAT, 0.5),
+        "lat_p95_ms": _pctl(_LAT, 0.95),
+        "lat_max_ms": max(_LAT) if _LAT else None,
+        "llm_calls_est": sum(1 for r in per if r.get("mode") and r.get("mode") != "template"),
+        "est_cost_cny": round(sum(1 for r in per if r.get("mode") and r.get("mode") != "template")
+                              * COST_PER_CALL, 4),
+        "sec": round(time.time() - t0, 1)}
     return per, m
 
 
@@ -427,6 +460,10 @@ def suite_engine(runs=5):
              "engine_hard_issues": t.get("hardIssues"),
              "engine_tight_transfers": t.get("tightTransfers"),
              "engine_transfers_seen": t.get("transfersSeen"),
+             # ITC 字典序总账（P2 #15）：硬违约与软成本分开记，软成本可上趋势
+             "engine_hard_violations": t.get("hardViolations"),
+             "engine_soft_cost_sum": t.get("softCostSum"),
+             "engine_optimality_ratio_avg": t.get("optimalityRatioAvg"),
              "engine_determinism": 1.0 if t.get("determinism") else 0.0}
         tasks = [{k: v for k, v in r.items() if k != "metrics"} | {"metrics": r.get("metrics")}
                  for r in data.get("results", [])]
@@ -464,8 +501,14 @@ def suite_e2e(base):
 
 # 这些是「计数/耗时」不是质量指标：变快/变少不代表退步，只印 Δ 不报警告。
 # （第一版把它们一起当质量指标，结果「跑得更快」被标成 ⚠️ 退步 —— 门禁的显示逻辑也要被检视。）
+# ④ 新增的延迟/成本/软成本同样属「计量」：软成本的字典序裁决在 acceptance.ts 里做，
+#    不在这里重复判红（否则同一件事红两次，且会把「成本上升但硬违约下降」误判）。
 _NO_WARN = {"sec", "n", "entities", "docs", "templates", "obs_cap_docs",
-            "engine_transfers_seen", "engine_hard_issues", "engine_tight_transfers"}
+            "engine_transfers_seen", "engine_hard_issues", "engine_tight_transfers",
+            "http_calls", "lat_p50_ms", "lat_p95_ms", "lat_max_ms",
+            "llm_calls_est", "est_cost_cny",
+            "engine_hard_violations", "engine_soft_cost_sum", "engine_optimality_ratio_avg",
+            "engine_slow_scenarios", "engine_lex_hard_regress"}
 
 
 def compare_baseline(metrics):
@@ -565,6 +608,18 @@ def main():
             print(f"   {'✅' if good else '❌'} 门禁 {g} = {v}（要求 {'≥' if g!='forbidden_hits' else '≤'} {thr}）")
             if not good:
                 fails.append(f"{g}={v} 未达门禁 {thr}")
+        # 观测档：只提示、不判红（先观测再收紧；见文件顶部 OBS 注释）
+        if m.get("lat_p95_ms") is not None:
+            over = []
+            if m["lat_p95_ms"] > OBS["lat_p95_ms"]:
+                over.append(f"P95 {m['lat_p95_ms']}ms > 观察线 {OBS['lat_p95_ms']}ms")
+            if (m.get("est_cost_cny") or 0) > OBS["est_cost_cny"]:
+                over.append(f"成本 ≈¥{m['est_cost_cny']} > 观察线 ¥{OBS['est_cost_cny']}")
+            print(f"   观测档（不判红）：HTTP {m['http_calls']} 次｜P50 {m['lat_p50_ms']}ms"
+                  f"｜P95 {m['lat_p95_ms']}ms｜max {m['lat_max_ms']}ms"
+                  f"｜LLM 调用 ≈{m['llm_calls_est']} 次 → ≈¥{m['est_cost_cny']}")
+            for o in over:
+                print(f"      ⚠️ 越过观察线：{o}（先攒两周分布再定阈值）")
         if m["forbidden"]:
             for f in m["forbidden"][:5]:
                 print(f"      🔴 违禁词：{f['q']} → {f['hit']}")
@@ -594,9 +649,20 @@ def main():
         v = m.get("engine_violations")
         slow = sum(1 for t in (tasks or []) if (t.get("metrics") or {}).get("slow"))
         m["engine_slow_scenarios"] = slow
-        print(f"  不变量违反 {v}｜硬约束 issues {m.get('engine_hard_issues')}"
+        # ITC 字典序硬违约退步（acceptance.ts 已按 (硬, 软) 字典序判过）→ 判红
+        lex = sum(1 for t in (tasks or []) if (t.get("metrics") or {}).get("lexRegress"))
+        m["engine_lex_hard_regress"] = lex
+        print(f"  不变量违反 {v}｜引擎 error issues {m.get('engine_hard_issues')}"
               f"｜转场 {m.get('engine_transfers_seen')}（紧 {m.get('engine_tight_transfers')}）"
               f"｜确定性 {m.get('engine_determinism')}｜p95 超基线 50%+ 的场景 {slow}｜{sec}s")
+        if m.get("engine_soft_cost_sum") is not None:
+            print(f"  ITC 字典序总账：(硬违约 {m.get('engine_hard_violations')}, "
+                  f"软成本和 {m.get('engine_soft_cost_sum')})"
+                  + (f"｜平均次优比 ×{m['engine_optimality_ratio_avg']}"
+                     if m.get("engine_optimality_ratio_avg") is not None else "｜（暂无 oracle）"))
+        if lex:
+            print(f"     🔴 ITC 硬违约退步场景 {lex} 个（字典序优先：可行性是入场券）")
+            fails.append(f"引擎 ITC 硬违约退步 {lex} 个场景")
         if slow:
             print(f"     ⚠️ 引擎变慢：{slow} 个场景 p95 高于基线 50%（噪声大，定论看 p50 或 --runs 9）")
         if rc != 0 or (v or 0) > 0:

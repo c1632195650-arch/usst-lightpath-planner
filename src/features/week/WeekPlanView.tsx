@@ -26,7 +26,7 @@ import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases'
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
 import { fetchRouteBatch } from '@/lib/planner/transfer';
-import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
+import { expandDeadlines, expandExamPrep, eventsNearWeek } from '@/lib/planner/events';
 import { fetchWeather, weatherHints } from '@/features/weather/weather';
 import type { WeatherAdvice, WeatherReport, WeatherDay } from '@/features/weather/weather';
 // 行为记录（2026-09-19 起只读）：「做了/没做」入口已下线，历史记录仍喂 actualLoadByDow
@@ -1128,6 +1128,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         // 校历事件 → 本周准备块（光电杯材料 / 四六级真题 / 期中复习…）。
         // 这一步就是「把截止日变成日程」：事件不再只是旁边一个倒计时数字。
         const eventTasks = expandDeadlines(DEADLINES, schedule.termStart, schedule.totalWeeks);
+        // 2026-09-20：课程考试日 → 备考块（`Course.examDate` 此前全仓无人消费）。
+        // 与事件准备块走**同一条 UserTask 通道**，同样不新增引擎参数。
+        const examTasks = expandExamPrep(schedule.courses, schedule.termStart, schedule.totalWeeks);
         // 天气 → 当天提醒块（带伞 / 防暑 / 保暖 / 防风）。
         // 与事件走**同一条 tasks 通道**，引擎完全不知道有「天气」这回事。
         // 差别在权重：天气块优先级只有 45–55（事件准备块是 88），
@@ -1149,6 +1152,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
          */
         const tasks = [
           ...eventTasks,
+          ...examTasks,
           ...userTasks,
           // R5：目标 → 排程任务（2026-09-19）。设立了截止日期并选了节奏的目标，
           // 按节奏生成每周投入块 / 截止前冲刺块（与作业同一 UserTask 通道）。

@@ -161,9 +161,31 @@ evals/
 | `scripts/test_libao.py` | L3 对话套件雏形，P1 升级为「终态断言 + pass^k」 |
 | `LIBAO_DEBUG` trace | Transcript 标准格式，P2 落 JSONL 供 L4 采样 |
 
+## 变异测试（Stryker）· 棘轮口径（2026-09-20）
+
+| 项 | 值 |
+|---|---|
+| 命令 | `npx stryker run`（仓库根；devDeps 已含 `@stryker-mutator/core`） |
+| 配置 | `stryker.config.json`：`mutate` = `src/lib/planner/{model,objective}.ts`；`testRunner: "command"`；`incremental: true`；`symlinkNodeModules: false`（Windows junction 安全） |
+| 口径 | **棘轮** —— `thresholds.break` 应等于已核定基线分，**只拦「比基线更低」**，不冲 60 |
+| 当前状态 | ⚠️ `break` **仍为 null（门禁未启用）**：本机沙箱跑不完全量（见下），**没有实测分就不许定门槛**——否则就是"永远红的门禁"，没人会看它 |
+| 报告 | `reports/mutation/mutation.json`（明细）｜`reports/stryker-incremental.json`（增量）｜`evals/runs/mutation_baseline.json`（基线记录：实测数据 + 核定步骤） |
+
+**怎么把棘轮真正装上**（4 步，在能跑完的环境做）：`npx stryker run --concurrency 2`（约 20–30 分钟）→ 读 `% Mutation score` → 写进 `thresholds.break` → 把 `evals/runs/mutation_baseline.json` 的 `status` 改成 `ratified`。已实测：`objective.ts:100-200` 切片（66 变异体）2m41s 可完成 = **18.18%**（该区间是死代码区，低分属预期）；`_p0work` 检出上 ZCode 首跑全量为 **58.21%**（model 73.57 / objective 53.44，同一对源文件）——两者都记在 `mutation_baseline.json` 里，作量级参考而**不是**基线。
+
+**为什么冲 60 是错目标**：门禁的两条铁律 —— 先观测再收紧、**永远红的门禁等于没有门禁**（本项目 `--gate` 的实测教训）。把 `break` 定在够不到的分数，只会让人习惯性忽略它。基线分只在**同一棵树 + 测试全绿**的前提下可比，改代码后要显式更新并写清理由。
+
+🔴 **必须知道的局限**：`testRunner: "command"` 在 Windows 下把整套测试计成**1 个 test**（`testsCompleted: 1`、每个变异体的 `coveredBy` 恒为 `[]`）→ 这份报告的分数**可用**（跑没跑过、杀没杀掉是准的），但**行级/用例级归因不可用**（"谁杀的"问不出来）。要看归因得换 per-test 的 runner 插件；本项目「零新增依赖」的取舍是**不换**，所以只把它当分数棘轮用。
+
+🔴 **本机沙箱的实测边界**（写下来免得下次重新踩）：3 次尝试中，`mutate` 整文件（451 变异体）或 302 变异体切片都在**开跑后即死**（无 stderr、无报告落盘）；66 变异体切片在 `--concurrency 2` 下稳定完成。→ 全量运行请放到 CI 或没有并发重活的机器上，并保持 `concurrency: 2`。
+
+**纪律：不给死代码写杀器。** 2026-09-20 从 `tests/objective-killers.test.ts` 删掉了 `collectDeadlineBoosts` / `urgencyBoostForWeek` 的断言 —— 它们在 `src/` 里零调用者（交期走 `events.ts` 的 `expandDeadlines`/`expandExamPrep` → `req.tasks`），杀它们不保护任何用户可见行为，只会把百分比刷上去（mutation-score gaming）。保留的每条断言都对应一条**活的**调用链（见该文件头部注释的逐条证据）。
+
+**前置条件**：跑之前必须确认 `npm run test:engine` 与 `npm run test:ui` **全绿** —— 基线不绿时的变异分没有意义（测试本来就红，变异体"被杀死"是假象）。
+
 ## 下一步（P2）
 
 1. `run.py --suite e2e --judge local`：把裁判接进夜间档（先装 Ollama 或接受付费），并用 `calibrate.py` 的 20 条人工标注过校准
 2. L4 采样：从 `trace_*.jsonl` 按 1~5% 抽流量过裁判，点踩/追问信号回填 golden（**每个真实 bug 当天变一条 task**）
-3. 能力题毕业机制：`pass^k=1` 且稳定的 capability 场景移进 regression 并长期门禁
-4. 延迟/成本门禁：把 P95 与单次成本纳入 `run.py` 的阈值比较（report.py 已有数据）
+3. ✅ 能力题毕业机制（2026-09-20 落地）：`report.py` 每份趋势报告给出「连续全过 → 毕业候选 / 连续全红 → 长期未过」两张表；升格仍需**人工**改 golden 的 `split`（防门禁自己放松自己）
+4. ✅ 延迟/成本观测（2026-09-20 落地）：`run.py` 记录 `lat_p50/p95/max`、`llm_calls_est`、`est_cost_cny`，对照 `OBS` 观察线**只提示不判红**（先攒两周分布再定阈值）

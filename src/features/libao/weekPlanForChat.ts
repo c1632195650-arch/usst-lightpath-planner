@@ -19,6 +19,8 @@
 import type { PersonaProfile, Schedule, WeekPlan } from '@/types';
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
+import { expandDeadlines, expandExamPrep } from '@/lib/planner/events';
+import { DEADLINES } from '@/data/usst';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { TERM_CALENDAR } from '@/constants/term';
 import { WEEKDAY_CN } from '@/lib/date';
@@ -49,11 +51,30 @@ export async function planWeekForChat(
   const phase = phaseOfWeek(semester.plan, weekNo);
   if (!phase) return null;
 
+  /**
+   * ⚠️ 2026-09-20：**事件准备块与课程备考块必须一起进来**（本模块的「双轨」补钉）。
+   *
+   * 此前这里只传 `{schedule, weekNo, policy, scenarios}` —— 于是对话里那份周计划
+   * 比周计划页**少了整整两类块**：校历事件准备块（光电杯材料 / 四六级真题）与
+   * 课程备考块。用户连着看两处就会发现对不上，成因正是本文件开头警告的「双轨破绽」。
+   *
+   * 修法：**复用同一条 UserTask 通道** —— 不新增引擎参数、也不在这里重写展开逻辑
+   * （`events.ts` 是唯一实现，周页与对话页都从它取，双写就是历史 bug 复现）。
+   *
+   * 仍未并入的：用户自加任务（`edits.userTasks`）与目标投入块（`goalTasksOf`）——
+   * 它们来自 localStorage / 页面状态，本函数拿不到；差距记在 PR 描述里，不在引擎层造假。
+   */
+  const tasks = [
+    ...expandDeadlines(DEADLINES, schedule.termStart, schedule.totalWeeks),
+    ...expandExamPrep(schedule.courses, schedule.termStart, schedule.totalWeeks),
+  ];
+
   const base = {
     schedule,
     weekNo,
     policy: phase.policy,
     scenarios: profile?.scenarios ?? null,
+    tasks,
   };
 
   // 两遍法编排统一走公共入口（`planner/planWeek.ts`）。
