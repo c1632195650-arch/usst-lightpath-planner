@@ -2,8 +2,14 @@
 
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
-> **基线**：现有引擎 `src/lib/planner/*`，基线 commit `cb3f39e`(dev)。核对日期 2026-09-15。
-> **状态**：Draft v1.7 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复 + 旧测试修复）**已推远端**（`feat/planner-v2-p1` @ `0aef2f4`，见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。**PR #2 的红灯已修并已推**（`feat/planner-v2-p0` @ `95532c1`）。
+> **基线**：现有引擎 `src/lib/planner/*`。**当前核对基线 `1d695b94`（dev，2026-09-20 实测）**；初版基线 `cb3f39e`(dev)，核对日期 2026-09-15。
+> **状态**：Draft v1.8 —— **P0 / P1 / P2 三期均已落地并合入 `dev`**（实况见 §12.5.3 / §14 / §15）。
+> **当前远端基线（2026-09-20 21:35 实测）**：`dev` = **`1d695b94`**（较 9/17 的 `fb967dab` 前进 45 个提交）；`main` = **`3531e5ca`**（已发布「引擎 beta」，PR #26）。
+> **开放 PR 5 个**：**#19 → #21 → #23 是三层栈**（必须按序合入）、#31、#33。仓库**无 CI workflow** → 门禁全手工，§7.5 纪律必须人肉执行。
+> **干净检出实测（`1d695b94`）**：tsc `exit=0` · `tests/**` **299 / 301**（2 条失败系本机复用 `node_modules` 缺 `fast-check`，**非仓库缺陷**）· `scripts/**` **207 / 207** · golden **5 / 5** · 🔴 **`tests/p0-check.ts` **25 / 26**（红灯，见 §15.6 待办）。
+> **本次新增**：**§15「引擎访问点与接入裁决」**（2026-09-21，为「自研引擎接入 + 问卷改版 + 前端重构」三件事给出唯一插入点与 5 条裁定）。
+>
+> **旧状态行（v1.7，已过期，仅留档）**：Draft v1.7 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复 + 旧测试修复）**已推远端**（`feat/planner-v2-p1` @ `0aef2f4`，见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。**PR #2 的红灯已修并已推**（`feat/planner-v2-p0` @ `95532c1`）。
 > **与 `docs/engine-plan.md` 的关系**：4 处分歧已全部裁决（§12.3）；CY 的最终裁决与契约边界见 **§12.5**。
 > **契约裁决已闭环**：§12.5.1（5 项落 `types.ts`）。P1 开工方式与边界见 §13。
 > **读者**：协作者 B（本仓库 `src/lib/`、`src/features/week/` 负责人）、CY（`src/types.ts` 契约层负责人）、后续接手的 Agent。
@@ -628,7 +634,20 @@ total =   w.studyShortfall * max(0, targetStudy - actualStudy)
         + w.placeMismatch  * Σ(跨校区块数)          # 校区未知(null)不计，见 §12.5.8
 ```
 
-`lockFactor`：`hard` 块参与 diff 时权重 ×100（等价于禁止移动）；`soft` 块 ×1；`free` 块 ×0。
+`lockFactor`：`hard` 块参与 diff 时权重 ×100（等价于禁止移动）；`soft` 块 ×1；`free` 块 ×**`FREE_CHURN_FACTOR = 0.08`**。
+
+> ⚠️ **裁决修订（2026-09-19，CY）**：`free` 由 `×0` 改为 `×0.08`。
+> 原因：`free` 覆盖的是**引擎自排的软块**（自习/三餐/活动），而 ×0 让 churn **代价恒为 0** ——
+> 「最小扰动」只剩度量、没有驱动力，用户改一次计划仍会全盘重排（实测：`tests/churn.test.ts`
+> 里被挤走的块 `churnMin > 0` 而 `cost.parts.churn === 0`）。
+> 标定与影响见 `model.ts::FREE_CHURN_FACTOR` 的注释（60 分钟挪动 ≈ 3.84 分，不阻止真正改进）。
+> 回归护栏：`tests/p0-check.ts` 与 `tests/churn.test.ts` 已同步更新并注明本次修订。
+>
+> 🔴 **回灌记录（2026-09-21，B 侧核查）**：本条原**只存在于仓库副本 `docs/scheduler-v2-spec.md`**，
+> 母本（工作区根）滞后 7 行 → 副本比母本新，违反 §7.5 条 6。本次已回灌，两侧现应逐字节一致。
+> ⚠️ **副本所述「`p0-check.ts` 已同步更新」与实况不符**：dev@`1d695b94` 的 `tests/p0-check.ts`
+> 实测 **25/26** —— `:220` 已改为 `lockFactor(free) === 0.08`，但 `:232` 仍断言 `churnCost === 0`，
+> 自相矛盾（错误信息 `3.84 !== 0`）。修复见 §15.6 待办。
 
 **`placeMismatch` 计数口径（§12.5.8 全局口径的落地）**：只统计「**已解析出校区**（`campusOfPlace(...) != null`）且与当天主校区不一致」的块。`null`（未登记地点）**既不加罚也不排除**。当天主校区推不出时，该天所有块一律不计。
 
@@ -1103,6 +1122,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | v1.5 | 2026-09-15 | **A3/A5 实现时发现的残留矛盾、未定义项与完备性缺口，逐条消除**：① §5.6 **`daysOverdue` 由「未定义」改为显式定义**（`max(0, −dueOffset)`，原点 = 当前周周一，与 §5.2 `urgency()` **同源**），并补示例与「不使用 `dueAt.min`」的说明；② §5.5 目标函数里 `placeMismatch` 的 `Σ(跨校区或未登记地点的块数)` **改为 `Σ(跨校区块数)`** —— 原文与 §12.5.8（`null` 不罚）**直接冲突**，并补「计数口径」段；③ §4.2 `Weights.placeMismatch` 与 `dueOverdue` 两处注释同步修正；④ §12.1 风险表「仅 **4** 项进契约层」订正为 **5**（v1.3 已改 4→5，此处遗漏）；⑤ §5.7 新增说明 + **新增 §13.8**：`resplit` 的拆分方向与 `reschedule-place` 的窗口方向**不被目标函数驱动**（§5.5 无时长/窗口项）→ P1 照常实现但不假设被选中，「块不超上限」由 `construct` 保证；⑥ §13.7 补「**已修**」状态表（含 ref）与 §12.5.8 兜底关系；⑦ **新增 §13.9**：B 侧求解器链执行进度（A2/A3/A4/A5 + 门禁现状）|
 | v1.6 | 2026-09-15 | **吸收 CY 的 P1 三请求 + 补验证纪律**：① **§4.5 重写**为 4.5.1/4.5.2/4.5.3 —— 新增 **`planWeek.ts`「两遍法唯一编排点」（请求 ②）**，并写明它**必须支持注入 provider 桩**（`planner/transfer.ts` 依赖 `lib/api.ts`，Node 里加载不了，不注入就进不了 `tests/`）；**`schedule.ts` 稳定入口（请求 ①）** 改为**实况表**（ref：`buildWeekPlan`= `schedule.ts:295`、`campusOfName` = `schedule.ts:85`；而 `buildPhasesFromCalendar` / `phaseOfWeek` 实为 **`buildPhases.ts:255/269`**，消费方分别是 `scripts/scheduler.test.ts:13-15` 与 `scripts/buildPhases.test.ts:8-10`）；② **新增 §7.5「干净检出必须通过」（请求 ③，定为硬纪律）**，含 6 条可执行条款；③ §12.5.3 订正 **PR #4 远端 head `a6038e5` → `eb79b6a`**（`git ls-remote` 复核），并新增「远端实况快照」段（含三条未跟踪分支的说明）；④ 头部状态行同步 v1.6；⑤ §13.9 补 B 侧**提交/推送状态**（9 提交 / 19 文件 +2984−24、四道门禁实跑结果）；⑥ **新发现并记录 PR #2 的红灯**：`31ddeb6` 的 `scripts/scheduler.test.ts:309` 断言 `campusOfName('第三教学楼')==='JG516'`，与 P0 后的 `null` 语义冲突（该函数自 P0 起未改动 → 断言必失败），修复在 `5a75357`，处置见 §12.5.3 / §13.9 |
 | v1.7 | 2026-09-15 | **P1 求解器重构落地并全绿**（新增 §13.10「落地实况」）：① 新增 `construct.ts`（T1.1，旧 7 步搬迁 + **语义键 id**）、`explain.ts`（T1.5）、`solver.ts` + `index.ts`（T1.4）、`planWeek.ts`（§4.5.2 两遍法）、`campusLookup.ts`（断环用）；② `schedule.ts` 改**门面**（对外形状一字未改，`buildWeekPlan` 转调 `construct`）；③ `model.ts` 加 `PlanRequest.tasks?` / `PlanResult.variants?` / `PlanVariant` / §6.4 的 `blockId()` 与 `isSemanticBlockId()`；④ `tests/` 新增 4 个文件 30 条（construct / solver / explain / planweek），**golden 快照已拍**（5 场景）；⑤ 门禁：typecheck 绿、`tests/**` **67-67**、`scripts/**` 48-48、`p0-check` 26-26、`golden-compare` **5/5**（⓪+AC-1+2+3）；⑥ **两处偏差已记账**：golden 快照提前拍摄（依据 `git diff 31ddeb6 HEAD -- src/lib/planner/schedule.ts` 为空）、T1.0 契约层未应用（补丁 `_devtools/t1.0-contract-patch.md`，等 CY 合入）；⑦ 记入**变异测试**证明验收有牙齿（`SOFT_BUFFER_MIN` 5→6 → ⓪/AC-2 精确报 776→775）；⑧ §13.6 改为逐项兑现表 |
+| v1.8 | 2026-09-21 | **P2 之后的实况对齐 + 新增 §15**（本轮为「自研引擎 / 问卷改版 / 前端重构」三件事定锚）：① **§5.5 回灌**：母本此前仍写 `free ×0`，而仓库副本已是 `×0.08` → 副本比母本新、违反 §7.5 条 6；本次把 CY 的 2026-09-19 裁决（`FREE_CHURN_FACTOR = 0.08`）连同理由与回归护栏**回灌母本**，两侧恢复逐字节一致；② 同一处**登记红灯**：副本声称「`p0-check.ts` 已同步更新」与实况不符（dev 实测 **25/26**，`:232` 仍断言 `churnCost === 0`）→ 记为 §15.6 待办；③ 头部状态行由 v1.7 刷新为 **v1.8**（基线 `1d695b94`、P0/P1/P2 全落地、开放 PR 5 个、无 CI、门禁实测值），旧行降级为「留档」；④ **新增 §15「引擎访问点与接入裁决」**：唯一插入点 `solver.ts::solveWeek` + 5 条裁定（id 禁含时间 / `PlanRequest`·`PlanResult` 契约不变 / `blank` 吸收为一等公民 / `CostBreakdown` 加 `source` / 三级锁保持非布尔）+「契约不变」声明与验收清单 |
 
 ### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
@@ -1727,4 +1747,91 @@ P2 收敛需要「每轮增量问路」，而 `transferFactory` 的语义是「�
 
 ---
 
-*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `31ddeb6` = PR #2 head，base=`dev`）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**。**P2 实施记录见 §14**（2026-09-17，独立工作树 `_p2work`，基线 `dev@fb967dab`）。*
+## 15. 引擎访问点与接入裁决（2026-09-21）
+
+> **本节目的**：P2 之后，项目要同时推进三件事 —— ①**自研/替换排程引擎**、②**问卷重做**、③**前端重构**。
+> 三件事都会碰到引擎边界，本节把它们各自的「允许动什么 / 禁止动什么」一次说死，
+> 避免出现**第三个引擎入口**或**静默改契约**。
+
+### 15.1 「自己的引擎」的唯一插入点
+
+**实况（ref：`1d695b94`，`src/lib/planner/index.ts`）**——对外只有 **3 个函数**：
+
+| 导出 | 形态 | 内部 | 谁在调 |
+|---|---|---|---|
+| `planWeekV2(req): PlanResult` | **同步** | 直接转调 `solveWeek(req)` | PR 校验入口（§4.5.1） |
+| `buildWeekPlan(input)` | 同步 | 旧兼容壳（`config.solver='greedy'` → `construct`） | 旧调用方 / 旧测试 |
+| `planWeek(req): Promise<PlanResult>` | **异步** | 两遍/迭代收敛编排（`transferConverge` + 真实网络 provider） | **UI（`WeekPlanView`）与梨宝（`weekPlanForChat`）实际调用** |
+
+**裁决**：要换掉「排程这件核心事」，插入点 = **`src/lib/planner/solver.ts::solveWeek`**
+（同步纯函数 `PlanRequest → PlanResult`）。
+
+- ❌ **不要**把新算法写进 `planWeek.ts` —— 那里是**异步编排 + 网络取数**（依赖 `lib/api.ts` 的
+  `import.meta.env`），Node 单测里**加载不了**，等于新算法进不了 `tests/**` 门禁。
+- ❌ **不要**在 `index.ts` 之外再造「第 4 个入口」；`index.ts` 是门面（§4.5）。
+- ✅ `construct.ts` / `objective.ts` / `improve.ts` 都是 `solveWeek` 的**内部实现细节**，可整体丢弃重写；
+  新实现只需满足：**§4.4 的 I/O 形状 + §8.1 硬约束零违反 + §6.4 的 id 规范**。
+- ✅ **可测性红利**：`solveWeek` 不碰 `import.meta.env`、无时钟、无随机 → 新算法**天然进
+  `tests/**` 门禁**，无需触碰 `planWeek` / 网络那一层。
+
+### 15.2 五条接入裁定（自研引擎必须遵守）
+
+| # | 裁定 | 依据 | 违反的后果 |
+|---|---|---|---|
+| **1** | **block id 只许语义键，严禁含时间** | §6.4 / §12.5.5-2 / §12.5.1 | `churn` 虚高（平移被判成「删+增」）；**三级锁彻底失效**（移动后 id 变 → 锁不住） |
+| **2** | **`PlanRequest` / `PlanResult` 契约一字不改** | §4.4 / §12.5（已生效，非建议） | UI、梨宝、golden、`scripts/**` **全线崩**；确需改动必须 CY + B 双方确认 |
+| **3** | **`blank`（留白）吸收为一等公民块** | §8.2 边界清单：留白是**显式产能** | 留白退回「不是块的空隙」隐式概念 → §5.3 产能 / §5.5 `blankDeficit` / 前端渲染三者对不上 |
+| **4** | **`CostBreakdown` 允许加 `source`（可溯源字段）** | §5.5 / §10.3「可解释」 | 已有 `reason` / `notes` 却说不清「**哪一项**把这块挤走的」→ 违反可解释纪律 |
+| **5** | **锁保持三级非布尔**（`hard` / `soft` / `free`） | §4.1 `LockLevel` / §5.5 | 退化成 `locked: boolean` → 同时毁掉「定住 = 长期锁」与 `churn` 权重分层（×100 / ×1 / ×0.08） |
+
+> ⚠️ 裁定 **3 / 4** 的说明：`blank` 属 `BlankBlock` 语义、`source` 属 `CostBreakdown`，
+> **两者都在引擎侧 `model.ts`，不在 `types.ts` 契约锁内** —— 所以「可动」，
+> 但按 §14 的规则仍**必须在本节登记**，不许只写在代码注释里。
+
+### 15.3 「契约不变」声明
+
+自研引擎接入 = **替换 `solveWeek` 的实现**，**不是**替换接口。因此：
+
+- `src/types.ts` **零改动**（红线上限）；
+- `PlanRequest` / `PlanResult` **零改动**；
+- 前端、梨宝、`scripts/**`、golden 的**调用点零改动**；
+- `docs/scheduler-v2-spec.md`（= 本文件）仍是**唯一实现依据**。
+
+**验收口径**：接入后须重跑 §7.5 全套（tsc → `tests/**` → `p0-check` → `golden-compare` → `scripts/**`），
+其中 **golden 5/5 是硬闸**：golden 变了就说明 I/O 语义偷偷变了，必须停下来解释。
+
+### 15.4 与问卷改版的关系
+
+问卷**可以整体重写**，因为引擎与画像之间**只有一个接口**：
+`PlanRequest.persona?: PersonaProfile | null`（`model.ts`，规格书 §5 明确为「可选」，且**逐项有兜底**）。
+只要新问卷产出的仍是 `PersonaProfile`（八轴 + 8 场景字段），`solveWeek` 内部怎么读都行。
+
+→ **详见独立文档《问卷规格书-面向排程引擎-2026-09-21.md》**（工作区根）。
+其中补录了两条本轮核查新发现：**通用 `trigger` 机制**（`templates.ts:50` → `construct.ts:698`，可零改引擎地新增画像消费点）
+与**第 13 个消费点**（`explain.ts:214` 读 `scenarios.exercise_trigger`）。
+
+### 15.5 与前端重构的关系
+
+前端重构的边界：**只动「谁保存状态、谁触达引擎」，不动引擎**。
+
+- `features/week/WeekPlanView.tsx` 目前有 **29 个 `useState`**（详见前端架构规格书的问题陈述）；
+- 重构必须保证「同一 `PlanRequest` 输入 → 同一 `PlanResult` 输出」不被破坏 →
+  **golden 5/5 与 `p0-check` 仍需绿**；
+- 交互态（拖拽中间态等）**不得触发重排**，否则会把「攒着改、点一次重排」的既定语义搞坏
+  （见《前端架构规格书》三层状态模型）。
+
+→ **详见独立文档《前端架构规格书-2026-09-21.md》**。
+
+### 15.6 待办（阻断级）
+
+- 🔴 **`tests/p0-check.ts:232`**：仍断言 `churnCost(free 块移动) === 0`，与 `:220`
+  （`lockFactorOf('free') === 0.08`）**自相矛盾** → 干净 `dev@1d695b94` 实测 **25 / 26**（错误信息 `3.84 !== 0`）。
+  **修法**：把 `:232` 期望值改为 `0.8 × 60 × 0.08 = 3.84`，或改断言为
+  「`churnCost > 0` 且 `=== diffMin × w.churn × FREE_CHURN_FACTOR`」。
+  **归属**：`tests/` 是 B 的地盘；若 `p0-check.ts` 另有 CY 维护链路，先按 §12.5.7 对齐再动。
+- ⚠️ **副本 / 母本一致性**：本次回灌后须 `diff -q docs/scheduler-v2-spec.md 排程引擎-v2-技术规格书.md` 逐字节校验（§7.5 条 6）。
+
+---
+
+*本规格书是设计依据。**P0 / P1 / P2 三期均已落地并合入 `dev`**（基线 `1d695b94`，2026-09-20 实测）；`main` = `3531e5ca`（引擎 beta）。契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**；P1 落地实况见 **§13.10**；P2 实施记录见 **§14**；**引擎接入点与 5 条裁定见 §15（2026-09-21）**。配套独立文档：《问卷规格书-面向排程引擎-2026-09-21.md》《前端架构规格书-2026-09-21.md》《页面与使用逻辑规格书-2026-09-21.md》。*
+
