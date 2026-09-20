@@ -1,0 +1,34 @@
+{
+  "status": "provisional",
+  "measuredAt": "2026-09-20",
+  "tree": "dev@d146d3ab（含 Ray 引擎融合）+ feat/eval-p2-ratchet",
+  "config": "stryker.config.json（commandRunner = 整个引擎套件；mutate = model.ts + objective.ts）",
+  "ratchetArmed": false,
+  "ratchetNote": "thresholds.break 目前为 null（门禁未启用）——不能用一个没实测过的数字当门槛，否则就是「永远红的门禁」。核定后请改成实测分并更新本文件 status=ratified。",
+  "reference": {
+    "source": "ZCode 首跑 2026-09-20 13:27（_p0work/repo 检出）",
+    "global": 58.21,
+    "model_ts": 73.57,
+    "objective_ts": 53.44,
+    "caveat": "该检出的 objective.ts/model.ts 与当前 dev 逐字节相同（blob 2e655cff），但测试集规模不同（115 vs 314）——分数只能作量级参考，不能直接当基线。"
+  },
+  "measuredThisSession": {
+    "objective.ts:100-200": {
+      "mutants": 66,
+      "killed": 12,
+      "survived": 54,
+      "score": 18.18,
+      "elapsedMin": 2.7,
+      "command": "stryker run --mutate \"src/lib/planner/objective.ts:100-200\" --reporters clear-text --concurrency 2",
+      "note": "该区间是**死代码区**（weightOfTag / collectDeadlineBoosts / urgencyBoostForWeek）。18.18% 的低分正好量化了「死代码杀不动」：这就是本批从 killer 测试里删掉这些断言、改为「不给死代码写杀器」的依据。"
+    }
+  },
+  "whyProvisional": "本机沙箱无法完成全量运行，三次实测：mutate 整文件(451)/302 变异体时进程在开跑后即死（无 stderr、无报告）；66 变异体的切片可正常完成。concurrency 4/6 更不稳，2 是可用上限。",
+  "howToRatify": [
+    "1) 在能稳定跑完的机器/CI 上执行：npx stryker run（建议 --concurrency 2，约 20–30 分钟）",
+    "2) 读控制台 % Mutation score（或 reports/mutation/mutation.json）",
+    "3) 把该分数写进 stryker.config.json 的 thresholds.break，并把本文件 status 改为 ratified、补 measuredAt/global",
+    "4) 之后任何一次下降都会被门禁拦住；分档（high/low）可保持不变，涨分后再收紧"
+  ],
+  "knownLimitation": "commandRunner 在 Windows 下把整套测试计为 1 个 test（testsCompleted=1、coveredBy 恒空）→ 分数可信，**行级/用例级归因不可用**。详见 evals/README.md「变异测试」一节。"
+}

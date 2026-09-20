@@ -25,9 +25,9 @@
  *   python evals/run.py --suite engine         # 由台架统一调用（npm run eval:engine）
  */
 import { buildWeekPlan, toPlanRequest } from '@/lib/planner/schedule.ts';
+import { planWeek } from '@/lib/planner/planWeek.ts';
 import { evaluate } from '@/lib/planner/objective.ts';
 import { DEFAULT_WEIGHTS } from '@/lib/planner/model.ts';
-import { planWeek } from '@/lib/planner/planWeek.ts';
 import { GOLDEN_INPUTS, buildGoldenInput } from '../../tests/golden-inputs.ts';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -42,6 +42,57 @@ const RUNS = Math.max(2, Number(flag('--runs', '5')));
 const OUT = String(flag('--json', ''));
 const UPDATE = argv.includes('--update-baseline');
 const BASELINE = 'evals/runs/engine_baseline.json';
+/** 可选 oracle（CP-SAT 小实例最优解）→ 用于算「次优比」；不存在则只报绝对值 */
+const ORACLE = 'evals/engine/oracle.json';
+
+/* ============================================================
+ * ITC 字典序成本编码（2026-09-20，究极体系 P2 #15）
+ * ============================================================
+ * ITC 2019 大学赛道的正解是**二元组字典序比较**：先比硬约束违约数（可行性是入场券，
+ * 硬违约直接出局），硬相同才比软成本 —— **不是**把软成本 ×1000 与硬违约加权合并。
+ * 本文件只改**报告口径**，不碰引擎实现（B 的领域）。
+ *
+ * 软成本口径与 `tests/scoring-transfer.test.ts` 的冻结锚点一致（legacy、420/1380），
+ * 所以这里的 soft 值可与 76.25 / 96.25 那些锚点直接对照。
+ */
+export function lexCompare(
+  oldT: { hard: number; soft: number },
+  newT: { hard: number; soft: number },
+): { verdict: 'improve' | 'same' | 'soft-regress' | 'hard-regress'; reason: string } {
+  if (newT.hard > oldT.hard) {
+    return { verdict: 'hard-regress', reason: `硬违约 ${oldT.hard}→${newT.hard}（字典序优先，直接判退步）` };
+  }
+  if (newT.hard < oldT.hard) {
+    return { verdict: 'improve', reason: `硬违约 ${oldT.hard}→${newT.hard}（可行性先赢）` };
+  }
+  if (newT.soft > oldT.soft + 1e-9) {
+    return { verdict: 'soft-regress', reason: `软成本 ${oldT.soft}→${newT.soft}（硬违约未变）` };
+  }
+  if (newT.soft < oldT.soft - 1e-9) {
+    return { verdict: 'improve', reason: `软成本 ${oldT.soft}→${newT.soft}` };
+  }
+  return { verdict: 'same', reason: '（硬, 软）均未变' };
+}
+
+/** 自检：字典序语义务必先硬后软 —— 反向验证纪律（改坏比较顺序必须变红） */
+function selftest(): number {
+  const cases: Array<[string, any, any, string]> = [
+    ['硬增 + 软降 → 仍判退步', { hard: 0, soft: 100 }, { hard: 1, soft: 50 }, 'hard-regress'],
+    ['硬降 + 软增 → 判改善', { hard: 2, soft: 50 }, { hard: 0, soft: 999 }, 'improve'],
+    ['硬同 + 软增 → 软退步', { hard: 0, soft: 70 }, { hard: 0, soft: 72 }, 'soft-regress'],
+    ['硬同 + 软降 → 改善', { hard: 1, soft: 70 }, { hard: 1, soft: 62.75 }, 'improve'],
+    ['硬同 + 软同 → 无变化', { hard: 0, soft: 96.25 }, { hard: 0, soft: 96.25 }, 'same'],
+  ];
+  let bad = 0;
+  for (const [name, o, n, want] of cases) {
+    const got = lexCompare(o, n).verdict;
+    const ok = got === want;
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? '✅' : '❌'} ${name}｜期望 ${want} 实得 ${got}`);
+  }
+  console.log(`\n${bad === 0 ? '✅' : '❌'} ITC 字典序自检 ${cases.length - bad}/${cases.length}`);
+  return bad === 0 ? 0 : 1;
+}
 
 /** 注入用确定性转场：任何两个不同地点都给 7 分钟（纯函数，无网络、无随机） */
 const STUB_MIN = 7;
@@ -178,28 +229,31 @@ async function runVariant(spec: AnyRec, variant: string) {
     checkInvariants(plan, buildGoldenInput(spec), { coverage: variant === 'transfers' });
   if (!deterministic) bad.push({ code: 'I5', detail: '同一输入两次运行结果不一致' });
 
-  // ITC 成本编码（2026-09-19，ITC2011/XHSTT 惯例）：解质量 = (infeasibility, objective)
-  // 字典序二元组——先比硬违约数、同则比软成本，**不做加权合并**（ITC2019：不可行解直接出局）。
-  const itcCost: { infeasibility: number; objective: number | null } =
-    { infeasibility: bad.length, objective: null };
-  try {
-    const gi = buildGoldenInput(spec);
-    const c = evaluate(plan, {
-      weekNo: gi.weekNo, policy: gi.policy, weights: DEFAULT_WEIGHTS,
-      dayStartMin: 420, dayEndMin: 1380,
-    });
-    itcCost.objective = +c.total.toFixed(4);
-  } catch { /* 评分失败不阻塞验收，objective 记 null */ }
-
   const sorted = [...times].sort((a, b) => a - b);
   const p = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
   const days = new Set((plan.blocks ?? []).map((b: AnyRec) => b.dayOfWeek));
+
+  // 软成本：与 tests/scoring-transfer 锚点同口径（legacy、420/1380）
+  // ⚠️ 这是**报告**用的目标值，不是合格判定 —— 合格判定在 bad（不变量）里。
+  let soft = 0;
+  try {
+    const input2 = buildGoldenInput(spec);
+    soft = +evaluate(plan, {
+      weekNo: input2.weekNo, policy: input2.policy, weights: DEFAULT_WEIGHTS,
+      dayStartMin: 420, dayEndMin: 1380,
+    }).total.toFixed(2);
+  } catch {
+    soft = -1;   // 算不出（异常形状）→ 报 -1，不假装 0
+  }
 
   return {
     name,
     variant,
     violations: bad,
     metrics: {
+      // ITC 字典序二元组（先硬后软）：hard = 不变量违反数，soft = 软成本
+      hard: bad.length,
+      soft,
       blocks: plan.blocks?.length ?? 0,
       courseBlocks: (plan.blocks ?? []).filter((b: AnyRec) => b.kind === 'course').length,
       daysCovered: days.size,
@@ -211,7 +265,6 @@ async function runVariant(spec: AnyRec, variant: string) {
       blankMin: plan.stats?.blankMin,
       issues: issuesOf(plan),
       ms: { p50: +p(0.5).toFixed(2), p95: +p(0.95).toFixed(2), max: +Math.max(...times).toFixed(2) },
-      itc: itcCost,
       determinism: deterministic,
       // 相对基线是否明显变慢（供 run.py --suite engine 报警；噪声大故阈值取 1.5×）
       slow: false,
@@ -220,6 +273,14 @@ async function runVariant(spec: AnyRec, variant: string) {
 }
 
 /* ---------------- 主流程 ---------------- */
+
+// ITC 自检出口：不跑引擎，只验字典序比较语义（0 依赖，反向验证用）
+if (argv.includes('--selftest')) {
+  console.log('\n🧪 ITC 字典序自检（先硬后软）');
+  const rc = selftest();
+  process.exit(rc);
+}
+
 const VARIANTS = ['as-is', 'campus', 'transfers'];
 const jobs = GOLDEN_INPUTS.flatMap((g) => VARIANTS.map((variant) => ({ spec: g as AnyRec, variant })));
 
@@ -244,10 +305,10 @@ for (const r of results) {
     continue;
   }
   console.log(
-    `${mark} ${r.name} [${r.variant}]｜块 ${m.blocks}（课 ${m.courseBlocks}）｜天 ${m.daysCovered}`
+    `${mark} ${r.name} [${r.variant}]｜ITC(硬 ${m.hard}, 软 ${m.soft})`
+      + `｜块 ${m.blocks}（课 ${m.courseBlocks}）｜天 ${m.daysCovered}`
       + `｜转场 ${m.transfers}（紧 ${m.tightTransfers}/最长 ${m.maxTransferMin}min）`
       + `｜issues e${m.issues.error}/w${m.issues.warn}/i${m.issues.info}`
-      + `｜ITC(${m.itc.infeasibility}, ${m.itc.objective ?? 'null'})`
       + `｜p50 ${m.ms.p50}ms p95 ${m.ms.p95}ms｜${m.determinism ? '确定性✓' : '确定性✗'}`,
   );
   for (const v of r.violations ?? []) console.log(`     ❌ [${v.code}] ${v.detail}`);
@@ -260,6 +321,9 @@ const payload = {
   results,
   totals: {
     violations: totalBad,
+    // ITC 字典序总账：硬违约（不变量）+ 软成本总和（可上趋势）
+    hardViolations: totalBad,
+    softCostSum: +results.reduce((s, r) => s + (typeof r.metrics?.soft === 'number' && r.metrics.soft >= 0 ? r.metrics.soft : 0), 0).toFixed(2),
     hardIssues: results.reduce((s, r) => s + (r.metrics?.issues?.error ?? 0), 0),
     tightTransfers: results.reduce((s, r) => s + (r.metrics?.tightTransfers ?? 0), 0),
     transfersSeen: results.reduce((s, r) => s + (r.metrics?.transfers ?? 0), 0),
@@ -267,15 +331,48 @@ const payload = {
   },
 };
 
+/* ---------------- 次优比（可选 oracle） ---------------- */
+if (existsSync(ORACLE)) {
+  try {
+    const orc = JSON.parse(readFileSync(ORACLE, 'utf8')) as Record<string, { hard: number; soft: number }>;
+    const ratios: number[] = [];
+    console.log('\n== 次优比（vs CP-SAT oracle，只列有 oracle 的实例）==');
+    for (const r of results) {
+      const o = orc[`${r.name}[${r.variant}]`];
+      if (!o || typeof r.metrics?.soft !== 'number' || r.metrics.soft < 0 || !o.soft) continue;
+      const ratio = +(r.metrics.soft / o.soft).toFixed(3);
+      ratios.push(ratio);
+      console.log(`  ${r.name}[${r.variant}]：soft ${r.metrics.soft} / oracle ${o.soft} = ×${ratio}`
+        + (r.metrics.hard > o.hard ? '  ❌ 硬违约多于 oracle（不该发生）' : ''));
+    }
+    if (ratios.length) {
+      const avg = +(ratios.reduce((a, b) => a + b, 0) / ratios.length).toFixed(3);
+      (payload.totals as AnyRec).optimalityRatioAvg = avg;
+      (payload.totals as AnyRec).oracleInstances = ratios.length;
+      console.log(`  平均次优比 ×${avg}（${ratios.length} 个实例）→ 已记入 totals.optimalityRatioAvg`);
+    }
+  } catch (e: any) {
+    console.log(`\n⚠️ oracle 读取失败（忽略）：${String(e?.message ?? e).slice(0, 120)}`);
+  }
+} else {
+  console.log(`\nℹ️ 无 ${ORACLE} → 跳过次优比（P2 子项：OR-Tools CP-SAT 小实例待生成）`);
+}
+
 const cur = {
   ts: payload.ts,
   perScenario: Object.fromEntries(results.map((r) => [`${r.name}[${r.variant}]`, r.metrics ?? null])),
   totals: payload.totals,
 };
+/** 读 JSON 时剥掉 BOM：Windows 侧用 PowerShell 写过基线会带 BOM，JSON.parse 会直接抛 */
+function readJsonNoBom(p: string): any {
+  return JSON.parse(readFileSync(p, 'utf8').replace(/^\uFEFF/, ''));
+}
+
 if (existsSync(BASELINE)) {
-  const old = JSON.parse(readFileSync(BASELINE, 'utf8'));
-  console.log('\n== 与引擎基线对比（只列变化）==');
+  const old = readJsonNoBom(BASELINE);
+  console.log('\n== 与引擎基线对比（ITC 字典序：(硬违约, 软成本) 先硬后软｜只列变化）==');
   let shown = 0;
+  let lexRegress = 0;
   for (const [name, m] of Object.entries(cur.perScenario) as [string, any][]) {
     const o = old.perScenario?.[name];
     if (!m || !o) continue;
@@ -283,6 +380,20 @@ if (existsSync(BASELINE)) {
     for (const k of ['blocks', 'studyMin', 'blankMin', 'transfers']) {
       if (typeof o[k] === 'number' && typeof m[k] === 'number' && o[k] !== m[k]) {
         bits.push(`${k} ${o[k]}→${m[k]}${m[k] > o[k] ? '↑' : '↓'}`);
+      }
+    }
+    // ITC 字典序裁决（老基线没有 hard/soft 字段时跳过，等 --update-baseline 建立）
+    if (typeof o.hard === 'number' && typeof o.soft === 'number'
+        && typeof m.hard === 'number' && typeof m.soft === 'number') {
+      const lex = lexCompare({ hard: o.hard, soft: o.soft }, { hard: m.hard, soft: m.soft });
+      if (lex.verdict === 'hard-regress') {
+        lexRegress += 1;
+        (m as any).lexRegress = true;    // 让 run.py 能数出来并判红
+        bits.push(`🔴 ITC 硬违约退步：${lex.reason}`);
+      } else if (lex.verdict === 'soft-regress') {
+        bits.push(`⚠️ ITC 软成本上升：${lex.reason}（硬违约未变，观测档）`);
+      } else if (lex.verdict === 'improve') {
+        bits.push(`✅ ITC 改善：${lex.reason}`);
       }
     }
     const p95o = o.ms?.p95;
@@ -300,6 +411,7 @@ if (existsSync(BASELINE)) {
     }
   }
   if (!shown) console.log('  （全部与基线一致）');
+  if (lexRegress) console.log(`\n🔴 ITC 字典序硬违约退步 ${lexRegress} 个场景（可行性是入场券，必须修）`);
 }
 if (UPDATE || !existsSync(BASELINE)) {
   mkdirSync(dirname(BASELINE), { recursive: true });
