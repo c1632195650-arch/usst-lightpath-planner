@@ -35,9 +35,13 @@ except Exception:
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
+from typing import Annotated
+
 from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 import rag
 import campus
 import memory
@@ -263,14 +267,31 @@ def extractive_answer(sources, route):
 
 # ---------- 路由 ----------
 class ChatReq(BaseModel):
-    q: str = Field(max_length=500)   # 防超长输入打爆 token；超长返回 422
+    # 2026-09-19 schemathesis 契约修复：extra="forbid"（未知参数→422）、q 非空、k 严格 int。
+    # 前端已有三层空 q 防护（LbaoChat trim + 按钮 disabled），min_length=1 不破坏任何现有调用。
+    model_config = ConfigDict(extra="forbid")
+    q: str = Field(min_length=1, max_length=500)   # 防超长/空输入；超长返回 422
     session_id: str = "default"
     user_id: str = "anon"
     # 用户档案摘要（画像轴值 + 课表概览 + 学期阶段），由前端 features/libao 侧生成。
     # 这里不设 max_length：它是内部通道，超长直接截断比返回 422 更不容易把对话打断
     # （截断与脱敏在 api_chat 里做）。
     profile_ctx: str = ""
-    k: int = 4
+    k: StrictInt = 4
+
+# 2026-09-19 schemathesis 契约修复：非法编码 body（非 UTF-8 字节）时 Starlette 底层
+# 抛 HTTPException(400)，但 OpenAPI 只声明 200/422 → 契约与实现不符。
+# 语义上「解析不了的 body」就是 422 Unprocessable Entity，这里统一规范化。
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_to_422(request, exc: StarletteHTTPException):
+    if exc.status_code == 400:
+        # 与 FastAPI 校验错误同形：detail 必须是 ValidationError 数组（schemathesis 对 schema 校验）
+        return JSONResponse(status_code=422, content={"detail": [
+            {"type": "json_invalid", "loc": ["body"],
+             "msg": "body 解析失败（编码非法）", "input": None}]})
+    from fastapi.responses import JSONResponse as _JR
+    return _JR(status_code=exc.status_code, content={"detail": str(exc.detail)})
+
 
 @app.get("/api/health")
 def health():
@@ -451,8 +472,16 @@ def api_search(q: str, k: int = 5):
 # 🔴 本接口**不返回经纬度**（2026-09-15 决策 D4）：
 #    `campus_map.json` 按合规设计本就不落坐标，投影层再显式白名单一次，
 #    保证既不暴露、也不给未来的改动留后门。
+class PoiQuery(BaseModel):
+    """GET query 收紧（2026-09-19 schemathesis）：未知参数 → 422（契约即文档）。"""
+    model_config = ConfigDict(extra="forbid")
+    q: str = ""
+    funcs: str = ""
+    k: int = 5
+
+
 @app.get("/api/poi")
-def api_poi(q: str = "", funcs: str = "", k: int = 5):
+def api_poi(query: Annotated[PoiQuery, Query()]):
     """`/api/poi?q=吃饭&funcs=life&k=5`
 
     q 支持官方名（第三教学楼）、别名（三教）、口语黑话（图文 / 取快递 / 看病）。
@@ -464,17 +493,26 @@ def api_poi(q: str = "", funcs: str = "", k: int = 5):
     接口签名里再用 `func` 会撞成 `got multiple values for argument 'func'`，
     运行时直接 500（2026-09-15 实测踩到，故改名 `funcs`）。
     """
-    q = (q or "").strip()
-    k = max(1, min(k, 20))
-    if not q and not funcs:
-        return {"query": q, "funcs": funcs, "results": []}
-    results = campus.search_pois(q, func=funcs or None, limit=k)
-    return {"query": q, "funcs": funcs, "results": results}
+    q = (query.q or "").strip()
+    k = max(1, min(query.k, 20))
+    if not q and not query.funcs:
+        return {"query": q, "funcs": query.funcs, "results": []}
+    results = campus.search_pois(q, func=query.funcs or None, limit=k)
+    return {"query": q, "funcs": query.funcs, "results": results}
+
+
+class NearbyQuery(BaseModel):
+    """同 PoiQuery：未知参数 → 422。`from` 是 Python 关键字，用 alias 承接。"""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    src: str = Field("", alias="from")
+    k: int = 5
+    funcs: str = ""
+    types: str = ""
+    max_min: float = 0
 
 
 @app.get("/api/nearby")
-def api_nearby(src: str = Query("", alias="from"), k: int = 5,
-               funcs: str = "", types: str = "", max_min: float = 0):
+def api_nearby(src: Annotated[NearbyQuery, Query()]):
     """`/api/nearby?from=第三教学楼&k=5&funcs=life&types=食堂`
 
     按**步行分钟**（OSM 路网实算，不是直线距离）升序返回最近的设施。
@@ -488,15 +526,16 @@ def api_nearby(src: str = Query("", alias="from"), k: int = 5,
 
     ⚠️ 同理，参数名避开 `func`（FastAPI 保留），见 `/api/poi` 的说明。
     """
-    k = max(1, min(k, 20))
-    ts = [t.strip() for t in types.split(",") if t.strip()] or None
-    return campus.nearby_by_walk(src, limit=k, funcs=funcs or None,
-                                 types=ts, max_min=(max_min or None))
+    k = max(1, min(src.k, 20))
+    ts = [t.strip() for t in src.types.split(",") if t.strip()] or None
+    return campus.nearby_by_walk(src.src, limit=k, funcs=src.funcs or None,
+                                 types=ts, max_min=((src.max_min or None)))
 
 
 # ---------- 步行路径（排程引擎的转场时间来源） ----------
 class RouteBatchReq(BaseModel):
     """批量问路：排程引擎一次要问十几对地点，逐条 HTTP 太慢。"""
+    model_config = ConfigDict(extra="forbid")
     pairs: list[list[str]] = Field(default_factory=list, max_length=200)
     mode: str = "fastest"
 
@@ -742,6 +781,7 @@ def api_chat(body: ChatReq):
     }
 
 class ResetReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     session_id: str = "default"
     user_id: str = "anon"
 
