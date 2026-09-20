@@ -209,7 +209,7 @@ test('展开：没给结束时间 → 按默认窗口铺（但上层必须如实
 
 test('把关：槽位不齐 → 只追问，绝不动手', () => {
   const slots = parseIntentSlots('帮我安排数学建模备赛', TODAY); // 缺时间 / 缺投入
-  const v = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, weekNo: 3, today: TODAY });
+  const v = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, today: TODAY });
 
   assert.equal(v.kind, 'needs_clarification');
   assert.ok(v.questions.length > 0 && v.questions.length <= 2, '一次最多问两条');
@@ -219,20 +219,25 @@ test('把关：槽位不齐 → 只追问，绝不动手', () => {
   assert.match(v.questions[0], /哪件事|什么时候|投入/);
 });
 
-test('把关：没有课表 / 周次不在学期内 → 如实说排不了', () => {
+test('把关：没有课表 / 窗口不在学期内 → 如实说排不了', () => {
   const slots = slotsOf(WIN);
   assert.equal(
-    checkGoalFeasibility({ slots, schedule: null, profile: null, weekNo: 3, today: TODAY }).kind,
+    checkGoalFeasibility({ slots, schedule: null, profile: null, today: TODAY }).kind,
     'infeasible',
   );
+  // 整个窗口都落在学期外 → 展开不出任何候选块 → infeasible（不再是「weekNo 99」——
+  // 干跑改为按候选块所在周逐周跑后，调用方不再传单一周次）
   assert.equal(
-    checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, weekNo: 99, today: TODAY }).kind,
+    checkGoalFeasibility({
+      slots: slotsOf({ dateFrom: '2027-06-01', dateTo: '2027-06-21' }),
+      schedule: SCHEDULE, profile: null, today: TODAY,
+    }).kind,
     'infeasible',
   );
 });
 
 test('把关：纯函数 —— 干跑不落盘，两次结果完全一致', () => {
-  const args = { slots: slotsOf(WIN), schedule: SCHEDULE, profile: null, weekNo: 4, today: TODAY };
+  const args = { slots: slotsOf(WIN), schedule: SCHEDULE, profile: null, today: TODAY };
   assert.deepEqual(checkGoalFeasibility(args), checkGoalFeasibility(args));
 });
 
@@ -241,13 +246,28 @@ test('把关：排得下 → 有落点，且落点条数与落块数对得上', 
     slots: slotsOf({ ...WIN, totalHours: 3, durationMin: 60 }),
     schedule: SCHEDULE,
     profile: null,
-    weekNo: 4,
     today: TODAY,
   });
   assert.ok(['ok', 'tight', 'conflict'].includes(v.kind), `意外结论：${v.kind}`);
   assert.ok(v.placedCount > 0, '一个学期内的正常诉求应当排得下');
   assert.equal(v.placedAt.length, v.placedCount, '落点条数和落块数对不上 = 回显会骗人');
-  for (const p of v.placedAt) assert.match(p, /^周[一二三四五六日] \d{2}:\d{2}-\d{2}:\d{2}$/);
+  for (const p of v.placedAt) assert.match(p, /^第\d+周 周[一二三四五六日] \d{2}:\d{2}-\d{2}:\d{2}$/);
+});
+
+test('把关：🔴 回归 —— 窗口**全在后面的周**也能排（E2E 抓到的误报 bug）', () => {
+  // 曾经的 bug：干跑只在「当前周」跑一遍，窗口在第 5-8 周时当前周的计划里
+  // 根本没有这些块 → 一律误报「排不进去」。这里窗口刻意**完全不与当前周重叠**
+  // （当前是第 2 周，窗口 10 月中旬起 = 第 5-8 周），且量大（40h/90min=27 块）。
+  const v = checkGoalFeasibility({
+    slots: slotsOf({ dateFrom: '2026-10-11', dateTo: '2026-10-31', totalHours: 40, durationMin: 90 }),
+    schedule: SCHEDULE,
+    profile: null,
+    today: TODAY,
+  });
+  assert.notEqual(v.kind, 'infeasible', `窗口在后几周却被误报排不进去：${v.reasons.join('；')}`);
+  assert.ok(v.placedCount > 0, '一个块都没落下去 —— 逐周干跑没生效');
+  // 落点必须写明是**哪一周**（跨周回显不含周次，用户没法核对）
+  for (const p of v.placedAt) assert.match(p, /^第\d+周 /);
 });
 
 test('把关：诚实性 —— 目标量超过窗口容量时必须说「放不下」，不能静默只排一部分', () => {
@@ -257,7 +277,6 @@ test('把关：诚实性 —— 目标量超过窗口容量时必须说「放不
     slots: slotsOf({ ...WIN, totalHours: 2000, durationMin: 60 }),
     schedule: SCHEDULE,
     profile: null,
-    weekNo: 4,
     today: TODAY,
   });
   assert.equal(v.kind, 'conflict', '2000 小时塞进 21 天却没报冲突');
@@ -272,7 +291,6 @@ test('把关：用了默认窗口 / 时间待定 / 没给地点，都必须如�
     slots: slotsOf({ dateFrom: '2026-09-21', certainty: 'unknown' }), // 无 dateTo → 默认窗口
     schedule: SCHEDULE,
     profile: null,
-    weekNo: 4,
     today: TODAY,
   });
   const all = v.caveats.join('\n');
@@ -294,9 +312,9 @@ test('把关：既有任务必须在场 —— 基线失真会把「挤掉别的
     },
   ];
   const slots = slotsOf({ ...WIN, totalHours: 9, durationMin: 60 });
-  const bare = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, weekNo: 4, today: TODAY });
+  const bare = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, today: TODAY });
   const loaded = checkGoalFeasibility({
-    slots, schedule: SCHEDULE, profile: null, weekNo: 4, today: TODAY, tasks: heavy,
+    slots, schedule: SCHEDULE, profile: null, today: TODAY, tasks: heavy,
   });
   assert.ok(
     loaded.placedCount <= bare.placedCount,
@@ -306,7 +324,7 @@ test('把关：既有任务必须在场 —— 基线失真会把「挤掉别的
 
 test('把关：草稿文案给选项、不替用户拍板（core §4 的 L4 边界）', () => {
   const infeasible = checkGoalFeasibility({
-    slots: slotsOf(WIN), schedule: null, profile: null, weekNo: 3, today: TODAY,
+    slots: slotsOf(WIN), schedule: null, profile: null, today: TODAY,
   });
   const text = describeVerdict(infeasible).join('\n');
   assert.match(text, /可以：/, '排不下时必须给出可选项');

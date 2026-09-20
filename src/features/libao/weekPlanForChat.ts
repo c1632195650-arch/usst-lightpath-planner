@@ -336,12 +336,17 @@ export function checkGoalFeasibility(args: {
   slots: IntentSlots;
   schedule: Schedule | null;
   profile: PersonaProfile | null;
-  weekNo: number;
+  /**
+   * ⚠️ 已废弃、被忽略：干跑改为按候选块**真正落在的周**逐周跑（见关三），
+   * 不再是「在调用方给的某一周排一遍」。保留这个可选参数是为了兼容
+   * 仍按旧签名调用的调用方，不让它们类型报错 —— 新代码不要再传。
+   */
+  weekNo?: number;
   /** 本周已经在用的任务（校历事件 / 天气 / 用户自己加的）—— 必须在场，否则基线失真 */
   tasks?: UserTask[];
   today: string;
 }): GoalVerdict {
-  const { slots, schedule, profile, weekNo, today } = args;
+  const { slots, schedule, profile, today } = args;
   const existing = args.tasks ?? [];
   const caveats: string[] = [];
 
@@ -372,10 +377,6 @@ export function checkGoalFeasibility(args: {
   }
 
   const semester = buildPhasesFromCalendar(schedule, profile, calendarOf(schedule));
-  const phase = phaseOfWeek(semester.plan, weekNo);
-  if (!phase) {
-    return { ...base, kind: 'infeasible', reasons: [`第 ${weekNo} 周不在本学期范围内。`] };
-  }
 
   // ── 关二：能不能展开成任务 ─────────────────────────────────
   const candidates = goalToTasks(slots, schedule, today);
@@ -398,38 +399,65 @@ export function checkGoalFeasibility(args: {
     caveats.push('没给地点 —— 转场时间按同校区估算，等你说地点我再校准。');
   }
 
-  // ── 关三：干跑对比 ─────────────────────────────────────────
-  const week = weekNo;
-  const mkInput = (tasks: UserTask[]) => ({
-    schedule,
-    weekNo: week,
-    policy: phase.policy,
-    scenarios: profile?.scenarios ?? null,
-    tasks,
-  });
-
-  const before = planWeekV2(toPlanRequest(mkInput(existing))).plan;
-  const after = planWeekV2(toPlanRequest(mkInput([...existing, ...candidates]))).plan;
-
-  const beforeCount = countIssues(before);
-  const afterCount = countIssues(after);
-  const added: GoalAddedIssue[] = [];
-  for (const [code, v] of afterCount) {
-    const prev = beforeCount.get(code)?.n ?? 0;
-    if (v.n > prev) added.push({ code, level: v.level, count: v.n - prev, sample: v.sample });
+  // ── 关三：干跑对比（**按候选块真正落在的周**逐周跑）─────────
+  // 🔴 这里曾只在「当前周」跑一遍 —— 而目标窗口往往在后面几周，
+  //    当前周的计划里根本没有这些块，于是一律误报「排不进去」。
+  //    这个 bug 是浏览器 E2E 实测抓到的（槽位全对、结论却是 infeasible），
+  //    单元测试的窗口恰好跨到当前周，所以没暴露 —— 回归用例见
+  //    「把关：窗口全在后面的周」。
+  const byWeek = new Map<number, UserTask[]>();
+  for (const t of candidates) {
+    const w = t.weeks?.[0];
+    if (!Number.isFinite(w)) continue;
+    const list = byWeek.get(w as number) ?? [];
+    list.push(t);
+    byWeek.set(w as number, list);
   }
+
+  const titles = new Set(candidates.map((t) => t.title));
+  const placed: Array<{ week: number; block: TimeBlock }> = [];
+  const addedAcc = new Map<string, GoalAddedIssue>();
+  let studyDeltaMin = 0;
+
+  for (const [w, wkTasks] of [...byWeek.entries()].sort((a, b) => a[0] - b[0])) {
+    const wkPhase = phaseOfWeek(semester.plan, w);
+    if (!wkPhase) continue; // 该周不在学期内 —— goalToTasks 理论上已滤掉
+    const mkInput = (tasks: UserTask[]) => ({
+      schedule,
+      weekNo: w,
+      policy: wkPhase.policy,
+      scenarios: profile?.scenarios ?? null,
+      tasks,
+    });
+
+    const before = planWeekV2(toPlanRequest(mkInput(existing))).plan;
+    const after = planWeekV2(toPlanRequest(mkInput([...existing, ...wkTasks]))).plan;
+
+    for (const b of after.blocks) {
+      if (titles.has(b.title)) placed.push({ week: w, block: b });
+    }
+    studyDeltaMin += after.stats.studyMin - before.stats.studyMin;
+
+    const beforeCount = countIssues(before);
+    for (const [code, v] of countIssues(after)) {
+      const prev = beforeCount.get(code)?.n ?? 0;
+      if (v.n <= prev) continue;
+      const acc = addedAcc.get(code);
+      if (acc) acc.count += v.n - prev;
+      else addedAcc.set(code, { code, level: v.level, count: v.n - prev, sample: v.sample });
+    }
+  }
+  const added = [...addedAcc.values()];
 
   // ── 关四：真的落进去了吗 ───────────────────────────────────
   // 按 title 认领 —— 固定块（给了 dayOfWeek+startMin）与浮动块分别由 construct 的两条
   // 分支生成，`source` 一个是 'user' 一个是 'template'，只有 title 两端都稳定。
-  const titles = new Set(candidates.map((t) => t.title));
-  const placed: TimeBlock[] = after.blocks.filter((b) => titles.has(b.title));
-  const studyDeltaMin = after.stats.studyMin - before.stats.studyMin;
-
   const placedAt = placed
     .slice()
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin)
-    .map((b) => `${WEEKDAY_CN[b.dayOfWeek % 7]} ${toHHmm(b.startMin)}-${toHHmm(b.endMin)}`);
+    .sort((a, b) =>
+      a.week - b.week || a.block.dayOfWeek - b.block.dayOfWeek || a.block.startMin - b.block.startMin)
+    .map(({ week, block }) =>
+      `第${week}周 ${WEEKDAY_CN[block.dayOfWeek % 7]} ${toHHmm(block.startMin)}-${toHHmm(block.endMin)}`);
 
   const reasons: string[] = [];
   const hasError = added.some((a) => a.level === 'error');
