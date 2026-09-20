@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyClarifyAnswer,
   describeSlots,
   detectIntent,
   extractEffort,
@@ -332,4 +333,116 @@ test('回显：把听懂的与没听懂的都说清楚（用户要能一眼核�
   assert.match(lines, /数学建模/);
   assert.match(lines, /九月中旬/);
   assert.match(lines, /待定/);
+});
+
+/* ============================================================
+ * 七、追问接续（applyClarifyAnswer）
+ * 🔴 2026-09-20 真实翻车回归：用户说「帮我安排10月2号的数学建模比赛备赛计划」
+ *    → 梨宝正确追问「打算投入多少」→ 用户回「每周 3 次、每次 2 小时」
+ *    → 这句不是动作句 → 掉进 RAG 问答被记忆带偏，日程一个块都没排。
+ * ========================================================== */
+
+/** 翻车现场第一句（逐字） */
+const CLARIFY_SEED = parseIntentSlots('帮我安排10月2号的数学建模比赛备赛计划', TODAY);
+
+test('追问接续：节奏式回答「每周 3 次、每次 2 小时」补齐 effort，missing 清空', () => {
+  assert.ok(CLARIFY_SEED.missing.includes('effort'), '种子句应缺 effort');
+
+  const { slots, contributed } = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  assert.equal(contributed, true, '回答没被接住 —— 这就是翻车的根因');
+  assert.equal(slots.perWeekCount, 3);
+  assert.equal(slots.durationMin, 120);
+  assert.deepEqual(slots.missing, [], '补完还留缺口 = 白追问一轮');
+  assert.equal(slots.title, CLARIFY_SEED.title, '已听懂的 title 不许被改写');
+  assert.equal(slots.when?.text, CLARIFY_SEED.when?.text, '已听懂的 when 不许被改写');
+});
+
+test('追问接续：总量式回答「一共20小时」同样补齐', () => {
+  const { slots, contributed } = applyClarifyAnswer('一共20小时', CLARIFY_SEED, TODAY);
+  assert.equal(contributed, true);
+  assert.equal(slots.totalHours, 20);
+  assert.deepEqual(slots.missing, []);
+});
+
+test('追问接续：补一半也算数 —— 只给单次时长，剩下缺口继续追问', () => {
+  // 🔪 用**跨窗口**种子（10月中旬）：单日种子（10月2号）现在给单次时长就算补齐了，
+  //    测「补一半」必须用多日窗口 —— 两个语义各有专门用例，别混。
+  const windowSeed = parseIntentSlots('我要报名数学建模，10月中旬开始，帮我规划备赛', TODAY);
+  assert.ok(windowSeed.missing.includes('effort'));
+  const { slots, contributed } = applyClarifyAnswer('每次 1 小时', windowSeed, TODAY);
+  assert.equal(contributed, true, '半份信息被扔掉 = 用户重说一遍全量，体验崩坏');
+  assert.equal(slots.durationMin, 60);
+  assert.ok(slots.missing.includes('effort'), '节奏不完整时 effort 仍算缺');
+});
+
+test('追问接续：答非所问不硬吃（contributed=false，交回普通分流）', () => {
+  for (const noise of ['图书馆几点开门', '帮我看看这周忙不忙']) {
+    const { contributed } = applyClarifyAnswer(noise, CLARIFY_SEED, TODAY);
+    assert.equal(contributed, false, `「${noise}」不该被当成追问的答案`);
+  }
+});
+
+test('追问接续：回应里给时间也能补 when 槽（「十月开始吧」）', () => {
+  const seed = parseIntentSlots('我要报名数学建模，帮我规划备赛', TODAY);
+  assert.ok(seed.missing.includes('when'));
+
+  const { slots, contributed } = applyClarifyAnswer('十月中旬开始吧', seed, TODAY);
+  assert.equal(contributed, true);
+  assert.ok(slots.when, 'when 没被补上');
+  assert.ok(!slots.missing.includes('when'));
+});
+
+test('追问接续：确定性 —— 同输入同输出', () => {
+  const a = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  const b = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  assert.deepEqual(a, b);
+});
+
+/* ============================================================
+ * 八、单日事件（「周四我要吃大餐」—— 2026-09-20 CY 真实翻车：
+ *     吃饭这种一句话被静默无视，一个块都没排）
+ * ========================================================== */
+
+test('单日事件：大餐被听懂成目标，缺的只有投入', () => {
+  const q = '周四我要吃大餐';
+  assert.equal(looksLikeAction(q), true, '「我要」就该命中');
+  const s = parseIntentSlots(q, TODAY);
+  assert.equal(s.title, '大餐', '大餐没进词表 = 整句被无视的根因');
+  assert.ok(s.when, '周四没被听见');
+  assert.deepEqual(s.missing, ['effort']);
+});
+
+test('单日事件：只给「每次 2 小时」投入就算齐（就一块，没有「几次」可言）', () => {
+  const seed = parseIntentSlots('周四我要吃大餐', TODAY);
+  const { slots, contributed } = applyClarifyAnswer('每次 2 小时', seed, TODAY);
+  assert.equal(contributed, true);
+  assert.equal(slots.durationMin, 120);
+  assert.deepEqual(slots.missing, [], '单日事件还追问频率 = 烦人');
+});
+
+test('单日豁免不误伤循环约定：「每周三复习每次 2 小时」仍要确认投入口径', () => {
+  const s = parseIntentSlots('每周三复习每次 2 小时', TODAY);
+  assert.ok(s.when?.recurring, '「每周三」该标 recurring（是循环约定不是这周三）');
+  assert.ok(s.missing.includes('effort'), '循环句不许蹭单日豁免');
+});
+
+test('单日事件：追问话术问「占多久」而不是「投入多少」', () => {
+  const s = parseIntentSlots('周四我要吃大餐', TODAY);
+  assert.match(topQuestions(s, 2)[0], /占多久/);
+});
+
+test('相对星期落在过去 → 滚到下周（周日说「周四」指的是下一个周四）', () => {
+  // TODAY = 2026-09-05（周六）。「周二」本周是 09-01（已过）→ 应滚到 09-08
+  const r = resolveWhen({ text: '周二', kind: 'relative', relativeWeeks: 0, weekday: 2 }, TODAY);
+  assert.equal(r.from, '2026-09-08');
+  assert.equal(r.certainty, 'exact');
+  // 未来的不动：周六说「周日」= 明天
+  const r2 = resolveWhen({ text: '周日', kind: 'relative', relativeWeeks: 0, weekday: 7 }, TODAY);
+  assert.equal(r2.from, '2026-09-06');
+});
+
+test('聚餐也能听懂', () => {
+  const s = parseIntentSlots('周五晚上班级聚餐', TODAY);
+  assert.ok(s.title.includes('聚餐'), `title=${s.title}`);
+  assert.ok(looksLikeAction('周五晚上我要去聚餐'));
 });

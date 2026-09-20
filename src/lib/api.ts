@@ -41,6 +41,41 @@ export interface ChatResult {
   request_id?: string;
   /** 后端侧耗时（毫秒，含检索 + 空间 + 记忆 + LLM） */
   elapsed_ms?: number;
+  /** 客观事实待确认（年级/学院/专业）—— 前端据此出建议卡，用户点头才进画像 */
+  memory_proposals?: MemoryFact[];
+  /** 已自动生效的偏好 —— 前端据此出可撤销提示 */
+  memory_applied?: MemoryFact[];
+}
+
+/* ---------------- 记忆面板（M2/M3） ----------------
+ * 事实分两类走两条路（CY 2026-09-20 拍板）：
+ *   · objective 客观事实（年级/学院/专业）→ 只提议，用户确认才生效；
+ *   · preference 偏好（薄弱项/口味/课程）→ 自动生效，可撤销；全部可删。 */
+export type FactKind = 'objective' | 'preference';
+export type FactStatus = 'pending' | 'applied' | 'rejected';
+
+export interface MemoryFact {
+  id: number;
+  kind: FactKind;
+  /** grade / college / major / weak.<项> / preferences.<标签> / course.<课名> */
+  key: string;
+  value: string;
+  status: FactStatus;
+  /** 提取来源原话片段（≤80 字），给面板里「我为什么会记得这个」一个交代 */
+  source?: string;
+}
+
+export function memoryFacts(userId: string, status: '' | FactStatus = ''): Promise<{ facts: MemoryFact[] }> {
+  const s = status ? `&status=${status}` : '';
+  return get(`/api/memory/facts?user_id=${encodeURIComponent(userId)}${s}`);
+}
+
+export function decideFact(userId: string, id: number, action: 'confirm' | 'reject' | 'undo'): Promise<{ ok: boolean; fact: MemoryFact | null }> {
+  return post(`/api/memory/facts/${id}/${action}`, { user_id: userId });
+}
+
+export function deleteFact(userId: string, id: number): Promise<{ ok: boolean }> {
+  return del(`/api/memory/facts/${id}?user_id=${encodeURIComponent(userId)}`);
 }
 
 export interface SearchResult {
@@ -71,6 +106,12 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }

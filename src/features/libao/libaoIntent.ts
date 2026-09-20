@@ -82,6 +82,8 @@ export interface WhenHint {
   weekday?: number;
   /** 用户明说「时间没定」。与「没提到时间」是两回事 —— 前者要标注，后者要追问。 */
   unspecified?: boolean;
+  /** 「每周三」这类循环约定 —— 不是某一天，不享受单日事件的投入豁免（hasEffort）。 */
+  recurring?: boolean;
 }
 
 /** 时段窗（「只在晚上」）。分钟口径，与引擎一致。 */
@@ -165,6 +167,8 @@ export const GOAL_NOUNS = [
   '备赛', '备考', '复习', '刷题', '预习', '练习',
   // 其他
   '证书', '实习', '社团', '招新',
+  // 生活事件（「周四我要吃大餐」这类单日安排 —— 2026-09-20 CY 真实使用翻车）
+  '大餐', '聚餐', '庆功', '生日',
 ];
 
 /**
@@ -414,6 +418,11 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
   const relWeek = /(下周|下星期|这周|本周|这星期|本星期)/.exec(s);
   const wd = /(周[一二三四五六日天]|星期[一二三四五六日天])/.exec(s);
   const wdNum = wd ? WD_NUM[wd[1].slice(1)] : undefined;
+  // 「每周三」= 循环约定，不是「这周三」—— 必须在相对周判定**之前**拦下，
+  // 否则单日豁免（hasEffort）会把「每周三复习 2 小时」错当成只排一块。
+  if (wd && wdNum != null && wd.index > 0 && s[wd.index - 1] === '每') {
+    return { text: '每' + wd[0], kind: 'window', recurring: true, weekday: wdNum };
+  }
   if (relWeek) {
     const isNext = relWeek[1].startsWith('下');
     return {
@@ -598,6 +607,9 @@ export function resolveWhen(
       if (hint.weekday != null) {
         const one = new Date(monday);
         one.setDate(monday.getDate() + (hint.weekday - 1));
+        // 周日说「周四」→ 算出来是昨天：人指的是**下一个**周四，滚一周。
+        // （过去的日子排进日程 = 用户看到一块灰色回忆，比不排更迷惑。）
+        if (one.getTime() < base.getTime()) one.setDate(one.getDate() + 7);
         return { from: isoOf(one), to: isoOf(one), certainty: 'exact' };
       }
       const sun = new Date(monday);
@@ -623,10 +635,31 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
   query: [],
 };
 
-/** `effort` 的满足条件：给了总时长，**或**给了「每周几次 × 每次多久」。居其一即可。 */
+/**
+ * 单日事件：只占**一个**块，所以「每次多久」就是全部投入 —— 不该再追问频率或总量。
+ * 「周四吃大餐」「明天体检 1 小时」vs「备赛 20 小时」「每周 3 次」是两类诉求。
+ * ⚠️ `recurring`（每周三）不算单日 —— 循环约定没有「一共占多久」的天然上限。
+ */
+function isSingleDayEvent(s: IntentSlots): boolean {
+  if (s.when?.recurring) return false;
+  // 解析过日期（传了 today）：起止同一天 = 单日
+  if (s.dateFrom && s.dateTo && s.dateFrom === s.dateTo) return true;
+  const w = s.when;
+  if (!w) return false;
+  if (w.kind === 'exact') return true;
+  // 没传 today 的语义层：明天/大后天、这周内的星期几
+  if (w.kind === 'relative' && w.relativeDays != null) return true;
+  if (w.kind === 'relative' && w.relativeWeeks === 0 && w.weekday != null) return true;
+  return false;
+}
+
+/** `effort` 的满足条件：给了总时长，**或**给了「每周几次 × 每次多久」；
+ *  单日事件给了单次时长即可（就一块，没有「几次」可言）。居其一即可。 */
 function hasEffort(s: IntentSlots): boolean {
   if (s.totalHours != null && s.totalHours > 0) return true;
-  return s.perWeekCount != null && s.durationMin != null;
+  if (s.perWeekCount != null && s.durationMin != null) return true;
+  if (s.durationMin != null && s.durationMin > 0 && isSingleDayEvent(s)) return true;
+  return false;
 }
 
 /** 算缺口。这是**唯一**的完备性判定 —— 别在别处再写一份「算不算缺」。 */
@@ -649,8 +682,15 @@ const SLOT_QUESTION: Record<SlotKey, string> = {
   target: '你要动的是哪一块？说个名字我好找到它。',
 };
 
+/** 单槽追问话术。effort 对**单日事件**换问法 —— 问「投入多少」吃顿饭的人听不懂；
+ *  例子带「每次」是为了把回答引向 `durationMin`（单日豁免认的就是它）。 */
+function questionFor(s: IntentSlots, slot: SlotKey): string {
+  if (slot === 'effort' && isSingleDayEvent(s)) return '大概占多久？（比如「每次 2 小时」）';
+  return SLOT_QUESTION[slot];
+}
+
 export function clarifyQuestions(s: IntentSlots): Array<{ slot: SlotKey; question: string }> {
-  return s.missing.map((slot) => ({ slot, question: SLOT_QUESTION[slot] }));
+  return s.missing.map((slot) => ({ slot, question: questionFor(s, slot) }));
 }
 
 /** 只取最关键的 n 条追问（默认 2）—— 一次问太多，用户就不答了。 */
@@ -661,7 +701,79 @@ export function topQuestions(s: IntentSlots, n = 2): string[] {
   return order
     .filter((k) => s.missing.includes(k))
     .slice(0, Math.max(0, n))
-    .map((k) => SLOT_QUESTION[k]);
+    .map((k) => questionFor(s, k));
+}
+
+/* ============================================================
+ * 五·半、追问接续（多轮对话的「下半句」）
+ * ========================================================== */
+
+/**
+ * 把用户对**追问**的回应合并进原槽位。
+ *
+ * ── 为什么必须有这个函数 ──────────────────────────────────────
+ * 追问「打算投入多少」之后，用户回「每周 3 次、每次 2 小时」——
+ * 这句话单独看**不是**一个动作句（没有目标名词、没有第一人称），
+ * `looksLikeAction` 判 false 是**对的**；错的是此前没人记得「上一句在等答案」，
+ * 于是这句话掉进 RAG 问答，被记忆层里的别的内容带偏。
+ *
+ * 规则：
+ *  ① **只填 `prev.missing` 里的槽位** —— 已听懂的字段不允许被一句碎片回答改写
+ *     （与纪律①「规则抽到的不被覆盖」同源：已确认的槽位是规则的产物）。
+ *  ② 回应里**没有任何缺口相关的内容** → `contributed=false`，调用方按普通消息分流。
+ *     「图书馆几点开门」不是答案，别硬吃。
+ *  ③ 合并后重算 `missing`（这是唯一的完备性判定，别处不许再写一份）。
+ */
+export function applyClarifyAnswer(
+  q: string,
+  prev: IntentSlots,
+  today?: string,
+): { slots: IntentSlots; contributed: boolean } {
+  const reply = parseIntentSlots(q, today);
+  const out: IntentSlots = { ...prev };
+  let contributed = false;
+
+  // title：回应里抽得到更具体的名字才收（「就叫高数吧」这种我们目前抽不到，不强求）
+  if (prev.missing.includes('title') && reply.title) {
+    out.title = reply.title;
+    contributed = true;
+  }
+
+  // when：回应给了时间表达才收（「十月开始吧」「下周三」）
+  if (prev.missing.includes('when') && reply.when) {
+    out.when = reply.when;
+    if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+    if (reply.dateTo) out.dateTo = reply.dateTo;
+    out.certainty = reply.certainty;
+    contributed = true;
+  }
+
+  // effort：节奏（每周 N 次 / 每次 M 分钟）或总量（一共 N 小时）居其一即算补了一块。
+  // ⚠️ 补一半（只给了「每次 1 小时」没给次数）也算 contributed —— 剩下的缺口重新追问，
+  //    而不是把用户给的半份信息扔掉再问一遍全量。
+  if (prev.missing.includes('effort')) {
+    if (reply.perWeekCount != null && out.perWeekCount == null) {
+      out.perWeekCount = reply.perWeekCount;
+      contributed = true;
+    }
+    if (reply.durationMin != null && out.durationMin == null) {
+      out.durationMin = reply.durationMin;
+      contributed = true;
+    }
+    if (reply.totalHours != null && out.totalHours == null) {
+      out.totalHours = reply.totalHours;
+      contributed = true;
+    }
+  }
+
+  // target：换/取消场景下「就动高数复习那一块」
+  if (prev.missing.includes('target') && reply.targetHint) {
+    out.targetHint = reply.targetHint;
+    contributed = true;
+  }
+
+  out.missing = missingSlots(out);
+  return { slots: out, contributed };
 }
 
 /* ============================================================
