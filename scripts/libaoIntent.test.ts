@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyClarifyAnswer,
   describeSlots,
   detectIntent,
   extractEffort,
@@ -332,4 +333,63 @@ test('回显：把听懂的与没听懂的都说清楚（用户要能一眼核�
   assert.match(lines, /数学建模/);
   assert.match(lines, /九月中旬/);
   assert.match(lines, /待定/);
+});
+
+/* ============================================================
+ * 七、追问接续（applyClarifyAnswer）
+ * 🔴 2026-09-20 真实翻车回归：用户说「帮我安排10月2号的数学建模比赛备赛计划」
+ *    → 梨宝正确追问「打算投入多少」→ 用户回「每周 3 次、每次 2 小时」
+ *    → 这句不是动作句 → 掉进 RAG 问答被记忆带偏，日程一个块都没排。
+ * ========================================================== */
+
+/** 翻车现场第一句（逐字） */
+const CLARIFY_SEED = parseIntentSlots('帮我安排10月2号的数学建模比赛备赛计划', TODAY);
+
+test('追问接续：节奏式回答「每周 3 次、每次 2 小时」补齐 effort，missing 清空', () => {
+  assert.ok(CLARIFY_SEED.missing.includes('effort'), '种子句应缺 effort');
+
+  const { slots, contributed } = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  assert.equal(contributed, true, '回答没被接住 —— 这就是翻车的根因');
+  assert.equal(slots.perWeekCount, 3);
+  assert.equal(slots.durationMin, 120);
+  assert.deepEqual(slots.missing, [], '补完还留缺口 = 白追问一轮');
+  assert.equal(slots.title, CLARIFY_SEED.title, '已听懂的 title 不许被改写');
+  assert.equal(slots.when?.text, CLARIFY_SEED.when?.text, '已听懂的 when 不许被改写');
+});
+
+test('追问接续：总量式回答「一共20小时」同样补齐', () => {
+  const { slots, contributed } = applyClarifyAnswer('一共20小时', CLARIFY_SEED, TODAY);
+  assert.equal(contributed, true);
+  assert.equal(slots.totalHours, 20);
+  assert.deepEqual(slots.missing, []);
+});
+
+test('追问接续：补一半也算数 —— 只给单次时长，剩下缺口继续追问', () => {
+  const { slots, contributed } = applyClarifyAnswer('每次 1 小时', CLARIFY_SEED, TODAY);
+  assert.equal(contributed, true, '半份信息被扔掉 = 用户重说一遍全量，体验崩坏');
+  assert.equal(slots.durationMin, 60);
+  assert.ok(slots.missing.includes('effort'), '节奏不完整时 effort 仍算缺');
+});
+
+test('追问接续：答非所问不硬吃（contributed=false，交回普通分流）', () => {
+  for (const noise of ['图书馆几点开门', '帮我看看这周忙不忙']) {
+    const { contributed } = applyClarifyAnswer(noise, CLARIFY_SEED, TODAY);
+    assert.equal(contributed, false, `「${noise}」不该被当成追问的答案`);
+  }
+});
+
+test('追问接续：回应里给时间也能补 when 槽（「十月开始吧」）', () => {
+  const seed = parseIntentSlots('我要报名数学建模，帮我规划备赛', TODAY);
+  assert.ok(seed.missing.includes('when'));
+
+  const { slots, contributed } = applyClarifyAnswer('十月中旬开始吧', seed, TODAY);
+  assert.equal(contributed, true);
+  assert.ok(slots.when, 'when 没被补上');
+  assert.ok(!slots.missing.includes('when'));
+});
+
+test('追问接续：确定性 —— 同输入同输出', () => {
+  const a = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  const b = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  assert.deepEqual(a, b);
 });
