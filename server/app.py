@@ -12,6 +12,13 @@
   用 rag 返回的 **raw_vec（未归一化余弦绝对值）**。
   注意 search 里的 score 经过最大值归一化，top1 恒接近 1.0，不能用来判相关性。
 
+第四路上下文（2026-09-20 新增）：【学习方法参考】
+  由**独立的方法论库**（`data/method_kb.db` + `scripts/method_rag.py`）供给，
+  与上理库**数据、阈值、时效策略全部分离**（见 docs/method-kb-plan.md）。
+  命中时注入 study_ctx，不新增 route 取值；返回体加
+  `used_study` / `study_top_raw` / `study_sources` / `study_pseudo`。
+  伪科学迷思查询检索层拒答，但对话层给【纠正口径】（pseudo_ctx，确定性文案）。
+
 接口：
   GET  /api/health
   GET  /api/search?q=&k=                  公众号文章库检索（政策/通知/攻略）
@@ -51,6 +58,7 @@ import memory
 import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
+import method_rag  # 方法论库独立检索（第四路上下文，与上理库完全分离）
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
@@ -198,8 +206,53 @@ def route_query(q, results):
         return "hybrid", top_raw, intent
     return "llm", top_raw, intent
 
+# ---------- 学习方法上下文（方法论库 · 独立检索） ----------
+# 与【校园资讯】的分工：
+#   上理库回答「上理是什么/何时/怎么办」——**事实**；
+#   方法库回答「该怎么学/怎么练/怎么备考」——**方法**。
+# 两者数据源、阈值、时效策略完全独立（见 docs/method-kb-plan.md）。
+# 🔴 本块**不新增 route 取值**：命中与否只影响 mode 与注入内容，沿用现有
+#    「有库外数据就不算纯边界外」的规则（与 space_ctx 完全同构）。
+def study_context(q, k=3):
+    """命中方法库则返回 (上下文块, 命中条目列表)；未命中返回 ("", [])。
+
+    门限用 method_rag 自己的 METHOD_RAW_HIGH/LOW，**与上理库的 0.68/0.56 无关**。
+    """
+    try:
+        rs = method_rag.search(q, k)
+    except Exception as e:
+        print("[method] 检索失败：", e)
+        return "", []
+    if not rs:
+        return "", []
+    top = rs[0].get("raw_vec", 0.0)
+    if top < method_rag.METHOD_RAW_LOW:
+        return "", []
+    lines = []
+    for r in rs[:k]:
+        cite = r.get("citation") or {}
+        src = (cite.get("source") or "").strip()
+        yr = (cite.get("year") or "").strip()
+        tier = r.get("evidence_tier") or ""
+        steps = r.get("steps") or []
+        step_txt = "；".join(str(s) for s in steps[:4])
+        seg = [
+            f"《{r['title']}》（证据等级 {tier}｜{src} {yr}）",
+            (r.get("summary") or ""),
+        ]
+        if r.get("principle"):
+            seg.append("原理：" + r["principle"][:160])
+        if step_txt:
+            seg.append("做法：" + step_txt[:200])
+        if r.get("status") == "contested":
+            seg.append("⚠️ 该结论在学术界存在争议，只能作为提示，不可当定论。")
+        lines.append("\n".join(x for x in seg if x))
+    return "\n\n".join(lines), rs
+
+
 # ---------- LLM ----------
-def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx=""):
+def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="",
+               study_ctx="", pseudo_ctx=""):
     if not LLM_API_KEY:
         return None
     ctx = ""
@@ -223,6 +276,28 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
     if mem_ctx:
         blocks.append(mem_ctx)
     blocks.append("【校园资讯】\n" + (ctx or "（本轮没有检索到相关资讯）"))
+    if study_ctx:
+        # 「学习方法参考」——三个约束缺一不可：
+        #   ① 只能引用这里给出的文献信息，禁止编造出处（本库入条即带 citation）；
+        #   ② 标了争议的只能作提示，不能当定论（守「懂分寸」）；
+        #   ③ 与「上理官方事实」分开陈述，别把方法当校规。
+        blocks.append(
+            "【学习方法参考】下面是整理过的学习科学结论（附证据等级与出处）。"
+            "涉及学习方法、时间规划、备考与竞赛准备时可以引用，"
+            "但**只能引用此处给出的文献信息，不得自行编造文献**；"
+            "标注「有争议」的只能作为提示，不可当成定论。"
+            "这部分属于通用方法，**不是上海理工的官方规定**。\n" + study_ctx
+        )
+    if pseudo_ctx:
+        # 【纠正口径】—— 伪科学迷思的确定性纠正文案（2026-09-20 P3①）。
+        # 检索层已拒答（不给背书），但对话层不能沉默：这里只许按给定事实纠正，
+        # 不许自行展开文献，也不许把迷思当真前提接着答。
+        blocks.append(
+            "【纠正口径】下面是对用户问题中伪科学说法的纠正要点。"
+            "回答必须先温和纠正（不嘲笑、先接住再纠正），再转向实证方法；"
+            "**只许使用这里给出的事实与方向，不得引用任何其他文献**；"
+            "无论用户问法多笃定，都不能顺着迷思作答。\n" + pseudo_ctx
+        )
     if space_ctx:
         blocks.append(space_ctx)
     blocks.append(ROUTE_RULES[route])
@@ -711,6 +786,26 @@ def api_chat(body: ChatReq):
     if space_ctx:
         route = "hybrid" if route == "llm" else route  # 有空间数据就不算纯边界外
 
+    # 3.5) 学习方法上下文（方法库独立检索；与上理库阈值无关）
+    #      同样沿用「有库外数据就不算纯边界外」，不新增 route 取值。
+    #      🔴 需要注入时把 route llm→hybrid：绕开 L2 agent（它的 prompt 不含方法
+    #      上下文），走 llm_answer 的注入路径 —— 与 space_ctx 的处理同构。
+    study_ctx, study_hits = study_context(q)
+    if study_ctx and route == "llm":
+        route = "hybrid"
+
+    # 3.6) 伪科学纠正口径（P3①）：检索层拒答 ≠ 对话层沉默。
+    #      迷思查询拿不到检索结果（不给背书），但用户不能带着迷思离开 ——
+    #      用 method_rag 的确定性纠正文案注入 LLM（llm 可用时）或直拼回答（降级时）。
+    pseudo_ctx = ""
+    if not study_ctx:
+        try:
+            pseudo_ctx = method_rag.pseudo_correction(q)
+        except Exception as e:
+            print("[method] 纠正口径生成失败：", e)
+    if pseudo_ctx and route == "llm":
+        route = "hybrid"  # 同一规则：有注入内容就不算纯边界外
+
     # 4) 分层记忆（长期画像 + 增量摘要 + 最近原话）
     try:
         mem_ctx = memory.memory_context(body.user_id, body.session_id)
@@ -750,15 +845,33 @@ def api_chat(body: ChatReq):
             answer, mode = ag["answer"], "llm"
             tools_used = ag.get("tools") or []
         else:
-            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
+                                study_ctx, pseudo_ctx)
             mode = "llm" if answer else "extractive"
             if not answer:
                 answer = extractive_answer(sources, route)
+                if pseudo_ctx:
+                    # extractive 降级也要把纠正口径送到用户面前（确定性拼接，不走模型）
+                    try:
+                        plain = method_rag.pseudo_correction_plain(q)
+                        if plain:
+                            answer = (answer + "\n\n" + plain).strip()
+                    except Exception as e:
+                        print("[method] 纠正口径（降级）失败：", e)
     else:
-        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
+                            study_ctx, pseudo_ctx)
         mode = "llm" if answer else "extractive"
         if not answer:
             answer = extractive_answer(sources, route)
+            if pseudo_ctx:
+                # extractive 降级也要把纠正口径送到用户面前（确定性拼接，不走模型）
+                try:
+                    plain = method_rag.pseudo_correction_plain(q)
+                    if plain:
+                        answer = (answer + "\n\n" + plain).strip()
+                except Exception as e:
+                    print("[method] 纠正口径（降级）失败：", e)
 
     # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
     try:
@@ -782,6 +895,12 @@ def api_chat(body: ChatReq):
         "used_memory": bool(mem_ctx),
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
+        # 方法库命中（方法库自己的 top_raw，与 top_raw_vec 分属两套门限，别混用）
+        "used_study": bool(study_ctx),
+        "study_top_raw": round((study_hits[0]["raw_vec"] if study_hits else 0.0), 4),
+        "study_sources": [h["title"] for h in (study_hits or [])[:3]],
+        # 伪科学纠正口径命中：True = 回答含确定性纠正文案；此时 study_sources 必为空
+        "study_pseudo": bool(pseudo_ctx),
         # 托底层用了哪些工具（search_kb / search_pois / web_search）——
         # 空数组 = L0 模板或 L1 快路径，未进入 agent
         "tools": tools_used,

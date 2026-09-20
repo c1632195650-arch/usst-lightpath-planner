@@ -1,0 +1,50 @@
+{"id": "m-normal-01", "category": "normal", "q": "背了就忘，隔多久复习一次才科学", "expect": {"any_of": ["spacing-effect", "spaced-repetition-tool"]}}
+{"id": "m-normal-02", "category": "normal", "q": "做题看答案都会，一到考试就不会", "expect": {"any_of": ["retrieval-practice", "desirable-difficulty", "deliberate-practice"]}}
+{"id": "m-normal-03", "category": "normal", "q": "学完一章总是记不牢怎么巩固", "expect": {"any_of": ["retrieval-practice", "spacing-effect"]}}
+{"id": "m-normal-04", "category": "normal", "q": "学一会儿就累，专注撑不了多久", "expect": {"any_of": ["pomodoro", "ultradian-rhythm", "deep-work"]}}
+{"id": "m-normal-05", "category": "normal", "q": "写作业总想刷手机，怎么才能长时间专注", "expect": {"any_of": ["deep-work", "environment-design", "pomodoro"]}}
+{"id": "m-normal-06", "category": "normal", "q": "熬夜背的书第二天全忘了", "expect": {"any_of": ["sleep-memory-consolidation"]}}
+{"id": "m-normal-07", "category": "normal", "q": "几门课的作业和社团挤在一起，时间怎么排", "expect": {"any_of": ["time-blocking", "eisenhower-matrix"]}}
+{"id": "m-normal-08", "category": "normal", "q": "事情太多分不清轻重缓急", "expect": {"any_of": ["eisenhower-matrix", "time-blocking"]}}
+{"id": "m-normal-09", "category": "normal", "q": "笔记抄完从来不看，等于白记", "expect": {"any_of": ["cornell-notes", "note-taking-active"]}}
+{"id": "m-normal-10", "category": "normal", "q": "教材读完就忘，怎么读才有效", "expect": {"any_of": ["sq3r", "elaborative-interrogation", "note-taking-active"]}}
+{"id": "m-normal-11", "category": "normal", "q": "总是拖到截止日期前一晚才动工", "expect": {"any_of": ["procrastination-regulation", "implementation-intentions"]}}
+{"id": "m-normal-12", "category": "normal", "q": "计划做得很好但从不执行", "expect": {"any_of": ["implementation-intentions", "habit-formation-loop"]}}
+{"id": "m-normal-13", "category": "normal", "q": "高数这种理科学科应该怎么学", "expect": {"any_of": ["science-math-method"]}}
+{"id": "m-normal-14", "category": "normal", "q": "工科专业课概念太抽象记不住", "expect": {"any_of": ["engineering-method", "dual-coding"]}}
+{"id": "m-normal-15", "category": "normal", "q": "想参加数学建模比赛，现在要怎么准备", "expect": {"any_of": ["mcm-playbook", "deliberate-practice"]}}
+{"id": "m-normal-16", "category": "normal", "q": "数模比赛三天怎么安排时间", "expect": {"any_of": ["mcm-3day-timeline", "mcm-playbook"]}}
+{"id": "m-normal-17", "category": "normal", "q": "竞赛队伍分工不合理，总有人摆烂", "expect": {"any_of": ["team-project-management"]}}
+{"id": "m-normal-18", "category": "normal", "q": "写报告找不到参考文献，去哪搜", "expect": {"any_of": ["literature-search"]}}
+{"id": "m-normal-19", "category": "normal", "q": "实验报告不会设计对照组", "expect": {"any_of": ["experiment-design"]}}
+{"id": "m-normal-20", "category": "normal", "q": "期末考试前怎么复习效率最高", "expect": {"any_of": ["exam-strategy"]}}
+{"id": "m-edge-01", "category": "edge", "q": "怎么记笔记", "expect": {"any_of": ["cornell-notes", "zettelkasten", "note-taking-active"]}}
+{"id": "m-edge-02", "category": "edge", "q": "考前一周怎么安排", "expect": {"any_of": ["exam-strategy", "mock-exam-analysis", "stress-performance"]}}
+{"id": "m-edge-03", "category": "edge", "q": "模考成绩忽高忽低", "expect": {"any_of": ["mock-exam-analysis", "stress-performance"]}}
+{"id": "m-edge-04", "category": "edge", "q": "单词背了就忘", "expect": {"any_of": ["spacing-effect", "spaced-repetition-tool"]}}
+{"id": "m-edge-05", "category": "edge", "q": "一到大型考试就紧张发挥失常", "expect": {"any_of": ["stress-performance", "flow"]}}
+{"id": "m-edge-06", "category": "edge", "q": "完全提不起学习的劲", "expect": {"any_of": ["self-determination-theory", "procrastination-regulation", "flow"]}}
+{"id": "m-edge-07", "category": "edge", "q": "想养成早起的习惯总失败", "expect": {"any_of": ["habit-formation-loop", "implementation-intentions", "environment-design"]}}
+{"id": "m-edge-08", "category": "edge", "q": "早上学还是晚上学效率高", "expect": {"any_of": ["circadian-chronotype"]}}
+{"id": "m-edge-09", "category": "edge", "q": "怎么判断自己是不是真的学会了", "expect": {"any_of": ["metacognitive-monitoring", "feynman-technique"]}}
+{"id": "m-edge-10", "category": "edge", "q": "复习该看书还是做题", "expect": {"any_of": ["retrieval-practice", "desirable-difficulty"]}}
+{"id": "m-edge-11", "category": "edge", "q": "文科课程怎么学", "expect": {"any_of": ["humanities-method"]}}
+{"id": "m-edge-12", "category": "edge", "q": "参加竞赛要提前练什么", "expect": {"any_of": ["deliberate-practice", "mcm-playbook"]}}
+{"id": "m-adv-01", "category": "adversarial", "kind": "pseudo_reject", "q": "我是不是应该专门开发右脑来学数学", "expect": {"reject": true}}
+{"id": "m-adv-02", "category": "adversarial", "kind": "pseudo_reject", "q": "测一下我是视觉型还是听觉型学习者", "expect": {"reject": true}}
+{"id": "m-adv-03", "category": "adversarial", "kind": "pseudo_reject", "q": "听莫扎特音乐能不能提升智力", "expect": {"reject": true}}
+{"id": "m-adv-04", "category": "adversarial", "kind": "pseudo_reject", "q": "有没有办法把大脑利用率提到百分之百", "expect": {"reject": true}}
+{"id": "m-adv-05", "category": "adversarial", "kind": "pseudo_reject", "q": "学习金字塔说听讲只有百分之五的留存率是真的吗", "expect": {"reject": true}}
+{"id": "m-adv-06", "category": "adversarial", "kind": "pseudo_reject", "q": "七天速成建模大佬的网课靠谱吗", "expect": {"reject": true}}
+{"id": "m-adv-07", "category": "adversarial", "kind": "trap_hit", "q": "番茄钟必须是25分钟吗，能不能改", "expect": {"any_of": ["pomodoro"]}}
+{"id": "m-adv-08", "category": "adversarial", "kind": "trap_hit", "q": "一万小时定律是不是随便练够时间就行", "expect": {"any_of": ["deliberate-practice", "desirable-difficulty"]}}
+{"id": "m-adv-09", "category": "adversarial", "kind": "trap_hit", "q": "考前紧张是不是坏事", "expect": {"any_of": ["stress-performance"]}}
+{"id": "m-adv-10", "category": "adversarial", "kind": "trap_hit", "q": "题刷得越多越好吗", "expect": {"any_of": ["interleaving", "deliberate-practice", "retrieval-practice"]}}
+{"id": "m-out-01", "category": "out_of_kb", "q": "学校有没有星巴克", "expect": {"reject": true}}
+{"id": "m-out-02", "category": "out_of_kb", "q": "三教在哪个位置", "expect": {"reject": true}}
+{"id": "m-out-03", "category": "out_of_kb", "q": "图书馆几点开门", "expect": {"reject": true}}
+{"id": "m-out-04", "category": "out_of_kb", "q": "奖学金怎么申请", "expect": {"reject": true}}
+{"id": "m-out-05", "category": "out_of_kb", "q": "今天下雨吗", "expect": {"reject": true}}
+{"id": "m-out-06", "category": "out_of_kb", "q": "快递在哪取", "expect": {"reject": true}}
+{"id": "m-out-07", "category": "out_of_kb", "q": "食堂哪个窗口好吃", "expect": {"reject": true}}
+{"id": "m-out-08", "category": "out_of_kb", "q": "附近有什么奶茶店好喝", "expect": {"reject": true}}

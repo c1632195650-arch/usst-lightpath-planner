@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
-import { currentWeekNo } from '@/lib/date';
+import type { UserTask } from '@/lib/planner/templates';
+import { currentWeekNo, todayISO } from '@/lib/date';
 import { lbaoChat, lbaoHealth, type ChatResult, type RagSource } from '@/lib/api';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
+import { parseGoalIntent, describeSlots } from '@/features/libao/libaoIntent';
+import {
+  checkGoalFeasibility,
+  describeVerdict,
+  goalToTasks,
+  methodAdviceForChat,
+  planWeekForChat,
+  summarizeWeekPlan,
+} from '@/features/libao/weekPlanForChat';
+import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan } from '@/features/week/userPlanStore';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 
 /** DEV 专用：把「已经拿回来、但一直没人看」的检索与路由信号显示出来。
@@ -24,21 +34,26 @@ interface Msg {
   /** 后端这一轮的完整元数据（route / intent / top_raw_vec / used_* / 耗时）。
    *  只用于 DEV 调试抽屉 —— 见本目录 ChatDebug.tsx 的说明。 */
   debug?: ChatResult;
+  /** 目标草稿卡的确认键 —— 有值且 `pending` 里还有对应草稿时，渲染「就这么排」按钮。
+   *  确认前**什么都不写入**：草稿只是草稿，执行权在用户手里（core §4 L4）。 */
+  goalAsk?: number;
+}
+
+/** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。 */
+interface PendingGoal {
+  title: string;
+  tasks: UserTask[];
+  weekNo: number;
 }
 
 /** 常见问法，避免第一次进入对话没有入口。 */
-const QUICK = ['四六级什么时候报名', '怎么选课和重修', '帮我安排这周', '这学期放假安排'];
+const QUICK = ['四六级什么时候报名', '帮我安排这周', '我要报名数学建模，帮我规划备赛', '这学期放假安排'];
 
 /** 对话初始说明，明确问答与排程两个能力。 */
-const GREETING = '我是梨宝，咱上理的校园助手。你可以问四六级、选课、放假、报到等校园问题，也可以说「帮我安排这周」，我会结合你的画像和课表给出建议。';
-
-/** 推荐意图识别：安排/规划类走真排程，其余走 RAG 问答。 */
-function isRecommendIntent(q: string): boolean {
-  const s = q.trim();
-  if (/(安排|规划|计划一下|怎么过|排一下|帮我排|给我排)/.test(s)) return true;
-  if (/(这周|本周|今天|明天|后天|周末)/.test(s) && /(怎么|干嘛|做啥|干点|过|安排)/.test(s)) return true;
-  return false;
-}
+const GREETING =
+  '我是梨宝，咱上理的校园助手。可以问四六级、选课、放假等校园问题；也可以说「帮我安排这周」，'
+  + '或者直接说要做什么（比如「我要报名数学建模，九月中旬比赛，帮我规划备赛」）——'
+  + '我会先排一版草稿给你确认，你不点头我不动日程。';
 
 /* ---------------- 对话身份 ----------------
  * 后端 `/api/chat` 早就接受 `session_id` / `user_id`，但前端此前**只发一个问题字符串**，
@@ -101,6 +116,10 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   const [online, setOnline] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  /** 待确认的目标草稿。键是消息下标递增号 —— 确认前不写任何状态。 */
+  const [pending, setPending] = useState<Record<number, PendingGoal>>({});
+  const pendingSeq = useRef(0);
+
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
     userId: deviceUserId(),
@@ -127,6 +146,36 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  /** 确认草稿：这一步才是**唯一**写日程的地方。
+   *  写之前压一份 undo 快照（与周计划页同一套机制），排错了能一键反悔。 */
+  const confirmGoal = (key: number) => {
+    const g = pending[key];
+    if (!g || g.tasks.length === 0) return;
+    try {
+      const layer = loadUserPlan();
+      pushUndoSnapshot(layer);
+      const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), layer.tasks);
+      saveUserPlan({ ...layer, tasks });
+      setPending((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `好，「${g.title}」写进第 ${g.weekNo} 周了，共 ${g.tasks.length} 个块。去周计划看全貌；排得不合适可以撤销（↩），也可以直接跟我说改。`,
+        goWeek: true,
+      }]);
+      track('plan_result', { ok: true, ms: 0, n: g.tasks.length });
+    } catch {
+      track('degrade', { id: 'goal-save-error' });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '写入日程的时候出了点小状况，没写成。草稿还在上面，你可以再点一次，或去周计划手动加。',
+      }]);
+    }
+  };
+
   /** 发送提问；排程意图在本地处理，其余交给校园资料问答。
    *
    *  埋点（`@/lib/telemetry`）只记**数字与枚举**，且只落本机：
@@ -139,12 +188,83 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     setMessages((current) => [...current, { role: 'user', text: q }]);
     setLoading(true);
 
-    /** 排程意图：走**真引擎**（与「周计划」页同源），只把结果要点化后回话。
-     *  这里刻意不调那套旧模板（`lib/lbao.ts` 里的 `lbaoRecommend`，已于 2026-09-19 删除）——
-     *  它是硬编码时间的（08:00/11:45/19:00），排出来会和周计划页对不上；
-     *  用户连着看两处就会发现，这就是「双轨」的破绽。 */
-    if (isRecommendIntent(q)) {
-      // 既无画像也无课表 → 没有可排的输入。说清楚缺什么，不假装能排。
+    /** 意图分流（`libaoIntent.ts`，规则优先、可测试）：
+     *  · 说得出**名字**的事 → 目标草稿路径（干跑把关 → 用户确认 → 落盘）；
+     *  · 泛泛的「安排/规划一下」（没有对象）→ 维持老行为：给这一周的建议；
+     *  · 都不是 → RAG 问答。
+     *  老的 `isRecommendIntent` 已被 `looksLikeAction` 取代 —— 后者是它的
+     *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
+    const today = todayISO();
+    const outcome = await parseGoalIntent(q, { today });
+
+    if (outcome.action && outcome.slots.title) {
+      const slots = outcome.slots;
+      const weekNo = currentWeekNo(schedule.termStart);
+      const t0 = Date.now();
+      try {
+        // 干跑把关：能不能排，由**引擎**说了算，不由 LLM 的嘴说了算
+        const verdict = checkGoalFeasibility({ slots, schedule, profile, weekNo, today });
+        track('plan_result', { ok: true, ms: Date.now() - t0 });
+
+        const lines = [...describeSlots(slots), ...describeVerdict(verdict)];
+
+        if (verdict.kind === 'needs_clarification') {
+          // 信息不全 → 只追问，绝不动手。猜一个排进去，比慢一轮更糟。
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: `想把「${slots.title}」排进日程，我还得问两句：`,
+            planPoints: verdict.questions,
+          }]);
+          setLoading(false);
+          return;
+        }
+
+        if (verdict.kind === 'ok' || verdict.kind === 'tight') {
+          // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
+          const key = (pendingSeq.current += 1);
+          setPending((p) => ({ ...p, [key]: {
+            title: slots.title,
+            tasks: goalToTasks(slots, schedule, today),
+            weekNo,
+          } }));
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: verdict.kind === 'ok'
+              ? `「${slots.title}」我排了一版草稿（还没写进日程）：`
+              : `「${slots.title}」排得下，但会紧一点。草稿在这（还没写进日程）：`,
+            planPoints: lines,
+            goalAsk: key,
+            goWeek: true,
+          }]);
+          setLoading(false);
+          return;
+        }
+
+        // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: verdict.kind === 'conflict'
+            ? `「${slots.title}」这么排会撞车：`
+            : `「${slots.title}」我排不进去：`,
+          planPoints: lines,
+          goWeek: true,
+        }]);
+      } catch {
+        track('degrade', { id: 'goal-engine-error' });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
+          goWeek: true,
+        }]);
+      }
+      setLoading(false);
+      return;
+    }
+
+    if (outcome.action) {
+      /** 泛泛的「帮我安排这周」→ 老路径（一周建议）。
+       *  这里维持原样，是因为用户没点名任何一件具体的事 ——
+       *  追问「你要排什么」反而答非所问。 */
       if (!profile && schedule.courses.length === 0) {
         track('degrade', { id: 'plan-no-input' });
         setMessages((current) => [...current, {
@@ -164,7 +284,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         setMessages((current) => [...current, plan ? {
           role: 'lbao',
           text: `第 ${weekNo} 周我按你的课表排了一版，你懂我意思吧：`,
-          planPoints: summarizeWeekPlan(plan),
+          // 排程要点（引擎事实）+ 方法建议（方法库编译参数，见 weekPlanForChat.methodAdviceForChat）。
+          // 两类都只提示不拍板 —— 「决策层不替用户做主」的边界在这里原样保持。
+          planPoints: [...summarizeWeekPlan(plan), ...methodAdviceForChat(schedule, profile, weekNo)],
           goWeek: true,
         } : {
           // 引擎排不了（该周不在学期范围）→ 直说，不编造日程
@@ -289,6 +411,25 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
                       <li key={i} className="text-[12.5px] leading-5 text-ink-soft">· {point}</li>
                     ))}
                   </ul>
+                )}
+
+                {/* 目标草稿卡：确认前不写任何状态 —— 执行权在用户手里 */}
+                {message.goalAsk != null && pending[message.goalAsk] && (
+                  <div className="flex gap-2 pl-1">
+                    <button onClick={() => confirmGoal(message.goalAsk!)} className="button-primary px-3 py-2 text-xs">
+                      就这么排
+                    </button>
+                    <button
+                      onClick={() => setPending((p) => {
+                        const next = { ...p };
+                        delete next[message.goalAsk as number];
+                        return next;
+                      })}
+                      className="rounded-xl border border-ink/15 px-3 py-2 text-xs text-ink-soft transition-colors hover:border-ink/30"
+                    >
+                      先不排
+                    </button>
+                  </div>
                 )}
 
                 {message.goWeek && (

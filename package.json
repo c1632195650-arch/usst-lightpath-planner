@@ -25,6 +25,7 @@
     "eval:all": "python evals/run.py --suite all",
     "eval:l3": "python evals/run.py --suite l3",
     "eval:engine": "python evals/run.py --suite engine",
+    "eval:method": "python evals/method/run.py --gate",
     "audit:transfer": "python scripts/audit_transfer.py",
     "verify:remote": "python scripts/verify_remote.py",
     "eval:report": "python evals/report.py",

@@ -33,8 +33,17 @@ const TRY_INDEX = ['/index.ts', '/index.tsx'];
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith('@/')) {
     const rel = specifier.slice(2);
-    const target = HAS_EXT.test(rel) ? rel : `${rel}.ts`;
-    return nextResolve(new URL(target, SRC).href, context);
+    // ⚠️ 点缀名（如 methodParams.generated）会被 HAS_EXT 误判为「已带扩展名」，
+    //    直接补 .ts 会失败；故先原样解析，失败再按序补扩展名/目录入口。
+    const candidates = HAS_EXT.test(rel)
+      ? [rel, `${rel}.ts`, `${rel}/index.ts`]
+      : [`${rel}.ts`, `${rel}/index.ts`];
+    for (const c of candidates) {
+      try {
+        return await nextResolve(new URL(c, SRC).href, context);
+      } catch { /* 试下一个 */ }
+    }
+    return nextResolve(new URL(rel, SRC).href, context);
   }
 
   if (specifier.startsWith('.') && !HAS_EXT.test(specifier)) {
