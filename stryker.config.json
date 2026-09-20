@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "node --import ./scripts/register-alias.mjs --test \"tests/**/*.test.ts\""
+  },
+  "mutate": [
+    "src/lib/planner/model.ts",
+    "src/lib/planner/objective.ts"
+  ],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": 60
+  },
+  "coverageAnalysis": "off",
+  "concurrency": 4,
+  "timeoutMS": 30000,
+  "tempDirName": ".stryker-tmp",
+  "incremental": true,
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/planner.html"
+  }
+}

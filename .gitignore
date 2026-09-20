@@ -39,6 +39,12 @@ desktop.ini
 # Vite 临时产物
 vite.config.ts.timestamp-*.mjs
 
+# 变异测试 / 契约模糊测试产物（2026-09-19）
+.stryker-tmp/
+stryker-incremental.json
+reports/mutation/
+st_out.txt
+
 # 日志
 *.log
 npm-debug.log*
@@ -72,3 +78,7 @@ _wx_raw4/
 data/libao_memory.db
 docs/_coverage_stat.json
 data/*.bak-*
+
+# Playwright 产物（视觉基线快照 e2e/**-snapshots 进仓库，运行产物不进）
+test-results/
+playwright-report/

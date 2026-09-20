@@ -108,6 +108,7 @@ def suite_l0():
         ("test_direct", "后端", f'"{PY}" scripts/test_direct.py'),
         ("test_rag", "后端", f'"{PY}" scripts/test_rag.py'),
         ("judge_rules", "评测", f'"{PY}" evals/test_judge_rules.py'),
+        ("test_privacy", "后端", f'"{PY}" scripts/test_privacy.py'),
         ("test:ui", "前端", "npm run test:ui"),
         ("test:engine", "前端", "npm run test:engine"),
         ("typecheck", "前端", "npm run typecheck"),
