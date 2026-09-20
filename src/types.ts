@@ -275,6 +275,8 @@ export interface TransferHint {
    * **不要把它当 `false` 用** —— 语义是「未知」，不是「估算」。
    */
   reliable?: boolean;
+  /** 数据来源，如 `'osm'` / `'campus-estimate'` / `'manual'`（2026-09-19 契约：评分按可信度打折依赖此字段） */
+  source?: string;
 }
 
 export interface TimeBlock {
@@ -348,6 +350,18 @@ export interface RollingState {
   upcoming: Array<{ id: string; title: string; dueAtWeek: number; urgency: number }>;
   /** 按星期几累计的负荷（长度 8；下标 1–7 有效，0 位留空） */
   loadByDow: number[];
+  /**
+   * 逐日可行性（0.6–1，下标 0..6 = 周一..周日）：某天计划的自习反复没做，
+   * 就对该天的自习目标打折（见 `planner/fatigue.ts`）。缺省 / 全 1 = 不调节。
+   * （2026-09-17 我方 #22 跨周滚动补入，融合时并回）
+   */
+  feasibleByDow?: number[];
+  /**
+   * **知识截止周** —— 这份滚动状态反映到第几周为止。
+   * 规则：只有 `throughWeek < 被排的周次` 时才把它喂给引擎，避免本周自指。
+   * （2026-09-17 我方 #22 跨周滚动补入，融合时并回）
+   */
+  throughWeek?: number | null;
 }
 
 /**
@@ -382,6 +396,13 @@ export interface PlanPersistState {
   updatedAt: string;
   /** 跨周负荷；null = 尚未积累 */
   rolling: RollingState | null;
+  /**
+   * 沉淀**当前周**滚动状态时所用的历史基线（= 上一周的 `rolling`）。
+   * 存基线是为了幂等：本周内任意次重算都从同一起点出发，避免 EWMA 叠加。
+   * 进入下一周后基线完成使命（`rolling.throughWeek < 新周次`，直接用 `rolling`）。
+   * （2026-09-17 我方 #22 跨周滚动补入，融合时并回）
+   */
+  rollingBase: RollingState | null;
 }
 
 /** 被锁块的最小位置快照（重排时用来把块写回原位） */

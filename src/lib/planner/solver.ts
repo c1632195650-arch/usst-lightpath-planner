@@ -23,6 +23,7 @@ import type { TransferProvider } from './campusLookup.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 import { evaluate } from './objective.ts';
 import { improve } from './improve.ts';
+import { fatigueAdjustment, weeklyStudyTarget } from './fatigue.ts';
 import {
   dirtyRegion, incrementalImprove, incrementalNotes, type IncrementalResult,
 } from './incremental.ts';
@@ -335,6 +336,12 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   const n = normalize(req, ctx);
   const { weights, config } = n;
 
+  // 跨周自适应（§4.4）：构造 / 改进 / 评分 / 解释必须共用同一份目标。
+  // 融合注记（2026-09-20）：Ray 的 ux-round4 分叉自 #22 合入之前，此处的接线在其
+  // 版本里缺失 —— 按 CY 裁决「引擎取舍全部用 Ray」，引擎逻辑保持 Ray 版，
+  // 但 dev 侧 #22 / PR-A / PR-B 的输入契约在此接回（rolling / scoring / transferTrust / transfer）。
+  const adj = fatigueAdjustment(req.policy, req.rolling);
+
   // `PlanRequest` 的可选字段允许 `null`（调用方（UI）手里常常是 `X | null`）。
   // 在这里一次性收敛成 `undefined`，下游（improve / evaluate / churn / 增量）
   // 就不必到处写 `?? undefined` —— 那些内部函数只关心「有 / 没有」，
@@ -434,6 +441,12 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
       lockLevels: effectiveLockLevels,
       previousPlan,
       config: req.config,
+      // dev 侧契约（#22 / PR-A / PR-B）： improve 必须与 evaluate 同口径，
+      // 否则 improve 会朝旧目标爬（实测会让 aware 口径白拿便宜）
+      rolling: n.req.rolling ?? undefined,
+      scoring: config.scoring,
+      transferTrust: config.transferTrust,
+      transfer: n.req.transfer ?? undefined,
     };
     /**
      * ④ 改进：有 `previousPlan` 时走**增量**（P2-T2.1 / §5.8），否则全量。
@@ -471,6 +484,11 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     previousPlan,
     // T9：诊断里的 cost 必须和 improve 用同一套锁级别，否则 churn 分项对不上
     lockLevels: effectiveLockLevels,
+    // dev 侧契约（#22 / PR-A / PR-B）：与 improve 完全同口径
+    rolling: n.req.rolling ?? undefined,
+    scoring: config.scoring,
+    transferTrust: config.transferTrust,
+    transfer: n.req.transfer ?? undefined,
   });
   const hard = countHardViolations(plan);
 
@@ -493,9 +511,20 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     },
     hardViolations: hard.total,
     churnMin: cost.raw.churnMin,
+    // 有滚动数据才带上：这样「没启用自适应」与「启用了但不需要调节」可区分（fatigue.test ①）
+    fatigue: req.rolling
+      ? {
+        factor: adj.factor,
+        baseDailyMin: adj.baseDailyMin,
+        observedDailyMin: adj.observedDailyMin,
+        weeklyTargetMin: weeklyStudyTarget(req.policy, adj),
+        softenedDays: adj.softenedDays,
+      }
+      : undefined,
   };
 
-  const notes = [...ex.notes];
+  // 自适应说明排在求解器日志之前 —— 它解释的是「为什么目标变了」，优先级更高
+  const notes = [...ex.notes, ...adj.reasons];
   if (iterations > 0) {
     notes.push(`求解器跑了 ${iterations} 轮改进，接受了 ${acceptedCount} 处调整（成本降到 ${cost.total.toFixed(1)}）`);
   }
