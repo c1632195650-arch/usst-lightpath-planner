@@ -104,7 +104,9 @@ for q in ["三教附近有啥近的食堂吗", "学校附近有没有麦当劳",
     check(f"放行「{q}」", direct.try_direct(q) is None,
           "含附近/有啥 → 属于就近推荐，模板只答单个地点会答非所问")
 
-# ---- 2026-09-19 风格回归（《梨宝语言风格规范》：规则命中也拟人，但克制）----
+# ---- 2026-09-19 风格回归（《梨宝语言风格规范》docs/libao-style-guide.md：规则命中也拟人，但克制）----
+# 硬规则中可机械检验的全量断言。不可机械检验的（R3 数据核对 / R4 品类 / R5 追问有据 /
+# R6 支撑度 / R7 揣测心情 / R9 烂梗）属 LLM 路由与判分器层面，归 test_libao / eval:libao 管辖。
 print("\n== 风格回归 · 多模板轮换 ==")
 STYLE_QS = ["学校有没有麦当劳", "学校有没有瑞幸", "学校有没有全家", "1906咖啡厅在哪",
             "第二食堂在哪", "第一食堂几点开门", "第五食堂几点开门", "学校有没有库迪",
@@ -122,6 +124,42 @@ tails = {a["answer"].splitlines()[-1] for a in s_ans if a}
 check("风格回归：开头句式跨问题有变化（≥2 种）", len(heads) >= 2, f"实际 {len(heads)} 种：{sorted(heads)[:3]}")
 check("风格回归：收尾句跨问题有变化（≥2 种，含克制档收尾即止）", len(tails) >= 2,
       f"实际 {len(tails)} 种")
+
+# ---- 风格回归 · 规范硬规则的机械检验全量（覆盖全部模板池变体，不止抽到的样本）----
+print("\n== 风格回归 · 规范铁律（docs/libao-style-guide.md）机械检验 ==")
+import re as _re
+
+_POOLS = [direct._TAIL_POOL, direct._OPEN_EXIST, direct._OPEN_WHERE, direct._OPEN_HOURS]
+_pool_texts = [t for pool in _POOLS for tpl in pool for t in ([tpl] if "{n}" not in tpl else [tpl, tpl.format(n="第一食堂")])]
+_ans_texts = [(a or {}).get("answer", "") for a in s_ans]
+
+_HAS_MD = _re.compile(r"\*\*|__|`|#")
+_EMOJI = _re.compile("["
+                     "\U0001F000-\U0001FAFF"   # emoji 主块
+                     "\u2600-\u27BF"           # 杂项符号与箭头（☕ weather 类）
+                     "\u2B00-\u2BFF\uFE0F\u20E3"
+                     "]")
+
+check("铁律2：markdown 符号（** 等）在全部模板池变体中零出现",
+      not any(_HAS_MD.search(t) for t in _pool_texts), str(_pool_texts))
+check("铁律2：markdown 符号在 10 问答案中零出现",
+      not any(_HAS_MD.search(t) for t in _ans_texts))
+check("维度③：emoji 在全部模板池变体与答案中零出现（规范：10 选 0）",
+      not any(_EMOJI.search(t) for t in _pool_texts + _ans_texts))
+check("维度②：万能套话动作「掐指一算」不出现（动作必须贴题，宁缺毋滥）",
+      not any("掐指一算" in t for t in _pool_texts + _ans_texts))
+check("维度①：称呼不堆叠（单答案「宝子」至多 1 次，无「宝子宝子」）",
+      all(t.count("宝子") <= 1 and "宝子宝子" not in t for t in _ans_texts),
+      str([t[:40] for t in _ans_texts if t.count("宝子") > 1]))
+check("铁律1：核心优先 —— 每个答案首行就含所问实体（第一句答透核心对象）",
+      all(a and (a["entity"] in a["answer"].splitlines()[0]) for a in s_ans),
+      str([(a["entity"], a["answer"].splitlines()[0][:30]) for a in s_ans
+           if a and a["entity"] not in a["answer"].splitlines()[0]][:2]))
+check("铁律8：就近候选用步行分钟说话（「· 周边：」行必须是 `步行 N 分钟` 格式）",
+      all(_re.search(r"步行 \d+ 分钟", ln) for t in _ans_texts
+          for ln in t.splitlines() if ln.startswith("· 周边")),
+      str([ln for t in _ans_texts for ln in t.splitlines()
+           if ln.startswith("· 周边") and not _re.search(r"步行 \d+ 分钟", ln)][:2]))
 
 print("\n" + "=" * 60)
 print(f"汇总：{ok}/{ok + fail} 通过（{ok / (ok + fail) * 100:.1f}%）")

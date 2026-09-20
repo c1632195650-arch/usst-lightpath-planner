@@ -12,12 +12,15 @@
  *   3. npm run test:ui      → fail=0 且 pass ≥ 219
  *   4. 禁区文件             → src/features/week/、src/lib/planner/、src/lib/persona.ts、
  *                            src/components/ 下不得有任何改动（协作红线：这些是队友 RAY 的文件）
+ *   5. 风格规范漂移         → scripts/check_style_drift.py（E10）：梨宝语言规范入库后，
+ *                            app.py 人格注释 / direct.py 模板引用必须与规范同步（2026-09-21 加入）
  *
  * 用法：  node scripts/gate_overnight.mjs
  * 退出码：0 = 全绿；1 = 有门禁未过（输出会指明是哪一条）
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import os from 'node:os';
 
 const BASELINE = { engine: 312, ui: 219 };
 
@@ -97,6 +100,30 @@ for (const [script, key, floor] of [
     detail = '未检测到 .git，跳过（建议先做 P0-A 快照）';
   }
   results.push({ name: '禁区文件', ok, detail });
+}
+
+// ---- 5. 风格规范漂移（E10；python 按候选顺序解析，PATH 里没有 python 时兜底到 workbuddy 管理版）----
+{
+  const cands = [
+    'python',
+    String.raw`${os.homedir()}\.workbuddy\binaries\python\versions\3.13.12\python.exe`,
+  ];
+  let py = cands[0];
+  for (const c of cands) {
+    const probe = run(`"${c}" -c "print(1)"`);
+    if (probe.code === 0 && probe.out.trim() === '1') {
+      py = c;
+      break;
+    }
+  }
+  const { code, out } = run(`"${py}" scripts/check_style_drift.py`);
+  const tail = out.split('\n').filter(Boolean).slice(-3).join(' | ');
+  results.push({
+    name: '风格漂移',
+    ok: code === 0,
+    detail: code === 0 ? '规范与代码同步（check_style_drift 8 项全过）' : tail,
+    raw: out,
+  });
 }
 
 // ---- 汇总 ----

@@ -102,6 +102,8 @@ RAW_HIGH = float(os.environ.get("RAW_HIGH", "0.68"))   # 高置信：知识库�
 RAW_LOW = float(os.environ.get("RAW_LOW", "0.56"))     # 低于此：判定为知识库外
 
 # ---------- 梨宝人格 ----------
+# 同步自 docs/libao-style-guide.md v1（2026-09-19），改动需双写：
+# 规范文件与这里任一处修改，另一处必须同步，scripts/check_style_drift.py 会校验版本注释一致。
 LIBAO_PERSONA = """你是「梨宝」，一颗住在上海理工大学（USST）服务器里的「数字闷骚梨」——表面懒洋洋，内里很靠谱的校园生活助手。
 
 【人设内核】
