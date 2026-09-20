@@ -16,6 +16,7 @@
  * 纯函数：不读时钟、不 fetch，同输入必得同输出 —— 与 buildPhases / schedule 一致。
  */
 import type { Deadline } from '../../data/usst.ts';
+import type { Course } from '../../types.ts';
 import type { UserTask } from './templates.ts';
 import { addDays, currentWeekNo, diffDays, shortCN, weekdayOf } from '../date.ts';
 import { toMinutes } from '../../constants/time.ts';
@@ -94,6 +95,86 @@ export function expandDeadlines(
         note: `「${d.title}」${shortCN(d.date)}截止，还剩 ${left} 天 —— 提前动手，别赶最后一天`,
         fromEventId: d.id,
         fromEventTitle: d.title,
+        daysLeft: left,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 考试日 → 备考任务（expandExamPrep）
+ * ============================================================
+ * 与 `expandDeadlines` **同一条通道、同一套取样规则**，区别只在数据源：
+ *   · `expandDeadlines` 读 `DEADLINES`（校历事件，事件自带 `prep` 声明）
+ *   · `expandExamPrep`  读 `Course.examDate`（课程考试日，见 `types.ts` 的 `Course`）
+ *
+ * 为什么单独一个函数：`examDate` 是**裸日期**，没有「提前几天 / 每次多久 / 共几小时」
+ * 这些声明 —— 由这里给出**显式默认**（`EXAM_PREP_DEFAULTS`）并作为选项暴露，
+ * 调用方要改口径就传 options，别改常量（口径集中一处才可测）。
+ *
+ * 纯函数：不读时钟、不 fetch，同输入必得同输出。
+ */
+export interface ExamPrepOptions {
+  /** 提前动手的天数（窗口 = 考试日 − leadDays … 考试日） */
+  leadDays?: number;
+  /** 单块分钟数 */
+  blockMin?: number;
+  /** 每科备考总时长（小时） */
+  prepHours?: number;
+}
+
+/** 默认口径：考前两周半内铺 3 个 1 小时块（共 3h）。改这里 = 改产品口径，要同步测试。 */
+export const EXAM_PREP_DEFAULTS = { leadDays: 10, blockMin: 60, prepHours: 3 } as const;
+
+export function expandExamPrep(
+  courses: Course[],
+  termStart: string,
+  totalWeeks: number,
+  opts: ExamPrepOptions = {},
+): ExpandedTask[] {
+  const out: ExpandedTask[] = [];
+  if (!termStart) return out;
+
+  const leadDays = Math.max(1, Math.floor(opts.leadDays ?? EXAM_PREP_DEFAULTS.leadDays));
+  const blockMin = Math.max(15, Math.floor(opts.blockMin ?? EXAM_PREP_DEFAULTS.blockMin));
+  const prepHours = Math.max(0.5, opts.prepHours ?? EXAM_PREP_DEFAULTS.prepHours);
+  const nBlocks = Math.max(1, Math.ceil((prepHours * 60) / blockMin));
+
+  for (const c of courses) {
+    if (!c.examDate) continue; // 没有考试日 → 不产生备考块（不猜）
+    const windowStart = addDays(c.examDate, -leadDays);
+
+    // 取样规则与 expandDeadlines 完全一致（块数 ≤ 天数则均匀铺开，否则天天排）
+    const offsets = new Set<number>();
+    for (let i = 0; i < nBlocks; i++) {
+      const at = nBlocks >= leadDays ? i % leadDays : Math.floor((i * leadDays) / nBlocks);
+      offsets.add(Math.min(leadDays - 1, Math.max(0, at)));
+    }
+
+    for (const off of offsets) {
+      const date = addDays(windowStart, off);
+      const wk = currentWeekNo(termStart, date);
+      if (wk < 1 || wk > totalWeeks) continue; // 窗口落在学期外，跳过
+      const dow = isoToDayOfWeek(date);
+      const left = diffDays(date, c.examDate);
+      out.push({
+        // id 稳定：只与「课程 + 周次 + 星期」有关，不含时间 —— 锁定/去重要靠它
+        id: `ex-${c.id}-w${wk}d${dow}`,
+        title: `${c.name} 备考`,
+        emoji: '📝',
+        kind: 'activity',
+        category: 'custom',
+        dayOfWeek: dow,
+        weeks: [wk],
+        durationMin: blockMin,
+        // 优先级高于日常活动（88）—— 考试是硬交期，不该被「刷剧」挤掉
+        priority: 90,
+        essential: true,
+        notBeforeMin: EVENT_EARLIEST_MIN,
+        note: `${c.name} 考试 ${shortCN(c.examDate)}，还剩 ${left} 天 —— 提前准备，别堆到最后`,
+        fromEventId: `exam-${c.id}`,
+        fromEventTitle: `${c.name} 考试`,
         daysLeft: left,
       });
     }
