@@ -7,6 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
+  // 🔴 必须收窄依赖预构建的扫描入口：默认 Vite 会把仓库里**所有** .html 当入口扫，
+  // 于是 Newton/光谱排程_技术验证Demo.html 里的 importmap（'three' → jsDelivr CDN）
+  // 会被当成裸依赖去 node_modules 找，找不到就直接报错、dev server 起不来。
+  // 该 Demo 是独立单文件原型（靠浏览器 importmap 自解析），本来就不该进 Vite 构建。
+  // 症状具有欺骗性：`vite build` 一切正常，只有 dev server 挂 → CI 发现不了。
+  optimizeDeps: { entries: ['index.html'] },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
