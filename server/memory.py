@@ -385,6 +385,23 @@ def recent_messages(sid, k=RECENT_TURNS):
     c.close()
     return list(reversed(rows))
 
+def history_messages(sid, k=50):
+    """某会话最近 k 条消息（升序、带自增 id 与时间戳）—— 供前端跨会话恢复聊天记录。
+
+    与 recent_messages 的区别：这条给「恢复 UI」用，要 id（前端按 id 去重合并）
+    与 created_at（按天分组展示）；recent_messages 给 LLM 上下文用，越轻越好。
+    """
+    if k < 1:
+        return []
+    c = _conn()
+    rows = c.execute(
+        "SELECT id, role, content, created_at FROM messages WHERE session_id=? "
+        "ORDER BY id DESC LIMIT ?", (sid, k)
+    ).fetchall()
+    c.close()
+    return [{"id": r[0], "role": r[1], "content": r[2], "created_at": r[3]}
+            for r in reversed(rows)]
+
 # ---------- 对外：拼接三层记忆 ----------
 def remember(user_id, session_id, role, content):
     """落库 + 抽事实（分流回写）+ 按需增量压缩（一个入口搞定）。

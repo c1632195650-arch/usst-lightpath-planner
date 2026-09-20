@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO } from '@/lib/date';
-import { lbaoChat, lbaoHealth, decideFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
@@ -17,6 +17,7 @@ import {
 import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan } from '@/features/week/userPlanStore';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
+import { historyToMsgs, mergeHistory, RESTORE_CHAT } from '@/features/libao/chatRestore';
 
 /** DEV 专用：把「已经拿回来、但一直没人看」的检索与路由信号显示出来。
  *  `import.meta.env.DEV` 在生产构建里是字面量 false → 整段被摇掉，线上零变化。 */
@@ -42,6 +43,8 @@ interface Msg {
   proposals?: MemoryFact[];
   /** 已自动生效的偏好（M2）：出可撤销提示 */
   applied?: MemoryFact[];
+  /** 后端 messages 自增 id —— 只在从 history 恢复的行上存在（跨会话恢复 E8 的去重依据） */
+  mid?: number;
 }
 
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。 */
@@ -103,11 +106,16 @@ function currentSessionId(): string {
   }
 }
 
-/* ---------------- 聊天快照 ----------------
+/* ---------------- 聊天快照与跨会话恢复（E8） ----------------
  * 切 tab（总览/画像/课表）会把本组件**卸载**，组件内 state 全部蒸发 ——
- * 用户回来说「聊天记录没了」（2026-09-20 真实反馈）。把对话/草稿/追问态
- * 存 sessionStorage（与 session_id 同生命周期：关标签页才清），挂载时恢复。
- * 刻意不用 localStorage：聊天是会话产物，隔天回来从干净的问候语开始反而对。 */
+ * 用户回来说「聊天记录没了」（2026-09-20 真实反馈）。对策两层：
+ *  · 同标签页内：对话/草稿/追问态存 sessionStorage（与 session_id 同生命周期），
+ *    挂载时恢复 —— 解决「切 tab 丢失」；
+ *  · 关过标签页（快照没了）：挂载时拉 `GET /api/chat/history`，用后端一直存着的
+ *    messages 原文重建对话 —— 解决「隔天/重开浏览器丢失」。两条路在
+ *    chatRestore.ts 里合并去重（按角色+文本多重集，快照消息没有后端 id）。
+ *  开关 `RESTORE_CHAT`（chatRestore.ts）默认开；关掉即回到旧行为
+ *  「隔天从干净问候语开始」。用户随时可点「清空对话」重置（走 /api/memory/reset）。 */
 
 interface ChatSnapshot {
   messages: Msg[];
@@ -117,6 +125,8 @@ interface ChatSnapshot {
 }
 
 const CHAT_SNAPSHOT_KEY = 'usst.libao.chat.v1';
+/** 清空标记：本标签页内清空过后不再自动恢复（后端已删则历史本就为空，双保险） */
+const CHAT_CLEARED_KEY = 'usst.libao.chat.cleared';
 
 function loadChatSnapshot(): ChatSnapshot | null {
   try {
@@ -179,8 +189,54 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     sessionId: currentSessionId(),
   }));
 
+  /** 跨会话恢复（E8）：挂载时拉一次后端历史。
+   *  · 有快照 → 与历史合并去重（chatRestore.mergeHistory，快照没覆盖的更早消息排前面）；
+   *  · 无快照（关过标签页）→ 用历史重建对话（问候语让位给真实记录）；
+   *  · 后端没开 / 历史为空 → 什么都不动（本地快照或问候语就是全部）。
+   *  服务挂了静默降级：恢复是增强能力，不能因为它在聊天页报错。 */
+  useEffect(() => {
+    if (!RESTORE_CHAT) return;
+    let cleared = false;
+    try {
+      cleared = sessionStorage.getItem(CHAT_CLEARED_KEY) === '1';
+    } catch { /* 隐私模式读不到就当没清过 */ }
+    if (cleared) return;
+    let alive = true;
+    chatHistory(identity, 50)
+      .then(({ messages: rows }) => {
+        if (!alive || rows.length === 0) return;
+        setMessages((current) => (
+          boot
+            ? mergeHistory(current, rows)
+            // 无快照（关过标签页）→ 用历史重建；问候语让位给真实记录（点「清空对话」可取回）
+            : historyToMsgs(rows)
+        ));
+      })
+      .catch(() => { /* 后端不可用：维持现状，不打扰用户 */ });
+    return () => { alive = false; };
+    // 只在挂载时执行一次；identity 与 boot 都是惰性初始化的常量
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** 记忆面板开关（M3） */
   const [memoryOpen, setMemoryOpen] = useState(false);
+
+  /** 清空对话（E8 配套）：走现有 /api/memory/reset —— 删本会话全部原文/摘要，
+   *  并抹掉本设备的画像与事实（后端同一套语义，按钮文案如实告知范围）。
+   *  后端没开也照常清本地：残留在后端的记录会在下次挂载时被拉回来，
+   *  所以同时置 CLEARED 标记，本标签页内不再自动恢复。 */
+  const clearChat = async () => {
+    try {
+      await resetMemory(identity);
+    } catch { /* 服务未连接：本地照清，标记兜底 */ }
+    try {
+      sessionStorage.setItem(CHAT_CLEARED_KEY, '1');
+    } catch { /* 隐私模式写不进就算了 */ }
+    setPending({});
+    pendingSeq.current = 0;
+    setClarifySlots(null);
+    setMessages([{ role: 'lbao', text: GREETING }]);
+  };
 
   /** 用户档案摘要：画像轴值 + 本周课表 + 学期阶段 + 基础信息（M1）。
    *  每轮随请求发出，但只在 profile / schedule 变化时重算 —— 后端会把它注入 system prompt，
@@ -492,6 +548,15 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
             className="mb-3 w-full rounded-xl border border-white/15 px-3 py-2 text-left text-xs text-white/70 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white"
           >
             📓 梨宝记住了什么（查看 / 确认 / 删除）
+          </button>
+          {/* 清空对话（E8 配套）：恢复默认开启后给用户一个「从头开始」的出口。
+              范围 = 本会话记录 + 本设备记忆（/api/memory/reset 的真实语义），文案不美化。 */}
+          <button
+            onClick={clearChat}
+            disabled={loading}
+            className="mb-3 w-full rounded-xl border border-white/15 px-3 py-2 text-left text-xs text-white/70 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            🗑 清空对话与记忆（本设备，不可恢复）
           </button>
           {/* 未连接用琥珀而不是品牌靛蓝：靛蓝在这套色板里代表「正常 / 可操作」，
               拿它表示服务不可用会把告警读成常态。 */}

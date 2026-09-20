@@ -78,6 +78,34 @@ export function deleteFact(userId: string, id: number): Promise<{ ok: boolean }>
   return del(`/api/memory/facts/${id}?user_id=${encodeURIComponent(userId)}`);
 }
 
+/* ---------------- 跨会话恢复（E8） ----------------
+ * 后端一直在存 messages，但此前没有读取端点 —— 关掉标签页聊天记录就没了。
+ * 现在挂载时拉一次 history，与本地快照合并去重（逻辑在 features/libao/chatRestore.ts）。 */
+
+export interface ChatHistoryRow {
+  /** 后端 messages 自增 id —— 合并去重的依据 */
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+/** 某会话最近 N 条消息（升序）。后端不可用 / 没有记录时返回空数组。 */
+export function chatHistory(identity: ChatIdentity = {}, limit = 50): Promise<{ messages: ChatHistoryRow[] }> {
+  const uid = identity.userId ? `&user_id=${encodeURIComponent(identity.userId)}` : '';
+  const sid = identity.sessionId ? `&session_id=${encodeURIComponent(identity.sessionId)}` : '';
+  return get(`/api/chat/history?limit=${limit}${uid}${sid}`);
+}
+
+/** 清空对话与记忆：删该会话的全部原文/摘要，并抹掉该设备的画像与事实。
+ *  与后端 /api/memory/reset 同一套语义 —— 「清空」是破坏性操作，UI 上要如实告知范围。 */
+export function resetMemory(identity: ChatIdentity = {}): Promise<{ ok: boolean }> {
+  return post('/api/memory/reset', {
+    session_id: identity.sessionId ?? 'default',
+    user_id: identity.userId ?? 'anon',
+  });
+}
+
 export interface SearchResult {
   id: number;
   account: string;

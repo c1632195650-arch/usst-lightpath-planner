@@ -820,6 +820,31 @@ def reset_mem(body: ResetReq):
     c.commit(); c.close()
     return {"ok": True}
 
+@app.get("/api/chat/history")
+def api_chat_history(user_id: str = "anon", session_id: str = "default", limit: int = 50):
+    """跨会话恢复聊天记录（E8，2026-09-21）。
+
+    后端一直在存 messages（L0 短期原文），但没有读取端点 —— 前端聊天记录只在
+    sessionStorage 里，关标签页即丢（方案 §一 #14「半实现」）。本端点把已存的
+    原文按会话吐回去：升序、带自增 id（前端按 id/文本去重合并）与 created_at。
+
+    `user_id` 当前不参与过滤（messages 表按 session_id 归档），保留在契约里是给
+    将来「按用户隔离历史」留位置 —— 与 /api/chat 的身份契约对齐。
+    脱敏逻辑同 chat：库里存的是已脱敏文本，读出时**再过一遍** desensitize，
+    防止历史脏数据（旧版本落库的未脱敏内容）回流到前端。
+    """
+    limit = max(1, min(limit, 200))
+    try:
+        rows = memory.history_messages(session_id, limit)
+    except Exception as e:
+        print("[memory] history 查询失败：", e)
+        rows = []
+    return {"messages": [
+        {"id": r["id"], "role": r["role"],
+         "content": desensitize(r["content"] or ""), "created_at": r["created_at"]}
+        for r in rows
+    ]}
+
 # ---------------- 记忆面板（M2/M3）：事实的确认 / 拒绝 / 撤销 / 删除 ----------------
 # 原则（CY 2026-09-20 拍板）：
 #   · 客观事实（年级/学院/专业）一律要用户确认 —— AI 只提议；
