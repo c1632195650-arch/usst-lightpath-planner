@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "purpose": "空间数据库可靠性审计的**独立检核点证据**（脚本 scripts/audit_spatial_quality.py 的输入）",
+    "why_this_file": "位置精度必须用**独立来源**的检核点来测（NSSDA/ASPRS 口径）。本项目没有测绘级控制点，只有两个互相独立的商业/第三方来源可比对，故把结论如实降级为「指示性」。",
+    "compliance": "🔴 本文件**只存「偏差统计量」与实体名，不存任何第三方坐标**。第三方坐标不落盘（《高德地图开放平台服务协议》3.5 禁止存储/缓存服务数据；本项目另有「对外不返回经纬度」红线）。",
+    "standard": [
+      "ISO 19157 位置精度：绝对（外部）精度 / 相对（内部）精度",
+      "NSSDA + ASPRS Positional Accuracy Standards (2014)：",
+      "  RMSE_r = sqrt(Σ d_i² / n)",
+      "  ACCURACY_r(95%) = RMSE_r × 1.7308",
+      "硬约束：检核点须来自独立且更高精度源（≥ 目标精度的 3 倍），且 n ≥ 20 才够统计显著"
+    ],
+    "two_kinds": {
+      "reference": "更高精度的参照源 → 偏差 ≈ 我方误差，直接代入 RMSE_r",
+      "peer": "对等精度的另一套独立数据 → 两者之差含双方误差。若假设误差独立且量级相当，则 σ_我方 ≈ RMSE_差 / √2（本文件用这个换算）"
+    },
+    "date": "2026-09-18"
+  },
+  "sources": [
+    {
+      "id": "tencent_poi_gates",
+      "name": "腾讯地图 POI（校门门牌点）",
+      "kind": "reference",
+      "n_declared": 5,
+      "source_accuracy_m": 10,
+      "source_accuracy_note": "估计值 —— 商业 POI 点位常规精度 5~15 m，非测绘检定值。因此**不满足**「优于目标 20 m 的 1/3」这条硬约束。",
+      "method": "腾讯返回 GCJ-02，按快照自标定的偏移（经 −0.00426 / 纬 +0.00214）换算到 WGS-84，再与 data/osm/key_points.json 的 points 逐点比距离。",
+      "src_file": "data/osm/key_points.json → _meta.third_party（原始结论与反例都在那里）",
+      "per_point": [
+        { "name": "516号校门", "dev_m": 1.0 },
+        { "name": "470号校门", "dev_m": 4.0 },
+        { "name": "334号校门", "dev_m": 7.0 },
+        { "name": "580号校门（西南3门）", "dev_m": 9.0 },
+        { "name": "580号校门（西北门）", "dev_m": 20.0 }
+      ],
+      "caveat": "n=5 ≪ 20，**统计上不足以作为正式检定值** —— 按 USGS 实践，17 个检核点都还不够（原文：not statistically significant enough to report as a final tested value）。本项结论只能是「指示性」。"
+    },
+    {
+      "id": "senior_agree_stratum",
+      "name": "学长站（高德 JS API 解析的地点点）· 同一物体层",
+      "kind": "peer",
+      "n_declared": 9,
+      "source_accuracy_m": 15,
+      "source_accuracy_note": "估计值 —— 商业 API 解析的地点点通常 5~20 m。与我校手搓路网**量级相当**（非更高精度源）→ 按 peer 处理，做 √2 换算。",
+      "method": "对同一实体各自取点位，算两点间距离。**只保留两侧指同一物体的行**；两边指了不同物体的（同名两地）归入专题精度，见本文件 semantic_conflicts。",
+      "src_file": "outputs/eval_r2_spatial.json → cross_check（工作区 outputs/，未入库；本文件保存其派生统计量）",
+      "per_point": [
+        { "ours": "招生办", "dev_m": 1.6 },
+        { "ours": "校医室（卫生科）", "dev_m": 2.1 },
+        { "ours": "图书馆（图文信息中心）", "dev_m": 6.9 },
+        { "ours": "留学生公寓", "dev_m": 7.5 },
+        { "ours": "管理学院大楼", "dev_m": 13.9 },
+        { "ours": "外语楼（南校区）", "dev_m": 14.0 },
+        { "ours": "第五食堂", "dev_m": 20.7 },
+        { "ours": "中德学院", "dev_m": 27.1 },
+        { "ours": "动力馆", "dev_m": 27.4 }
+      ],
+      "caveat": "n=9。另：peer 比对假设「双方误差独立且量级相当」，这是**假设不是事实** —— 所以本文另给出「单点最大偏差」这种不依赖该假设的硬数字。"
+    },
+    {
+      "id": "senior_weak_anchor_stratum",
+      "name": "学长站 · 我方弱锚层（偏大需复核）",
+      "kind": "peer",
+      "n_declared": 4,
+      "source_accuracy_m": 15,
+      "source_accuracy_note": "同上（peer）。",
+      "method": "同上；这一层的共同点是**我方端是派生锚**（near_landmark / zone / walk_minutes），误差会累积。",
+      "src_file": "outputs/eval_r2_spatial.json → cross_check（verdict = 偏大需复核）",
+      "per_point": [
+        { "ours": "综合楼", "dev_m": 60.3, "our_source": "walk_minutes" },
+        { "ours": "理学院楼", "dev_m": 87.2, "our_source": "osm" },
+        { "ours": "先进制造大楼", "dev_m": 103.5, "our_source": "near_landmark" },
+        { "ours": "体育馆（体育活动中心）", "dev_m": 116.9, "our_source": "zone" }
+      ],
+      "caveat": "🔴 这一层**就是弱锚的代价**，也正是 P1-3「弱锚提锚」要打的靶子。它不该与实锚层混在一起算 RMSE —— 混算会把实锚的真实精度淹没。"
+    }
+  ],
+  "semantic_conflicts": {
+    "_why": "这 6 条**不是位置精度问题**，是**同名两地归属争议**（双方各自指了同名的另一个实体）。按 ISO 19157 属**专题精度 · 分类正确性**（DQ_ThematicClassificationCorrectness），归到位置精度里算 RMSE 会得出 267 m 这种假数字。",
+    "_resolution": "已给出结论的走实地核对定案（docs/field-check-2026-09-16.md）；未定案的保留在待办里，不用「改坐标」去掩盖。",
+    "items": [
+      { "ours": "外语楼", "theirs": "外语学院", "dev_m": 631.1, "nature": "同名两地：北校 vs 南校各有一个外语类单位" },
+      { "ours": "理学院楼", "theirs": "理学院", "dev_m": 586.9, "nature": "同名两地：他指北校理学院，我方条目在南校 334" },
+      { "ours": "医务室（南校区）", "theirs": "门诊部", "dev_m": 561.1, "nature": "我方同名词条混淆：他指的是北校那处门诊部" },
+      { "ours": "516号校门", "theirs": "军工路校区主入口(516号)", "dev_m": 375.4, "nature": "语义错：对方点其实是**校区 POI 的地址点**，不是门（反例已记在 key_points.json）" },
+      { "ours": "沪江学院", "theirs": "沪江学院", "dev_m": 287.7, "nature": "同名两地，待定案" },
+      { "ours": "334号校门", "theirs": "南校区校门(334号)", "dev_m": 189.9, "nature": "同名但落点相差 190 m：需实地核对是同一道门还是南校区另一处出入口" }
+    ]
+  },
+  "gap": {
+    "uncovered": "1100 基础学院、580 片区、以及 28 条弱锚（2026-09-19 提锚后）**没有任何检核点**。",
+    "scope": "🔴 覆盖范围（2026-09-19 CY 定）= 军工路本部（北校/南校/580）+ 1100 基础学院。**复兴路校区明确不在范围**：不建图、不检核、不计缺口。",
+    "next": "补齐路径 = docs/gps-trace-protocol.md 的 5 人 × 10 条定向 OD 外业采集（自采轨迹精度可控，且不碰第三方数据条款）。",
+    "target": "检核点 ≥ 20 且覆盖范围内的三个分组后，位置精度才可从「指示性」升级为「检定值」。"
+  }
+}

@@ -1,0 +1,22 @@
+{
+ "_meta": {
+  "why": "趋势门禁基线（**不是**「上次运行」）—— CI / 新 clone 里没有上次运行，把基线做成本地状态会让门禁不可复现（本项目要求「一条命令验收」）。只由 `--write-baseline` 更新，**放宽必须在提交信息里写明理由**。",
+  "updated": "2026-09-19",
+  "rules": {
+   "confidence_level": "up",
+   "verified_share": "up",
+   "hours_coverage": "up",
+   "open_now_answerable": "up",
+   "derived_anchor_count": "down",
+   "indicative_count": "down"
+  }
+ },
+ "metrics": {
+  "confidence_level": 1,
+  "verified_share": 0.6759,
+  "hours_coverage": 0.1586,
+  "open_now_answerable": 18,
+  "derived_anchor_count": 28,
+  "indicative_count": 4
+ }
+}

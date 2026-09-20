@@ -13,6 +13,15 @@
     "test:libao": "python scripts/test_libao.py",
     "eval:libao": "python scripts/libao_eval.py",
     "probe:fact": "python scripts/fact_probe.py",
+    "probe:reverse": "python scripts/fact_judge_reverse.py",
+    "audit:quality": "python scripts/audit_spatial_quality.py",
+    "audit:quality:reverse": "python scripts/audit_spatial_quality.py --selftest",
+    "audit:quality:baseline": "python scripts/audit_spatial_quality.py --write-baseline",
+    "audit:readiness": "python scripts/audit_readiness.py --all",
+    "audit:overlap": "python scripts/overlap_accuracy.py --self-test",
+    "audit:network": "python scripts/audit_network_quality.py",
+    "test:campus": "python scripts/test_campus.py",
+    "vocab:check": "python server/campus_vocab.py",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
