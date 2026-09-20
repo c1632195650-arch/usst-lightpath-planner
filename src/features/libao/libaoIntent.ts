@@ -665,6 +665,78 @@ export function topQuestions(s: IntentSlots, n = 2): string[] {
 }
 
 /* ============================================================
+ * 五·半、追问接续（多轮对话的「下半句」）
+ * ========================================================== */
+
+/**
+ * 把用户对**追问**的回应合并进原槽位。
+ *
+ * ── 为什么必须有这个函数 ──────────────────────────────────────
+ * 追问「打算投入多少」之后，用户回「每周 3 次、每次 2 小时」——
+ * 这句话单独看**不是**一个动作句（没有目标名词、没有第一人称），
+ * `looksLikeAction` 判 false 是**对的**；错的是此前没人记得「上一句在等答案」，
+ * 于是这句话掉进 RAG 问答，被记忆层里的别的内容带偏。
+ *
+ * 规则：
+ *  ① **只填 `prev.missing` 里的槽位** —— 已听懂的字段不允许被一句碎片回答改写
+ *     （与纪律①「规则抽到的不被覆盖」同源：已确认的槽位是规则的产物）。
+ *  ② 回应里**没有任何缺口相关的内容** → `contributed=false`，调用方按普通消息分流。
+ *     「图书馆几点开门」不是答案，别硬吃。
+ *  ③ 合并后重算 `missing`（这是唯一的完备性判定，别处不许再写一份）。
+ */
+export function applyClarifyAnswer(
+  q: string,
+  prev: IntentSlots,
+  today?: string,
+): { slots: IntentSlots; contributed: boolean } {
+  const reply = parseIntentSlots(q, today);
+  const out: IntentSlots = { ...prev };
+  let contributed = false;
+
+  // title：回应里抽得到更具体的名字才收（「就叫高数吧」这种我们目前抽不到，不强求）
+  if (prev.missing.includes('title') && reply.title) {
+    out.title = reply.title;
+    contributed = true;
+  }
+
+  // when：回应给了时间表达才收（「十月开始吧」「下周三」）
+  if (prev.missing.includes('when') && reply.when) {
+    out.when = reply.when;
+    if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+    if (reply.dateTo) out.dateTo = reply.dateTo;
+    out.certainty = reply.certainty;
+    contributed = true;
+  }
+
+  // effort：节奏（每周 N 次 / 每次 M 分钟）或总量（一共 N 小时）居其一即算补了一块。
+  // ⚠️ 补一半（只给了「每次 1 小时」没给次数）也算 contributed —— 剩下的缺口重新追问，
+  //    而不是把用户给的半份信息扔掉再问一遍全量。
+  if (prev.missing.includes('effort')) {
+    if (reply.perWeekCount != null && out.perWeekCount == null) {
+      out.perWeekCount = reply.perWeekCount;
+      contributed = true;
+    }
+    if (reply.durationMin != null && out.durationMin == null) {
+      out.durationMin = reply.durationMin;
+      contributed = true;
+    }
+    if (reply.totalHours != null && out.totalHours == null) {
+      out.totalHours = reply.totalHours;
+      contributed = true;
+    }
+  }
+
+  // target：换/取消场景下「就动高数复习那一块」
+  if (prev.missing.includes('target') && reply.targetHint) {
+    out.targetHint = reply.targetHint;
+    contributed = true;
+  }
+
+  out.missing = missingSlots(out);
+  return { slots: out, contributed };
+}
+
+/* ============================================================
  * 六、对外：解析一句话
  * ========================================================== */
 
