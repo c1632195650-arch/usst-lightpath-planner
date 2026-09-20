@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import type { Course, CourseTimeSlot, PersonaProfile, Schedule } from '@/types';
+import type { Course, CourseTimeSlot, PersonaProfile, Schedule, WeekPlan } from '@/types';
 import { LIFE_MODES } from '@/data/usst';
 import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
-import { lbaoShell, type LbaoPlan } from '@/lib/lbao';
-import { toLbaoPlan } from '@/features/libao/lbaoPlanFromEngine';
-import { planWeekForChat } from '@/features/libao/weekPlanForChat';
+import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
+import { weekPlanToLbaoPlan } from '@/features/libao/weekPlanAdapter';
 import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
 import { categoryColor } from '@/constants/chartColors';
 
@@ -30,9 +29,21 @@ const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1)
 
 export function WeekView(props: Props) {
   const { weekMonday, weekNo, schedule, selectedDays, persona, onBack, onShiftWeek } = props;
-  const [lbao, setLbao] = useState<LbaoPlan | null>(null);
-  /** 生成中（引擎是异步的：要问后端路网算转场）—— 不给反馈会让人以为按钮没反应 */
-  const [busy, setBusy] = useState(false);
+  /**
+   * 梨宝建议的结果 —— **改成 v2 引擎的产物**（P2-T2.5 并轨）。
+   *
+   * 原先这里是 `LbaoPlan`（`lib/lbao.ts::lbaoRecommend` 的硬编码模板产物：
+   * 08:00 早饭 / 11:45 午饭 / 19:00 自习，固定时间、不排转场、不读校历、
+   * 不认用户锁定的块）。同一个 App 里「周计划」页已经是真引擎，
+   * 这里还是模板 —— 用户连着看两处会发现对不上，这就是双轨的破绽。
+   *
+   * 现在两边都走 `planWeek()`（见 `features/libao/weekPlanForChat.ts`），
+   * 差别只在**呈现形态**：对话/建议给要点，周计划页给完整时间轴。
+   */
+  const [lbaoPlan, setLbaoPlan] = useState<WeekPlan | null>(null);
+  const [lbaoTips, setLbaoTips] = useState<string[]>([]);
+  const [lbaoBusy, setLbaoBusy] = useState(false);
+  const [lbaoError, setLbaoError] = useState<string | null>(null);
 
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
   const selectedSet = useMemo(() => new Set(selectedDays), [selectedDays]);
@@ -52,25 +63,34 @@ export function WeekView(props: Props) {
       s.dayOfWeek === dow && s.startPeriod < p && s.endPeriod >= p && activeThisWeek(s, weekNo)));
 
   /**
-   * 「生成建议」—— **并轨真引擎**（原先调的是 `lib/lbao.ts` 里那套硬编码时段的模板）。
+   * 生成梨宝建议。走 `planWeekForChat`（= 公共 `planWeek()` 编排），
+   * 与「周计划」页**同一个引擎、同一份输出**，只是这里展示要点、那边展示时间轴。
    *
-   * 关键差别：模板给的是「08:00 上课 / 11:45 午餐」这种与你的课表无关的样板；
-   * 现在走 `planWeekForChat()` → `planWeek()`，拿到的是**真的排过的**周计划：
-   * 真实节次时间、真实转场分钟、校历事件准备块、以及「为什么排在这儿」。
-   *
-   * 因此它变成**异步**的（两遍法要问后端路网）；取不到时降级为单遍估算，
-   * 不会抛错也不会空白。呈现层次仍与周计划页分工：那边铺时间轴，这边给一屏卡片。
+   * 三件事以前没有、现在必须有：
+   *   ① 异步 —— `planWeek` 要问后端路网，是 Promise（旧 `lbaoRecommend` 是同步的）；
+   *   ② 进行中状态 —— 否则用户点完按钮到出结果之间页面毫无反应，会重复点；
+   *   ③ 失败提示 —— 排不出来（周次超范围）要说清原因，而不是静默什么都不发生。
    */
   const runLbao = async () => {
-    if (!persona || busy) return;
-    const daysForPlan = selectedDays.length > 0 ? selectedDays : days;
-    setBusy(true);
+    if (!persona || lbaoBusy) return;
+    setLbaoBusy(true);
+    setLbaoError(null);
     try {
       const plan = await planWeekForChat(schedule, persona, weekNo);
-      if (!plan) { setLbao(null); return; }
-      setLbao(toLbaoPlan(plan, lbaoShell(persona, props.lifeMode), daysForPlan));
+      if (!plan) {
+        setLbaoError('这个周次不在学期范围内，排不出计划');
+        setLbaoPlan(null);
+        setLbaoTips([]);
+        return;
+      }
+      setLbaoPlan(plan);
+      setLbaoTips(summarizeWeekPlan(plan));
+    } catch (e) {
+      // 引擎本身不抛错（内部有多层降级），能走到这里说明是意料外的失败。
+      // 如实报出来比吞掉好 —— 用户至少知道「不是没反应，是出问题了」。
+      setLbaoError(e instanceof Error ? e.message : '生成失败，请稍后重试');
     } finally {
-      setBusy(false);
+      setLbaoBusy(false);
     }
   };
 
@@ -219,10 +239,10 @@ export function WeekView(props: Props) {
             </div>
             <button
               onClick={runLbao}
-              disabled={!persona || busy}
+              disabled={!persona || lbaoBusy}
               className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45"
             >
-              {busy ? '正在排程…' : lbao ? '重新生成' : '生成建议'}
+              {lbaoBusy ? '正在排…' : '生成建议'}
             </button>
           </div>
 
@@ -230,9 +250,25 @@ export function WeekView(props: Props) {
             <p className="px-5 py-5 text-sm leading-6 text-ink-faint">完成画像后，梨宝才能给出更贴近你习惯的建议。</p>
           )}
 
-          {lbao && (
+          {lbaoError && (
+            <p className="px-5 py-5 text-sm leading-6 text-amber-800">{lbaoError}</p>
+          )}
+
+          {lbaoPlan && (
             <div className="px-5 py-5">
-              <LbaoPlanView plan={lbao} />
+              {/* 「这一周的要点」—— 与周计划页同源，只是压成了几句话。
+                  刻意只陈述事实（哪天满 / 哪里紧 / 哪天空），不替用户拍板，
+                  这是产品既定的智能边界（`summarizeWeekPlan` 的注释里写着理由）。 */}
+              <ul className="space-y-1.5">
+                {lbaoTips.map((t, i) => (
+                  <li key={i} className="text-sm leading-6 text-ink-soft">· {t}</li>
+                ))}
+              </ul>
+              <div className="mt-4 border-t border-ink/10 pt-3">
+                {/* 适配层把引擎产物翻成展示形状 —— 见 `weekPlanAdapter.ts`。
+                    展示组件的入参没变，换掉的只是**数据来源**。 */}
+                <LbaoPlanView plan={weekPlanToLbaoPlan(lbaoPlan, props.lifeMode, schedule.termStart)} />
+              </div>
             </div>
           )}
         </div>

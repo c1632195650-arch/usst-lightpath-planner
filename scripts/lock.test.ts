@@ -49,26 +49,28 @@ const policy: PhasePolicy = {
 const stubTransfer = () => ({ minutes: 5, source: 'stub', reliable: true });
 
 /**
- * 「改变输入」用的那一版课表：在**周一 9-10 节**加一门课。
+ * 「改变输入」用的那一版策略：**放开晚间 + 允许周末**。
  *
- * 为什么是这个变化：这是**实测搜出来的**（试了 8 种改动，逐个看哪些块会移动、
- * 移动后原位是否还空着）。它的性质正好：
- *   · 周一第二个自习块（原 14:00）会被挤走 —— 所以「不锁会动」这个前提成立；
- *   · 它原来的 14:00–15:00 在新布局里仍然空着 —— 所以**锁得住**。
- * 若换一个「原位会被新内容占掉」的改动（如周一 5-6 节加课，实测正好压住原位置），
- * 测的就不是锁、而是冲突上报了（那是另一条测试）。
+ * 为什么用它（2026-09-19 用探针搜出来的，试了 10 组加课 + 3 组策略变化）：
+ *   它得同时满足三个条件 ——
+ *     · **A 有自习块被挤走**：否则测不出锁有没有用；
+ *     · **B 被挤走那块的原时间在新布局里完全空着**：否则锁回去会撞别的东西，
+ *       测的就变成「冲突上报」而不是「锁生效」；
+ *     · **C 同一天还有别的块也跟着变**：否则测不出「锁一块不冻结整天」。
+ *
+ * ⚠️ 为什么不用「加课」：探针实测，加课会**连锁推动**整天的块，
+ *    导致目标块的原位置总被别的块占掉（B 不满足）——
+ *    包括原先的「周一 9-10 节」和试过的 5-6 / 7-8 / 11-12 节，全部如此。
+ *
+ * ⚠️ 断言**不写死是哪一个块**（见测试体）：写死具体块的做法一旦布局变化就假失败。
+ *    现在动态找出「确实被挤走的那个」，夹具对别处的改动免疫。
  */
-const changedSchedule = {
-  ...schedule,
-  courses: [
-    ...schedule.courses,
-    {
-      id: 'c9', name: '专题讲座', credit: 0, category: '公共基础',
-      campus: '北校', building: '第一教学楼',
-      slots: [slot(1, 9, 10)],
-    },
-  ],
-};
+const changedPolicy = { ...policy, eveningAllowed: true, weekendWork: true };
+
+/** 变化后的请求（所有「改变输入」的测试都走它） */
+function changedReq(over: Record<string, unknown> = {}) {
+  return baseReq({ policy: changedPolicy, ...over });
+}
 
 function baseReq(over: Record<string, unknown> = {}) {
   return {
@@ -94,8 +96,7 @@ function placementOf(b: TimeBlock) {
   };
 }
 
-const lockedReq = (target: TimeBlock, over: Record<string, unknown> = {}) => baseReq({
-  schedule: changedSchedule,
+const lockedReq = (target: TimeBlock, over: Record<string, unknown> = {}) => changedReq({
   lockLevels: { [target.id]: 'hard' },
   lockedPlacements: { [target.id]: placementOf(target) },
   ...over,
@@ -105,44 +106,75 @@ const lockedReq = (target: TimeBlock, over: Record<string, unknown> = {}) => bas
 
 test('锁定的块在重排后回到原位（不锁则会动）', () => {
   const p0 = solveWeek(baseReq()).plan;
-  const target = pickStudy(p0);
+  const changed = solveWeek(changedReq()).plan;
+
+  /**
+   * 动态找出「确实被这次输入变化挤走的那个块」。
+   *
+   * 为什么不再写死 `pickStudy(p0)`（周一最后一个自习块）：
+   * 那种写法把「哪个块会动」硬编码进夹具 —— 一旦别处的改动改变了布局，
+   * 测试就会以「前提不成立」假失败，报的不是功能坏了，而是夹具过期了。
+   * 改成动态查找后，夹具对布局变化免疫（这正是 2026-09-19 修它的原因）。
+   */
+  const before = new Map(p0.blocks.map((b) => [b.id, b]));
+  const moved = changed.blocks.find((b) => {
+    const old = before.get(b.id);
+    return old != null && old.kind === 'study' && old.startMin !== b.startMin;
+  });
+  assert.ok(moved, '夹具前提不成立：这次输入变化没有让任何自习块移动');
 
   // 先证明「不锁真的会动」—— 否则本测试在锁失效时也会通过（假覆盖）
-  const moved = solveWeek(baseReq({ schedule: changedSchedule })).plan
-    .blocks.find((b) => b.id === target.id);
-  assert.ok(moved, '加课之后该块仍应存在');
+  const original = before.get(moved.id)!;
   assert.notEqual(
-    moved.startMin, target.startMin,
-    `夹具前提不成立：不加锁时该块也没动（${target.startMin}），测试无法区分锁是否生效`,
+    moved.startMin, original.startMin,
+    `夹具前提不成立：不加锁时该块也没动（${original.startMin}），测试无法区分锁是否生效`,
   );
 
   // 再加锁重排 → 必须回到原位
-  const locked = solveWeek(lockedReq(target)).plan.blocks.find((b) => b.id === target.id);
+  const locked = solveWeek(lockedReq(original)).plan.blocks.find((b) => b.id === original.id);
 
   assert.ok(locked, '锁定后该块仍应存在');
-  assert.equal(locked.startMin, target.startMin, '锁定的块应回到原开始时间');
-  assert.equal(locked.endMin, target.endMin, '锁定的块应保持原时长');
-  assert.equal(locked.place, target.place, '地点应一并还原（时间与地点是一体的）');
+  assert.equal(locked.startMin, original.startMin, '锁定的块应回到原开始时间');
+  assert.equal(locked.endMin, original.endMin, '锁定的块应保持原时长');
+  assert.equal(locked.place, original.place, '地点应一并还原（时间与地点是一体的）');
 });
 
 test('锁只钉住那一块，同一天的其他块照常跟着新输入变（不是整周冻结）', () => {
   const p0 = solveWeek(baseReq()).plan;
-  const day1 = p0.blocks
-    .filter((b) => b.kind === 'study' && b.dayOfWeek === 1)
-    .sort((a, b) => a.startMin - b.startMin);
-  const pinned = day1[0];
-  const other = day1[day1.length - 1];
+  const changed = solveWeek(changedReq()).plan;
+  const before = new Map(p0.blocks.map((b) => [b.id, b]));
 
-  const out = solveWeek(lockedReq(pinned)).plan;
+  // 动态找「一个会被挤走的自习块」来锁（理由同前一条：不写死具体是哪个）
+  const victim = changed.blocks.find((b) => {
+    const old = before.get(b.id);
+    return old != null && old.kind === 'study' && old.startMin !== b.startMin;
+  });
+  assert.ok(victim, '夹具前提不成立：这次变化没有移动任何自习块');
+  const original = before.get(victim.id)!;
 
+  const out = solveWeek(lockedReq(original)).plan;
+
+  // ① 被锁的块回到原位
   assert.equal(
-    out.blocks.find((b) => b.id === pinned.id)?.startMin, pinned.startMin,
+    out.blocks.find((b) => b.id === original.id)?.startMin, original.startMin,
     '前提：被锁的块回到原位',
   );
-  const otherAfter = out.blocks.find((b) => b.id === other.id);
-  assert.ok(otherAfter, '前提：另一个自习块还在');
-  assert.notEqual(
-    otherAfter.startMin, other.startMin,
+
+  /**
+   * ② 同一天**还有别的块确实跟着新输入走了** —— 这才说明锁没有把整天冻住。
+   *
+   * 判据是「它此刻的位置 == 它在『无锁变化版』里的位置」：
+   * 只要有一个未锁的块在基线里与新输入下位置不同、且现在取的是新位置，
+   * 就证明它照常响应了新输入，没被锁牵连。
+   */
+  const stillFollowing = out.blocks.some((b) => {
+    if (b.dayOfWeek !== original.dayOfWeek || b.id === original.id) return false;
+    const c = changed.blocks.find((x) => x.id === b.id);
+    const o = before.get(b.id);
+    return c != null && o != null && c.startMin !== o.startMin && b.startMin === c.startMin;
+  });
+  assert.ok(
+    stillFollowing,
     '锁一块不该把整天冻住：同一天未锁的块仍应随新输入调整位置',
   );
 });
@@ -219,19 +251,27 @@ test('reattachTransfers：块被移动后，转场按新位置重算（不留旧
     .pop();
   assert.ok(victim, '夹具应有周一下午的自习块');
 
-  // ① 挪到傍晚：前序块变成「晚餐」，转场必须跟着变
-  const toEvening = 18 * 60;
+  /**
+   * ① 挪到**上午课程之后**：前序块变成「第一节课」，转场必须跟着变。
+   *
+   * ⚠️ 原先挪到「傍晚 18:00」，靠「晚餐」当前序块 —— 但 T2 之后三餐不再指定食堂，
+   *    餐次块没有 `place`，于是「转场来源 = 前序块的地点」这条断言失去依据。
+   *    改成课程块当前序：**课程永远有地点**，这个夹具不会再被餐次的改动波及。
+   */
+  const toMorning = 10 * 60;
   const shifted = {
     ...plan,
     blocks: plan.blocks.map((b) => (b.id === victim.id
-      ? { ...b, startMin: toEvening, endMin: toEvening + 60 } : { ...b })),
+      ? { ...b, startMin: toMorning, endMin: toMorning + 60 } : { ...b })),
   };
   const out = reattachTransfers(shifted, stubTransfer);
   const after = out.blocks.find((b) => b.id === victim.id)!;
   const prev = out.blocks
     .filter((b) => b.dayOfWeek === day && b.id !== victim.id && b.endMin <= after.startMin)
     .sort((a, b) => b.endMin - a.endMin)[0];
-  assert.ok(prev, '傍晚位置应有前序块（晚餐）');
+  assert.ok(prev, '上午位置应有前序块（第一节课）');
+  // 夹具前提：前序块必须有地点 —— 否则 `fromPlace` 的断言等于没测
+  assert.ok(prev.place, '夹具前提不成立：前序块没有地点，测不出转场来源');
   assert.equal(after.transfer?.fromPlace, prev.place, '转场来源必须指向新的前序块');
   assert.equal(
     after.transfer?.slackMin,

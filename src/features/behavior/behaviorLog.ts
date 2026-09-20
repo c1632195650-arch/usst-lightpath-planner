@@ -15,6 +15,7 @@
  * 附带好处：零契约改动，不与排程引擎那条线争夺 `types.ts`。
  */
 import type { BlockKind } from '@/types';
+import { addDays, weekDates, weekdayOf } from '@/lib/date';
 
 const KEY = 'usst-behavior-log-v1';
 
@@ -125,6 +126,49 @@ export function actualLoadByDate(records: BehaviorRecord[], dates: string[]): nu
     byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.plannedMin);
   }
   return dates.map((d) => byDate.get(d) ?? 0);
+}
+
+/**
+ * 按**星期几**聚合的实际负荷（下标 0 = 周一 … 6 = 周日）—— 喂给引擎的
+ * `ConstructCtx.actualLoadByDow`（P2-T2.2，规格书 §5.3 跨天加成）。
+ *
+ * 为什么要按星期几而不是按日期：跨周疲劳是「周三总是最累」这类**星期规律**，
+ * 而不是「某一天是 9 月 17 日」。引擎也只认 `loadByDow`（长度 8，下标 1..7）。
+ *
+ * 多条同星期几的日期取**平均**（而不是求和）：记录了 3 个周三，求和会让
+ * 「记了两周」凭空变成三倍负荷；平均才是「一个周三大概多重」。
+ * 没记录的星期几返回 0（缺口补 0，与 `actualLoadByDate` 同一策略）。
+ *
+ * @param weeeksBack 只看最近几周的记录；缺省 4。太旧的记录不代表「最近累不累」。
+ */
+export function actualLoadByDow(
+  records: BehaviorRecord[],
+  mondayISO: string,
+  weeksBack = 4,
+): number[] {
+  const sums = [0, 0, 0, 0, 0, 0, 0];
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  if (weeksBack <= 0) return sums;
+
+  // 最近 weeksBack 周的日期窗口（周一 → 周日），用集合做 O(1) 命中
+  const inWindow = new Set<string>();
+  for (let w = weeksBack - 1; w >= 0; w -= 1) {
+    const monday = addDays(mondayISO, -w * 7);
+    for (const iso of weekDates(monday)) inWindow.add(iso);
+  }
+
+  // 按「日期 → 该日实际负荷」先算一遍，再归到星期几
+  const dates = [...inWindow].sort();
+  const loads = actualLoadByDate(records, dates);
+  for (let i = 0; i < dates.length; i += 1) {
+    const v = loads[i];
+    if (v <= 0) continue;
+    const dow = weekdayOf(dates[i]); // 0 = 周日
+    const idx = dow === 0 ? 6 : dow - 1; // 转成「0 = 周一」
+    sums[idx] += v;
+    counts[idx] += 1;
+  }
+  return sums.map((s, i) => (counts[i] > 0 ? Math.round(s / counts[i]) : 0));
 }
 
 /* ---------------- 存储层（唯一碰 localStorage 的地方） ---------------- */

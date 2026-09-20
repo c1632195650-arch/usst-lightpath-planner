@@ -206,6 +206,30 @@ export type PlanIssueCode =
   | 'capacity.overload'           // 当日负荷超容量
   | 'due.overdue'                 // 交期已过
   | 'due.insufficient_capacity';  // 交期邻近但产能不足
+
+/** 相邻两块之间的转场提示（挂在「后一个块」的 `transfer` 上） */
+export interface TransferHint {
+  fromPlace?: string;
+  toPlace?: string;
+  /** 实测步行分钟 */
+  minutes: number;
+  /** 到下一件事的余量（分钟），可为负 = 来不及 */
+  slackMin: number;
+  tight: boolean;
+  /** 面向用户的文案（如「估算值（跨校区）…」） */
+  note?: string;
+  /**
+   * 分钟数是否来自**真实路网实测**（`true`）还是兜底估算（`false`）。
+   *
+   * **P2-T2.4 / AC-10 新增**。此前「实测还是估算」只编码在 `note` 的中文串里，
+   * 前端要判断就得匹配 `'估算值（跨校区）…'` —— 文案一改判断就静默失效。
+   * 转场收敛的诚实原则（「个别转场时间为估算值」）需要机器可读信号。
+   *
+   * 缺省 `undefined` = 引擎未被告知来源（旧调用方 / 未注入 provider）。
+   * **语义是「未知」，不得当作 `false` 使用。**
+   */
+  reliable?: boolean;
+}
 ```
 
 **引擎侧部分**（留 `model.ts`）：
@@ -359,10 +383,35 @@ export interface PlanRequest {
   withMeals?: boolean;                  // 默认 true
 
   // —— 增量/动态（P2）——
-  previousPlan?: WeekPlan;              // 上一版计划（用于 churn 与锁）
-  lockLevels?: Record<string, LockLevel>; // blockId -> 锁级别
-  fromNow?: number;                     // 当前分钟；给定则只排 [fromNow, dayEnd]
-  rolling?: RollingState;               // 上一周传来的滚动状态
+  /** 上一版计划：用于 churn（最小扰动）与增量重排的脏区域基准 */
+  previousPlan?: WeekPlan | null;
+  /** 上一版的提交项快照 —— 脏区域靠「本次 vs 上次」的差算出来（§5.8） */
+  previousCommits?: Commit[] | null;
+  /** blockId -> 锁级别 */
+  lockLevels?: Record<string, LockLevel>;
+  /** 被锁块的位置快照 —— `solver` 构造后据此把 hard 块**写回原位** */
+  lockedPlacements?: Record<string, LockedPlacement>;
+  /** 当前分钟；给定则只排 [fromNow, dayEnd]（`null` 同「不启用」） */
+  fromNow?: number | null;
+  /**
+   * `fromNow` 作用在哪一天（P2-T2.3）。
+   *
+   * 为什么必须有它：`fromNow` 是「现在几点」，而计划是**整周**的 —— 今天剩下的
+   * 时间要收紧，但明天、后天不该跟着被砍。引擎**不读时钟**（纯函数纪律），
+   * 所以「今天是周几」必须由调用方告知。
+   * 缺省 `null` = 不在任何一天生效（等价于没传 `fromNow`）。
+   */
+  fromNowDay?: DayOfWeek | null;
+  /** 上一周传来的滚动状态（计划值）；`null` 同「还没积累」 */
+  rolling?: RollingState | null;
+  /**
+   * 最近若干周的**实际**负荷（按星期几，下标 0 = 周一；P2-T2.2）。
+   *
+   * 为什么与 `rolling` 分开：来源与新鲜度不同 —— `rolling.loadByDow` 是
+   * **上次排程时的计划值**，这个是**用户标记的实际执行量**。
+   * 引擎里实际优先、计划兜底（`roll.ts::mergeLoad`），所以必须分开传。
+   */
+  actualLoadByDow?: number[] | null;
 }
 
 /** 求解诊断（面向开发者与验收，不直接展示给用户） */
@@ -1584,4 +1633,105 @@ function studyCandidates(policy, dayCampus, templates): { preferred; fallback } 
 
 ---
 
-*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `31ddeb6` = PR #2 head，base=`dev`）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**。*
+## 14. P2 实施记录（2026-09-17）
+
+> 本节记录 P2 落地时对**规格书本身**的补充与偏离。规则：**实现服从规格书**；
+> 凡实现中发现规格书未覆盖或需澄清之处，一律回写本节，不留在代码注释里。
+
+### 14.1 模块清单（新增 / 修改）
+
+| 文件 | 动作 | 说明 |
+|---|---|---|
+| `src/lib/planner/roll.ts` | **新增** | 滚动视野的**消费侧**（§5.3 跨天加成）。`mergeLoad` / `dayCapacityFactors` / `capacityFactorOn` / `rollingNotes` |
+| `src/lib/planner/incremental.ts` | **新增** | 增量重排（§5.8）。`dirtyRegion` / `incrementalImprove` / `incrementalNotes` |
+| `src/lib/planner/transferConverge.ts` | **新增** | 两趟收敛的**纯逻辑**（§5.9 方法 A＋B），Node 可直载、可单测 |
+| `src/lib/planner/transfer.ts` | 重写 | 只保留「接真实后端」一件事；算法全部搬去 `transferConverge.ts` |
+| `src/lib/planner/planWeek.ts` | 重写 | 从「固定两遍」升级为「迭代到收敛」；`transferFactory` 标记废弃 |
+| `src/lib/planner/construct.ts` | 修改 | `fromNow` 软地板；产能乘 `capacityFactor`；写 `transfer.reliable` |
+| `src/lib/planner/solver.ts` | 修改 | 走 `incrementalImprove`；`null` → `undefined` 收敛 |
+| `src/lib/planner/model.ts` | 修改 | `PlanRequest` / `PlanResult` 的 P2 字段 |
+| `src/lib/planner/schedule.ts` | 修改 | `toPlanRequest` 透传 P2 字段（`null` 归一为「不传」） |
+| `src/features/plan/planLock.ts` | 修改 | `withRolling` / `rollingForWeek`（补 P1 留下的断链） |
+| `src/features/behavior/behaviorLog.ts` | 修改 | `actualLoadByDow`（实际负荷 → 按星期几聚合） |
+| `src/features/week/WeekPlanView.tsx` | 修改 | 注入 P2 输入；**写回 rolling**；`fromNow` 开关；转场诚实提示 |
+| `src/features/week/WeekView.tsx` | 修改 | **双轨修复**：`lbaoRecommend` → `planWeek`（T2.5） |
+| `src/features/libao/weekPlanAdapter.ts` | **新增** | `WeekPlan` → `LbaoPlan` 展示适配（纯字段翻译） |
+| `src/types.ts` | 修改 | `TransferHint.reliable`（见 §14.3） |
+
+### 14.2 实施中做出的技术裁决
+
+**① 收敛核心放在 `transferConverge.ts`（而非 `transfer.ts`）**
+
+依据 §7.3 的硬约束：`transfer.ts` 静态 import `lib/api.ts`，后者顶层读
+`import.meta.env` → **Node 里加载不了**。若收敛循环写在 `transfer.ts`，
+单测永远碰不到它；而浏览器里后端一旦不通，收敛与否**表现不出差别**
+（永远「全兜底估算」）。拆出纯逻辑后，`planWeek.ts` 可以**静态** import 它
+（依赖方向干净），只有真正 fetch 的那层才需要动态 import。
+
+**② `transferFactory` 保留但标记废弃**
+
+P2 收敛需要「每轮增量问路」，而 `transferFactory` 的语义是「按整份布局给我
+一个 provider」，拿不到「问了哪些对、哪些没问到」，因此**无法判断收敛**
+（也就无法遵守 AC-10 的诚实报告）。硬适配只会得到「假装收敛」的实现。
+处置：新增 `fetchRoutes` 作为唯一被收敛循环使用的接口；`transferFactory`
+保留可用（走「问一次 + 重算一次」的 P1 等价路径）并标 `@deprecated`。
+
+**③ 冻结手法：临时提升锁级别（复用而非另写）**
+
+`incrementalImprove` 把「非脏区域的 free/soft 块」临时提升为 `hard` 交给
+`improve()` —— 复用其既有的 `movableBlocks()` 排除机制（§8.1 H8）。
+**不给 `improve` 加 `allowedDays` 参数**：那个参数是**相位策略**语义
+（周末要不要干活），与「脏区域」正交，混用会让 `policy.weekendWork=false`
+时把脏区域里的周六块误判为「不许排」。
+
+**④ `planWeek` 的分支顺序：`fetchRoutes` 优先于 `req.transfer`**
+
+`req.transfer` 往往是语料 / 调用方带的**兜底 provider**（golden 语料就是），
+不代表「已有实测值」。早先写成 `if (req.transfer) return`，导致「注入了
+`fetchRoutes` 却拿不到实测值，收敛循环根本没跑」。
+**这个 bug 是被 `tests/p2-live-transfer.ts`（真实后端端到端）抓到的**，
+纯单测覆盖不到 —— 记此以为戒。
+
+### 14.3 契约层变更（需 CY 确认）
+
+**`TransferHint.reliable?: boolean`（新增，可选）**
+
+改前：「实测还是估算」**只编码在 `note` 的中文字符串**里（`'估算值（跨校区）…'`），
+前端要判断就得匹配文案 —— 文案一改判断就静默失效。
+改后：新增机器可读的 `reliable?: boolean`，`note` 继续保留给人看。
+
+**兼容性**：可选字段，缺省 `undefined`，语义是「未知」（**不是 `false`**）。
+现有调用方零改动。golden 快照**不受影响**（快照走 `stablePlanJson`，
+而它不含 `transfer.reliable`…… ⚠️ 若后续把 `transfer` 纳入快照，
+需重新拍摄基线）。
+
+### 14.4 门禁结果（2026-09-17 本地实跑）
+
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 类型 | `npm run typecheck` | exit 0 |
+| 引擎单测 | `node --import ./tests/register.mjs --test "tests/**/*.test.ts"` | **94 / 94**（P1 时 67） |
+| golden | `node --import ./tests/register.mjs tests/golden-compare.ts` | **5 / 5** 全 PASS |
+| UI 脚本测试 | `--test "scripts/**/*.test.ts"` | **134 / 134** |
+| P0 验收 | `tests/p0-check.ts` | **26 / 26** |
+| 生产构建 | `vite build` | 成功（305.76 kB / gzip 108.46 kB） |
+| **端到端（真实后端）** | `tests/p2-live-transfer.ts` | 收敛 2 轮 · 74 路问全 · 实测 37 / 估算 3 · 未覆盖 0 · 硬约束违反 0 |
+
+**新增测试文件**（P2 专属）：
+- `tests/p2-incremental-rolling.test.ts` —— AC-7 增量最小扰动 / §5.3 跨天加成 / T2.3 `fromNow` / §5.8 脏区域（14 例）
+- `tests/p2-convergence.test.ts` —— AC-10 两趟收敛（方法 A 不动点 + 方法 B 覆盖 + 上限兜底 + 诚实报告，7 例）
+- `tests/p2-essential-budget.test.ts` —— `essential` 预算专项（6 例，补 CY 点名的缺口）
+- `tests/p2-live-transfer.ts` —— 真实后端端到端（**非** `node --test` 用例，需后端在跑）
+
+### 14.5 AC-7 / AC-10 取证
+
+- **AC-7**：`p2-incremental-rolling.test.ts` 断言「脏区域**之外**的块坐标一个未动」
+  （movedOutside === 0），并有「输入不变 → 零移动」与「确定性」两条下界。
+- **AC-10**：端到端实测「未覆盖 0 条」即达标。`convergeTransfers` 的
+  `uncovered` 由 `collectTransferPairs(最终布局) − 缓存` 得出，
+  与规格书判据逐字一致；三条正常出口（`covered` / `converged` / `max-rounds`）
+  外加 `no-progress`（后端确实没有这些路）都有测试覆盖。
+
+---
+
+*本规格书是设计依据。P0 已完成并推送（`feat/planner-v2-p0` @ `31ddeb6` = PR #2 head，base=`dev`）。P1 开工方案见 **§13**；契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**。**P2 实施记录见 §14**（2026-09-17，独立工作树 `_p2work`，基线 `dev@fb967dab`）。*

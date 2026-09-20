@@ -25,6 +25,7 @@ import type {
 // ⚠️ 依赖下沉：`campusLookup.ts` 不依赖任何 planner 模块，故此处不会成环
 //    （若 import `./schedule.ts`，而 `schedule.ts` 又要 import `./construct.ts` → 环）
 import type { TransferProvider } from './campusLookup.ts';
+import type { DayLoadDecision } from './roll.ts';
 import type { UserTask } from './templates.ts';
 
 // 契约层已收归的类型：本文件只 re-export，不再本地定义（见头部「契约边界」）
@@ -231,6 +232,23 @@ export function emptyRollingState(): RollingState {
  * 五、求解请求 / 结果（规格书 §4.4）
  * ========================================================== */
 
+/**
+ * 用户声明的「不可时段」（R6.2）。
+ *
+ * 与 `features/week/userPlanStore.UnavailableSlot` 一一对应，这里是**引擎侧的最小形状**
+ * —— 引擎不该知道它在 localStorage 里叫什么。
+ */
+export interface ReqUnavailableSlot {
+  id?: string;
+  days: number[];
+  fromMin: number;
+  toMin: number;
+  /** 空 = 长期（自 `createdAtWeek` 起生效） */
+  weeks?: number[];
+  createdAtWeek?: number;
+  title?: string;
+}
+
 export interface PlanRequest {
   // —— 必需 ——
   schedule: Schedule;
@@ -270,8 +288,23 @@ export interface PlanRequest {
   withMeals?: boolean;
 
   // —— 增量 / 动态（P2，P0 仅预留字段）——
-  /** 上一版计划：用于 churn（最小扰动） */
-  previousPlan?: WeekPlan;
+  /**
+   * 上一版计划：用于 churn（最小扰动），也是增量重排算脏区域的输入。
+   *
+   * 为什么允许 `null`：调用方（UI）持有的就是 `WeekPlan | null`，
+   * 让它每次调用前先判空再决定「传不传这个 key」是没必要的负担 ——
+   * `null` 与 `undefined` 在这里语义相同，都是「没有上一版」。
+   */
+  previousPlan?: WeekPlan | null;
+  /**
+   * 上一版的提交项（P2-T2.1）。
+   *
+   * 为什么需要它：脏区域（§5.8）靠**对比「这次输入」与「上次输入」**算出来 ——
+   * 「新增了什么 / 谁的改期了」。只给 `previousPlan` 只能知道「块原来在哪」，
+   * 无法区分「用户新增了一个任务」与「引擎上次没排下它」。
+   * 缺省 `undefined` → 退化为全量重排（真实场景：第一次排程）。
+   */
+  previousCommits?: Commit[] | null;
   /** 锁级别覆盖：blockId -> LockLevel */
   lockLevels?: Record<string, LockLevel>;
   /**
@@ -283,10 +316,86 @@ export interface PlanRequest {
    * 少了这个字段，`lockLevels` 只是半个功能（UI 显示「已定住」但块照样跑）。
    */
   lockedPlacements?: Record<string, LockedPlacement>;
-  /** 当前分钟；给定则只排 [fromNow, dayEnd] */
-  fromNow?: number;
-  /** 上一周传来的滚动状态 */
-  rolling?: RollingState;
+  /**
+   * 当前分钟；给定则只排 [fromNow, dayEnd]。
+   *
+   * `null` 与 `undefined` 同义（都是「不启用」）—— 调用方手里常是
+   * `number | null`（比如「开关没开」），没必要逼它先判空再决定传不传 key。
+   */
+  fromNow?: number | null;
+  /**
+   * `fromNow` 作用在哪一天（P2-T2.3）。
+   *
+   * 为什么必须有它：`fromNow` 是「现在几点」，而计划是**整周**的 ——
+   * 今天剩下的时间要收紧，但明天、后天不该跟着被砍（否则下午三点才开始用，
+   * 整周都排不满）。引擎**不读时钟**（纯函数纪律），所以「今天是周几」
+   * 必须由调用方告知。
+   * 缺省 `null` = 不在任何一天生效（等价于没传 `fromNow`）。
+   */
+  fromNowDay?: DayOfWeek | null;
+  /** 上一周传来的滚动状态；`null` 与 `undefined` 同义（都是「还没积累」） */
+  rolling?: RollingState | null;
+  /**
+   * 最近若干周的**实际**负荷（按星期几，下标 0 = 周一；P2-T2.2）。
+   *
+   * 为什么它是独立输入而不是塞进 `rolling`：两者的来源与新鲜度不同 ——
+   * `rolling.loadByDow` 是**上次排程时的计划值**，而这个是**用户标记的实际执行量**。
+   * 引擎里实际优先、计划兜底（见 `roll.ts::mergeLoad`），所以必须分开传。
+   */
+  actualLoadByDow?: number[] | null;
+
+  // —— 用户干预（阶段 A/B，2026-09-19 新增，均为可选、向后兼容）——
+
+  /**
+   * 用户明确排除的块 id（「这块我不做」）。
+   *
+   * 为什么需要它：界面提供了「删掉这一块」，但引擎每次排程都会重新构造 ——
+   * 不告诉引擎「用户不要它」，下一轮它又回来了（用户会觉得「删了没用」）。
+   *
+   * 语义：**构造阶段直接跳过**这些 id 对应的块；不报 issue（这是用户自己的选择，
+   * 不是引擎的失误）。与 `lockLevels='hard'` 的区别：锁是「钉住位置」，
+   * 这里是「根本不要」。
+   */
+  excludedBlockIds?: string[] | null;
+
+  /**
+   * R6.2：**用户声明的不可时段**（「周四下午别排自习」）。
+   *
+   * 引擎**：这些时段不许出现任何软事**（课程除外 —— 课是既成事实）。
+   * 落在禁区里的软块会被挪到邻近空位；挪不开就从计划里去掉并记一条 info。
+   *
+   * ⚠️ 这是**可选**字段，不传就退回原有行为 —— 老调用方不受影响。
+   * ⚠️ 它**不动 `src/types.ts`**（`PlanRequest` 属于 `lib/planner` 的内部契约）。
+   */
+  unavailable?: ReqUnavailableSlot[] | null;
+
+  /**
+   * 偏好校正层（阶段 B 落库；阶段 C 起真正被引擎消费）。
+   *
+   * 用户对排法的改进建议（「周四下午别排东西」「每天多学 1 小时」）的结构化载体。
+   * 与 `weights` / `config` 的区别：那些是**开发者调参**，这个来自**用户本人**，
+   * 且要能逐条撤销、能展示给用户看「引擎从你这里学到了什么」。
+   *
+   * ⚠️ 类型定义在 `./corrections.ts`（引擎侧）而不是 `features/**` ——
+   *    否则 `lib/planner → features` 会成为反向依赖。
+   * ⚠️ 与画像的关系：**永不回写** `persona` / `answers`（那是 35 题测评的纯函数产物，
+   *    改了下一次重算就没了）。校正层是独立叠加层，见 `corrections.ts` 头部说明。
+   */
+  corrections?: import('./corrections.ts').CorrectionRule[] | null;
+
+  /**
+   * 用户指定的食堂（S4，2026-09-19）。
+   *
+   * 背景：T2 删掉了「引擎自动猜吃哪家」（依据不成立 —— 大部分人只去固定摊位），
+   * 于是三餐只占时间、不指定地点。但用户**仍然想能自己设定**，这就是本字段。
+   *
+   * 语义：给了哪一餐就用哪个食堂，**留空的餐次保持「不指定」**（T2 行为）。
+   * 值 = POI 名（与 `templates.ts` 里 `category:'meal'` 模板的 `place` 同名）。
+   *
+   * 为什么不放进 `corrections`：那会给 `CorrectionRule` 加字段 →
+   * 触发「改引擎侧类型就要登记规格书」的额外动作。放在 `PlanRequest` 上更轻。
+   */
+  mealPlaces?: { breakfast?: string; lunch?: string; dinner?: string } | null;
 }
 
 /** 求解诊断（面向开发者与验收，不直接展示给用户） */
@@ -325,6 +434,33 @@ export interface PlanResult {
   diagnostics: Diagnostics;
   /** 传给下一周的滚动状态 */
   nextRolling: RollingState;
+
+  /**
+   * 本周逐日的跨周负荷判定（P2-T2.2）。
+   *
+   * 为什么不塞进 `diagnostics`：这不是「给开发者看的性能数」，而是
+   * **用户可读的决策依据**（「周三上周太满，这周给你松了 10%」）。
+   * 前端据此可以把「哪几天被降档」直接标在时间轴上，
+   * 混进 `cost` 那些内部指标里反而不好用。
+   *
+   * 缺省/首次排程时是全 1.0 的 7 项（不是 undefined）—— 消费方无需判空。
+   */
+  loadDecisions?: DayLoadDecision[];
+
+  /**
+   * 转场收敛诊断（P2-T2.4 / AC-10）——由 `planWeek` 的收敛循环填写。
+   *
+   * `transferRounds`：实际求解轮数（首轮 + 每轮重算各计 1）。正常周程通常 2 轮。
+   * `transferUncovered`：终版布局里**仍拿不到实测值**的相邻跨点对，
+   *   形如 `['三教→国合楼']`。空数组 = 全部命中缓存（AC-10 达标）。
+   *
+   * 为什么放这里而不塞进 `diagnostics.cost`：`cost` 是「引擎内部的目标函数分解」，
+   * 这是「取数质量」；两者受众不同。UI 可以据此如实提示
+   * 「个别转场时间为估算」，而不是把估算值当实测值显示。
+   * 单遍路径（没有收敛循环）时保持 `undefined`。
+   */
+  transferRounds?: number;
+  transferUncovered?: string[];
 
   // —— 为未来留口，P1 不填（规格书 §4.4 / §12.3 D-2）——
   /** 多版本；P1 恒为 `undefined`（或长度 1 = 上面的 `plan`） */

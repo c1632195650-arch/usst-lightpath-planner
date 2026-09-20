@@ -169,26 +169,20 @@ test('没早课的日子不排早餐（不硬叫早）', () => {
 
 /* ---------------- 四、画像真的改变排程结果 ---------------- */
 
-test('「就近快吃」会按转场时间挑最近的食堂（不是按固定优先级）', () => {
-  // 桩：从第三教学楼走到第二食堂只要 2 分钟，其他都要 10 分钟
-  const stub = (from, to) => (from === '第三教学楼' && to === '第二食堂'
-    ? { minutes: 2, source: 'stub' } : { minutes: 10, source: 'stub' });
-
-  const near = buildWeekPlan({
-    schedule, weekNo: 4, policy: policy(), scenarios: scen({ meal_radius: 'near' }), transfer: stub,
-  }).plan;
-  const far = buildWeekPlan({
-    schedule, weekNo: 4, policy: policy(), scenarios: scen({ meal_radius: 'far' }), transfer: stub,
-  }).plan;
-
-  const lunchNear = blocksOf(near, 1).find((b) => b.title.includes('午餐'));
-  const lunchFar = blocksOf(far, 1).find((b) => b.title.includes('午餐'));
-  assert.ok(lunchNear.title.includes('第二食堂'),
-    `「就近」应选最近的第二食堂，实际「${lunchNear.title}」`);
-  assert.ok(!lunchFar.title.includes('第二食堂'),
-    `「愿意走远」不该被最近原则绑架，实际「${lunchFar.title}」`);
-  assert.ok(lunchNear.reason.includes('就近'), `应说明理由，实际「${lunchNear.reason}」`);
-});
+/*
+ * ⚠️ 这里原有测试「「就近快吃」会按转场时间挑最近的食堂（不是按固定优先级）」
+ *    —— **已于 2026-09-19 删除**。
+ *
+ * 删除原因：T2 起**三餐不再指定食堂**。引擎无法可靠判断用户平时吃哪家
+ * （用户反馈：「大部分人只去固定摊位」），所以那个判断被整体移除；
+ * 这条测试赖以验证的手段（选哪个食堂）随之消失。
+ *
+ * 📌 连带记账：画像字段 `scenarios.meal_radius`（就餐半径）**目前没有任何消费点** ——
+ *    它原本唯一的落点就是「选哪个食堂」。
+ *    负责人已确认改为「**用户指定食堂**」（计划书 S4）—— 那是**用户手动设定**，
+ *    不属于画像，因此该字段在可预见的将来仍是闲置的。
+ *    在此显式记录，避免日后误以为它还在起作用。
+ */
 
 test('运动块只在画像说「自己按计划去」时主动排', () => {
   const self = build({ scenarios: scen({ exercise_trigger: 'self_plan' }) });
