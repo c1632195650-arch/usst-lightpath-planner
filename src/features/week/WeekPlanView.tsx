@@ -93,6 +93,8 @@ interface Props {
    * 点了「猛攻模式」排得一样松 —— 现在它会真正改变阶段策略的强度。
    */
   lifeMode: string | null;
+  /** 「📍 回到今天」：周次状态由 App（weekMonday）持有，点击回到本周 */
+  onGoToToday?: () => void;
 }
 
 /**
@@ -402,7 +404,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onGoToToday }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -644,6 +646,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     [weekMonday],
   );
 
+  /* ---------- 「回到今天」与今天列强调（2026-09-20） ---------- */
+  const todayIso = todayISO();
+
   /**
    * 「此刻」是否落在本周 —— `fromNow` 的前置条件。
    *
@@ -861,11 +866,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
   const updatePreview = useCallback((day: number, atMin: number, coord: string) => {
     if (!draggingId || !shownPlan) return;
-    // 🔴 去重 key 必须是**鼠标坐标**而不是落点时刻：
+    // 🔴 去重 key 必须是**鼠标坐标 + 滚动位置**而不是落点时刻：
     //    预览会重排布局 → 鼠标底下的块变了 → 落点变了 → key 变了 → 再重算 →
     //    无限震荡（块在新旧位置来回跳）。坐标不动就不重算 —— 布局冻结在当前预览。
-    if (previewKeyRef.current === coord) return;
-    previewKeyRef.current = coord;
+    //    加 scrollY：自动滚屏时鼠标 clientY 不变但页面内容移动了，必须让 key 变化。
+    const key = `${coord}:${window.scrollY}`;
+    if (previewKeyRef.current === key) return;
+    previewKeyRef.current = key;
 
     const src = shownPlan.blocks.find((b) => b.id === draggingId);
     if (!src) { setPreview(null); return; }
@@ -900,11 +907,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
   /**
    * 🔴 拖拽结束的**兜底清理**（挂在 window 上，不依赖源元素还活着）。
-   *
-   * 为什么必须：预览期间被拖的块会从列表里**卸载**（它变成了影子），
-   * 而浏览器的 `dragend` 派发给源元素 —— 元素都没了，事件没人收，
-   * `draggingId` 就会残留 → 那块永远卡在半透明「拖动中」样式。
-   * window 级监听永远收得到，drop / dragend / 取消 / Escape 全覆盖。
+   * ...
    */
   useEffect(() => {
     if (!draggingId) return;
@@ -919,6 +922,54 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       window.removeEventListener('drop', onEnd);
     };
   }, [draggingId, clearPreview]);
+
+  /**
+   * **拖拽期间的页面滚动**（2026-09-20，用户报告：页面下方的课程拖不进去）。
+   *
+   * 浏览器在 HTML5 拖拽期间禁用滚轮、也不做自动滚屏 —— 页面下方的列永远够不着。
+   * 两套补偿，都只挂在「拖动进行中」：
+   *   1. **边缘自动滚屏**：鼠标进入视口上/下 90px 时，按靠近程度持续滚动
+   *      （rAF 驱动；滚动改变内容位置 → dragover 继续触发 → 影子随之更新）；
+   *   2. **滚轮补偿**：DnD 吞掉滚轮的默认滚动，手动 `scrollBy` 补回来。
+   */
+  useEffect(() => {
+    if (!draggingId) return;
+    let lastClientY: number | null = null;
+    let raf = 0;
+    const EDGE = 90;       // 边缘触发区（px）
+    const MAX_SPEED = 18;  // 最大滚动速度（px/帧）
+
+    const step = () => {
+      if (lastClientY != null) {
+        const vh = window.innerHeight;
+        // 🔴 上滑判定线 = sticky 导航条的**底边**（2026-09-20 用户纠正）：
+        //    「上理生活助手」导航条不属于周计划板块 —— 光标停在它上面或刚过它下缘
+        //    就该开始上滑，而不是要顶进视口最顶端。
+        const headerBottom = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+        if (lastClientY < headerBottom + EDGE) {
+          // 光标在导航条内 = 已顶到头 → 全速上滑；刚过导航条下缘 → 缓慢上滑
+          const depth = Math.max(0, lastClientY - headerBottom);
+          window.scrollBy(0, -Math.ceil((1 - Math.min(depth / EDGE, 1)) * MAX_SPEED));
+        } else if (lastClientY > vh - EDGE) {
+          window.scrollBy(0, Math.ceil((1 - (vh - lastClientY) / EDGE) * MAX_SPEED));
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+
+    const onDragOver = (e: DragEvent) => { lastClientY = e.clientY; };
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); window.scrollBy(0, e.deltaY); };
+    window.addEventListener('dragover', onDragOver);
+    // capture 阶段：防止事件被页内滚动容器吃掉导致 window 收不到
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('wheel', onWheel, { capture: true });
+      lastClientY = null;
+    };
+  }, [draggingId]);
 
   /**
    * 落位计算（R1）—— 把某一块送到「星期几 + 起点」。
@@ -1457,6 +1508,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           用户的干预入口。加进去 / 删掉的事会**立刻**重排
           （`edits` 在主 effect 的依赖数组里）。 */}
       <div className="flex flex-wrap items-center gap-2">
+        {onGoToToday && (
+          <button
+            type="button"
+            onClick={() => {
+              onGoToToday();
+              // 切周渲染完成后再定位：把今天那一列滚到视口中央，当天安排完整可见
+              window.setTimeout(() => {
+                document.querySelector('[data-today-col]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 80);
+            }}
+            title="回到今天所在的那一周，并定位到今天"
+            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
+          >
+            📍 回到今天
+          </button>
+        )}
         <button
           type="button"
           onClick={handleUndo}
@@ -1619,10 +1686,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             ...gaps.map((g) => ({ kind: 'gap' as const, startMin: g.startMin, gap: g })),
             ...(ghost ? [{ kind: 'ghost' as const, startMin: ghost.startMin, ghost }] : []),
           ].sort((a, b) => a.startMin - b.startMin);
+          /** 今天列（2026-09-20）：查看本周时，今天那一列整体强调、日程块特别着色 */
+          const isToday = todayDow === day;
+          /** 该列日期的「月/日」显示（用户要求 M/D 形式，不补零） */
+          const [mm, dd] = dateOfDay(day).slice(5).split('-').map(Number);
           return (
             <div
               key={day}
+              data-today-col={isToday ? '' : undefined}
               className="panel p-3"
+              style={isToday ? { backgroundColor: '#9fadd0' } : undefined}
+              /* 🔴 dragover 不 preventDefault 的话 drop 不会触发（HTML5 铁律）——
+                 昨晚回退时间轴时漏掉了这里，导致整页没有合法 drop 目标、拖拽失效。 */
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (draggingId) updatePreview(day, tailMin + 10, `${e.clientX}:${e.clientY}`);
+              }}
               onDragLeave={(e) => {
                 // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
                 if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
@@ -1638,7 +1717,15 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
               }}
             >
               <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[13px] font-semibold text-ink">{name}</span>
+                <span className="text-[13px] font-semibold text-ink">
+                  {name}
+                  <span className={`ml-1.5 font-mono text-[11px] font-normal ${isToday ? 'text-brand' : 'text-ink-faint'}`}>
+                    {mm}/{dd}
+                  </span>
+                  {isToday && (
+                    <span className="ml-1.5 rounded bg-brand px-1.5 py-0.5 align-middle text-[9.5px] font-semibold text-white">今天</span>
+                  )}
+                </span>
                 {study > 0 && (
                   <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>
                 )}
@@ -1710,38 +1797,85 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                       );
                     }
                     if (item.kind === 'gap') {
+                      // 空闲块也是 drop 目标：拖到「⬜ 空闲 11:00–13:00」= 排到空档开头
+                      const gapProps = {
+                        onDragOver: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (draggingId && draggingId !== '__drag-ghost__') {
+                            updatePreview(day, item.gap.startMin, `${e.clientX}:${e.clientY}`);
+                          }
+                        },
+                        onDrop: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const id = e.dataTransfer.getData('text/plain') || draggingId;
+                          const atMin = preview && preview.day === day ? preview.atMin : item.gap.startMin;
+                          if (id && id !== '__drag-ghost__') handleDrop(id, day, atMin);
+                          setDraggingId(null);
+                          clearPreview();
+                        },
+                      };
                       return (
                         <div
                           key={`gap-${item.gap.startMin}`}
-                          className="rounded-lg border border-dashed border-ink/20 bg-paper/60 px-2.5 py-1.5 text-[11px] text-ink-faint"
+                          {...gapProps}
+                          className={`rounded-lg border border-dashed px-2.5 py-1.5 text-[11px] text-ink-faint ${
+                            draggingId ? 'border-brand/40 bg-brand-light/30' : 'border-ink/20 bg-paper/60'
+                          }`}
                         >
                           ⬜ 空闲 {toHHmm(item.gap.startMin)}–{toHHmm(item.gap.endMin)}
                           （{humanizeMinutes(item.gap.endMin - item.gap.startMin)}）
+                          {draggingId && <span className="ml-1 text-brand/70">· 可拖到这里</span>}
                         </div>
                       );
                     }
                     const b = item.block;
                     const newTaskId = recentTaskIds.find((tid) => b.id.endsWith(`-${tid}`));
                     return (
-                      <BlockCard
-                        key={b.id}
-                        block={b}
-                        date={dateOfDay(day)}
-                        locked={isLockedThisWeek(planState, weekNo, b)}
-                        onToggleLock={toggleLock}
-                        onExclude={handleExcludeBlock}
-                        assignmentMin={b.courseId ? assignmentByCourse.get(b.courseId) : undefined}
-                        onSetAssignment={handleSetAssignment}
-                        onClearAssignment={handleClearAssignment}
-                        edited={editedBlockIds.has(b.id)}
-                        onEditBlock={handleEditBlock}
-                        onRevertEdit={handleRevertEdit}
-                        dragging={draggingId === b.id}
-                        onDragStartCard={(blk) => { setDraggingId(blk.id); clearPreview(); }}
-                        onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
-                        isNew={!!newTaskId}
-                        onDismissNew={newTaskId ? () => setRecentTaskIds((prev) => prev.filter((tid) => tid !== newTaskId)) : undefined}
-                      />
+                      /* R1：落在某张卡上 = 放到**这一张的位置**，它之后的软块自动顺延。
+                          卡自己也是拖拽源（见 BlockCard），所以这里的 drop 必须先 stopPropagation，
+                          否则会把事件继续冒到「列末尾」那条 branches 上，落点变成最后。 */
+                      <div
+                        key={`wrap-${b.id}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (draggingId && draggingId !== b.id) {
+                            updatePreview(day, b.startMin, `${e.clientX}:${e.clientY}`);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const id = e.dataTransfer.getData('text/plain') || draggingId;
+                          // 与预览同一落点：影子画在哪，就落在哪
+                          const atMin = preview && preview.day === day ? preview.atMin : b.startMin;
+                          if (id && id !== b.id) handleDrop(id, day, atMin);
+                          setDraggingId(null);
+                          clearPreview();
+                        }}
+                      >
+                        <BlockCard
+                          key={b.id}
+                          block={b}
+                          date={dateOfDay(day)}
+                          locked={isLockedThisWeek(planState, weekNo, b)}
+                          onToggleLock={toggleLock}
+                          onExclude={handleExcludeBlock}
+                          assignmentMin={b.courseId ? assignmentByCourse.get(b.courseId) : undefined}
+                          onSetAssignment={handleSetAssignment}
+                          onClearAssignment={handleClearAssignment}
+                          edited={editedBlockIds.has(b.id)}
+                          onEditBlock={handleEditBlock}
+                          onRevertEdit={handleRevertEdit}
+                          dragging={draggingId === b.id}
+                          onDragStartCard={(blk) => { setDraggingId(blk.id); clearPreview(); }}
+                          onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
+                          isNew={!!newTaskId}
+                          onDismissNew={newTaskId ? () => setRecentTaskIds((prev) => prev.filter((tid) => tid !== newTaskId)) : undefined}
+                        />
+                      </div>
                     );
                   })}
                 </div>

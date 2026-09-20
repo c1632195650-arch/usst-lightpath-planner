@@ -255,6 +255,8 @@ export default function App() {
                 onPlanStateChange={(ps) => patchState({ planState: ps })}
                 // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
                 lifeMode={state.lifeMode}
+                // 「📍 回到今天」：weekMonday 置空 = 回到本周（App 的默认口径）
+                onGoToToday={() => setWeekMonday(null)}
               />
             ) : (
               <WeekView
