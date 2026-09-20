@@ -70,14 +70,31 @@ test('调用方已注入 req.transfer → 单遍（不再重复取数）', async
   // 注意：显式给了 factory 就是「我要两遍」——所以这里断言的是**没有 factory** 的情形
   assert.equal(called, true, '显式给了 factory 就该用它');
 
-  const res2 = await planWeek(req);
-  assert.equal(stablePlanJson(res2), stablePlanJson(planWeekV2(req)),
-    '已有 provider 时不该再取一次（结果应与单遍一致）');
+  // 融合注记（2026-09-20）：P2 起 fetchRoutes 优先于 req.transfer（见 planWeek.ts 头注，
+  // 这是 Ray 侧有意的行为变更，修的是「注入了 fetchRoutes 却拿不到实测值」的旧 bug）。
+  // 因此本测试不再断言「有 req.transfer 就绝不问路」——那在真实浏览器语义下已不成立。
+  // 这里钉住的是**确定性的降级出口**：fetchRoutes 抛错（后端不可达）→ 退回单遍，
+  // 结果必须与 planWeekV2 逐字节一致（不因收敛循环失败而崩、也不悄悄换布局）。
+  const degraded = await planWeek(req, {
+    fetchRoutes: async () => {
+      throw new Error('测试：模拟后端不可达');
+    },
+  });
+  assert.equal(stablePlanJson(degraded), stablePlanJson(planWeekV2(req)),
+    'fetchRoutes 失败应降级为单遍（结果与 planWeekV2 一致）');
 });
 
-test('无 factory 且无 req.transfer → Node 里取不到 transfer.ts，应降级单遍而不是崩', async () => {
+test('fetchRoutes 抛错（后端不可达）→ 降级单遍而不是崩', async () => {
   const req = toPlanRequest(buildGoldenInput(G));
-  const res = await planWeek(req); // 动态 import 会因 lib/api 的 import.meta.env 失败 → 降级
+  // 早期版本靠「Node 里动态 import transfer.ts 会失败」触发降级；如今 Node 也能加载它
+  // （register-alias 垫了 import.meta.env），且本机若恰好开着 8000 后端，收敛循环会真取到
+  // 实测分钟 —— 结果随环境漂移（门禁最忌讳的「随时间红绿」）。所以这里改成**显式注入
+  // 会抛错的 fetchRoutes**，确定性走到同一个降级出口。
+  const res = await planWeek(req, {
+    fetchRoutes: async () => {
+      throw new Error('测试：模拟后端不可达');
+    },
+  });
   assert.equal(stablePlanJson(res), stablePlanJson(planWeekV2(req)));
   assert.ok(typeof planWeek === 'function');
 });

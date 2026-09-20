@@ -11,74 +11,57 @@
  * 为什么要两遍：引擎是同步的，而网络是异步的。与其把引擎改成 async
  * （那会污染整条纯函数链、也没法 node --test），不如让它跑两遍 —— 第一遍
  * 只为收集「需要问哪些路」，第二遍才是给用户看的结果。
+ *
+ * ────────────────────────────────────────────────────────────
+ * 【本文件的职责边界 —— 只有一个】
+ * 「把 `FetchRoutes` 接到真实后端」。循环、指纹、缓存策略全在
+ * `transferConverge.ts` 里，因为**那个文件能在 Node 里加载**，而本文件不能
+ * （静态 import `lib/api.ts` → 顶层读 `import.meta.env`）。
+ *
+ * ⚠️ 所以：**不要在本文件里写任何需要测试的逻辑**。写了就等于没有测试 ——
+ *    单测加载不了这个模块。需要逻辑 → 加到 `transferConverge.ts`。
+ * ────────────────────────────────────────────────────────────
+ *
+ * 【§5.9 / T2.4 / AC-10】具体算法（迭代到不动点 + 预取候选对）写在
+ * `transferConverge.ts::convergeTransfers` 的注释里，那里解释得比这里细。
  */
-import type { TimeBlock } from '@/types';
+import type { TimeBlock, TimeBlock as Block } from '@/types';
 import { routeBatch } from '../api';
-import { campusFallbackTransfer, type TransferInfo, type TransferProvider } from './schedule.ts';
+import { campusFallbackTransfer, type TransferInfo, type TransferProvider } from './campusLookup.ts';
+import {
+  convergeTransfers,
+  TransferCache,
+  type ConvergeOptions,
+  type ConvergeResult,
+  type FetchRoutes,
+} from './transferConverge.ts';
 
-function key(a: string, b: string): string {
-  return `${a}→${b}`;
-}
+/* ── 纯逻辑的 re-export：调用方只需 import 本文件 ── */
+export {
+  collectTransferPairs,
+  collectCandidatePairs,
+  layoutSignature,
+  uncoveredPairs,
+  pairKey,
+  TransferCache,
+  MAX_TRANSFER_ROUNDS,
+} from './transferConverge.ts';
+export type {
+  FetchRoutes,
+  PlacedBlock,
+  ConvergeOptions,
+  ConvergeResult,
+} from './transferConverge.ts';
 
-/** 从一周的块里收集「相邻两个块在地点上不同」的点对（去重） */
-export function collectTransferPairs(blocks: TimeBlock[]): Array<[string, string]> {
-  const byDay = new Map<number, TimeBlock[]>();
-  for (const b of blocks) {
-    const list = byDay.get(b.dayOfWeek) ?? [];
-    list.push(b);
-    byDay.set(b.dayOfWeek, list);
-  }
-  const pairs: Array<[string, string]> = [];
-  const seen = new Set<string>();
-  for (const list of byDay.values()) {
-    const sorted = [...list].sort((a, b) => a.startMin - b.startMin);
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const a = sorted[i].place;
-      const b = sorted[i + 1].place;
-      if (!a || !b || a === b) continue;
-      const k = key(a, b);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      pairs.push([a, b]);
-    }
-  }
-  return pairs;
-}
+import { collectTransferPairs as collectTransferPairsLocal } from './transferConverge.ts';
 
 /**
- * 转场缓存。先问后端，问不到就退回「跨校区估算」，并如实标 reliable:false。
- * 不猜同校区的步行分钟 —— 那是真实路网的活儿。
+ * 真实后端的批量问路。
+ *
+ * 失败**不抛错**，只是拿不到实测值（返回 `{}`）—— 转场时间会退回兜底估算，
+ * 计划本身照常给出。这是刻意的：一个路网接口挂掉不该让用户看不到日程。
  */
-export class TransferCache {
-  private map = new Map<string, TransferInfo>();
-
-  /** 用后端批量结果填充 */
-  fill(routes: Record<string, { minutes: number; reliable?: boolean } | null>): void {
-    for (const [k, v] of Object.entries(routes)) {
-      if (v && typeof v.minutes === 'number') {
-        this.map.set(k, { minutes: v.minutes, source: 'osm', reliable: v.reliable !== false });
-      }
-    }
-  }
-
-  has(a: string, b: string): boolean {
-    return this.map.has(key(a, b));
-  }
-
-  size(): number {
-    return this.map.size;
-  }
-
-  /** 引擎用的同步 provider */
-  readonly provider: TransferProvider = (a, b) => {
-    const hit = this.map.get(key(a, b));
-    if (hit) return hit;
-    return campusFallbackTransfer(a, b); // 后端没结果时退回跨校区估算
-  };
-}
-
-/** 问后端要这批路线的实测步行时间（失败不抛错，只是拿不到实测值） */
-export async function prefetchRoutes(pairs: Array<[string, string]>): Promise<Record<string, { minutes: number; reliable?: boolean } | null>> {
+export const fetchRouteBatch: FetchRoutes = async (pairs) => {
   if (pairs.length === 0) return {};
   try {
     const res = await routeBatch(pairs);
@@ -86,12 +69,39 @@ export async function prefetchRoutes(pairs: Array<[string, string]>): Promise<Re
   } catch {
     return {};
   }
+};
+
+/** 语义别名 —— 同一个函数，两处语境各顺一个叫法 */
+export const backendFetchRoutes = fetchRouteBatch;
+
+/** 把缓存包成引擎要的同步 `TransferProvider`（未命中退回跨校区估算） */
+export function providerFromCache(cache: TransferCache): TransferProvider {
+  return (a: string, b: string): TransferInfo => {
+    const hit = cache.get(a, b);
+    if (hit) return hit as TransferInfo;
+    // `campusFallbackTransfer` 认不出校区时会返回 null（它拒绝猜）——
+    // 而 `TransferProvider` 的契约允许 null，所以原样透传即可。
+    return campusFallbackTransfer(a, b) as TransferInfo;
+  };
 }
 
-/** 一次性封装：收集 → 拉取 → 得到可用的 provider（供周计划重算） */
+/**
+ * 收敛编排（应用层入口）：接真实后端，跑 §5.9 的两条方法。
+ *
+ * @param solve 单趟求解。给一个缓存，吐出一版结果 —— 调用方（`planWeek`）
+ *              负责把 `providerFromCache(cache)` 塞进 `PlanRequest.transfer`。
+ */
+export function convergeWithBackend<B extends Block, R>(
+  solve: (cache: TransferCache) => { result: R; blocks: B[] },
+  opts: ConvergeOptions = {},
+): Promise<ConvergeResult<B, R>> {
+  return convergeTransfers(solve, backendFetchRoutes, providerFromCache as never, opts);
+}
+
+/** 一次性封装：收集 → 拉取 → 得到可用的 provider（**单遍**用；收敛场景请用 `convergeWithBackend`） */
 export async function buildTransferProvider(blocks: TimeBlock[]): Promise<TransferCache> {
   const cache = new TransferCache();
-  const pairs = collectTransferPairs(blocks).filter(([a, b]) => !cache.has(a, b));
-  cache.fill(await prefetchRoutes(pairs));
+  const pairs = collectTransferPairsLocal(blocks).filter(([a, b]) => !cache.has(a, b));
+  cache.fill(await fetchRouteBatch(pairs));
   return cache;
 }

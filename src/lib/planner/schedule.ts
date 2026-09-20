@@ -17,10 +17,10 @@
  *   ② `buildWeekPlan` 作为**兼容转调**：把 `BuildWeekPlanInput` 映射成 `PlanRequest`，
  *      交给 `construct`（= 旧 7 步），因此块内容与旧引擎逐块一致（AC-2）。
  */
-import type { DayOfWeek, PhasePolicy, Schedule, ScenarioFields, TimeBlock } from '@/types';
+import type { DayOfWeek, PhasePolicy, Schedule, ScenarioFields, TimeBlock, WeekPlan, RollingState } from '@/types';
 import { toHHmm } from '../../constants/time.ts';
 import type { ActivityTemplate, UserTask } from './templates.ts';
-import type { PlanRequest } from './model.ts';
+import type { Commit, PlanRequest } from './model.ts';
 import { construct } from './construct.ts';
 
 /* ============================================================
@@ -58,6 +58,27 @@ export interface BuildWeekPlanInput {
   dayEnd?: string;
   /** 是否排三餐（默认 true） */
   withMeals?: boolean;
+
+  /* —— P2 新增（全部可选：不传 = 旧行为，老调用点零改动）—— */
+  /**
+   * 跨周负荷状态（上一周的产物）。UI 侧用 `rollingForWeek(planState, weekNo)` 取，
+   * 别直接读 `planState.rolling` —— 那会在同一周内自我强化降档（见 planLock.ts）。
+   */
+  rolling?: RollingState | null;
+  /**
+   * 最近若干周的**实际**负荷（按星期几，下标 0 = 周一）。
+   * UI 侧由 `actualLoadByDow(records, weekMonday)` 得到。
+   * 与 `rolling.loadByDow`（计划值）互为补充：实际优先、计划兜底。
+   */
+  actualLoadByDow?: number[] | null;
+  /** 上一版计划（供增量重排算脏区域）；首次排程传 null */
+  previousPlan?: WeekPlan | null;
+  /** 上一版的提交项快照（供增量重排识别交期变化） */
+  previousCommits?: Commit[] | null;
+  /** 「从现在开始排」的分钟数（自当日 00:00 起的绝对分钟） */
+  fromNow?: number | null;
+  /** 与 `fromNow` 配套的星期几（1 = 周一） */
+  fromNowDay?: DayOfWeek | null;
 }
 
 export interface BuildWeekPlanResult {
@@ -79,6 +100,15 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     dayStart: input.dayStart,
     dayEnd: input.dayEnd,
     withMeals: input.withMeals,
+    // P2：条件展开 —— 不传的字段**不出现**在对象上，保持与旧行为逐字段一致。
+    // 显式把 `null` 归成「不传」（`PlanRequest` 的可选字段不带 null）：
+    // UI 手里就是 `WeekPlan | null` / `number | null`，要求它先判空是没必要的负担。
+    ...(input.rolling != null ? { rolling: input.rolling } : {}),
+    ...(input.actualLoadByDow != null ? { actualLoadByDow: input.actualLoadByDow } : {}),
+    ...(input.previousPlan != null ? { previousPlan: input.previousPlan } : {}),
+    ...(input.previousCommits != null ? { previousCommits: input.previousCommits } : {}),
+    ...(input.fromNow != null ? { fromNow: input.fromNow } : {}),
+    ...(input.fromNowDay != null ? { fromNowDay: input.fromNowDay } : {}),
   };
 }
 

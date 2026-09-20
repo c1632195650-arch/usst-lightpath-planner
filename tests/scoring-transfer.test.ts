@@ -33,13 +33,19 @@ const day = (
  * ① legacy 逐位不变（冻结锚点）
  * ============================================================ */
 
-/** 2026-09-15 冻结快照（tests/golden/*.json）的 cost 值，逐位比对 */
+/** 冻结快照（tests/golden/*.json）的 cost 值，逐位比对
+ *
+ * 融合换底（2026-09-20，CY 裁决「引擎取舍全部用 Ray」）：
+ * Ray 的 buildWeekPlan 转场估算与 dev 不同（平铺估算 vs 按校区距离），legacy 三档罚分
+ * 在 week-04-usertasks 上差一档（total 恰差 10.0），故该锚点换底为新引擎产出。
+ * 其余 4 个语料逐位未动。旧值：week-04-usertasks = 72.75（2026-09-15 dev 冻结）。
+ */
 const LEGACY_ANCHOR: Record<string, number> = {
   'week-04-typical': 76.25,
   'week-06-practice': 75.75,
   'week-12-crosscampus': 96.25,
   'week-19-exam': 72.25,
-  'week-04-usertasks': 72.75,
+  'week-04-usertasks': 62.75,
 };
 
 for (const g of GOLDEN_INPUTS) {

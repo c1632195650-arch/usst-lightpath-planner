@@ -253,6 +253,8 @@ export default function App() {
                 persona={state.persona}
                 planState={state.planState}
                 onPlanStateChange={(ps) => patchState({ planState: ps })}
+                // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
+                lifeMode={state.lifeMode}
               />
             ) : (
               <WeekView

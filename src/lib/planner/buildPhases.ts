@@ -18,6 +18,12 @@
 import type {
   PersonaProfile, Phase, PhaseKind, PhasePolicy, Schedule, SemesterPlan,
 } from '@/types';
+// 阶段 C：用户自己的改进建议（偏好校正层）要能叠加到阶段策略上。
+// 依赖方向 `buildPhases → corrections` 是 lib 内部同层引用，不引入反向依赖。
+import { applyCorrectionsToPolicy, composeEffectivePrefs, summarizeCorrections } from './corrections.ts';
+import type { CorrectionRule } from './corrections.ts';
+// 阶段 D：生活模式（平衡/摸鱼/猛攻…）要真正影响强度，而不只是换配色
+import { applyLifeMode } from './lifeModePolicy.ts';
 
 /** 校历里与本模块相关的最小信息（从 constants/term.ts 的 TermCalendar 取） */
 export interface PhaseCalendar {
@@ -49,12 +55,32 @@ const PHASE_NAME: Record<PhaseKind, string> = {
  *
  * 为什么是「池」而不是单值：单值时引擎永远取第一个，于是「说喜欢图书馆」
  * 就天天同一个图书馆 —— 可生活不是一成不变的。给池子后引擎按天轮换。
+ *
+ * ⚠️ **T8（2026-09-19）：每个池子都补足备选，不再「选了什么就锁死在那一个地方」。**
+ *
+ * 用户的原话：「自习为什么一定在宿舍里呢？每个人有倾向的，我就偏向于去空教室，
+ * 也可以去图书馆。**这是一个动态的偏向**。」
+ *
+ * 原来的映射是单值导向的 —— 选了 `dorm` 就只有「第二学生公寓」一个候选，
+ * 一周七天全排在那儿。但「我想在宿舍学」的真实含义是**倾向**，不是**排他**：
+ * 状态不好、室友在打游戏的时候，人自然会去图书馆。
+ *
+ * 现在每个偏好都是「首选 + 若干合理的备选」，由 `construct` 的 `rotateFrom` 按天轮换。
+ * 首选仍在最前面 —— 轮换是**从首选开始**转，不改变偏好的优先级。
+ *
+ * ⚠️ 若将来要让用户**自己**勾选这组地点（而不是由画像的单选题推导），
+ *    那属于画像层改动（`features/persona/**`，CY 地盘），需先协调。
+ *    当前这版是「不改画像也能让偏好不再排他」的最小改动。
  */
 const STUDY_PLACES: Record<string, string[]> = {
-  library: ['图书馆（图文信息中心）', '湛恩纪念图书馆', '老图书馆'],
-  classroom: ['第三教学楼', '第一教学楼'],
-  dorm: ['第二学生公寓'],
-  cafe: ['1906咖啡厅', '图书馆（图文信息中心）'],
+  // 图书馆派：安静为主，备选是同样能坐下来的地方
+  library: ['图书馆（图文信息中心）', '湛恩纪念图书馆', '老图书馆', '第三教学楼'],
+  // 空教室派：能摊开资料就行
+  classroom: ['第三教学楼', '第一教学楼', '图书馆（图文信息中心）'],
+  // 宿舍派：**不再锁死在宿舍** —— 这是 T8 修的那一条
+  dorm: ['第二学生公寓', '图书馆（图文信息中心）', '第三教学楼'],
+  // 咖啡厅派：换个环境，备选回到图书馆
+  cafe: ['1906咖啡厅', '图书馆（图文信息中心）', '第三教学楼'],
 };
 
 const DEFAULT_STUDY_PLACES = ['图书馆（图文信息中心）', '第三教学楼'];
@@ -156,11 +182,17 @@ export interface BuildPhasesResult {
  * @param schedule 课表（用 termStart/totalWeeks，以及课程周次算实际有课区间）
  * @param persona  画像，可为 null
  * @param calendar 校历（可选）：给了就用官方的理论教学/考试周边界
+ * @param corrections 用户的偏好校正（阶段 C，可选）：在其上叠加用户自己提的要求。
+ *        **缺省 = 旧行为**（不带校正），故既有调用方零改动。
+ * @param lifeMode 生活模式 id（阶段 D，可选）：平衡/摸鱼/猛攻… 会影响强度。
+ *        缺省 = 不调整（旧行为）。
  */
 export function buildPhases(
   schedule: Schedule,
   persona: PersonaProfile | null = null,
   calendar?: PhaseCalendar,
+  corrections?: readonly CorrectionRule[] | null,
+  lifeMode?: string | null,
 ): BuildPhasesResult {
   const totalWeeks = Math.max(1, schedule.totalWeeks);
   const notes: string[] = [];
@@ -236,10 +268,40 @@ export function buildPhases(
   }
   notes.push('阶段划分依据：校历的教学周结构 + 你课表的实际周次区间 + 画像');
   notes.push(...adaptReasons);
+  // 阶段 D：把原型**说出来**。
+  //
+  // 为什么只解释、不额外调 policy：原型本质是 8 轴的一种聚类概括，
+  // 而 `applyPersona` 已经把每条轴逐个消费过了 —— 再拿原型调一遍就是**重复计价**，
+  // 会让「按画像排」悄悄变成「按画像排两次」，日后偏离基准时无从归因。
+  // 让它在理由里出现，画像页那张卡片就不再是装饰，用户也能对得上号。
+  const arch = persona?.archetype.primary;
+  if (arch) notes.push(`整体节奏参照你的原型「${arch.name}」：${arch.tagline}`);
+
+  /**
+   * 阶段 C：把用户的偏好校正合成**一次**，供每个阶段复用。
+   *
+   * 位置刻意选在 `applyPersona` **之后** —— 画像先给出「你这个阶段该多紧」的基线，
+   * 校正层再在其上叠加「用户的额外要求」。反过来（先校正、后画像）会让画像的
+   * 自动调整把用户明确说过的话又推回去，用户会觉得「我说了不算」。
+   */
+  const eff = composeEffectivePrefs(persona, corrections ?? []);
+  const correctionReason = (() => {
+    const active = (corrections ?? []).filter((r) => r.active);
+    if (active.length === 0) return null;
+    return `已应用你的要求：${summarizeCorrections(active).map((i) => i.title).join('；')}`;
+  })();
 
   const phases: Phase[] = segs.map(({ kind, from, to }) => {
-    const { policy, reasons } = applyPersona(kind, BASE_POLICY[kind], persona);
+    const { policy: personaPolicy, reasons } = applyPersona(kind, BASE_POLICY[kind], persona);
+    // 叠加顺序：画像基线 → 生活模式 → 用户校正。
+    // 每个环节的取舍见各自模块头部说明（后两者都会在 reasons 里留下痕迹）。
+    const lm = applyLifeMode(personaPolicy, lifeMode);
+    const policy = applyCorrectionsToPolicy(lm.policy, eff);
     const rs = [...reasons];
+    // 生效了就必须**说出来**。否则用户切了模式 / 提了要求却看不到任何痕迹，
+    // 会以为功能坏了 —— 这是本项目一直坚持的「可解释」纪律。
+    if (lm.note) rs.push(lm.note);
+    if (correctionReason) rs.push(correctionReason);
     if (kind === 'exam') rs.unshift(`第 ${from}-${to} 周是考试周，课已结束，重点是复习节奏与睡眠`);
     return {
       kind,
@@ -267,13 +329,15 @@ export function buildPhasesFromCalendar(
   schedule: Schedule,
   persona: PersonaProfile | null,
   calendar?: { phases?: Array<{ kind: string; fromWeek: number; toWeek: number }> },
+  corrections?: readonly CorrectionRule[] | null,
+  lifeMode?: string | null,
 ): BuildPhasesResult {
   const theory = calendar?.phases?.find((p) => p.kind === 'theory');
   const exam = calendar?.phases?.find((p) => p.kind === 'exam');
   return buildPhases(schedule, persona, {
     theoryFromWeek: theory?.fromWeek,
     examFromWeek: exam?.fromWeek,
-  });
+  }, corrections, lifeMode);
 }
 
 /** 查某周落在哪个阶段（周计划生成时用） */
