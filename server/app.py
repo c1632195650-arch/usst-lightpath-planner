@@ -19,6 +19,9 @@
   GET  /api/nearby?from=&k=&funcs=&types=  就近推荐（按步行分钟，OSM 路网实算）
   POST /api/chat   {q, session_id, user_id, k}
   POST /api/memory/reset  {session_id, user_id}
+  GET  /api/memory/facts?user_id=&status=      记忆面板：事实列表（pending/applied）
+  POST /api/memory/facts/{id}/confirm|reject|undo   确认 / 拒绝 / 撤销
+  DELETE /api/memory/facts/{id}                删除
   GET  /api/route?from=&to=&mode=         两点步行路径（排程引擎的转场时间）
   POST /api/route/batch  {pairs:[[a,b],...]}  批量问路
   GET  /api/weather?days=7                未来天气（Open-Meteo · 分时段摘要）
@@ -761,8 +764,14 @@ def api_chat(body: ChatReq):
             answer = extractive_answer(sources, route)
 
     # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
+    #    ⚠️ 2026-09-20 前这里返回的 facts 被直接丢弃 —— 「记忆调整画像」断在这一行。
+    #    现在 user 轮的事件随响应下发：pending=客观事实待确认（出建议卡），
+    #    applied=偏好已自动生效（出可撤销提示）。
+    mem_events = {"pending": [], "applied": []}
     try:
-        memory.remember(body.user_id, body.session_id, "user", q)
+        got = memory.remember(body.user_id, body.session_id, "user", q)
+        if isinstance(got, dict):
+            mem_events = {"pending": got.get("pending", []), "applied": got.get("applied", [])}
         memory.remember(body.user_id, body.session_id, "assistant", desensitize(answer))
     except Exception as e:
         print("[memory] 写入失败：", e)
@@ -787,6 +796,9 @@ def api_chat(body: ChatReq):
         "tools": tools_used,
         # 纯附加字段（不破坏既有契约）：给前端调试抽屉与日志做对齐用
         "request_id": rid, "elapsed_ms": round(elapsed_ms),
+        # 记忆回写事件（M2）：客观事实待确认 / 偏好已自动生效 —— 前端据此出卡片
+        "memory_proposals": mem_events["pending"],
+        "memory_applied": mem_events["applied"],
     }
 
 class ResetReq(BaseModel):
@@ -802,8 +814,45 @@ def reset_mem(body: ResetReq):
     c.execute("DELETE FROM sessions WHERE session_id=?", (body.session_id,))
     if body.user_id:
         c.execute("DELETE FROM profiles WHERE user_id=?", (body.user_id,))
+        c.execute("DELETE FROM facts WHERE user_id=?", (body.user_id,))
     c.commit(); c.close()
     return {"ok": True}
+
+# ---------------- 记忆面板（M2/M3）：事实的确认 / 拒绝 / 撤销 / 删除 ----------------
+# 原则（CY 2026-09-20 拍板）：
+#   · 客观事实（年级/学院/专业）一律要用户确认 —— AI 只提议；
+#   · 偏好类自动生效，但可撤销；
+#   · 全部可删；user_id 为设备级（暂不跨设备，取值已在前端收敛为单一来源）。
+
+@app.get("/api/memory/facts")
+def api_list_facts(user_id: str = "anon", status: str = ""):
+    """status=pending / applied / 空表示两者都要。"""
+    if status not in ("", "pending", "applied", "rejected"):
+        return {"facts": [], "error": "invalid status"}
+    try:
+        return {"facts": memory.list_facts(user_id, status or None)}
+    except Exception as e:
+        print("[memory] facts 查询失败：", e)
+        return {"facts": []}
+
+@app.post("/api/memory/facts/{fact_id}/confirm")
+def api_confirm_fact(fact_id: int):
+    r = memory.confirm_fact(fact_id)
+    return {"ok": r is not None, "fact": r}
+
+@app.post("/api/memory/facts/{fact_id}/reject")
+def api_reject_fact(fact_id: int):
+    r = memory.reject_fact(fact_id)
+    return {"ok": r is not None, "fact": r}
+
+@app.post("/api/memory/facts/{fact_id}/undo")
+def api_undo_fact(fact_id: int):
+    r = memory.undo_fact(fact_id)
+    return {"ok": r is not None, "fact": r}
+
+@app.delete("/api/memory/facts/{fact_id}")
+def api_delete_fact(fact_id: int):
+    return {"ok": memory.delete_fact(fact_id)}
 
 if __name__ == "__main__":
     import uvicorn

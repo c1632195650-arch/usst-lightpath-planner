@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO } from '@/lib/date';
-import { lbaoChat, lbaoHealth, type ChatResult, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, decideFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
+import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { parseGoalIntent, describeSlots } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswer, parseGoalIntent, describeSlots, topQuestions, type IntentSlots } from '@/features/libao/libaoIntent';
 import {
   checkGoalFeasibility,
   describeVerdict,
@@ -15,6 +16,7 @@ import {
 } from '@/features/libao/weekPlanForChat';
 import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan } from '@/features/week/userPlanStore';
 import { ChatDebug } from '@/features/libao/ChatDebug';
+import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
 
 /** DEV 专用：把「已经拿回来、但一直没人看」的检索与路由信号显示出来。
  *  `import.meta.env.DEV` 在生产构建里是字面量 false → 整段被摇掉，线上零变化。 */
@@ -36,13 +38,25 @@ interface Msg {
   /** 目标草稿卡的确认键 —— 有值且 `pending` 里还有对应草稿时，渲染「就这么排」按钮。
    *  确认前**什么都不写入**：草稿只是草稿，执行权在用户手里（core §4 L4）。 */
   goalAsk?: number;
+  /** 记忆建议卡（M2）：客观事实待确认 —— 用户点头才进画像与基础信息 */
+  proposals?: MemoryFact[];
+  /** 已自动生效的偏好（M2）：出可撤销提示 */
+  applied?: MemoryFact[];
 }
 
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。 */
 interface PendingGoal {
   title: string;
   tasks: UserTask[];
-  weekNo: number;
+  /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
+  weeks: number[];
+}
+
+/** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
+function weeksLabel(weeks: number[]): string {
+  if (weeks.length === 0) return '本期';
+  if (weeks.length === 1) return `第 ${weeks[0]} 周`;
+  return `第 ${weeks[0]}–${weeks[weeks.length - 1]} 周`;
 }
 
 /** 常见问法，避免第一次进入对话没有入口。 */
@@ -72,24 +86,10 @@ function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** 设备级标识：持久化复用 —— 后端的「长期画像」靠它跨会话累积。
- *  ⚠️ 换设备或清缓存 = 变成另一个人，这是无登录体系下的已知限制。 */
-function deviceUserId(): string {
-  const KEY = 'usst.libao.user_id';
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved) return saved;
-    const id = `u-${newId()}`;
-    localStorage.setItem(KEY, id);
-    return id;
-  } catch {
-    // 隐私模式等场景 localStorage 不可写 → 退回后端默认，功能降级但不报错
-    return 'anon';
-  }
-}
-
 /** 会话级标识：存 sessionStorage，关掉标签页即失效 —— 对应后端「最近原话」的窗口。
- *  与 user_id **刻意分开**：合成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。 */
+ *  与 user_id **刻意分开**：合成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。
+ *  （user_id 的取值已收敛到 `@/lib/identity` 的 `getUserId()` —— 单一来源，
+ *   将来换登录/同步方案只改那一处。） */
 function currentSessionId(): string {
   const KEY = 'usst.libao.session_id';
   try {
@@ -119,17 +119,27 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   const [pending, setPending] = useState<Record<number, PendingGoal>>({});
   const pendingSeq = useRef(0);
 
+  /** 追问接续态：needs_clarification 时把**半成品槽位**存这里，下一句话先当
+   *  「追问的回应」尝试解析（applyClarifyAnswer），补齐了就继续出草稿。
+   *  没有它，用户的回答会被当成全新消息重新分流 ——「每周 3 次、每次 2 小时」
+   *  不是动作句 → 掉进 RAG 问答（2026-09-20 真实使用翻车的根因）。 */
+  const [clarifySlots, setClarifySlots] = useState<IntentSlots | null>(null);
+
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
-    userId: deviceUserId(),
+    userId: getUserId(),
     sessionId: currentSessionId(),
   }));
 
-  /** 用户档案摘要：画像轴值 + 本周课表 + 学期阶段。
+  /** 记忆面板开关（M3） */
+  const [memoryOpen, setMemoryOpen] = useState(false);
+
+  /** 用户档案摘要：画像轴值 + 本周课表 + 学期阶段 + 基础信息（M1）。
    *  每轮随请求发出，但只在 profile / schedule 变化时重算 —— 后端会把它注入 system prompt，
    *  这是「梨宝知道你是谁」这件事的全部数据来源。 */
   const profileCtx = useMemo(
-    () => buildProfileContext(profile, schedule),
+    () => [buildProfileContext(profile, schedule), basicInfoContext()]
+      .filter(Boolean).join('\n\n'),
     [profile, schedule],
   );
 
@@ -162,7 +172,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       });
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: `好，「${g.title}」写进第 ${g.weekNo} 周了，共 ${g.tasks.length} 个块。去周计划看全貌；排得不合适可以撤销（↩），也可以直接跟我说改。`,
+        text: `好，「${g.title}」写进${weeksLabel(g.weeks)}的日程了，共 ${g.tasks.length} 个块。去周计划看全貌；排得不合适可以撤销（↩），也可以直接跟我说改。`,
         goWeek: true,
       }]);
       track('plan_result', { ok: true, ms: 0, n: g.tasks.length });
@@ -173,6 +183,98 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         text: '写入日程的时候出了点小状况，没写成。草稿还在上面，你可以再点一次，或去周计划手动加。',
       }]);
     }
+  };
+
+  /** 记忆卡操作（M2）：confirm / reject / undo —— 只作用于用户点到的那一条。
+   *  客观事实确认后同步写进本地基础信息（AI 只提议、用户拍板的最后一公里）。 */
+  const handleFact = async (msgIndex: number, fact: MemoryFact, action: 'confirm' | 'reject' | 'undo') => {
+    try {
+      await decideFact(identity.userId, fact.id, action);
+      if (action === 'confirm' && objectiveKeyToField(fact.key)) {
+        applyObjectiveFact(fact.key, fact.value);
+      }
+    } catch {
+      return; // 服务挂了：卡片留在原地，用户可重试
+    }
+    setMessages((current) => current.map((m, i) => (i === msgIndex ? {
+      ...m,
+      proposals: m.proposals?.filter((f) => f.id !== fact.id),
+      applied: m.applied?.filter((f) => f.id !== fact.id),
+    } : m)));
+  };
+
+  /** 目标槽位 → 干跑把关 → 追问 / 草稿 / 冲突说明。
+   *  「新句子抽出的槽位」与「追问接续补齐的槽位」共用这一条通路 ——
+   *  两口各写一份必然漂移（同 checkGoalFeasibility 是唯一完备性判定的道理）。 */
+  const runGoalSlots = async (slots: IntentSlots, today: string) => {
+    const t0 = Date.now();
+    try {
+      // 干跑把关：能不能排，由**引擎**说了算，不由 LLM 的嘴说了算。
+      // （不传 weekNo —— 干跑按候选块**真正落在的周**逐周跑，见 checkGoalFeasibility。）
+      const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
+      track('plan_result', { ok: true, ms: Date.now() - t0 });
+
+      const lines = [...describeSlots(slots), ...describeVerdict(verdict)];
+
+      if (verdict.kind === 'needs_clarification') {
+        // 信息不全 → 只追问，绝不动手。猜一个排进去，比慢一轮更糟。
+        // 半成品槽位存起来 —— 用户的下一句话是「答案」，不是新消息（追问接续）。
+        setClarifySlots(slots);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `想把「${slots.title}」排进日程，我还得问两句：`,
+          planPoints: verdict.questions,
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      // 走到这就不再等答案了：出草稿或说清冲突，都算「这轮问完了」。
+      setClarifySlots(null);
+
+      if (verdict.kind === 'ok' || verdict.kind === 'tight') {
+        // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
+        // 窗口常跨多周 —— 落盘的周从任务本身取，不假设是「当前周」。
+        const goalTasks = goalToTasks(slots, schedule, today);
+        const weeks = [...new Set(goalTasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
+        const key = (pendingSeq.current += 1);
+        setPending((p) => ({ ...p, [key]: {
+          title: slots.title,
+          tasks: goalTasks,
+          weeks,
+        } }));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: verdict.kind === 'ok'
+            ? `「${slots.title}」我排了一版草稿（还没写进日程）：`
+            : `「${slots.title}」排得下，但会紧一点。草稿在这（还没写进日程）：`,
+          planPoints: lines,
+          goalAsk: key,
+          goWeek: true,
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: verdict.kind === 'conflict'
+          ? `「${slots.title}」这么排会撞车：`
+          : `「${slots.title}」我排不进去：`,
+        planPoints: lines,
+        goWeek: true,
+      }]);
+    } catch {
+      track('degrade', { id: 'goal-engine-error' });
+      setClarifySlots(null);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
+        goWeek: true,
+      }]);
+    }
+    setLoading(false);
   };
 
   /** 发送提问；排程意图在本地处理，其余交给校园资料问答。
@@ -194,69 +296,37 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
      *  老的 `isRecommendIntent` 已被 `looksLikeAction` 取代 —— 后者是它的
      *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
     const today = todayISO();
+
+    // ── 追问接续：上一条梨宝消息在等答案 → 这句先当「回应」解析 ──
+    // 「每周 3 次、每次 2 小时」单独看不是动作句，looksLikeAction 判 false 是对的；
+    // 没有这段，答案就会掉进 RAG 问答被记忆层带偏（2026-09-20 真实翻车）。
+    if (clarifySlots) {
+      const merged = applyClarifyAnswer(q, clarifySlots, today);
+      if (merged.contributed) {
+        if (merged.slots.missing.length > 0) {
+          // 补了一半（比如只给了单次时长没给次数）→ 存档，继续追问剩下的
+          setClarifySlots(merged.slots);
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: '还差一点：',
+            planPoints: topQuestions(merged.slots),
+          }]);
+          setLoading(false);
+          return;
+        }
+        // 补齐了 → 带着完整槽位走同一条干跑通路
+        setClarifySlots(null);
+        await runGoalSlots(merged.slots, today);
+        return;
+      }
+      // 答非所问 → 按普通消息分流；若命中新目标，旧追问自然作废
+      setClarifySlots(null);
+    }
+
     const outcome = await parseGoalIntent(q, { today });
 
     if (outcome.action && outcome.slots.title) {
-      const slots = outcome.slots;
-      const weekNo = currentWeekNo(schedule.termStart);
-      const t0 = Date.now();
-      try {
-        // 干跑把关：能不能排，由**引擎**说了算，不由 LLM 的嘴说了算
-        const verdict = checkGoalFeasibility({ slots, schedule, profile, weekNo, today });
-        track('plan_result', { ok: true, ms: Date.now() - t0 });
-
-        const lines = [...describeSlots(slots), ...describeVerdict(verdict)];
-
-        if (verdict.kind === 'needs_clarification') {
-          // 信息不全 → 只追问，绝不动手。猜一个排进去，比慢一轮更糟。
-          setMessages((current) => [...current, {
-            role: 'lbao',
-            text: `想把「${slots.title}」排进日程，我还得问两句：`,
-            planPoints: verdict.questions,
-          }]);
-          setLoading(false);
-          return;
-        }
-
-        if (verdict.kind === 'ok' || verdict.kind === 'tight') {
-          // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
-          const key = (pendingSeq.current += 1);
-          setPending((p) => ({ ...p, [key]: {
-            title: slots.title,
-            tasks: goalToTasks(slots, schedule, today),
-            weekNo,
-          } }));
-          setMessages((current) => [...current, {
-            role: 'lbao',
-            text: verdict.kind === 'ok'
-              ? `「${slots.title}」我排了一版草稿（还没写进日程）：`
-              : `「${slots.title}」排得下，但会紧一点。草稿在这（还没写进日程）：`,
-            planPoints: lines,
-            goalAsk: key,
-            goWeek: true,
-          }]);
-          setLoading(false);
-          return;
-        }
-
-        // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**
-        setMessages((current) => [...current, {
-          role: 'lbao',
-          text: verdict.kind === 'conflict'
-            ? `「${slots.title}」这么排会撞车：`
-            : `「${slots.title}」我排不进去：`,
-          planPoints: lines,
-          goWeek: true,
-        }]);
-      } catch {
-        track('degrade', { id: 'goal-engine-error' });
-        setMessages((current) => [...current, {
-          role: 'lbao',
-          text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
-          goWeek: true,
-        }]);
-      }
-      setLoading(false);
+      await runGoalSlots(outcome.slots, today);
       return;
     }
 
@@ -318,6 +388,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         // answer/sources/mode，其余当场丢掉 —— 于是「答得不对」时没有第二手信息。
         // 整包存下来给 DEV 调试抽屉，生产构建不渲染。
         debug: response,
+        // 记忆回写（M2）：客观事实出建议卡等确认；偏好已自动生效，出可撤销提示
+        proposals: response.memory_proposals?.length ? response.memory_proposals : undefined,
+        applied: response.memory_applied?.length ? response.memory_applied : undefined,
       }]);
       setOnline(true);
     } catch {
@@ -365,6 +438,13 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         </div>
 
         <div className="mt-auto pt-4 lg:pt-6">
+          {/* 记忆入口（M3）：梨宝记住了什么，点开全部可见、可确认、可撤销、可删 */}
+          <button
+            onClick={() => setMemoryOpen(true)}
+            className="mb-3 w-full rounded-xl border border-white/15 px-3 py-2 text-left text-xs text-white/70 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white"
+          >
+            📓 梨宝记住了什么（查看 / 确认 / 删除）
+          </button>
           {/* 未连接用琥珀而不是品牌靛蓝：靛蓝在这套色板里代表「正常 / 可操作」，
               拿它表示服务不可用会把告警读成常态。 */}
           <div className={`flex items-center gap-2 text-xs ${online === false ? 'text-accent' : 'text-white/55'}`}>
@@ -433,6 +513,34 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
                   <p className="pl-1 text-[11.5px] text-ink-faint">完整时间轴在「总览 → 选一周 → 周计划」</p>
                 )}
 
+                {/* 记忆建议卡（M2）：客观事实（年级/学院/专业）只提议，点头才记 */}
+                {message.proposals && message.proposals.length > 0 && (
+                  <div className="w-full space-y-2 pl-1">
+                    <p className="text-[11.5px] text-ink-faint">我在对话里听到了这些身份信息，你点头我才记：</p>
+                    {message.proposals.map((fact) => (
+                      <div key={fact.id} className="flex w-full items-center justify-between gap-2 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-sm">
+                        <span className="text-ink">{factLabel(fact.key)}：{fact.value}</span>
+                        <span className="flex shrink-0 gap-2">
+                          <button onClick={() => void handleFact(index, fact, 'confirm')} className="button-primary px-3 py-1.5 text-xs">记下来</button>
+                          <button onClick={() => void handleFact(index, fact, 'reject')} className="rounded-xl border border-ink/15 px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-ink/30">不记</button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 已自动生效的偏好（M2）：自动记下，但随时可撤销 */}
+                {message.applied && message.applied.length > 0 && (
+                  <div className="w-full space-y-1.5 pl-1">
+                    {message.applied.map((fact) => (
+                      <div key={fact.id} className="flex w-full items-center justify-between gap-2 rounded-xl border border-ok/25 bg-ok/10 px-3 py-2 text-[12.5px] text-ink-soft">
+                        <span>顺手记下了：{factLabel(fact.key)} · {fact.value}</span>
+                        <button onClick={() => void handleFact(index, fact, 'undo')} className="shrink-0 underline underline-offset-2">撤销</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {message.sources && message.sources.length > 0 && (
                   <div className="w-full divide-y divide-ink/10 border-y border-ink/10 pl-1">
                     {message.sources.slice(0, 3).map((source, sourceIndex) => (
@@ -479,6 +587,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
           </button>
         </div>
       </section>
+
+      <MemoryPanel open={memoryOpen} userId={identity.userId} onClose={() => setMemoryOpen(false)} />
     </div>
   );
 }
