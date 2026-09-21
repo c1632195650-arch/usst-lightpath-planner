@@ -1,0 +1,33 @@
+# 行尾与二进制声明 —— 2026-09-21 三树合流时加入
+#
+# 背景：本项目有多棵树与多个工具交替写入，行尾不统一会在跨树搬运时产生
+# **整文件 diff 噪音**：2026-09-21 合流实测，6 个数据文件仅因 CRLF/LF 差异
+# 就虚增约 5.2 万行改动，把真实改动淹掉了。
+#
+# 本仓约定：**`_work_dev` 全仓 LF**。
+#   `_full`（301/302 文件）与 `usst-planner` 是 CRLF —— 从它们 cp 文件过来后，
+#   跑 `python scripts/normalize_eol.py` 归一即可（对已是 LF 的文件是空操作，
+#   不会误伤队友文件）。
+#
+# `-text` = 禁止 git 做任何行尾转换，仓库里存的字节 == 工作区字节。
+#   好处：跨树比较/搬运不会因 git 的暗自转换而虚增差异，行为完全可预期。
+#   若将来想把归一化交给 git 自动完成，改成 `* text=auto eol=lf` 并跑
+#   `git add --renormalize .` —— 那是会影响全仓（含 `_full`）的决定，需先商量。
+
+* -text
+
+# 二进制（显式声明，避免将来有人把 * 改成 text=auto 时误伤）
+*.db    binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.zip   binary
+*.gz    binary
+*.xlsx  binary
+*.pdf   binary
+*.pyc   binary
