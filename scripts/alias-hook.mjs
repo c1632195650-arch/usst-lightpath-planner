@@ -22,8 +22,11 @@
 
 const SRC = new URL('../src/', import.meta.url);
 
-/** 已带扩展名的原样解析，否则补扩展名（源码里两种写法都有） */
-const HAS_EXT = /\.[a-z]+$/i;
+/** 已带扩展名的原样解析，否则补扩展名（源码里两种写法都有）。
+ *  ⚠️ 必须是**真实扩展名白名单**而非「有点就当扩展名」——
+ *     否则 `@/data/healthParams.generated` 里的 `.generated` 会被误判为扩展名，
+ *     补不上 `.ts` 直接 ERR_MODULE_NOT_FOUND（2026-09-21 三树合流时踩到）。 */
+const HAS_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|json|css|svg|md)$/i;
 
 /** 相对导入可补的扩展名，按优先级尝试 */
 const TRY_EXT = ['.ts', '.tsx'];

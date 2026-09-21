@@ -1,0 +1,40 @@
+{
+ "_meta": {
+  "what": "骑行通行假设表 —— 我们**没有**骑行路网数据，本表是**显式写下的假设**，不是实测。",
+  "why_assumption": "主校区 OSM 提取 junchanglu.osm 里 k=\"bicycle\" 标签 0 条（只有复兴路校区的 fuxinglu.osm 有 12 条）。也就是说：我们不知道校内哪条路禁骑、限行时段是什么、哪里能停车 —— 做不出真正的骑行寻路，硬做就是假精确。",
+  "status": "assumption（假设）—— 由此算出的任何骑行时间对外必须标注『估算』，不得与实测混用。",
+  "date": "2026-09-18",
+  "rule_source": "OSM 默认通行规则（OSM wiki 的 default access 表）。注意这是**默认值**，不是实地勘察结果。",
+  "speed_kmh": 12,
+  "speed_basis": "校园内短距骑行的常见巡航速度（12 km/h ≈ 3.3 m/s）。刻意保守：校内人多、路口多、要停车让行。",
+  "overhead_seconds": 120,
+  "overhead_basis": "取车 + 锁车 2 分钟（含找车/扫码/停车入位），是经验值而非实测。",
+  "how_we_use_it": "目前**只用于**把步行距离换算成骑行时间估计，标记为 est：bike_minutes = 距离 ÷ 12 km/h ÷ 60 + 2 分钟。**不用于骑行寻路** —— 因为按本表，校内可骑的路主要是 service/residential，footway/pedestrian/steps 全部禁骑或需推行，真正的骑行路线与步行路线差别会很大。",
+  "unresolved": [
+   "校内禁骑区 / 限行时段 OSM 未标注 —— 本表按默认可骑处理，若实地有禁骑，本表会高估可骑范围。",
+   "停车点（amenity=bicycle_parking）未采集 —— 取车还车的真实步行时间无法估算，只用固定 120 秒替代。",
+   "上下坡未建模 —— 上理本部基本平坦，暂按平地处理；若含复兴路校区需重估。"
+  ]
+ },
+ "rules": [
+  {"highway": "steps",        "bike": false, "basis": "OSM 默认：台阶不可骑（可推行）"},
+  {"highway": "footway",      "bike": false, "basis": "OSM 默认：人行步道仅行人（可推行）"},
+  {"highway": "pedestrian",   "bike": false, "basis": "OSM 默认：步行广场/步行街仅行人"},
+  {"highway": "corridor",     "bike": false, "basis": "室内走廊，禁骑"},
+  {"highway": "path",         "bike": true,  "basis": "OSM 默认：通用小径可骑（窄路谨慎）"},
+  {"highway": "cycleway",     "bike": true,  "basis": "专用自行车道"},
+  {"highway": "service",      "bike": true,  "basis": "OSM 默认：内部道路可骑"},
+  {"highway": "residential",  "bike": true,  "basis": "OSM 默认：居住区道路可骑"},
+  {"highway": "living_street","bike": true,  "basis": "OSM 默认：生活街区可骑"},
+  {"highway": "track",        "bike": true,  "basis": "OSM 默认：土路可骑"},
+  {"highway": "unclassified", "bike": true,  "basis": "OSM 默认：可骑"},
+  {"highway": "tertiary",     "bike": true,  "basis": "OSM 默认：可骑"},
+  {"highway": "secondary",    "bike": true,  "basis": "OSM 默认：可骑"},
+  {"highway": "primary",      "bike": true,  "basis": "OSM 默认：可骑（靠右、注意车流）"},
+  {"highway": "trunk",        "bike": false, "basis": "OSM 默认：快速路禁骑（中环路）"},
+  {"highway": "motorway",     "bike": false, "basis": "OSM 默认：高速禁骑"}
+ ],
+ "footnote": {
+  "tunnel": "车行隧道（tunnel=yes 的城市道路）行人骑行都不可通行 —— 已在 campus_network.TUNNEL_CAR 里从步行路网剔除（2026-09-18）。"
+ }
+}

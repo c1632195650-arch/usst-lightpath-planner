@@ -29,18 +29,30 @@ except Exception:
     pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 两个离线断言集，**都要跑**：
+#   · evals/test_judge_rules.py    门禁用例（2026-09-16 / 09-15 两次真实误报的固化）
+#   · scripts/fact_probe.py --selftest-judge  judge() 的罐头自检（24 例）
+# 🔴 2026-09-20：只跑门禁用例时，R1/R2 的变异体会「破坏后测试仍绿」——
+#   不是守卫坏了，是**门禁用例里根本没有断言锁「摇摆」桶与营业状态抹除**
+#   （那两条一直是 judge 自带自检在守）。变异点射程与断言集射程不对齐，
+#   反向验证就会把「没人守」误报成「守不住」。
 RULES_CMD = [sys.executable, os.path.join(ROOT, "evals", "test_judge_rules.py")]
+SELFTEST_CMD = [sys.executable, os.path.join(ROOT, "scripts", "fact_probe.py"),
+                "--selftest-judge"]
 
 # 每个变异 = (编号, 目标文件, 定位串, 破坏后的替换, 会抓到它的用例)
 MUTATIONS = [
+    # ⚠️ 2026-09-20 随 PR #23 的 fact_probe.py 升级同步（旧锚点已失配 4 处）：
+    #   `(?<!现在)(?<!还)没开` 被 STATUS 整段吸收；judge 里证据命中、犹豫判定、
+    #   贴实体否认的判定都改了写法。同时把断言集补上 judge 自带自检（见 RULES_CMD 注释）。
     ("R1", "scripts/fact_probe.py",
-     r'(?<!现在)(?<!还)没开',
-     r'没开',
-     "「现在没开」被误判否定（2026-09-16 事件的守卫失效）"),
+     'NEG.search(STATUS.sub("", a))',
+     "NEG.search(a)",
+     "营业状态抹除失效 → 模板答「现在没开」被误判否定（2026-09-16 事件守卫失效）"),
     ("R2", "scripts/fact_probe.py",
-     'return "摇摆", "既提到又出现否定表述"',
+     'return "摇摆", "命中证据串但贴着实体犹豫（答了，不干脆）"',
      'return "对", "mutated"',
-     "「既提到又否定判摇摆」失效"),
+     "「贴着实体犹豫判摇摆」失效（召回失败的犹豫被涂成「对」）"),
     ("R3", "scripts/fact_probe.py",
      "if neg or soft:",
      "if neg and soft:",
@@ -66,21 +78,27 @@ MUTATIONS = [
      "return (not fab.search(a))",
      "「含糊不表态判不诚实」失效"),
     ("R9", "scripts/fact_probe.py",
-     'NEG = re.compile(r"(没有(?!(?:精确|数据|细节|具体|明确|说|提|一|任|查))|没得|无此|查无|并没有|"\n'
-     '                 r"好像没有|应该没有|(?<!现在)(?<!还)没开|没设|没这|没有这家|没有这个|不存在)")',
+     'NEG = re.compile(r"((?<!有)没有(?!(?:精确|数据|细节|具体|明确|说|提|一|任|查))|没得|无此|查无|"\n'
+     '                 r"并没有|好像没有|应该没有|没设|没这|没有这家|没有这个|不存在)")',
      'NEG = re.compile(r"(?!)")',
-     "NEG 整体失能（真否定仍被抓 / 既提到又否定 / 否定样本如实回答 三例连锁变红）"),
+     "NEG 整体失能（贴着实体的否认不再被抓 / 库里没有的如实否认沦为含糊）"),
     ("R10", "scripts/fact_probe.py",
-     'ev = any(e in a for e in probe["evidence"]) if probe["evidence"] else False',
+     "ev = any(e in a for e in evs)",
      "ev = False",
-     "证据命中判定失效（「数值事实命中真值判对」等连锁变红）"),
+     "证据命中判定失效（贴着实体犹豫的题会掉进「拒答」桶）"),
 ]
 
 
 def run_rules():
-    p = subprocess.run(RULES_CMD, cwd=ROOT, capture_output=True,
-                       text=True, encoding="utf-8", errors="replace")
-    return p.returncode, (p.stdout or "") + (p.stderr or "")
+    """跑两个断言集；任一为红即视为红（返回首个非零退出码）。"""
+    rc, outs = 0, []
+    for cmd in (RULES_CMD, SELFTEST_CMD):
+        p = subprocess.run(cmd, cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+        if p.returncode != 0 and rc == 0:
+            rc = p.returncode
+        outs.append((p.stdout or "") + (p.stderr or ""))
+    return rc, "\n".join(outs)
 
 
 def main():
@@ -108,6 +126,12 @@ def main():
         for mid, f, old, new, why in MUTATIONS:
             path = os.path.join(ROOT, f)
             src = originals[f].decode("utf-8")
+            if src.count(old) != 1:
+                # 多行锚点对换行符敏感：仓库里有 CRLF 文件，写成 LF 的锚点会定位不到。
+                # 换行不敏感地重试一次（不改语义，只是别让 CRLF 伪装成「锚点过期」）。
+                alt = old.replace("\n", "\r\n") if "\r\n" in src else old.replace("\r\n", "\n")
+                if src.count(alt) == 1:
+                    old, new = alt, new.replace("\n", "\r\n") if "\r\n" in src else new
             if src.count(old) != 1:
                 failed.append(f"{mid} 定位失败（出现 {src.count(old)} 次，应为 1）：{why}")
                 continue

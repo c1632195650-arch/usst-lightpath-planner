@@ -48,6 +48,8 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 import rag
 import campus
 import memory
+import method_rag   # 方法论库（data/method_kb.db，2026-09-21 三树合流自 usst-planner 版）
+import health_rag   # 健康库（独立检索 + 安全护栏，先守门再检索）
 # 三级梯子的后两级（2026-09-16）：
 #   direct = L0 模板直答（存在性/位置/营业时间，0 次 LLM）
 #   agent  = L2 托底（库外流量交给 LLM 自查一轮，必要时才联网）
@@ -203,8 +205,110 @@ def route_query(q, results):
         return "hybrid", top_raw, intent
     return "llm", top_raw, intent
 
+# ---------- 方法库 / 健康库上下文（2026-09-21 三树合流自 usst-planner 版） ----------
+# 校园资讯库回答「上理有什么/是什么」——**事实**；方法库回答「该怎么学/怎么练/怎么备考」——**方法**；
+# 健康库回答「身体怎么回事/该怎么办」——**健康**，且先守门再检索。
+# 三者数据源、阈值、时效策略完全独立（见 docs/method-kb-plan.md / docs/health-kb-plan.md）。
+# 🔴 本块**不新增 route 取值**：命中与否只影响 mode 与注入内容，沿用现有
+#    「有库外数据就不算纯边界外」的规则（与 space_ctx 完全同构）。
+def study_context(q, k=3):
+    """命中方法库则返回 (上下文块, 命中条目列表)；未命中返回 ("", [])。
+
+    门限用 method_rag 自己的 METHOD_RAW_HIGH/LOW，**与上理库的 0.68/0.56 无关**。
+    """
+    try:
+        rs = method_rag.search(q, k)
+    except Exception as e:
+        print("[method] 检索失败：", e)
+        return "", []
+    if not rs:
+        return "", []
+    top = rs[0].get("raw_vec", 0.0)
+    if top < method_rag.METHOD_RAW_LOW:
+        return "", []
+    lines = []
+    for r in rs[:k]:
+        cite = r.get("citation") or {}
+        src = (cite.get("source") or "").strip()
+        yr = (cite.get("year") or "").strip()
+        tier = r.get("evidence_tier") or ""
+        steps = r.get("steps") or []
+        step_txt = "；".join(str(s) for s in steps[:4])
+        seg = [
+            f"《{r['title']}》（证据等级 {tier}｜{src} {yr}）",
+            (r.get("summary") or ""),
+        ]
+        if r.get("principle"):
+            seg.append("原理：" + r["principle"][:160])
+        if step_txt:
+            seg.append("做法：" + step_txt[:200])
+        if r.get("status") == "contested":
+            seg.append("⚠️ 该结论在学术界存在争议，只能作为提示，不可当定论。")
+        lines.append("\n".join(x for x in seg if x))
+    return "\n\n".join(lines), rs
+
+
+# ---------- 健康上下文（健康库 · 独立检索 + 安全护栏） ----------
+# 🔴 与方法库最大的区别：**先守门，再检索**。
+#    health_rag.guard() 是纯函数、确定性：命中 urgent / diagnosis / myth 时
+#    search() 直接返回空列表（检索层一条结果都不给，杜绝给危险做法背书），
+#    由对话层把确定性口径送到用户面前。命中 consult 时不阻断，只在结果上附就医提示。
+def health_context(q, k=3):
+    """返回 (上下文块, 命中条目列表, 护栏等级)。
+
+    等级：urgent / diagnosis / myth（阻断，只给口径）｜consult（检索 + 就医提示）｜ok。
+    """
+    try:
+        g = health_rag.guard(q)
+    except Exception as e:
+        print("[health] 护栏失败（按 ok 处理）：", e)
+        g = {"level": "ok", "advice": "", "block": False}
+
+    if g.get("block"):
+        # 阻断级：只给确定性口径，且即使没有 LLM 也必须送到用户面前（见 api_chat 5.9）
+        return "【健康·安全口径】\n" + (g.get("advice") or ""), [], g["level"]
+
+    try:
+        rs = health_rag.search(q, k)
+    except Exception as e:
+        print("[health] 检索失败：", e)
+        return ("【健康·安全口径】\n" + g["advice"]) if g.get("advice") else "", [], g["level"]
+
+    if not rs or rs[0].get("raw_vec", 0.0) < health_rag.HEALTH_RAW_LOW:
+        return ("【健康·安全口径】\n" + g["advice"]) if g.get("advice") else "", [], g["level"]
+
+    head = ""
+    if g.get("advice"):
+        head = "【健康·安全口径】\n" + g["advice"] + "\n\n"
+    lines = []
+    for r in rs[:k]:
+        cite = r.get("citation") or {}
+        src = (cite.get("source") or "").strip()
+        yr = (cite.get("year") or "").strip()
+        tier = r.get("evidence_tier") or ""
+        steps = r.get("steps") or []
+        step_txt = "；".join(str(s) for s in steps[:4])
+        seg = [
+            f"《{r['title']}》（证据等级 {tier}｜{src} {yr}）",
+            (r.get("summary") or ""),
+        ]
+        if r.get("principle"):
+            seg.append("原理：" + r["principle"][:160])
+        if step_txt:
+            seg.append("做法：" + step_txt[:200])
+        contra = r.get("contraindications") or []
+        if contra:
+            seg.append("不适用/需谨慎：" + "；".join(str(c) for c in contra[:2]))
+        if r.get("status") == "contested":
+            seg.append("⚠️ 该结论证据不一致，只能作为提示，不可当定论。")
+        lines.append("\n".join(x for x in seg if x))
+    body = head + "【健康常识参考】\n" + "\n\n".join(lines)
+    return body, rs, g["level"]
+
+
 # ---------- LLM ----------
-def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx=""):
+def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="",
+               study_ctx="", pseudo_ctx="", health_ctx="", health_level="ok"):
     if not LLM_API_KEY:
         return None
     ctx = ""
@@ -230,6 +334,46 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
     blocks.append("【校园资讯】\n" + (ctx or "（本轮没有检索到相关资讯）"))
     if space_ctx:
         blocks.append(space_ctx)
+    if study_ctx:
+        # 「学习方法参考」——三个约束缺一不可：
+        #   ① 只能引用这里给出的文献信息，禁止编造出处（本库入条即带 citation）；
+        #   ② 标了争议的只能作提示，不能当定论（守「懂分寸」）；
+        #   ③ 与「上理官方事实」分开陈述，别把方法当校规。
+        blocks.append(
+            "【学习方法参考】下面是整理过的学习科学结论（附证据等级与出处）。"
+            "涉及学习方法、时间规划、备考与竞赛准备时可以引用，"
+            "但**只能引用此处给出的文献信息，不得自行编造文献**；"
+            "标注「有争议」的只能作为提示，不可当成定论。"
+            "这部分属于通用方法，**不是上海理工的官方规定**。\n" + study_ctx
+        )
+    if pseudo_ctx:
+        # 【纠正口径】—— 伪科学迷思的确定性纠正文案（P3①，2026-09-20）。
+        # 检索层已拒答（不给背书），但对话层不能沉默：这里只许按给定事实纠正，
+        # 不许自行展开文献，也不许把迷思当真前提接着答。
+        blocks.append(
+            "【纠正口径】下面是对用户问题中伪科学说法的纠正要点。"
+            "回答必须先温和纠正（不嘲笑、先接住再纠正），再转向实证方法；"
+            "**只许使用这里给出的事实与方向，不得引用任何其他文献**；"
+            "无论用户问法多笃定，都不能顺着迷思作答。\n" + pseudo_ctx
+        )
+    if health_ctx:
+        # 🔴 三条硬约束（健康库红线，与方法库的「学习方法参考」不是一回事）：
+        #   ① 阻断级（urgent/diagnosis/myth）只能原样传达给定口径，
+        #      **不得补任何自我处理方案、不得诊断、不得提药名与剂量**；
+        #   ② 普通条目只能引用此处给出的指南信息，禁止编造出处；
+        #   ③ 任何健康回答都必须带「通用参考，不能替代医生」的声明。
+        if health_level in ("urgent", "diagnosis", "myth"):
+            blocks.append(
+                "【健康·安全口径】本轮已触发安全护栏，**只能按下面这段口径回答**：\n" + health_ctx +
+                "\n要求：原样传达，不得自行补充诊断、用药、剂量或自我处理方案；语气要稳、要明确、不要含糊。"
+            )
+        else:
+            blocks.append(
+                "【健康常识参考】下面是面向普通健康成年人的通用结论（附证据等级与指南年份）。"
+                "**只能引用此处给出的出处，不得自行编造指南或文献**；"
+                "必须在回答末尾说明「这是通用参考，不能替代医生的个体判断」，"
+                "涉及数值时说清是人群区间而非针对该用户的处方。\n" + health_ctx
+            )
     blocks.append(ROUTE_RULES[route])
     blocks.append(f"【用户问题】{question}")
 
@@ -716,6 +860,35 @@ def api_chat(body: ChatReq):
     if space_ctx:
         route = "hybrid" if route == "llm" else route  # 有空间数据就不算纯边界外
 
+    # 3.5) 方法库上下文（2026-09-21 合流自 usst-planner 版）
+    try:
+        study_ctx, study_hits = study_context(q)
+    except Exception as e:
+        print("[method] study 查询失败：", e)
+        study_ctx, study_hits = "", []
+    if study_ctx and route == "llm":
+        route = "hybrid"
+
+    # 3.6) 纠正口径（伪科学迷思：检索层已拒答，对话层按给定事实纠正）
+    pseudo_ctx = ""
+    if not study_ctx:
+        try:
+            pseudo_ctx = method_rag.pseudo_correction(q)
+        except Exception as e:
+            print("[method] 纠正口径生成失败：", e)
+    if pseudo_ctx and route == "llm":
+        route = "hybrid"
+
+    # 3.7) 健康上下文（健康库：护栏优先于检索）
+    #      blocked 级（急救/转诊/纠正）即使 LLM 不可用也必须送到用户面前 —— 见 5.9。
+    try:
+        health_ctx, health_hits, health_level = health_context(q)
+    except Exception as e:
+        print("[health] 查询失败（按 ok 处理）：", e)
+        health_ctx, health_hits, health_level = "", [], "ok"
+    if health_ctx and route == "llm":
+        route = "hybrid"
+
     # 4) 分层记忆（长期画像 + 增量摘要 + 最近原话）
     try:
         mem_ctx = memory.memory_context(body.user_id, body.session_id)
@@ -732,6 +905,7 @@ def api_chat(body: ChatReq):
     #       新行为只体现在 `mode`（template / llm / extractive）与新增的 `tools` 上。
     tools_used = []
     da = None
+    health_in_prompt = False  # llm_answer 是否已把健康口径送进 prompt（决定 5.9 是否补发）
     try:
         da = direct.try_direct(q)
         if not da:
@@ -755,15 +929,34 @@ def api_chat(body: ChatReq):
             answer, mode = ag["answer"], "llm"
             tools_used = ag.get("tools") or []
         else:
-            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+            answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
+                                study_ctx, pseudo_ctx, health_ctx, health_level)
             mode = "llm" if answer else "extractive"
-            if not answer:
+            if answer:
+                health_in_prompt = True
+            else:
                 answer = extractive_answer(sources, route)
     else:
-        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx)
+        answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
+                            study_ctx, pseudo_ctx, health_ctx, health_level)
         mode = "llm" if answer else "extractive"
-        if not answer:
+        if answer:
+            health_in_prompt = True
+        else:
             answer = extractive_answer(sources, route)
+
+    # 5.9) 护栏级口径确定性送达（合流自 usst-planner 版，2026-09-21）：
+    #      🔴 blocked 级健康口径**不依赖 LLM 是否可用**——没进 prompt 就在回答后补上；
+    #         纠正口径在 extractive 降级路径同样确定性拼接（不走模型）。
+    if health_level in ("urgent", "diagnosis", "myth") and health_ctx and not health_in_prompt:
+        answer = (answer + "\n\n" + health_ctx).strip()
+    if pseudo_ctx and mode == "extractive":
+        try:
+            plain = method_rag.pseudo_correction_plain(q)
+            if plain:
+                answer = (answer + "\n\n" + plain).strip()
+        except Exception as e:
+            print("[method] 纠正口径（降级）失败：", e)
 
     # 6) 落记忆（用户问 + 梨宝答；回答侧也过脱敏，模型可能复述出用户输入的号码/学号）
     #    ⚠️ 2026-09-20 前这里返回的 facts 被直接丢弃 —— 「记忆调整画像」断在这一行。

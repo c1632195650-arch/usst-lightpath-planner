@@ -1,0 +1,76 @@
+{
+ "_meta": {
+  "why": "校区词表的**唯一事实源（SSOT）**。此前同一个「校区」概念在四处各写一遍、彼此零校验：server/campus.py 的 _CAMPUS_CN、server/campus_network.py 的 _WALK_GROUP、src/constants/campus.ts 的 CampusId+BUILDING_CAMPUS_MAP、src/lib/planner/templates.ts 的 CampusName。后果**不是报错而是静默算错**（改一处忘一处 → 排程插错缓冲块 / 就近跨组算距离）。",
+  "how": "Python 侧**运行时导入**（server/campus_vocab.py）；TS 侧**保持硬编码**（src/lib/planner/places.ts:17 明令不 import JSON，Node 测试环境加载不了），由 tests/campus-vocab.test.ts 读本文件逐条比对 —— 镜像仍在两语言里，但从此**被机器校验**。",
+  "why_not_codegen": "本项目零 codegen 基础设施；生成物会静默过期 —— 那正是本文件要治的病。",
+  "date": "2026-09-19",
+  "consumers": ["server/campus_vocab.py", "tests/campus-vocab.test.ts"]
+ },
+
+ "codes": {
+  "北校": {
+   "cn": "军工路 516 号（北校区·主校区）",
+   "domain_note": "本部北区（军工路 516）",
+   "walk_group": "本部",
+   "label_to_id": "JG516",
+   "in_scope": true
+  },
+  "南校": {
+   "cn": "军工路 334 号（南校区）",
+   "domain_note": "本部南区（军工路 334）",
+   "walk_group": "本部",
+   "label_to_id": "JG334",
+   "in_scope": true
+  },
+  "580": {
+   "cn": "军工路 580 号",
+   "domain_note": "军工路 580 号片区（校门 + 校门口业态）",
+   "walk_group": "本部",
+   "label_to_id": "JG516",
+   "in_scope": true
+  },
+  "连接": {
+   "cn": "南北校区连接点",
+   "domain_note": "跨校区连接体（海安路人行天桥）—— 不属于任何单一校区，刻意保留",
+   "walk_group": "本部",
+   "label_to_id": "UNKNOWN",
+   "in_scope": true
+  },
+  "1100": {
+   "cn": "军工路 1100 号（基础学院）",
+   "domain_note": "1100 基础学院（远庆路），独立分组",
+   "walk_group": "1100",
+   "label_to_id": "JG1100",
+   "in_scope": true
+  },
+  "复兴路": {
+   "cn": "复兴中路 1195 号（中英国际学院）",
+   "domain_note": "复兴中路校区，独立分组（当前图谱 0 条，见完整性）",
+   "walk_group": "复兴路",
+   "label_to_id": "UNKNOWN",
+   "in_scope": false,
+   "out_nature": "out-of-scope",
+   "out_reason": "不建图、不检核、不计缺口（CY 2026-09-19 定）"
+  }
+ },
+
+ "frontend_only": {
+  "FUXING": {
+   "name": "复兴路校区",
+   "nature": "timetable-inference-only",
+   "out_reason": "只服务**课表地点字符串反推**（src/constants/campus.ts 的 BUILDING_CAMPUS_MAP『复兴』/ guessCampus）。空间数据不在范围（见 codes.复兴路）。注意：campusFromLabel('复兴路') 返回 UNKNOWN，两种用法别混。"
+  },
+  "YINGKOU": {
+   "name": "营口路校区",
+   "nature": "timetable-inference-only",
+   "out_reason": "只服务课表反推（BUILDING_CAMPUS_MAP『营口』/ campusLookup CAMPUS_KEYWORDS『营口』）。**后端 SCOPE_IN/SCOPE_OUT 里两边都没有** —— 之前是悬空的，本条即它的声明：空间数据不在范围，图谱 0 条，**非缺口**。"
+  },
+  "UNKNOWN": {
+   "name": "未知校区",
+   "nature": "not-a-place",
+   "out_reason": "「认不出就返回它」的**哨兵值**，不是一个校区；也是 campusFromLabel 对 `连接`/`复兴路` 的回落目标。"
+  }
+ },
+
+ "frontend_ids": ["JG516", "JG334", "JG1100", "FUXING", "YINGKOU", "UNKNOWN"]
+}

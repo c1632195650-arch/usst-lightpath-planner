@@ -82,19 +82,47 @@ for (const [script, key, floor] of [
 }
 
 // ---- 4. 禁区文件 ----
+// 红线本意是保护 RAY 的**既有工作**：已跟踪禁区文件的修改/删除一律违规；
+// 但三树合流（2026-09-21）会向禁区目录**新增**文件（methods.ts / health.ts 等），
+// 新增只提示不判死 —— 合流是 CY 白天拍板的行为，不是夜间 agent 的自作主张。
+//
+// 已跟踪禁区文件的改动，只有两种出口：
+//   a) 默认 → 违规（夜间无人值守任务走这条，规则仍是「零改动」）；
+//   b) 人工主导的操作（合流 / 修 bug）→ 由操作者显式导出 GATE_ALLOW_FORBIDDEN
+//      逐个声明，输出里专门列一节，既放行又留痕、可审计。
+//   夜间任务脚本里**绝不设**该变量。
+const ALLOW = (process.env.GATE_ALLOW_FORBIDDEN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 {
   let ok = true;
   let detail = '禁区文件零改动';
   if (existsSync('.git')) {
     const { out } = run('git status --porcelain');
-    const hit = out
-      .split('\n')
-      .map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
-      .filter(Boolean)
-      .filter((p) => FORBIDDEN.some((f) => p.startsWith(f)));
+    const hit = [];
+    const added = [];
+    const approved = [];
+    for (const l of out.split('\n')) {
+      const st = l.slice(0, 2);
+      const p = l.slice(3).trim().replace(/^"|"$/g, '');
+      if (!p || !FORBIDDEN.some((f) => p.startsWith(f))) continue;
+      if (st === '??' || st.includes('A')) added.push(p);
+      else if (ALLOW.includes(p)) approved.push(p);
+      else hit.push(p);
+    }
+    const notes = [];
+    if (approved.length) {
+      notes.push('人工批准的例外 ' + approved.length + ' 个：\n      ' + approved.join('\n      '));
+    }
+    if (added.length) {
+      notes.push('合流新增 ' + added.length + ' 个（未动既有文件）：\n      ' + added.join('\n      '));
+    }
     if (hit.length) {
       ok = false;
       detail = '禁区文件被改动：\n      ' + hit.join('\n      ');
+    } else {
+      detail = '禁区文件零改动' + (notes.length ? '（' + notes.join('；') + '）' : '');
     }
   } else {
     detail = '未检测到 .git，跳过（建议先做 P0-A 快照）';

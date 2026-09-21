@@ -1,7 +1,7 @@
 {
  "_meta": {
   "campus": "军工路校区（本部=516 北校区 + 334 南校区）｜1100 基础学院｜580 号｜复兴路校区",
-  "updated": "2026-09-15",
+  "updated": "2026-09-19",
   "sources": [
    "上海理工大学官网·食堂导览 https://www.usst.edu.cn/jgl516hxq/main.psp",
    "官方《军工路校区及校区道路名称》iso.usst.edu.cn/2014/0709/c1161a11098/page.htm（17 条路段·建筑相邻关系的权威骨架）",
@@ -28,7 +28,8 @@
    "sport": "运动",
    "transport": "交通"
   },
-  "pinyin": "【拼音检索·2026-09-15】`pyf` / `pyi` / `pyt` 为**离线生成**的拼音索引（名字与各别名的全拼 / 首字母、类型拼音、口语同义词拼音；`|` 分隔），由 `scripts/build_pinyin_index.py` 产出。生成需 `pypinyin`，**运行时不需要任何依赖** —— 检索只是查字符串。匹配只做「整段相等」与「前缀」，不做子串（子串假命中太多）。"
+  "pinyin": "【拼音检索·2026-09-16】`pyf` / `pyi` / `pyt` / `pyk` / `pyg` 为**离线生成**的拼音索引（名字与各别名的全拼 / 首字母、类型拼音、泛类别词拼音、口语同义词拼音；`|` 分隔），由 `scripts/build_pinyin_index.py` 产出。生成需 `pypinyin`，**运行时不需要任何依赖** —— 检索只是查字符串。匹配只做「整段相等」与「前缀」，不做子串（子串假命中太多）。",
+  "bike": "`walk_minutes` 每行的 `bike_minutes` 是**估算**（est），不是实测、也不是高德数据：按 `data/access_policy.json` 的口径 = 步行路网距离 ÷ 12 km/h ÷ 60 + 取放车 2 分钟。校内 footway/pedestrian/steps 按 OSM 默认禁骑，真正的骑行路线会与步行路线不同 —— 所以这一列只能当量级参考，对外必须标注『估算』。生成脚本 `scripts/build_bike_minutes.py`。"
  },
  "zones": {
   "北校区·西北角": "先进制造大楼、第五教学楼、七公寓、学生处/武装部/心理健康中心、体育活动中心、体育馆、材料学院、工程实训中心、光仪所、1906咖啡厅（体育活动中心西侧）",
@@ -108,7 +109,8 @@
    "pyf": "diyishitang|yishitang|1shitang|yican",
    "pyi": "dyst|yst|1st|yc",
    "pyt": "shitang|st",
-   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|jiguangxiangxiangji|xiangxiangji|zhaji|cf|zf|wf|cxc|jy|ms|yp|jgxxj|xxj|zj"
+   "pyg": "chifan|zaofan|wufan|wanfan|chuanxiangcai|jiangya|mianshi|yinpin|jiguangxiangxiangji|xiangxiangji|zhaji|cf|zf|wf|cxc|jy|ms|yp|jgxxj|xxj|zj",
+   "pyk": "yongcan"
   },
   {
    "id": "bakery",
@@ -121,6 +123,9 @@
    "type": "烘焙/饮品",
    "zone": "第一食堂内·大厅最南侧",
    "near_landmark": [
+    "第一食堂"
+   ],
+   "match_osm": [
     "第一食堂"
    ],
    "hours": {
@@ -154,7 +159,8 @@
    "pyf": "shanglihongbeifang|hongbeifang|mianbaofang|yishitanghongbeifang",
    "pyi": "slhbf|hbf|mbf|ysthbf",
    "pyt": "hongbeiyinpin|hbyp",
-   "pyg": "mianbao|dangao|tiandian|zaodian|hongbei|mb|dg|td|zd|hb"
+   "pyg": "mianbao|dangao|tiandian|zaodian|hongbei|mb|dg|td|zd|hb",
+   "pyk": "yongcan"
   },
   {
    "id": "canteen2",
@@ -163,6 +169,7 @@
     "二食堂",
     "2食堂",
     "二餐",
+    "麦当劳（二食堂左侧）",
     "第二食堂 / 教工食堂"
    ],
    "type": "食堂",
@@ -211,11 +218,12 @@
     "教工餐厅",
     "快餐"
    ],
-   "pyf": "diershitang|ershitang|2shitang|ercan|diershitangjiaogongshitang",
-   "pyi": "dest|est|2st|ec|destjgst",
+   "pyf": "diershitang|ershitang|2shitang|ercan|maidanglaoershitangzuoce|diershitangjiaogongshitang",
+   "pyi": "dest|est|2st|ec|mdlestzc|destjgst",
    "pyt": "shitang|st",
    "pyg": "chifan|wufan|wanfan|jiaogongcanting|kuaican|cf|wf|jgct|kc",
-   "note": "（同一建筑两层：二楼为阅餐厅（教工餐厅为主，学生亦可上二楼用餐）；麦当劳位于一楼。——CY 实地 2026-09-19）"
+   "note": "（同一建筑两层：二楼为阅餐厅（教工餐厅为主，学生亦可上二楼用餐）；麦当劳位于一楼。——CY 实地 2026-09-19）",
+   "pyk": "yongcan"
   },
   {
    "id": "yue",
@@ -229,6 +237,9 @@
    "near_landmark": [
     "第二食堂",
     "尚理汇咖啡吧"
+   ],
+   "match_osm": [
+    "第二食堂"
    ],
    "hours": {
     "午餐": "11:00-13:00（仅教职工）",
@@ -263,7 +274,8 @@
    "pyf": "yuecanting|ershitangerlou|jiaoshicanting",
    "pyi": "yct|estel|jsct",
    "pyt": "shitang|st",
-   "pyg": "chifan|jucan|xiaochao|ershitangerlou|cf|jc|xc|estel"
+   "pyg": "chifan|jucan|xiaochao|ershitangerlou|cf|jc|xc|estel",
+   "pyk": "yongcan"
   },
   {
    "id": "canteen5",
@@ -331,7 +343,8 @@
    "pyf": "diwushitang|wushitang|5shitang|wucan",
    "pyi": "dwst|wst|5st|wc",
    "pyt": "shitang|st",
-   "pyg": "chifan|wufan|wanfan|zixuan|jucan|kudi|qifentian|shuangpinai|zhaji|cf|wf|zx|jc|kd|qft|spn|zj"
+   "pyg": "chifan|wufan|wanfan|zixuan|jucan|kudi|qifentian|shuangpinai|zhaji|cf|wf|zx|jc|kd|qft|spn|zj",
+   "pyk": "yongcan"
   },
   {
    "id": "mini",
@@ -380,7 +393,8 @@
    "pyf": "minicanting|minecanting",
    "pyi": "mnct|minict",
    "pyt": "canting|ct",
-   "pyg": "chifan|xiaochao|juhui|diancai|cf|xc|jh|dc"
+   "pyg": "chifan|xiaochao|juhui|diancai|cf|xc|jh|dc",
+   "pyk": "yongcan"
   },
   {
    "id": "sicanting",
@@ -429,6 +443,7 @@
    "pyi": "sct|nxqsct|sst",
    "pyt": "shitang|st",
    "pyg": "chifan|wufan|wanfan|nanxiaochifan|ruixing|mixuebingcheng|yidiandian|pingguohuayuan|kendeji|kfc|kenyue|kafei|naicha|mianbaohongbei|cf|wf|nxcf|rx|mxbc|ydd|pghy|kdj|kfc|ky|kf|nc|mbhb",
+   "pyk": "yongcan",
    "features": [
     "四楼设瑞幸咖啡（文证：学生会推文《新品牌入驻》）",
     "一楼设蜜雪冰城（文证：学生会推文《新品牌入驻》）",
@@ -444,31 +459,37 @@
     "四食堂"
    ],
    "type": "食堂",
-   "zone": "南校区（334）·南侧",
-   "near_landmark": [
-    "管理学院大楼",
-    "南校区宿舍区"
-   ],
    "hours": {
     "午晚餐": "常规饭点"
    },
-   "good_for": [
-    "南校区南侧宿舍就近吃"
-   ],
    "verified": true,
-   "campus": "南校",
    "func": [
     "life"
    ],
    "emoji": "🍜",
-   "tags": [
-    "吃饭",
-    "南校吃饭"
-   ],
    "pyf": "disishitang|sishitang",
    "pyi": "dsst|sst",
    "pyt": "shitang|st",
-   "pyg": "chifan|nanxiaochifan|cf|nxcf"
+   "pyg": "chifan|1100chifan|cf|1100cf",
+   "campus": "1100",
+   "zone": "1100基础学院（远庆路）",
+   "near_landmark": [
+    "1100图书馆",
+    "1100教育超市"
+   ],
+   "match_osm": [
+    "1L清真食堂和第四食堂2L图书馆"
+   ],
+   "good_for": [
+    "1100 基础学院新生就近吃",
+    "图书馆楼下"
+   ],
+   "tags": [
+    "吃饭",
+    "1100吃饭"
+   ],
+   "note": "🔴 2026-09-18 校区修正：原标为南校（334）·南侧，实为军工路 1100 号基础学院。三重证据：① 校《上理美食》官方导览把「第四食堂」列在「军工路1100号校区」段，并注明「位于图书馆楼下」；② 后勤管理处《2026 元旦后勤服务安排》食堂表把「第四食堂大众餐／第四食堂风味档口／特色餐厅」整段列在 1100 号校区；③ 校《一卡通服务网点》南校区只列第六、第七食堂，1100 号校区列「第四食堂」。OSM 建筑名「1L清真食堂和第四食堂2L图书馆」——1 楼清真+第四食堂、2 楼图书馆，正好对上本图谱「1100图书馆」的 zone 注记。",
+   "pyk": "yongcan"
   },
   {
    "id": "qingzhen334",
@@ -505,7 +526,8 @@
    "pyf": "qingzhenshitang334|nanxiaoquqingzhenshitang|qingzhencanting",
    "pyi": "qzst334|nxqqzst|qzct",
    "pyt": "shitang|st",
-   "pyg": "chifan|qingzhen|musilin|nanxiaochifan|cf|qz|msl|nxcf"
+   "pyg": "chifan|qingzhen|musilin|nanxiaochifan|cf|qz|msl|nxcf",
+   "pyk": "yongcan"
   },
   {
    "id": "canteen6",
@@ -539,7 +561,8 @@
    "pyf": "diliushitang|liushitang",
    "pyi": "dlst|lst",
    "pyt": "shitang|st",
-   "pyg": "chifan|nanxiaochifan|liushitang|cf|nxcf|lst"
+   "pyg": "chifan|nanxiaochifan|liushitang|cf|nxcf|lst",
+   "pyk": "yongcan"
   },
   {
    "id": "minzu580",
@@ -579,7 +602,8 @@
    "pyf": "minzucanting580hao|minzucanting|580qingzhen",
    "pyi": "mzct580h|mzct|580qz",
    "pyt": "shitang|st",
-   "pyg": "chifan|qingzhen|musilin|580|cf|qz|msl|580"
+   "pyg": "chifan|qingzhen|musilin|580|cf|qz|msl|580",
+   "pyk": "yongcan"
   },
   {
    "id": "nuanwu",
@@ -616,12 +640,15 @@
     "买零食",
     "买东西",
     "泡面",
-    "日用品"
+    "日用品",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水"
    ],
    "pyf": "nuanwuchaoshi|nuanwu|nuanwuaixinchaoshi|nuanwuaixinchaoshidongtang",
    "pyi": "nwcs|nw|nwaxcs|nwaxcsdt",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|ms|mls|mdx|pm|ryp"
+   "pyg": "maishui|mailingshi|maidongxi|paomian|riyongpin|maipingshui|maipingzhuangshui|kuangquanshui|ms|mls|mdx|pm|ryp|mps|mpzs|kqs"
   },
   {
    "id": "nuanwu_fresh",
@@ -633,6 +660,10 @@
    "zone": "北校区·一公寓北楼",
    "near_landmark": [
     "一公寓北楼（同楼还有理发店、洗衣店、尚学书屋、礼品鲜花店）"
+   ],
+   "match_osm": [
+    "暖屋爱心超市",
+    "暖屋爱心超市 (东堂)"
    ],
    "good_for": [
     "买水果生鲜"
@@ -647,12 +678,15 @@
     "买菜",
     "水果",
     "生鲜",
-    "买水果"
+    "买水果",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水"
    ],
    "pyf": "nuanwuchaoshishengxiandian|nuanwushengxian",
    "pyi": "nwcssxd|nwsx",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maicai|shuiguo|shengxian|maishuiguo|mc|sg|sx|msg"
+   "pyg": "maicai|shuiguo|shengxian|maishuiguo|maipingshui|maipingzhuangshui|kuangquanshui|mc|sg|sx|msg|mps|mpzs|kqs"
   },
   {
    "id": "edu_market_s",
@@ -685,12 +719,23 @@
     "买文具",
     "文具",
     "买水",
-    "笔记本"
+    "笔记本",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "nanxiaoqujiaoyuchaoshi|334chaoshi|jiaoyuchaoshi",
    "pyi": "nxqjycs|334cs|jycs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maiwenju|wenju|maishui|bijiben|mwj|wj|ms|bjb"
+   "pyg": "maiwenju|wenju|maishui|bijiben|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|mwj|wj|ms|bjb|mps|mpzs|kqs|mb|bx",
+   "hours_vacation": {
+    "营业": "8:30-20:30"
+   },
+   "hours_src": "《上理寒假期间后勤服务开放安排！》+《上理清明后勤服务安排通知!》（两份假期安排对 334 号公共浴室的时段一致：13:00-23:00）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "学期 8:30-22:00 / 寒假 8:30-20:30（1月26日-2月14日档）"
   },
   {
    "id": "edu_market_1100",
@@ -701,8 +746,10 @@
    "type": "超市/便利店",
    "zone": "1100基础学院",
    "near_landmark": [
-    "浴室2",
-    "学生活动中心"
+    "1100图书馆"
+   ],
+   "match_osm": [
+    "教育超市"
    ],
    "good_for": [
     "大一买日用品"
@@ -716,12 +763,17 @@
    "tags": [
     "买文具",
     "文具",
-    "基础学院"
+    "基础学院",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "1100jiaoyuchaoshi|jichuxueyuanchaoshi",
    "pyi": "1100jycs|jcxycs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maiwenju|wenju|jichuxueyuan|mwj|wj|jcxy"
+   "pyg": "maiwenju|wenju|jichuxueyuan|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|mwj|wj|jcxy|mps|mpzs|kqs|mb|bx"
   },
   {
    "id": "cainiao",
@@ -788,7 +840,11 @@
    "pyf": "hongtadayin|beixiaohongtadayin",
    "pyi": "htdy|bxhtdy",
    "pyt": "dayin|dy",
-   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd"
+   "pyg": "dayin|fuyin|caiyin|lunwenzhuangding|dy|fy|cy|lwzd",
+   "match_osm": [
+    "勤工俭学中心 (红塔)"
+   ],
+   "anchor_note": "2026-09-19 提锚：名字+语义都对（『红塔』既是打印店所在楼，也是 OSM 具名建筑），由 walk_minutes 派生锚升为 osm 实锚"
   },
   {
    "id": "print_fuke",
@@ -884,7 +940,8 @@
    "pyf": "1906kafeiting",
    "pyi": "1906kft",
    "pyt": "hongbeiyinpin|hbyp",
-   "pyg": "kafei|naicha|hekafei|zixi|kf|nc|hkf|zx"
+   "pyg": "kafei|naicha|hekafei|zixi|kf|nc|hkf|zx",
+   "pyk": "yongcan"
   },
   {
    "id": "bath1",
@@ -923,7 +980,7 @@
    "name": "公共浴室（南校区）",
    "alias": [
     "334浴室",
-    "浴室"
+    "南校浴室"
    ],
    "type": "生活服务",
    "zone": "南校区（334）·思餐厅东侧",
@@ -946,10 +1003,16 @@
     "淋浴",
     "南校洗澡"
    ],
-   "pyf": "gonggongyushinanxiaoqu|334yushi|yushi",
-   "pyi": "ggysnxq|334ys|ys",
+   "pyf": "gonggongyushinanxiaoqu|334yushi|nanxiaoyushi",
+   "pyi": "ggysnxq|334ys|nxys",
    "pyt": "shenghuofuwu|shfw",
-   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz"
+   "pyg": "xizao|linyu|nanxiaoxizao|xz|ly|nxxz",
+   "hours_vacation": {
+    "开放": "13:00-23:00"
+   },
+   "hours_src": "《上理寒假期间后勤服务开放安排！》+《上理清明后勤服务安排通知!》（两份假期安排对 334 号公共浴室的时段一致：13:00-23:00）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "学期 15:00-23:00（《公共洗浴》运营表）/ 假期 13:00-23:00"
   },
   {
    "id": "atm_abc",
@@ -986,16 +1049,26 @@
    "name": "校医室（卫生科）",
    "alias": [
     "校医院",
-    "卫生科"
+    "卫生科",
+    "医务室",
+    "门诊部"
    ],
    "type": "生活服务",
-   "zone": "北校区·东部（花园旁）",
-   "near_landmark": [
-    "保卫处",
-    "三公寓"
-   ],
+   "zone": "北校区·中北部",
+   "hours": {
+    "门诊（周一至周五）": "8:00-18:00",
+    "门诊（双休日及节假日）": "9:00-11:30, 13:00-15:00",
+    "急诊值班": "18:00-19:00"
+   },
+   "note": "后勤管理处《校内就医》：军工路 516 号校区卫生科在**勤勉大道光电信息大楼对面**（该『光电信息大楼』的具体位置待实地核对，疑与图谱『光电楼』不是同一栋）。开设内科/外科/妇科/口腔科/预防保健科/全科门诊；药房 100 余种基础药品；凭医保卡免费挂号，医保内药品自付 20%。另两处：1100 号校区在羽毛球馆后面（周一至周五 8:00-18:00）、复兴路校区在篮球场旁边（8:00-15:30）。位置：2026-09-16 与 OSM 具名建筑『医务室』合并为一条 —— 该建筑与高德『上海理工大学门诊部』点位仅差 2 m，是两处独立来源互证的唯一实几何。",
    "verified": true,
    "campus": "北校",
+   "near_landmark": [
+    "保卫处"
+   ],
+   "match_osm": [
+    "医务室"
+   ],
    "func": [
     "life"
    ],
@@ -1006,18 +1079,27 @@
     "开药",
     "配药",
     "体检",
-    "医务室"
+    "门诊",
+    "买药",
+    "挂号",
+    "医保",
+    "医务室",
+    "门诊部",
+    "生病",
+    "生病了去哪看",
+    "不舒服"
    ],
-   "pyf": "xiaoyishiweishengke|xiaoyiyuan|weishengke",
-   "pyi": "xyswsk|xyy|wsk",
+   "pyf": "xiaoyishiweishengke|xiaoyiyuan|weishengke|yiwushi|menzhenbu",
+   "pyi": "xyswsk|xyy|wsk|yws|mzb",
    "pyt": "shenghuofuwu|shfw",
-   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|yiwushi|kb|xyy|ky|py|tj|yws"
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|peiyao|tijian|menzhen|maiyao|guahao|yibao|yiwushi|menzhenbu|shengbing|shengbinglequnakan|bushufu|kb|xyy|ky|py|tj|mz|my|gh|yb|yws|mzb|sb|sblqnk|bsf"
   },
   {
    "id": "pscenter",
    "name": "心理健康中心",
    "alias": [
-    "心理中心"
+    "心理中心",
+    "心理健康教育与咨询中心"
    ],
    "type": "生活服务",
    "zone": "北校区·西北角",
@@ -1037,8 +1119,8 @@
     "倾诉",
     "心理辅导"
    ],
-   "pyf": "xinlijiankangzhongxin|xinlizhongxin",
-   "pyi": "xljkzx|xlzx",
+   "pyf": "xinlijiankangzhongxin|xinlizhongxin|xinlijiankangjiaoyuyuzixunzhongxin",
+   "pyi": "xljkzx|xlzx|xljkjyyzxzx",
    "pyt": "shenghuofuwu|shfw",
    "pyg": "xinlizixun|xinliyuyue|shudong|qingsu|xinlifudao|xlzx|xlyy|sd|qs|xlfd"
   },
@@ -1083,12 +1165,17 @@
     "饭团",
     "早饭",
     "买零食",
-    "24小时"
+    "24小时",
+    "买瓶水",
+    "买瓶装水",
+    "矿泉水",
+    "买笔",
+    "笔芯"
    ],
    "pyf": "quanjiabianlidian|quanjia|quanjiachaoshi|quanjiabianliliansuochaoshi",
    "pyi": "qjbld|qj|qjcs|qjbllscs",
    "pyt": "chaoshibianlidian|csbld",
-   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|ms|bld|ft|zf|mls|24xs"
+   "pyg": "maishui|bianlidian|fantuan|zaofan|mailingshi|24xiaoshi|maipingshui|maipingzhuangshui|kuangquanshui|maibi|bixin|ms|bld|ft|zf|mls|24xs|mps|mpzs|kqs|mb|bx"
   }
  ],
  "landmarks": [
@@ -1116,7 +1203,8 @@
    "pyf": "diyijiaoxuelou|yijiao|1jiao",
    "pyi": "dyjxl|yj|1j",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zixi|yijiaoshangke|sk|zx|yjsk"
+   "pyg": "shangke|zixi|yijiaoshangke|sk|zx|yjsk",
+   "pyk": "jiaoshi"
   },
   {
    "id": "teach3",
@@ -1143,7 +1231,8 @@
    "pyf": "disanjiaoxuelou|sanjiao|3jiao|xinsanjiao",
    "pyi": "dsjxl|sj|3j|xsj",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zixi|sanjiaoshangke|sk|zx|sjsk"
+   "pyg": "shangke|zixi|sanjiaoshangke|sk|zx|sjsk",
+   "pyk": "jiaoshi"
   },
   {
    "id": "teach5",
@@ -1169,7 +1258,8 @@
    "pyf": "diwujiaoxuelou|wujiao|5jiao",
    "pyi": "dwjxl|wj|5j",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zixi|wujiaoshangke|sk|zx|wjsk"
+   "pyg": "shangke|zixi|wujiaoshangke|sk|zx|wjsk",
+   "pyk": "jiaoshi"
   },
   {
    "id": "yixing",
@@ -1194,17 +1284,50 @@
    "pyf": "yixinglou|disijiaoxuelou|sijiao",
    "pyi": "yxl|dsjxl|sj",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|sijiaoshangke|sk|sjsk"
+   "pyg": "shangke|sijiaoshangke|sk|sjsk",
+   "pyk": "jiaoshi"
+  },
+  {
+   "id": "modernedu",
+   "name": "现代化教学中心",
+   "alias": [
+    "计算中心",
+    "教学中心"
+   ],
+   "type": "教学楼",
+   "zone": "北校区·中北部",
+   "note": "图文信息中心北侧，紧邻网管中心；以机房与多媒体教室为主，平时被叫『计算中心』。⚠️ 归属存疑：本图谱原把『计算中心』记在图书馆楼内（见图书馆条目 note），而第三方点位距 OSM『现代化教学中心』7 米、距『网管中心』21 米、距图书馆 51 米 —— 与『在图书馆楼内』不一致，待实地核对。建筑本身为 OSM 具名建筑（实锚）。",
+   "verified": false,
+   "campus": "北校",
+   "func": [
+    "teach",
+    "office"
+   ],
+   "emoji": "💻",
+   "tags": [
+    "上课",
+    "机房",
+    "计算机",
+    "多媒体教室"
+   ],
+   "pyf": "xiandaihuajiaoxuezhongxin|jisuanzhongxin|jiaoxuezhongxin",
+   "pyi": "xdhjxzx|jszx|jxzx",
+   "pyt": "jiaoxuelou|jxl",
+   "pyg": "shangke|jifang|jisuanji|duomeitijiaoshi|sk|jf|jsj|dmtjs",
+   "pyk": "jiaoshi"
   },
   {
    "id": "zonghe",
    "name": "综合楼",
    "alias": [
-    "中德学院综合楼"
+    "中德学院综合楼",
+    "田家炳楼",
+    "田家炳综合楼",
+    "田家炳理学院"
    ],
    "type": "教学楼",
    "zone": "北校区·西南（近470校门）",
-   "note": "分A/B/C/D四个区，上理重要教学楼，几乎每个上理人都在这上过课；课下适合拍照/滑板/撸猫",
+   "note": "分A/B/C/D四个区，上理重要教学楼，几乎每个上理人都在这上过课；课下适合拍照/滑板/撸猫。又称『田家炳楼』：2006 年田家炳先生捐资港币三百万元建理学院教学楼，学校将该楼命名为『田家炳楼』，理学院亦称『田家炳理学院』（证据：校理学院官网 2018 讣告、理学院 2009 校友会『在综合楼B110召开』、搜狐/澎湃/美篇均称『田家炳综合楼』；另一第三方点位距 OSM『综合楼 B 座』4.8 米）。",
    "verified": true,
    "campus": "北校",
    "func": [
@@ -1217,20 +1340,32 @@
     "自习",
     "中德"
    ],
-   "pyf": "zonghelou|zhongdexueyuanzonghelou",
-   "pyi": "zhl|zdxyzhl",
+   "pyf": "zonghelou|zhongdexueyuanzonghelou|tianjiabinglou|tianjiabingzonghelou|tianjiabinglixueyuan",
+   "pyi": "zhl|zdxyzhl|tjbl|tjbzhl|tjblxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zixi|zhongde|sk|zx|zd"
+   "pyg": "shangke|zixi|zhongde|sk|zx|zd",
+   "match_osm": [
+    "综合楼 A 座",
+    "综合楼 B 座",
+    "综合楼 C 座",
+    "综合楼 D 座"
+   ],
+   "pyk": "jiaoshi"
   },
   {
    "id": "zhuoyue",
    "name": "卓越楼",
    "alias": [
-    "卓越工程研究生院"
+    "卓越工程研究生院",
+    "健康科学与工程学院",
+    "健康学院",
+    "医疗器械与食品学院",
+    "医疗器械学院",
+    "食品学院"
    ],
    "type": "教学楼",
    "zone": "南校区（334）·西侧",
-   "note": "天桥过后右转一直走到底；崭新现代化，研究生院所在",
+   "note": "天桥过后右转一直走到底；崭新现代化，研究生院所在。『医疗器械与食品学院』2021 年更名『健康科学与工程学院』（上理工委〔2021〕95号），学院即在本楼 —— 校后勤通知写『军工路334号校区 卓越楼』，学院消防演习通知写『演练地点 军工路334号校区卓越楼 1-6、10-14 层』。",
    "verified": true,
    "campus": "南校",
    "func": [
@@ -1242,10 +1377,11 @@
     "自习",
     "研究生课"
    ],
-   "pyf": "zhuoyuelou|zhuoyuegongchengyanjiushengyuan",
-   "pyi": "zyl|zygcyjsy",
+   "pyf": "zhuoyuelou|zhuoyuegongchengyanjiushengyuan|jiankangkexueyugongchengxueyuan|jiankangxueyuan|yiliaoqixieyushipinxueyuan|yiliaoqixiexueyuan|shipinxueyuan",
+   "pyi": "zyl|zygcyjsy|jkkxygcxy|jkxy|ylqxyspxy|ylqxxy|spxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zixi|yanjiushengke|sk|zx|yjsk"
+   "pyg": "shangke|zixi|yanjiushengke|sk|zx|yjsk",
+   "pyk": "jiaoshi"
   },
   {
    "id": "guohe",
@@ -1270,7 +1406,8 @@
    "pyf": "guohelou|guojihezuodalou",
    "pyi": "ghl|gjhzdl",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|guojihezuo|zixi|sk|gjhz|zx"
+   "pyg": "shangke|guojihezuo|zixi|sk|gjhz|zx",
+   "pyk": "jiaoshi"
   },
   {
    "id": "shen1",
@@ -1282,6 +1419,9 @@
    "type": "教学楼",
    "zone": "1100基础学院",
    "note": "与图书馆/基础学院办公室/计算中心同一建筑群；非教学时间可自习",
+   "match_osm": [
+    "教学楼"
+   ],
    "verified": true,
    "campus": "1100",
    "func": [
@@ -1295,7 +1435,8 @@
    "pyf": "shenyijiao|shenyi|1100yijiao",
    "pyi": "syj|sy|1100yj",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|jichuxueyuan|sk|jcxy"
+   "pyg": "shangke|jichuxueyuan|sk|jcxy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "shen2",
@@ -1320,7 +1461,8 @@
    "pyf": "shenerjiao|shenerlou|1100erjiao",
    "pyi": "sej|sel|1100ej",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|jichuxueyuan|sk|jcxy"
+   "pyg": "shangke|jichuxueyuan|sk|jcxy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "guangdian",
@@ -1347,7 +1489,8 @@
    "pyf": "guangdianlou|guangdiandalou|guangdianxinxiyujisuanjigongchengxueyuan",
    "pyi": "gdl|gddl|gdxxyjsjgcxy",
    "pyt": "xueyuanlou|xyl",
-   "pyg": "shangke|guangdianxueyuan|fudaoyuan|banshi|sk|gdxy|fdy|bs"
+   "pyg": "shangke|guangdianxueyuan|fudaoyuan|banshi|sk|gdxy|fdy|bs",
+   "pyk": "jiaoshi"
   },
   {
    "id": "jidian",
@@ -1371,17 +1514,20 @@
    "pyf": "jixielou|jixiegongchengxueyuan",
    "pyi": "jxl|jxgcxy",
    "pyt": "xueyuanlou|xyl",
-   "pyg": "shangke|jixiexueyuan|sk|jxxy"
+   "pyg": "shangke|jixiexueyuan|sk|jxxy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "huanjian",
    "name": "环建楼",
    "alias": [
-    "环境与建筑学院"
+    "环境与建筑学院",
+    "环建学院",
+    "城建学院"
    ],
    "type": "学院楼",
    "zone": "北校区·历史核心区西",
-   "note": "编号地图66号",
+   "note": "编号地图66号。即『环境与建筑学院』，校方文件简称『环建学院』；第三方也把它叫『城建学院』（该写法不是我方命名，但为便于检索收为别名 —— 依据：第三方点位距 OSM『环境与建筑学院』建筑 18 米）。",
    "verified": true,
    "campus": "北校",
    "func": [
@@ -1392,10 +1538,11 @@
     "上课",
     "环建学院"
    ],
-   "pyf": "huanjianlou|huanjingyujianzhuxueyuan",
-   "pyi": "hjl|hjyjzxy",
+   "pyf": "huanjianlou|huanjingyujianzhuxueyuan|huanjianxueyuan|chengjianxueyuan",
+   "pyi": "hjl|hjyjzxy|hjxy|cjxy",
    "pyt": "xueyuanlou|xyl",
-   "pyg": "shangke|huanjianxueyuan|sk|hjxy"
+   "pyg": "shangke|huanjianxueyuan|sk|hjxy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "glA",
@@ -1420,7 +1567,8 @@
    "pyf": "guanlixueyuandalou|guanlixueyuan|guanyuan",
    "pyi": "glxydl|glxy|gy",
    "pyt": "xueyuanlou|xyl",
-   "pyg": "shangke|guanyuan|sk|gy"
+   "pyg": "shangke|guanyuan|sk|gy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "lib",
@@ -1428,17 +1576,27 @@
    "alias": [
     "图书馆",
     "图文信息中心",
-    "图书馆总馆"
+    "图文",
+    "图书馆总馆",
+    "主馆",
+    "湛恩纪念图书馆",
+    "湛恩图书馆",
+    "北校区图书馆",
+    "图文信息中心（图书馆）"
    ],
    "type": "自习点",
-   "zone": "北校区·中北部",
+   "zone": "北校区·中北部（思勉路西北侧）",
    "hours": {
     "开放": "8:00-23:00",
+    "自修室": "7:00-23:00",
     "借还书": "8:00-21:45"
    },
-   "note": "馆内有自习区、咖啡休闲区、电子文化长廊、瀑布流屏幕",
+   "note": "官方名『湛恩纪念图书馆（主馆）』—— 2007 年 7 月启用、约 2.3 万㎡、2500 座；『图文信息中心』即其所在大楼，楼内另有档案馆（校史馆）、网络中心（⚠️『计算中心』是否在楼内**存疑** —— 见『现代化教学中心』条目）。⚠️ 原图谱把「图书馆（图文信息中心）」与「湛恩纪念图书馆」当两处（2026-09-16 依校图书馆《历史沿革》合并为一条，别名保留『湛恩纪念图书馆』）。馆内有自习区、咖啡休闲区、电子文化长廊、瀑布流屏幕；二楼自修室 7:00 开门（早于大厅 8:00），八楼自习室 7:30 起；座位需 Welink 预约。",
    "verified": true,
    "campus": "北校",
+   "match_osm": [
+    "湛恩纪念图书馆"
+   ],
    "func": [
     "teach"
    ],
@@ -1449,45 +1607,17 @@
     "看书",
     "学习",
     "占座",
+    "借阅",
+    "电子阅览",
     "图文",
-    "图书馆总馆"
-   ],
-   "pyf": "tushuguantuwenxinxizhongxin|tushuguan|tuwenxinxizhongxin|tushuguanzongguan",
-   "pyi": "tsgtwxxzx|tsg|twxxzx|tsgzg",
-   "pyt": "zixidian|zxd",
-   "pyg": "zixi|jieshu|kanshu|xuexi|zhanzuo|tuwen|tushuguanzongguan|zx|js|ks|xx|zz|tw|tsgzg"
-  },
-  {
-   "id": "zhanen_lib",
-   "name": "湛恩纪念图书馆",
-   "alias": [
-    "湛恩图书馆",
-    "北校区图书馆"
-   ],
-   "type": "自习点",
-   "zone": "北校区（校史馆旁，思勉路西北侧）",
-   "hours": {
-    "自修室": "7:00-23:00",
-    "八楼自习室": "周一到周日 7:30-23:00"
-   },
-   "note": "早起党自习圣地，比总馆开门早一小时",
-   "verified": true,
-   "campus": "北校",
-   "func": [
-    "teach"
-   ],
-   "emoji": "📖",
-   "tags": [
-    "自习",
-    "借书",
-    "看书",
+    "图书馆总馆",
     "湛恩",
     "图书馆"
    ],
-   "pyf": "zhanenjiniantushuguan|zhanentushuguan|beixiaoqutushuguan",
-   "pyi": "zejntsg|zetsg|bxqtsg",
+   "pyf": "tushuguantuwenxinxizhongxin|tushuguan|tuwenxinxizhongxin|tuwen|tushuguanzongguan|zhuguan|zhanenjiniantushuguan|zhanentushuguan|beixiaoqutushuguan|tuwenxinxizhongxintushuguan",
+   "pyi": "tsgtwxxzx|tsg|twxxzx|tw|tsgzg|zg|zejntsg|zetsg|bxqtsg|twxxzxtsg",
    "pyt": "zixidian|zxd",
-   "pyg": "zixi|jieshu|kanshu|zhanen|tushuguan|zx|js|ks|ze|tsg"
+   "pyg": "zixi|jieshu|kanshu|xuexi|zhanzuo|jieyue|dianziyuelan|tuwen|tushuguanzongguan|zhanen|tushuguan|zx|js|ks|xx|zz|jy|dzyl|tw|tsgzg|ze|tsg"
   },
   {
    "id": "old_lib",
@@ -1540,7 +1670,11 @@
    "pyf": "nanxiaoqutushuguan|334tushuguan",
    "pyi": "nxqtsg|334tsg",
    "pyt": "zixidian|zxd",
-   "pyg": "zixi|jieshu|kanshu|nanxiaozixi|zx|js|ks|nxzx"
+   "pyg": "zixi|jieshu|kanshu|nanxiaozixi|zx|js|ks|nxzx",
+   "match_osm": [
+    "管理学院"
+   ],
+   "note": "zone 已注明「334，管理学院 B 栋同楼」—— 图书馆就在管理学院楼内，故直接对齐 OSM 具名建筑「管理学院」（2026-09-18 升实锚）。"
   },
   {
    "id": "lib1100",
@@ -1550,6 +1684,9 @@
    ],
    "type": "自习点",
    "zone": "1100基础学院（远庆路四食堂二楼）",
+   "match_osm": [
+    "1L清真食堂和第四食堂2L图书馆"
+   ],
    "hours": {
     "周日至周五": "8:00-21:45",
     "周六": "8:00-16:45"
@@ -1597,7 +1734,14 @@
    "pyf": "yundongchang|caochang|dacaochang",
    "pyi": "ydc|cc|dcc",
    "pyt": "yundong|yd",
-   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp"
+   "pyg": "paobu|daqiu|caochang|yepao|tice|xiaoyuanpao|pb|dq|cc|yp|tc|xyp",
+   "hours": {
+    "开放": "6:00-21:00"
+   },
+   "hours_src": "《上理体育场馆全指南｜开放时间+预约流程+收费标准一键收藏！》（data/usst_articles.db 可检索原文）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "北校区田径场；校内外免费时段 6:00-8:00、18:00-21:00，教学/活动期间暂停",
+   "needs_check": null
   },
   {
    "id": "gym",
@@ -1629,7 +1773,18 @@
    "pyg": "daqiu|yumaoqiu|lanqiu|tiyuke|jianshenfang|tims|dq|ymq|lq|tyk|jsf|tims",
    "features": [
     "门前设 Tims 天好咖啡（文证：后勤处推文 2026-09 官宣即将开业，开业状态以现场为准）"
-   ]
+   ],
+   "match_osm": [
+    "体育文化活动中心",
+    "室内体育馆"
+   ],
+   "hours": {
+    "开放": "9:00-21:00"
+   },
+   "hours_src": "《上理体育场馆全指南｜开放时间+预约流程+收费标准一键收藏！》（data/usst_articles.db 可检索原文）",
+   "hours_src_date": "2026-09-19",
+   "hours_note": "室内免费场馆；需预约，在校师生免费",
+   "needs_check": null
   },
   {
    "id": "dorm1",
@@ -1649,12 +1804,20 @@
    "emoji": "🛏️",
    "tags": [
     "宿舍",
-    "回宿舍"
+    "回宿舍",
+    "理发",
+    "理发店",
+    "美发",
+    "洗衣",
+    "洗衣店",
+    "洗衣服",
+    "干洗"
    ],
    "pyf": "diyixueshenggongyu|1gongyu|yigongyu",
    "pyi": "dyxsgy|1gy|ygy",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|lifa|lifadian|meifa|xiyi|xiyidian|xiyifu|ganxi|ss|hss|lf|lfd|mf|xy|xyd|xyf|gx",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm2",
@@ -1694,7 +1857,8 @@
    "pyf": "dierxueshenggongyu|2gongyu|ergongyu|dierxueshenggongyu1haolou|dierxueshenggongyu2haolou|dierxueshenggongyu3haolou",
    "pyi": "dexsgy|2gy|egy|dexsgy1hl|dexsgy2hl|dexsgy3hl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm3",
@@ -1722,7 +1886,8 @@
    "pyf": "disanxueshenggongyu|3gongyu|sangongyu|disanxueshenggongyu1haolou|disanxueshenggongyu2haolou|disanxueshenggongyu3haolou",
    "pyi": "dsxsgy|3gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm4",
@@ -1751,7 +1916,8 @@
    "pyf": "disixueshenggongyu|4gongyu|sigongyu|disixueshenggongyu1haolou|disixueshenggongyu2haolou|disixueshenggongyu3haolou|disixueshenggongyu4haolou",
    "pyi": "dsxsgy|4gy|sgy|dsxsgy1hl|dsxsgy2hl|dsxsgy3hl|dsxsgy4hl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm5n",
@@ -1787,7 +1953,8 @@
    "pyf": "diwuxueshenggongyu|5gongyu|wugongyu|wugongyu14haolou|diwuxueshenggongyu1haolou|diwuxueshenggongyu2haolou|diwuxueshenggongyu3haolou|diwuxueshenggongyu4haolou",
    "pyi": "dwxsgy|5gy|wgy|wgy14hl|dwxsgy1hl|dwxsgy2hl|dwxsgy3hl|dwxsgy4hl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm6",
@@ -1819,7 +1986,8 @@
    "pyf": "diliuxueshenggongyu|6gongyu|liugongyu|liugongyu13haolou",
    "pyi": "dlxsgy|6gy|lgy|lgy13hl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm9",
@@ -1843,7 +2011,8 @@
    "pyf": "dijiusushe|jiusushe",
    "pyi": "djss|jss",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "dorm10",
@@ -1867,7 +2036,8 @@
    "pyf": "dishisushe|shisushe",
    "pyi": "dsss|sss",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "star",
@@ -1924,7 +2094,7 @@
    ],
    "type": "校门",
    "zone": "北校区·西南（军工路）",
-   "note": "进门即湛恩大道，直通黄浦江（对岸复兴岛）",
+   "note": "进门即湛恩大道，直通黄浦江（对岸复兴岛）。坐标经腾讯地图第三方交叉验证（2026-09-18）：偏差 1 米。注：第三方站点把「军工路校区主入口(516号)」标在别处，那其实是高德「上海理工大学(军工路校区)」的校区地址点，不是门。",
    "verified": true,
    "campus": "北校",
    "func": [
@@ -1951,7 +2121,7 @@
    ],
    "type": "校门",
    "zone": "北校区·西（军工路）",
-   "note": "近综合楼；校办财务发票开票点在此附近",
+   "note": "近综合楼；校办财务发票开票点在此附近。坐标经腾讯地图交叉验证（2026-09-18）：偏差 4 米。",
    "verified": true,
    "campus": "北校",
    "func": [
@@ -1976,7 +2146,7 @@
    ],
    "type": "校门",
    "zone": "580号",
-   "note": "基建处/保卫处旁；校外小吃（老盛昌等）集中",
+   "note": "基建处/保卫处旁；校外小吃（老盛昌等）集中。坐标经腾讯地图交叉验证（2026-09-18）：偏差 9 米。",
    "verified": true,
    "campus": "580",
    "func": [
@@ -2002,7 +2172,7 @@
    ],
    "type": "校门",
    "zone": "南校区·西南（军工路）",
-   "note": "进门左手边国合楼",
+   "note": "进门左手边国合楼。坐标经腾讯地图交叉验证（2026-09-18）：偏差 7 米。",
    "verified": true,
    "campus": "南校",
    "func": [
@@ -2081,7 +2251,8 @@
    "pyf": "nanxiaoqudiyixiushe|nan1sushe|nanxiaoqu1sushe|nanyixiushe|nanyi",
    "pyi": "nxqdyxs|n1ss|nxq1ss|nyxs|ny",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第二宿舍",
@@ -2111,7 +2282,8 @@
    "pyf": "nanxiaoqudiersushe|nan2sushe|nanxiaoqu2sushe|nanersushe|naner",
    "pyi": "nxqdess|n2ss|nxq2ss|ness|ne",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第三宿舍",
@@ -2142,7 +2314,8 @@
    "pyf": "nanxiaoqudisansushe|nan3sushe|nanxiaoqu3sushe|nansansushe|nansan",
    "pyi": "nxqdsss|n3ss|nxq3ss|nsss|ns",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第七宿舍",
@@ -2171,7 +2344,8 @@
    "pyf": "nanxiaoqudiqisushe|nan7sushe|nanqisushe|nanqi",
    "pyi": "nxqdqss|n7ss|nqss|nq",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第八宿舍",
@@ -2198,7 +2372,8 @@
    "pyf": "nanxiaoqudibasushe|nan8sushe|nanbasushe|nanba",
    "pyi": "nxqdbss|n8ss|nbss|nb",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第九宿舍",
@@ -2225,7 +2400,8 @@
    "pyf": "nanxiaoqudijiusushe|nan9sushe|nanjiusushe|nanjiu",
    "pyi": "nxqdjss|n9ss|njss|nj",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第十宿舍",
@@ -2253,7 +2429,8 @@
    "pyf": "nanxiaoqudishisushe|nan10sushe|nanshisushe|nanshi",
    "pyi": "nxqdsss|n10ss|nsss|ns",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "北校区第三宿舍",
@@ -2281,7 +2458,8 @@
    "pyf": "beixiaoqudisansushe|bei3sushe|3sushe|disansushesipeitang",
    "pyi": "bxqdsss|b3ss|3ss|dsssspt",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "北校区第四宿舍",
@@ -2309,7 +2487,8 @@
    "pyf": "beixiaoqudisisushe|bei4sushe|4sushe|disisushesiyitang",
    "pyi": "bxqdsss|b4ss|4ss|dssssyt",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "北校区第五宿舍",
@@ -2339,7 +2518,8 @@
    "pyf": "beixiaoqudiwusushe|bei5sushe|5sushe|diwusushehuaidetang",
    "pyi": "bxqdwss|b5ss|5ss|dwsshdt",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "北校区第七宿舍",
@@ -2367,7 +2547,8 @@
    "pyf": "beixiaoqudiqisushe|bei7sushe|7sushe|diqisushe",
    "pyi": "bxqdqss|b7ss|7ss|dqss",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "北校区第八宿舍",
@@ -2397,7 +2578,8 @@
    "pyf": "beixiaoqudibasushe|bei8sushe|8sushe|dibasushe",
    "pyi": "bxqdbss|b8ss|8ss|dbss",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "第十二宿舍",
@@ -2426,7 +2608,8 @@
    "pyf": "dishiersushe|12sushe|shiersushe",
    "pyi": "dsess|12ss|sess",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "启明楼宿舍",
@@ -2453,7 +2636,8 @@
    "pyf": "qiminglousushe|qiminglou",
    "pyi": "qmlss|qml",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|qiminglou|hss|qml"
+   "pyg": "huisushe|qiminglou|hss|qml",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "留学生公寓",
@@ -2481,7 +2665,8 @@
    "pyf": "liuxueshenggongyu|liuxueshenggongyu1haolou|liuxueshenggongyu2haolou|diliususheliuxueshenggongyufulaitang",
    "pyi": "lxsgy|lxsgy1hl|lxsgy2hl|dlsslxsgyflt",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|liuxuesheng|guojixuesheng|hss|lxs|gjxs"
+   "pyg": "huisushe|liuxuesheng|guojixuesheng|hss|lxs|gjxs",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "藏书阁宿舍",
@@ -2506,7 +2691,8 @@
    "pyf": "cangshugesushe|cangshuge",
    "pyi": "csgss|csg",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|cangshuge|hss|csg"
+   "pyg": "huisushe|cangshuge|hss|csg",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区操场",
@@ -2549,6 +2735,9 @@
    "near_landmark": [
     "逸兴楼（第四教学楼）"
    ],
+   "match_osm": [
+    "室内体育馆"
+   ],
    "verified": true,
    "func": [
     "sport"
@@ -2588,7 +2777,8 @@
    "pyf": "jiaogongshitang|nanxiaoqujiaogongshitang",
    "pyi": "jgst|nxqjgst",
    "pyt": "shitang|st",
-   "pyg": "chifan|jiaogong|cf|jg"
+   "pyg": "chifan|jiaogong|cf|jg",
+   "pyk": "yongcan"
   },
   {
    "name": "先进制造大楼",
@@ -2602,6 +2792,9 @@
     "第五教学楼",
     "工程实训中心"
    ],
+   "match_osm": [
+    "先进制造技术大楼"
+   ],
    "verified": true,
    "func": [
     "teach"
@@ -2614,7 +2807,8 @@
    "pyf": "xianjinzhizaodalou|xianjinzhizao",
    "pyi": "xjzzdl|xjzz",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|xianjinzhizao|sk|xjzz"
+   "pyg": "shangke|xianjinzhizao|sk|xjzz",
+   "pyk": "jiaoshi"
   },
   {
    "name": "大礼堂",
@@ -2645,7 +2839,8 @@
    "pyf": "dalitang|litang",
    "pyi": "dlt|lt",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "huodong|yanchu|kaixuedianli|jiangzuo|wanhui|hd|yc|kxdl|jz|wh"
+   "pyg": "huodong|yanchu|kaixuedianli|jiangzuo|wanhui|hd|yc|kxdl|jz|wh",
+   "pyk": "jiaoshi"
   },
   {
    "name": "校史馆",
@@ -2657,6 +2852,9 @@
    "campus": "北校",
    "near_landmark": [
     "图文信息中心",
+    "湛恩纪念图书馆"
+   ],
+   "match_osm": [
     "湛恩纪念图书馆"
    ],
    "note": "与图文信息中心同址（编号 11 合并标注『校史馆、图文信息中心』）",
@@ -2674,7 +2872,8 @@
    "pyf": "xiaoshiguan|xiaoshiguantuwenxinxizhongxin",
    "pyi": "xsg|xsgtwxxzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "canguan|xiaoshi|jiangjie|cg|xs|jj"
+   "pyg": "canguan|xiaoshi|jiangjie|cg|xs|jj",
+   "pyk": "jiaoshi"
   },
   {
    "name": "水母楼",
@@ -2723,6 +2922,10 @@
     "第一浴室",
     "北校区第八宿舍"
    ],
+   "match_osm": [
+    "行政服务中心",
+    "行政服务中心 (格致堂)"
+   ],
    "note": "校园卡补办/充值在此（异地补卡约 20 元）",
    "verified": true,
    "func": [
@@ -2748,12 +2951,6 @@
     "中德国际学院"
    ],
    "type": "教学楼",
-   "zone": "北校区·历史核心区",
-   "campus": "北校",
-   "near_landmark": [
-    "格致堂",
-    "国合楼（南校区，部分课程）"
-   ],
    "verified": true,
    "func": [
     "teach"
@@ -2766,7 +2963,18 @@
    "pyf": "zhongdexueyuan|hanbaoguojigongchengxueyuan|zhongdeguojixueyuan",
    "pyi": "zdxy|hbgjgcxy|zdgjxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|zhongde|sk|zd"
+   "pyg": "shangke|zhongde|sk|zd",
+   "campus": "南校",
+   "zone": "南校区（334）",
+   "near_landmark": [
+    "国合楼（334）",
+    "南校区图书馆"
+   ],
+   "match_osm": [
+    "中德学院"
+   ],
+   "note": "🔴 2026-09-18 校区修正：原标为北校·历史核心区（锚在格致堂），实为军工路 334 南校区。证据：① 中德国际学院官网《联系我们》页面地址写「中德国际学院（从军工路334号门进入）」（516 号只是 229 信箱的通信地址）；② 同院《德语强化班招生简章》地址「军工路334号上海理工大学南校区」；③ OSM 有具名建筑「中德学院」落在 334 校区。",
+   "pyk": "jiaoshi"
   },
   {
    "name": "动力馆",
@@ -2791,7 +2999,8 @@
    "pyf": "dongliguan|nengyuanyudongligongchengxueyuan",
    "pyi": "dlg|nyydlgcxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|nengdong|sk|nd"
+   "pyg": "shangke|nengdong|sk|nd",
+   "pyk": "jiaoshi"
   },
   {
    "name": "沪江美术馆",
@@ -2802,6 +3011,9 @@
    "zone": "北校区·历史核心区",
    "campus": "北校",
    "near_landmark": [
+    "音乐堂"
+   ],
+   "match_osm": [
     "音乐堂"
    ],
    "verified": true,
@@ -2817,7 +3029,8 @@
    "pyf": "hujiangmeishuguan|meishuguan",
    "pyi": "hjmsg|msg",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "kanzhan|meishuguan|yishu|kz|msg|ys"
+   "pyg": "kanzhan|meishuguan|yishu|kz|msg|ys",
+   "pyk": "jiaoshi"
   },
   {
    "name": "音乐堂",
@@ -2842,7 +3055,8 @@
    "pyf": "yinyuetang",
    "pyi": "yyt",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "yanchu|yinyuehui|huodong|yc|yyh|hd"
+   "pyg": "yanchu|yinyuehui|huodong|yc|yyh|hd",
+   "pyk": "jiaoshi"
   },
   {
    "name": "理学院楼",
@@ -2869,7 +3083,8 @@
    "pyf": "lixueyuanlou|lixueyuan",
    "pyi": "lxyl|lxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|lixueyuan|sk|lxy"
+   "pyg": "shangke|lixueyuan|sk|lxy",
+   "pyk": "jiaoshi"
   },
   {
    "name": "外语楼",
@@ -2895,7 +3110,8 @@
    "pyf": "waiyulou|waiyuxueyuan",
    "pyi": "wyl|wyxy",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|waiyuxueyuan|sk|wyxy"
+   "pyg": "shangke|waiyuxueyuan|sk|wyxy",
+   "pyk": "jiaoshi"
   },
   {
    "name": "微创楼",
@@ -2907,6 +3123,9 @@
    "campus": "南校",
    "near_landmark": [
     "南校区图书馆"
+   ],
+   "match_osm": [
+    "微创工程中心"
    ],
    "verified": true,
    "func": [
@@ -2920,7 +3139,8 @@
    "pyf": "weichuanglou|weichuangzhongxin",
    "pyi": "wcl|wczx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|weichuang|sk|wc"
+   "pyg": "shangke|weichuang|sk|wc",
+   "pyk": "jiaoshi"
   },
   {
    "name": "理科实验中心",
@@ -2946,7 +3166,8 @@
    "pyf": "likeshiyanzhongxin|likeshiyanlou",
    "pyi": "lksyzx|lksyl",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "zuoshiyan|shiyanke|likeshiyan|zsy|syk|lksy"
+   "pyg": "zuoshiyan|shiyanke|likeshiyan|zsy|syk|lksy",
+   "pyk": "jiaoshi"
   },
   {
    "name": "中德学院实验中心",
@@ -2958,6 +3179,9 @@
    "campus": "南校",
    "near_landmark": [
     "南校区室内篮球场"
+   ],
+   "match_osm": [
+    "第四教学楼"
    ],
    "verified": true,
    "func": [
@@ -2971,7 +3195,8 @@
    "pyf": "zhongdexueyuanshiyanzhongxin|zhongdeshiyanzhongxin",
    "pyi": "zdxysyzx|zdsyzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "zuoshiyan|shiyanke|zsy|syk"
+   "pyg": "zuoshiyan|shiyanke|zsy|syk",
+   "pyk": "jiaoshi"
   },
   {
    "name": "朝花夕拾书店",
@@ -3013,6 +3238,9 @@
     "清真食堂",
     "第六食堂"
    ],
+   "match_osm": [
+    "南四宿舍"
+   ],
    "verified": true,
    "func": [
     "life"
@@ -3025,7 +3253,8 @@
    "pyf": "nanxiaoqudisisushe|nan4sushe",
    "pyi": "nxqdsss|n4ss",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区第五宿舍",
@@ -3053,7 +3282,8 @@
    "pyf": "nanxiaoqudiwusushe|nan5sushe|nanwusushe|nanwu",
    "pyi": "nxqdwss|n5ss|nwss|nw",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "南校区科技大楼",
@@ -3066,6 +3296,9 @@
     "理学院楼",
     "管理学院大楼"
    ],
+   "match_osm": [
+    "科技大楼"
+   ],
    "verified": true,
    "func": [
     "teach"
@@ -3077,7 +3310,8 @@
    "pyf": "nanxiaoqukejidalou",
    "pyi": "nxqkjdl",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shangke|sk"
+   "pyg": "shangke|sk",
+   "pyk": "jiaoshi"
   },
   {
    "name": "南校区教工宿舍",
@@ -3105,29 +3339,8 @@
    "pyf": "nanxiaoqujiaogongsushe|334jiaogongsushe|jiaogongsushe",
    "pyi": "nxqjgss|334jgss|jgss",
    "pyt": "sushe|ss",
-   "pyg": "jiaogongsushe|huisushe|jgss|hss"
-  },
-  {
-   "id": "osm-001",
-   "name": "(原第四食堂)",
-   "alias": [],
-   "type": "食堂",
-   "zone": "北校区",
-   "campus": "北校",
-   "verified": false,
-   "src": "osm",
-   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
-   "func": [
-    "life"
-   ],
-   "emoji": "🍜",
-   "tags": [
-    "吃饭"
-   ],
-   "pyf": "yuandisishitang",
-   "pyi": "ydsst",
-   "pyt": "shitang|st",
-   "pyg": "chifan|cf"
+   "pyg": "jiaogongsushe|huisushe|jgss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-002",
@@ -3340,7 +3553,8 @@
    "pyf": "chuangxinshixunzhongxin",
    "pyi": "cxsxzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shixun|chuangxin|sx|cx"
+   "pyg": "shixun|chuangxin|sx|cx",
+   "pyk": "jiaoshi"
   },
   {
    "id": "osm-011",
@@ -3416,41 +3630,16 @@
    "id": "osm-014",
    "name": "医务室（南校区）",
    "alias": [
-    "医务室"
+    "医务室（334）"
    ],
    "type": "生活服务",
    "zone": "南校区（334）",
-   "campus": "南校",
+   "note": "OSM 收录建筑（自动导入）。⚠️ 后勤管理处《校内就医》只列 516 / 1100 / 复兴路三处卫生科，未提 334 —— 这栋楼是否仍是医务室待实地确认；因 OSM 有独立建筑几何，暂保留不删。",
    "verified": false,
-   "src": "osm",
-   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
-   "func": [
-    "life"
-   ],
-   "emoji": "🏥",
-   "tags": [
-    "看病",
-    "校医院",
-    "开药",
-    "南校看病"
-   ],
-   "pyf": "yiwushinanxiaoqu|yiwushi",
-   "pyi": "ywsnxq|yws",
-   "pyt": "shenghuofuwu|shfw",
-   "pyg": "kanbing|xiaoyiyuan|kaiyao|nanxiaokanbing|kb|xyy|ky|nxkb"
-  },
-  {
-   "id": "osm-015",
-   "name": "医务室（北校区）",
-   "alias": [
+   "campus": "南校",
+   "match_osm": [
     "医务室"
    ],
-   "type": "生活服务",
-   "zone": "北校区",
-   "campus": "北校",
-   "verified": false,
-   "src": "osm",
-   "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
    "func": [
     "life"
    ],
@@ -3459,12 +3648,16 @@
     "看病",
     "校医院",
     "开药",
-    "北校看病"
+    "南校看病",
+    "门诊",
+    "买药",
+    "门诊部"
    ],
-   "pyf": "yiwushibeixiaoqu|yiwushi",
-   "pyi": "ywsbxq|yws",
+   "src": "osm",
+   "pyf": "yiwushinanxiaoqu|yiwushi334",
+   "pyi": "ywsnxq|yws334",
    "pyt": "shenghuofuwu|shfw",
-   "pyg": "kanbing|xiaoyiyuan|kaiyao|beixiaokanbing|kb|xyy|ky|bxkb"
+   "pyg": "kanbing|xiaoyiyuan|kaiyao|nanxiaokanbing|menzhen|maiyao|menzhenbu|kb|xyy|ky|nxkb|mz|my|mzb"
   },
   {
    "id": "osm-023",
@@ -3489,7 +3682,8 @@
    "pyf": "nanliusushe|nanliu",
    "pyi": "nlss|nl",
    "pyt": "sushe|ss",
-   "pyg": "sushe|huisushe|ss|hss"
+   "pyg": "sushe|huisushe|ss|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-025",
@@ -3513,7 +3707,8 @@
    "pyf": "jichushiyanzhongxin",
    "pyi": "jcsyzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "zuoshiyan|shiyanke|jichushiyan|zsy|syk|jcsy"
+   "pyg": "zuoshiyan|shiyanke|jichushiyan|zsy|syk|jcsy",
+   "pyk": "jiaoshi"
   },
   {
    "id": "osm-026",
@@ -3535,7 +3730,8 @@
    "pyf": "xuezigongyu",
    "pyi": "xzgy",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|hss"
+   "pyg": "huisushe|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-027",
@@ -3586,7 +3782,8 @@
    "pyf": "shixunzhongxin|gongchengshixunzhongxin|gongchengxunlianzhongxin",
    "pyi": "sxzx|gcsxzx|gcxlzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "shixun|gongchengxunlian|jingongshixi|sx|gcxl|jgsx"
+   "pyg": "shixun|gongchengxunlian|jingongshixi|sx|gcxl|jgsx",
+   "pyk": "jiaoshi"
   },
   {
    "id": "osm-029",
@@ -3710,10 +3907,9 @@
    "alias": [],
    "type": "办公楼",
    "zone": "北校区",
-   "campus": "北校",
-   "verified": false,
-   "src": "osm",
    "note": "OSM 收录建筑（自动导入，位置与信息待人工确认）",
+   "verified": false,
+   "campus": "北校",
    "func": [
     "office"
    ],
@@ -3722,12 +3918,15 @@
     "招生",
     "录取",
     "咨询",
-    "报考"
+    "报考",
+    "入学",
+    "入学手续"
    ],
+   "src": "osm",
    "pyf": "zhaoshengban",
    "pyi": "zsb",
    "pyt": "bangonglou|bgl",
-   "pyg": "zhaosheng|luqu|zixun|baokao|zs|lq|zx|bk"
+   "pyg": "zhaosheng|luqu|zixun|baokao|ruxue|ruxueshouxu|zs|lq|zx|bk|rx|rxsx"
   },
   {
    "id": "osm-035",
@@ -3773,7 +3972,8 @@
    "pyf": "xinzhuanjialou",
    "pyi": "xzjl",
    "pyt": "sushe|ss",
-   "pyg": "zhuanjialou|huisushe|zjl|hss"
+   "pyg": "zhuanjialou|huisushe|zjl|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-037",
@@ -3956,7 +4156,8 @@
    "pyf": "xuandeju",
    "pyi": "xdj",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|hss"
+   "pyg": "huisushe|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-045",
@@ -4095,7 +4296,8 @@
    "pyf": "laozhuanjialou",
    "pyi": "lzjl",
    "pyt": "sushe|ss",
-   "pyg": "zhuanjialou|huisushe|zjl|hss"
+   "pyg": "zhuanjialou|huisushe|zjl|hss",
+   "pyk": "zhusu|gongyu"
   },
   {
    "id": "osm-051",
@@ -4217,7 +4419,8 @@
    "pyf": "qigongyu|7gongyu|diqigongyu",
    "pyi": "qgy|7gy|dqgy",
    "pyt": "sushe|ss",
-   "pyg": "huisushe|580|xiaomenpang|hss|580|xmp"
+   "pyg": "huisushe|580|xiaomenpang|hss|580|xmp",
+   "pyk": "zhusu|gongyu"
   },
   {
    "name": "公共实验楼",
@@ -4248,7 +4451,8 @@
    "pyf": "gonggongshiyanlou|wulishiyanzhongxin|gonggongshiyanzhongxin",
    "pyi": "ggsyl|wlsyzx|ggsyzx",
    "pyt": "jiaoxuelou|jxl",
-   "pyg": "zuoshiyan|wulishiyan|shiyanke|zsy|wlsy|syk"
+   "pyg": "zuoshiyan|wulishiyan|shiyanke|zsy|wlsy|syk",
+   "pyk": "jiaoshi"
   }
  ],
  "roads": [
@@ -4323,6 +4527,7 @@
    "from": "第一教学楼",
    "to": "第二食堂",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "官方：最靠近一教的食堂，下课首选",
    "verified": true
   },
@@ -4330,12 +4535,14 @@
    "from": "第一教学楼",
    "to": "麦当劳（二食堂左侧）",
    "minutes": 3,
+   "bike_minutes": 3,
    "verified": true
   },
   {
    "from": "第一教学楼",
    "to": "第三教学楼",
    "minutes": 6,
+   "bike_minutes": 5,
    "note": "高德导航实测：451米 / 6分钟（向东北，途经研究生院·工会·第一食堂一带）",
    "verified": true
   },
@@ -4343,6 +4550,7 @@
    "from": "第一教学楼",
    "to": "老图书馆",
    "minutes": 2,
+   "bike_minutes": 2,
    "note": "毛像和一教后方",
    "verified": true
   },
@@ -4350,12 +4558,14 @@
    "from": "第一教学楼",
    "to": "运动场",
    "minutes": 1,
+   "bike_minutes": 2,
    "verified": true
   },
   {
    "from": "第三教学楼",
    "to": "第一食堂",
    "minutes": 3,
+   "bike_minutes": 4,
    "note": "官方路段：同在海远中路沿线（第一学生公寓—第一食堂—三教）",
    "verified": true
   },
@@ -4363,6 +4573,7 @@
    "from": "第三教学楼",
    "to": "图文信息中心（图书馆）",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "官方路段：海志北路沿线（三教—机械学院—图文信息中心）",
    "verified": true
   },
@@ -4370,6 +4581,7 @@
    "from": "第三教学楼",
    "to": "咪昵餐厅",
    "minutes": 6,
+   "bike_minutes": 4,
    "note": "est：生活区在南侧，沿路直走",
    "verified": false
   },
@@ -4377,6 +4589,7 @@
    "from": "第三教学楼",
    "to": "第二食堂",
    "minutes": 6,
+   "bike_minutes": 4,
    "note": "est",
    "verified": false
   },
@@ -4384,6 +4597,7 @@
    "from": "第三教学楼",
    "to": "光电楼",
    "minutes": 4,
+   "bike_minutes": 4,
    "note": "est：同在中北部",
    "verified": false
   },
@@ -4391,6 +4605,7 @@
    "from": "第一食堂",
    "to": "咪昵餐厅",
    "minutes": 1,
+   "bike_minutes": 2,
    "note": "第一食堂背后",
    "verified": true
   },
@@ -4398,6 +4613,7 @@
    "from": "第一食堂",
    "to": "第九宿舍",
    "minutes": 1,
+   "bike_minutes": 2,
    "note": "就在一食堂楼上",
    "verified": true
   },
@@ -4405,12 +4621,14 @@
    "from": "第一食堂",
    "to": "第十宿舍",
    "minutes": 2,
+   "bike_minutes": 3,
    "verified": true
   },
   {
    "from": "第一食堂",
    "to": "暖屋超市",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "est：志摩路沿线",
    "verified": false
   },
@@ -4418,24 +4636,28 @@
    "from": "第二食堂",
    "to": "阅餐厅",
    "minutes": 1,
+   "bike_minutes": 2,
    "verified": true
   },
   {
    "from": "第二食堂",
    "to": "红塔打印",
    "minutes": 1,
+   "bike_minutes": 2,
    "verified": true
   },
   {
    "from": "第四学生公寓",
    "to": "第五食堂",
    "minutes": 3,
+   "bike_minutes": 3,
    "verified": true
   },
   {
    "from": "图书馆（图文信息中心）",
    "to": "第五食堂",
    "minutes": 4,
+   "bike_minutes": 4,
    "note": "高德导航实测：0.3km / 4分15秒（路径：向正南→右转→直行178m→右转→左转）",
    "verified": true
   },
@@ -4443,30 +4665,35 @@
    "from": "图书馆（图文信息中心）",
    "to": "第三教学楼",
    "minutes": 3,
+   "bike_minutes": 3,
    "verified": true
   },
   {
-   "from": "湛恩纪念图书馆",
+   "from": "图书馆（图文信息中心）",
    "to": "校史馆",
    "minutes": 1,
+   "bike_minutes": 2,
    "verified": true
   },
   {
    "from": "咪昵餐厅",
    "to": "暖屋超市",
    "minutes": 2,
+   "bike_minutes": 3,
    "verified": true
   },
   {
    "from": "二公寓",
    "to": "菜鸟驿站",
    "minutes": 2,
+   "bike_minutes": 4,
    "verified": true
   },
   {
    "from": "运动场",
    "to": "第一食堂",
    "minutes": 6,
+   "bike_minutes": 4,
    "note": "est：生活区在运动场东侧",
    "verified": false
   },
@@ -4474,6 +4701,7 @@
    "from": "1906咖啡厅",
    "to": "体育馆",
    "minutes": 1,
+   "bike_minutes": 4,
    "note": "体育活动中心西侧",
    "verified": true
   },
@@ -4481,12 +4709,14 @@
    "from": "综合楼",
    "to": "470号校门",
    "minutes": 2,
+   "bike_minutes": 3,
    "verified": true
   },
   {
    "from": "334号校门",
    "to": "国合楼",
    "minutes": 1,
+   "bike_minutes": 2,
    "note": "进门左手边",
    "verified": true
   },
@@ -4494,6 +4724,7 @@
    "from": "卓越楼",
    "to": "思餐厅",
    "minutes": 4,
+   "bike_minutes": 4,
    "note": "est",
    "verified": false
   },
@@ -4501,6 +4732,7 @@
    "from": "逸兴楼（四教）",
    "to": "南校区操场",
    "minutes": 1,
+   "bike_minutes": 4,
    "note": "沿南校操场走到底",
    "verified": true
   },
@@ -4508,6 +4740,7 @@
    "from": "第五学生公寓",
    "to": "卓越楼",
    "minutes": 2,
+   "bike_minutes": 3,
    "note": "五公寓离卓越楼近在咫尺（宿舍指南原话）",
    "verified": false
   },
@@ -4515,6 +4748,7 @@
    "from": "第五学生公寓",
    "to": "思餐厅",
    "minutes": 5,
+   "bike_minutes": 4,
    "note": "est：南校区北侧，步行数分钟",
    "verified": false
   },
@@ -4522,6 +4756,7 @@
    "from": "第五学生公寓",
    "to": "南校区教育超市",
    "minutes": 2,
+   "bike_minutes": 4,
    "note": "宿舍指南：周边有教育超市",
    "verified": false
   },
@@ -4529,6 +4764,7 @@
    "from": "第六学生公寓",
    "to": "第六食堂",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "est：南校区东北侧",
    "verified": false
   },
@@ -4536,6 +4772,7 @@
    "from": "第六学生公寓",
    "to": "外语楼",
    "minutes": 4,
+   "bike_minutes": 3,
    "note": "est：海学南路沿线",
    "verified": false
   },
@@ -4543,6 +4780,7 @@
    "from": "第六学生公寓",
    "to": "朝花夕拾书店",
    "minutes": 1,
+   "bike_minutes": 2,
    "note": "宿舍指南：六公寓旁",
    "verified": false
   },
@@ -4550,6 +4788,7 @@
    "from": "国合楼",
    "to": "南校区第一宿舍",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "est：南校区西南角",
    "verified": false
   },
@@ -4557,6 +4796,7 @@
    "from": "南校区操场",
    "to": "思餐厅",
    "minutes": 4,
+   "bike_minutes": 3,
    "note": "est：南校操场旁",
    "verified": false
   },
@@ -4564,6 +4804,7 @@
    "from": "逸兴楼（四教）",
    "to": "思餐厅",
    "minutes": 4,
+   "bike_minutes": 5,
    "note": "est：南校区内",
    "verified": false
   },
@@ -4571,6 +4812,7 @@
    "from": "334号校门",
    "to": "南校区第一宿舍",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "est：进门后向西南",
    "verified": false
   },
@@ -4578,6 +4820,7 @@
    "from": "全家便利店",
    "to": "菜鸟驿站",
    "minutes": 1,
+   "bike_minutes": 3,
    "note": "同在操场围栏外那条路上",
    "verified": false
   },
@@ -4585,6 +4828,7 @@
    "from": "全家便利店",
    "to": "第二学生公寓",
    "minutes": 3,
+   "bike_minutes": 3,
    "note": "est",
    "verified": false
   },
@@ -4592,6 +4836,7 @@
    "from": "全家便利店",
    "to": "运动场",
    "minutes": 1,
+   "bike_minutes": 4,
    "note": "跑道围栏外",
    "verified": false
   },
@@ -4599,6 +4844,7 @@
    "from": "二公寓",
    "to": "思餐厅",
    "minutes": 4,
+   "bike_minutes": 5,
    "verified": true,
    "note": "高德导航实测：288米 / 4分钟，途经『上过街天桥』（海安路师生专用通道）"
   }
@@ -4672,6 +4918,13 @@
   "南校区各宿舍楼的精确楼栋编号与床位类型（现据宿舍指南聚合描述）",
   "七公寓的精确坐标待确认（CY 描述在 580 号校门/先进制造大楼旁；OSM 该区域只有无名 apartments，无匹配建筑）—— 现暂锚定 580 号校门，属近似值",
   "「工程实训中心」（金工实习上课地点）= 图谱「实训中心」？ 待核实（现按同一栋处理）",
-  "「公共实验楼」的准确位置与楼号待确认（物理实验 / 模电实验上课地点）"
+  "「公共实验楼」的准确位置与楼号待确认（物理实验 / 模电实验上课地点）",
+  "「第七食堂」：官方《一卡通服务网点》列有该地点，但图谱无对应条目，且 OSM 155 个具名建筑里**没有**同名建筑 → 拿不到实锚。按「不猜」纪律**不建条目**，待实地确认位置/所属校区后补入。",
+  "【hours 缺口】第一浴室：616 公共浴室在**十二宿舍西北角**，《公共洗浴》运营表按宿舍楼逐条列（第五宿舍/七公寓/4公寓1号楼…）但**没有十二宿舍那一行** ⇒ 无法映射，待实地问询",
+  "【hours 缺口】菜鸟驿站：语料内未见营业时间；假期安排里的「快递中心」是否即菜鸟驿站**未定案** ⇒ 不推",
+  "【hours 缺口】1100教育超市：只有元旦假期口径（9:00-20:00），**学期口径无来源** ⇒ 学期值留空",
+  "【hours 缺口】南校区操场：《体育场馆全指南》只点名「北校区田径场」；南校场地未逐条列出 ⇒ 待核",
+  "【hours 缺口】室内体育馆：同上（「室内免费场馆 9:00-21:00」未标校区）⇒ 待核，不按北校口径照搬",
+  "【hours 缺口】教学楼：教学楼日常开放时间**语料内无硬来源**（只有假期关闭通知）⇒ 不推；这是 hours 冲 40 的主要缺口"
  ]
 }
