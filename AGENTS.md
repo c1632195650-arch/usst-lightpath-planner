@@ -248,10 +248,38 @@ node scripts/gate_overnight.mjs
 | 树 | 位置 | 现状 |
 |---|---|---|
 | `_full` | `D:\WORKBUDDY DATA\学术部\_full` | 有完整 git（分支 `integration`），但内容较旧 |
-| `_work_dev` | `D:\WORKBUDDY DATA\学术部\_work_dev` | **内容最新**，但没有 `.git` |
+| `_work_dev` | `D:\WORKBUDDY DATA\学术部\_work_dev` | **当前主力工作树**，已有 `.git`（2026-09-21 建立），本地仓、无远端 |
 | `usst-planner` | `D:\WORKBUDDY DATA\学术部\usst-planner` | 有 `.git` 但 `main` 是空分支、170 个文件未提交；方法库/健康库在这里 |
+
+> **2026-09-21 更新**：三树合流已由人工在白天完成（commit `7e2c649`），另两棵树的
+> 独有资产已并入 `_work_dev`，两棵树**保持原样未被改动**。此后 `_work_dev` 是唯一
+> 开发树；再有跨树同步需求，仍按本节的规矩人工做，不许自动合流。
 
 **无人值守期间只允许在 `_work_dev` 内部工作。** 可以在 `_work_dev` 里 `git init` + 全量快照提交（这是保险，不是合并），但**绝对不许**把另外两棵树的文件自动搬进来，也不许自动解决差异。合流必须白天人工做，因为一次错误的自动合并会**静默丢掉工作**。
 
 > 注意：`.gitignore` 第 60 行是 `_*`，所以**必须在 `_work_dev` 目录内部 `git init`**，不要在上层 `学术部\` 目录 init——那样 `_work_dev` 整体会被忽略，快照等于没做。
 
+
+## 九、行尾约定（2026-09-21 立，改了行尾等于改了全文件）
+
+**本树（`_work_dev`）全仓 LF；`_full` 与 `usst-planner` 是 CRLF。**
+
+这条不是洁癖，是吃过亏的：2026-09-21 三树合流时，6 个数据文件仅因 CRLF/LF 差异
+就被 git 判为整文件重写，虚增约 **5.2 万行**改动，把真实改动淹掉了，审查时几乎看不出
+改了什么。
+
+**规则：**
+
+1. **从 `_full` / `usst-planner` 拷文件进本树后，必须归一**：
+   ```bash
+   python scripts/normalize_eol.py --dry-run   # 先看会动哪些
+   python scripts/normalize_eol.py             # 执行
+   ```
+   对已经是 LF 的文件是空操作，所以**不会误伤队友的代码**。
+2. **新增文本文件请写成 LF**。已知坑：`pathlib.Path.write_text()` 在 Windows 上会把
+   `\n` 自动转成 `\r\n`，写生成脚本时请传 `newline=''`。
+3. `.gitattributes` 用 `* -text` 声明字节精确 —— 禁止 git 暗自做行尾转换，行为可预期。
+4. **不要为了行尾去动队友的文件。** 行尾是仓级约定，调整它属于跨模块决策：
+   只处理本次任务的产物，`src/features/week/`、`src/components/`、`src/lib/persona.ts`
+   下的文件除非你有正当改动理由，否则一行都别碰（2026-09-21 曾误把全仓 300 个文件
+   归一为 CRLF，含队友 51 个文件，已整体回退）。
