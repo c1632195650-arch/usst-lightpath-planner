@@ -191,6 +191,29 @@ test('投入：总量与单次分开 —— 混在一起会把 20 小时排成�
   assert.equal(perHour.totalHours, undefined, '「每天2小时」被重复计成了总量');
 });
 
+test('投入：中文数字同样要认 —— 真实口语说「两小时」，不说「2 小时」', () => {
+  // 2026-09-22 真机抓到的缺口：原实现只认阿拉伯数字，于是
+  // 「这周我要准备英语六级，每天两小时」的时长被整段丢掉，梨宝反过来追问
+  // 「打算投入多少？」——用户明明已经说了。**本条用例就是那次翻车的形状。**
+  const cnHour = extractEffort('每天两小时');
+  assert.equal(cnHour.durationMin, 120, '「两小时」没被认成 120 分钟');
+  assert.equal(cnHour.totalHours, undefined, '「每天两小时」被重复计成了总量');
+
+  assert.equal(extractEffort('每次三十分钟').durationMin, 30);
+  assert.equal(extractEffort('每天半小时').durationMin, 30, '「半」不在数字类正则里，要单列一条');
+  assert.equal(extractEffort('每周 3 次、每次一小时').durationMin, 60);
+  // 十位进位：旧 cnToInt 会把「二十」算成 12，时长不能复用它的进位逻辑
+  assert.equal(extractEffort('一共二十小时').totalHours, 20);
+  assert.equal(extractEffort('九十九分钟').totalHours, undefined);
+});
+
+test('投入：中文数字要能一路走到「缺口清零」—— 别在追问环节掉链子', () => {
+  const s = parseIntentSlots('这周我要准备英语六级，每天两小时', TODAY);
+  assert.ok(!s.missing.includes('effort'), '时长已经说了，却仍把 effort 记成缺口');
+  assert.equal(s.durationMin, 120);
+  assert.equal(s.perWeekCount, 7);
+});
+
 test('频率：每周N次 / 每天；只写「每周」不算给了频率', () => {
   assert.equal(extractFrequency('每周3次'), 3);
   assert.equal(extractFrequency('每天刷题'), 7);

@@ -986,6 +986,19 @@ def api_chat(body: ChatReq):
         "used_memory": bool(mem_ctx),
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
+        # 方法库命中（2026-09-22 合流补漏：实现一直在跑，但响应字段在三树合流时丢了）。
+        # ⚠️ study_top_raw 是「方法库自己的 top_raw」，与上理库的 top_raw_vec
+        #    分属两套门限（0.60/0.50 vs 0.68/0.56），**别混用**。
+        "used_study": bool(study_ctx),
+        "study_top_raw": round((study_hits[0].get("raw_vec", 0.0) if study_hits else 0.0), 4),
+        "study_sources": [h.get("title", "") for h in (study_hits or [])[:3]],
+        # 伪科学纠正口径命中：True = 回答含确定性纠正文案；此时 study_sources 必为空
+        "study_pseudo": bool(pseudo_ctx),
+        # 健康库（护栏等级 + 命中；urgent/diagnosis/myth 阻断级时 health_sources 必为空）
+        "used_health": bool(health_ctx),
+        "health_level": health_level,
+        "health_top_raw": round((health_hits[0].get("raw_vec", 0.0) if health_hits else 0.0), 4),
+        "health_sources": [h.get("title", "") for h in (health_hits or [])[:3]],
         # 托底层用了哪些工具（search_kb / search_pois / web_search）——
         # 空数组 = L0 模板或 L1 快路径，未进入 agent
         "tools": tools_used,

@@ -276,6 +276,35 @@ function cnToInt(s: string): number | undefined {
   return undefined;
 }
 
+/**
+ * 中文 / 阿拉伯数字 → 数值，覆盖 一~九十九（时长、总量的口语表达）。
+ *
+ * 为什么不复用 `cnToInt`：后者只服务月份与次数（一~十二），进位逻辑把
+ * 「二十」解成 **12**（0 + 2 + 10），而时长里「二十小时」「三十分钟」都是
+ * 正常说法 —— 拿它算会安静地算错，比抽不到更危险。两个函数服务两种量纲，
+ * 刻意分开：改这里不会动摇既有月份/次数的解析。
+ *
+ * ⚠️ 放宽数字形态的动机（2026-09-22 真机抓到）：原实现只认阿拉伯数字，
+ *    于是「这周我要准备英语六级，**每天两小时**」的时长被整段丢掉 ——
+ *    梨宝反过来追问「打算投入多少？」，而用户明明已经说了。
+ *    真实用户说「两小时」远多于「2 小时」；测试用例却全用阿拉伯数字，
+ *    所以 67 条全绿也没兜住（见 scripts/libaoIntent.test.ts 新增用例）。
+ */
+function cnAmount(s: string): number | undefined {
+  const t = (s || '').trim();
+  if (!t) return undefined;
+  if (/^\d+(?:\.\d+)?$/.test(t)) return Number(t);
+  const m = /^([一二两三四五六七八九]?)(十?)([一二三四五六七八九]?)$/.exec(t);
+  if (!m) return undefined;
+  const [, a, shi, b] = m;
+  if (shi) {
+    // 「十」= 10、「十五」= 15、「二十」= 20、「九十九」= 99
+    const tens = a ? (CN_NUM[a] ?? 0) : 1;
+    return tens * 10 + (b ? (CN_NUM[b] ?? 0) : 0);
+  }
+  return a && !b ? CN_NUM[a] : undefined;
+}
+
 /* ============================================================
  * 二、快筛：这句话要不要动日程
  * ========================================================== */
@@ -473,19 +502,33 @@ export function extractEffort(q: string): { totalHours?: number; durationMin?: n
   const s = q || '';
   const out: { totalHours?: number; durationMin?: number } = {};
   const PER = /每(?:次|回|天|日)/;
+  // 数字一律「阿拉伯 **或** 中文」：真实口语是「每天两小时 / 半小时 / 一共二十小时」，
+  // 只认阿拉伯数字会让用户的投入量整段白说（2026-09-22 真机抓到）。
+  const NUM = '([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十]+)';
 
-  const perMin = /每(?:次|回|天|日)?\s*(\d+(?:\.\d+)?)\s*分钟/.exec(s);
-  if (perMin) out.durationMin = Math.round(Number(perMin[1]));
+  const perMin = new RegExp(`每(?:次|回|天|日)?\\s*${NUM}\\s*分钟`).exec(s);
+  if (perMin) {
+    const v = cnAmount(perMin[1]);
+    if (v != null) out.durationMin = Math.round(v);
+  }
 
-  const perHour = /每(?:次|回|天|日)?\s*(\d+(?:\.\d+)?)\s*(?:个)?\s*(?:小时|h|H)/i.exec(s);
-  if (perHour) out.durationMin = Math.round(Number(perHour[1]) * 60);
+  const perHour = new RegExp(`每(?:次|回|天|日)?\\s*${NUM}\\s*(?:个)?\\s*(?:小时|h|H)`, 'i').exec(s);
+  if (perHour) {
+    const v = cnAmount(perHour[1]);
+    if (v != null) out.durationMin = Math.round(v * 60);
+  }
 
-  const total = /(\d+(?:\.\d+)?)\s*(?:个)?\s*(?:小时|h|H)/i.exec(s);
+  // 「半小时」：口语高频，但「半」不在数字类正则里，单列一条。
+  // 只在没算出单次时长时才兜 —— 「每次一小时，路上半小时」不该把 60 改成 30。
+  if (out.durationMin == null && /半\s*(?:个)?\s*小时/.test(s)) out.durationMin = 30;
+
+  const total = new RegExp(`${NUM}\\s*(?:个)?\\s*(?:小时|h|H)`, 'i').exec(s);
   if (total) {
     const idx = total.index ?? 0;
     const before = s.slice(Math.max(0, idx - 4), idx);
     // 「每次 N 小时」已归入单次时长，不再重复计入总量
-    if (!PER.test(before)) out.totalHours = Number(total[1]);
+    const v = cnAmount(total[1]);
+    if (!PER.test(before) && v != null) out.totalHours = v;
   }
   return out;
 }

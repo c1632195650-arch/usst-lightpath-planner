@@ -37,6 +37,25 @@ export interface ChatResult {
   used_memory?: boolean;
   /** 本轮是否带上了用户档案摘要（前端 profileCtx） */
   used_profile?: boolean;
+  /* ---- 方法库 / 健康库命中信号（2026-09-22 补齐）----
+     后端两个库一直在检索与注入，但响应字段在三树合流时丢了 → 前端无从观测
+     「这轮答的是不是方法库/健康库」。这里如实声明出来，不做任何加工。 */
+  /** 本轮是否命中方法库（学习方法 / 备考 / 元能力类条目） */
+  used_study?: boolean;
+  /** 方法库自己的检索最高原始向量 —— ⚠️ 与 top_raw_vec 分属两套门限（0.60/0.50），别混用 */
+  study_top_raw?: number;
+  /** 方法库命中条目标题（最多 3 条） */
+  study_sources?: string[];
+  /** 是否命中伪科学纠正口径（True 时回答含确定性纠正文案，study_sources 必为空） */
+  study_pseudo?: boolean;
+  /** 本轮是否命中健康库 */
+  used_health?: boolean;
+  /** 健康护栏等级：urgent/diagnosis/myth = 阻断（只给口径）｜consult = 提示｜ok */
+  health_level?: 'urgent' | 'diagnosis' | 'myth' | 'consult' | 'ok';
+  /** 健康库检索最高原始向量 */
+  health_top_raw?: number;
+  /** 健康库命中条目标题（阻断级时为空 —— 口径不走检索） */
+  health_sources?: string[];
   /** 本轮请求 id —— 与后端 `LIBAO_DEBUG=1` 打的 trace 行对齐用 */
   request_id?: string;
   /** 后端侧耗时（毫秒，含检索 + 空间 + 记忆 + LLM） */
