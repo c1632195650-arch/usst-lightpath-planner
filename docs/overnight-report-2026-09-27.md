@@ -115,3 +115,15 @@
 - 收尾门禁 5/5 PASS：tsc=0 / engine=336 / ui=262；禁区例外 1 个已申报留痕；md5 未变
 
 ---
+## 批 5 · WP8-mini + WP9（四小步独立 commit）
+
+### 5a · MiniWeekPreview 纯组件 —— commit（WP8:）
+
+- `src/features/week/miniWeekPreviewModel.ts`（新）：纯视图模型（分组/排序/紧凑/空态/确定性）。
+  node --test 跑不了 JSX，验收做在模型层；`MiniWeekPreview.tsx` 只是薄映射。
+- `src/features/week/MiniWeekPreview.tsx`（新）：零状态零 handler（`data-testid="mini-week-preview"`）。
+- `scripts/miniWeekPreview.test.ts`（新，5 用例）；反向：删除排序 → 红（pass4/fail1）→ 恢复 → 5/5 绿
+- 门禁 5/5 PASS（tsc=0 / engine=336 / ui=267）；禁区仅新增文件（未动既有）
+- 注：方案书的 `WeekDraft` 类型在本仓不存在，草稿态与正式排程同为 `WeekPlan`，语义由 caption 承载。
+
+---
