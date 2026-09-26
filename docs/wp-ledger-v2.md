@@ -8,8 +8,8 @@
 
 - 起点：`03a11b5`（master，2026-09-22 合流后修复提交）
 - 分支：`beta-v2`（扁平名；本机安全软件会拦带斜杠分支名，故不用 feat/*）
-- 当前基线（批 4 收尾）：**tsc=0 / engine=336 / ui=262 / intent=69+8(含于 ui) / golden=v1**
-  - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336
+- 当前基线（批 5 收尾）：**tsc=0 / engine=342 / ui=267 / intent=69+8(含于 ui) / golden=v1**
+  - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336；批 5a：ui=267
   - 注：`scripts/gate_overnight.mjs` 内置下限为旧值 312/219；台账以实测更高值为「只增」基线。
 - 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = eb43ce60816d4691a8b209f3904dcb3b`（夜里禁改，收尾必核）
 
@@ -35,7 +35,7 @@
 | 2 | WP2 题库年级分层 + 上理场景化 | [x]（分层口径待 CY 复核，见 §WP2） | |
 | 3 | WP4b 四 bug（B2/B3/B5/B6） | [x] | |
 | 4 | WP11 重要日体系 | [x] | |
-| 5 | WP8-mini + WP9 梨宝改排程 + 预览卡（5a-5d 四小步） | [ ] | |
+| 5 | WP8-mini + WP9 梨宝改排程 + 预览卡（5a-5d 四小步） | [x]（5b-5d 合并 commit，见 §WP9 申报） | |
 | 6 | WP10 拖拽合规（仅余力） | [ ] | |
 
 状态图例：[ ] 未开始 / [~] 进行中(含卡点) / [x] 完成(含会话证据)
@@ -133,9 +133,20 @@
 
 ## §WP8-mini + WP9 梨宝改排程执行器 + 预览卡
 
+- 状态：[x] 完成（5a 独立 commit WP8:；5b-5d 因同文件交织合一个 commit WP9: —— 与「逐小步 commit」的偏差在此申报）
 - 改动文件清单：
-- 反向验证记录：
+  - 5a：`src/features/week/miniWeekPreviewModel.ts`（新，纯视图模型）+ `src/features/week/MiniWeekPreview.tsx`（新，零状态零 handler）+ `scripts/miniWeekPreview.test.ts`（新，5 用例）。注：方案书的 `WeekDraft` 类型本仓不存在，草稿/落盘同为 `WeekPlan`，语义由 caption 承载
+  - 5b/5c/5d：`src/features/libao/weekPlanForChat.ts` — 执行器纯函数层（防腐层内，合红线）：`findCancelTargets`（user 待办优先 → activity/study 块；课程不进取消通道）/ `applyCancel`（removeTask | excludeBlock）/ `findMoveTargets`（非课程）/ `planReschedule`（走 ripple.dragTo 同一条合规校验，产出 move + 涟漪清单）/ `DraftKind`
+  - `src/features/libao/LbaoChat.tsx` — runGoalSlots 按 intent 分流 cancel/reschedule/replace（不再全塞 create 通路）；找不到/命中多个/缺信息一律追问不硬猜；confirmGoal 按 kind 分发落层（每路径一次 undo 快照）；5d：侧栏 MiniWeekPreview（xl+ 显示），落盘 bumpPlanVersion 重算引擎，有未确认草稿时按草稿态算（pending 任务喂 planWeekWithTasks）caption「草稿 · 未落盘」/「本周排程 · 已落盘」
+  - `tests/wp9.test.ts`（新，6 用例）
+- 反向验证记录（关实现 → 红 → 恢复 → 绿）：
+  - 5a RV：删除排序 → 红（pass4/fail1）→ 恢复 → 5/5
+  - 5b RV：applyCancel 还原 no-op → 红；5c RV：planReschedule 丢 displaced → 红（批量 pass4/fail2）→ 恢复 → 6/6
+- 门禁：tsc=0 / engine=342(+6) / ui=267 / 禁区（本批未动既有禁区文件）/ 风格 8 项 — 5/5 PASS
 - 遗留：
+  - LbaoChat 的目标匹配基于「planWeekForChat 当周重算」，不含已 excluded/moves 的影响 —— 块 id 与周计划页引擎一致（同 construct），但极端情况下预览可能与页面显示有出入；对齐留 WP12。
+  - 侧栏 undo/redo 在周计划页操作时不会实时 bump（聊天页只在自身落盘时刷新）。
+  - ModeSetupDialog（依赖 WP5 六模式）按任务书不做，白天批次接入 MiniWeekPreview compact。
 
 ## §WP10 拖拽合规
 

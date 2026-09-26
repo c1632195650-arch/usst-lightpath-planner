@@ -127,3 +127,18 @@
 - 注：方案书的 `WeekDraft` 类型在本仓不存在，草稿态与正式排程同为 `WeekPlan`，语义由 caption 承载。
 
 ---
+### 5b-5d · cancel / reschedule / replace 执行器 + 预览侧栏 —— commit（WP9:）
+
+- `src/features/libao/weekPlanForChat.ts` — 执行器纯函数层（放在防腐层内以守住
+  「features/libao 禁 import lib/planner」红线）：`findCancelTargets`（user 待办优先 →
+  activity/study 块，课程不进取消通道）/ `applyCancel`（removeTask | excludeBlock）/
+  `findMoveTargets` / `planReschedule`（走 ripple.dragTo 同一条合规校验 + 涟漪清单）+ `DraftKind`
+- `src/features/libao/LbaoChat.tsx` — runGoalSlots 按 intent 分流；找不到/多个/缺信息一律追问；
+  confirmGoal 按 kind 分发落层（每路径一次 undo 快照）；侧栏 MiniWeekPreview（xl+），
+  落盘 bumpPlanVersion 重算，草稿态 caption「草稿 · 未落盘」
+- `tests/wp9.test.ts`（新，6 用例）
+- 反向验证：RV-5b applyCancel no-op → 红；RV-5c 丢 displaced → 红（批量 pass4/fail2）→ 恢复 → 6/6
+- 门禁 5/5 PASS：tsc=0 / engine=342 / ui=267 / 禁区零改动 / md5 未变
+- 偏差申报：5b-5d 改动交织在同一组文件，合并为一个 commit（5a 已独立 WP8: commit）
+
+---

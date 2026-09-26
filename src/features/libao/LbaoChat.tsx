@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PersonaProfile, Schedule } from '@/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
-import { currentWeekNo, todayISO } from '@/lib/date';
+import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
@@ -9,13 +9,21 @@ import { buildProfileContext } from '@/features/libao/profileContext';
 import { applyClarifyAnswer, deadlineProposal, parseGoalIntent, describeSlots, topQuestions, type DeadlineProposal, type IntentSlots } from '@/features/libao/libaoIntent';
 import { addUserDeadline } from '@/features/calendar/deadlineStore';
 import {
+  applyCancel,
   checkGoalFeasibility,
   describeVerdict,
+  findCancelTargets,
+  findMoveTargets,
   goalToTasks,
+  planReschedule,
   planWeekForChat,
+  planWeekWithTasks,
   summarizeWeekPlan,
+  type CancelTarget,
+  type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan } from '@/features/week/userPlanStore';
+import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
+import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
 import { historyToMsgs, mergeHistory, RESTORE_CHAT } from '@/features/libao/chatRestore';
@@ -50,12 +58,18 @@ interface Msg {
   mid?: number;
 }
 
-/** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。 */
+/** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
+ *  WP9：kind 区分执行器（确认时走不同落层通道），缺省 create 兼容旧草稿。 */
 interface PendingGoal {
+  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query';
   title: string;
   tasks: UserTask[];
   /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
   weeks: number[];
+  /** cancel / replace：要取消的目标（applyCancel 落层） */
+  cancelTarget?: CancelTarget;
+  /** reschedule：确认后 upsertMove 的记录与涟漪预览 */
+  movePreview?: ReschedulePreview;
 }
 
 /** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
@@ -165,6 +179,33 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   const [pendingDeadlines, setPendingDeadlines] = useState<Record<number, DeadlineProposal>>({});
   const pendingSeq = useRef(boot?.pendingSeq ?? 0);
 
+  // ── WP9：侧栏排程预览卡 —— 「必须跟随最新进度」的落点 ──────────────
+  // 任何落盘（确认排/取消/挪/替换）都 bumpPlanVersion() → 重算引擎 → 卡片刷新。
+  // 有未确认草稿时按「草稿态」算（pending 的任务一起喂引擎），caption 如实标注。
+  const [planVersion, setPlanVersion] = useState(0);
+  const bumpPlanVersion = useCallback(() => setPlanVersion((v) => v + 1), []);
+  const [previewPlan, setPreviewPlan] = useState<WeekPlan | null>(null);
+  const pendingTasksKey = useMemo(
+    () => Object.values(pending).map((g) => g.tasks.map((t) => t.id).join(',')).join('|'),
+    [pending],
+  );
+  useEffect(() => {
+    let alive = true;
+    const weekNo = currentWeekNo(schedule.termStart, todayISO());
+    const tasks = Object.values(pending).flatMap((g) => g.tasks);
+    (async () => {
+      try {
+        const plan = tasks.length > 0
+          ? await planWeekWithTasks(schedule, profile, weekNo, tasks)
+          : await planWeekForChat(schedule, profile, weekNo);
+        if (alive) setPreviewPlan(plan);
+      } catch {
+        if (alive) setPreviewPlan(null);
+      }
+    })();
+    return () => { alive = false; };
+  }, [schedule, profile, pendingTasksKey, planVersion]);
+
   /** 追问接续态：needs_clarification 时把**半成品槽位**存这里，下一句话先当
    *  「追问的回应」尝试解析（applyClarifyAnswer），补齐了就继续出草稿。
    *  没有它，用户的回答会被当成全新消息重新分流 ——「每周 3 次、每次 2 小时」
@@ -268,12 +309,97 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
    *  写之前压一份 undo 快照（与周计划页同一套机制），排错了能一键反悔。 */
   const confirmGoal = (key: number) => {
     const g = pending[key];
+    if (!g) return;
+
+    // ── WP9·cancel：确认 → applyCancel 落层（一次 undo 快照）──
+    if (g.kind === 'cancel' && g.cancelTarget) {
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        saveUserPlan(applyCancel(layer, g.cancelTarget));
+        bumpPlanVersion();
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `好，「${g.title}」取消了。反悔按 ↩ 撤销；要重新排一遍去周计划点「重新排一遍」。`,
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '取消的时候出了点小状况，没写成。草稿还在上面，可以再试一次。',
+        }]);
+      }
+      return;
+    }
+
+    // ── WP9·reschedule：确认 → upsertMove 落层（source='drag'，用户明确表达）──
+    if (g.kind === 'reschedule' && g.movePreview?.move) {
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        saveUserPlan({ ...layer, moves: upsertMove(layer.moves, g.movePreview.move) });
+        bumpPlanVersion();
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `好，「${g.title}」挪过去了（要点「重新排一遍」才会真正重排；排得不合适按 ↩ 撤销）。`,
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '挪的时候出了点小状况，没写成。草稿还在上面，可以再试一次。',
+        }]);
+      }
+      return;
+    }
+
+    // ── WP9·replace：取消 + 新增两步一次快照（一次确认）──
+    if (g.kind === 'replace' && g.cancelTarget && g.tasks.length > 0) {
+      const target = g.cancelTarget;
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        const afterCancel = applyCancel(layer, target);
+        const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), afterCancel.tasks);
+        saveUserPlan({ ...afterCancel, tasks });
+        bumpPlanVersion();
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `好，替换完成：取消「${target.title}」，新增「${g.title}」× ${g.tasks.length} 块。反悔按 ↩ 一步撤销。`,
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '替换的时候出了点小状况，没写成。草稿还在上面，可以再试一次。',
+        }]);
+      }
+      return;
+    }
+
+    // ── create（原有路径）──
     if (!g || g.tasks.length === 0) return;
     try {
       const layer = loadUserPlan();
       pushUndoSnapshot(layer);
       const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), layer.tasks);
       saveUserPlan({ ...layer, tasks });
+      bumpPlanVersion();
       setPending((p) => {
         const next = { ...p };
         delete next[key];
@@ -340,9 +466,194 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   /** 目标槽位 → 干跑把关 → 追问 / 草稿 / 冲突说明。
    *  「新句子抽出的槽位」与「追问接续补齐的槽位」共用这一条通路 ——
    *  两口各写一份必然漂移（同 checkGoalFeasibility 是唯一完备性判定的道理）。 */
+  /** 把目标块算出来（cancel / reschedule / replace 都要对着真实日程匹配）。
+   *  引擎不可用就退化为只匹配用户待办 —— 诚实降级，不崩。 */
+  const blocksForMatching = async (today: string): Promise<TimeBlock[]> => {
+    try {
+      const weekNo = currentWeekNo(schedule.termStart, today);
+      const plan = await planWeekForChat(schedule, profile, weekNo);
+      return plan?.blocks ?? [];
+    } catch {
+      return [];
+    }
+  };
+
+  /** WP9·cancel 执行器：按名匹配（先待办后日程 activity/study 块）。
+   *  找不到说清楚；命中多个走追问通道；唯一命中才出确认卡（还没动手）。 */
+  const runCancel = async (slots: IntentSlots, today: string) => {
+    const q = (slots.targetHint || slots.title || '').trim();
+    if (!q) {
+      setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] });
+      setMessages((current) => [...current, { role: 'lbao', text: '好，取消哪件事？说个名字我好找到它。' }]);
+      setLoading(false);
+      return;
+    }
+    const blocks = await blocksForMatching(today);
+    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks);
+    if (targets.length === 0) {
+      setClarifySlots(null);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `日程和待办里都没找到「${q}」。可能不在这周，或者叫法不一样；你也可以去周计划直接删。`,
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    if (targets.length > 1) {
+      // 走既有追问通道：把 'target' 塞回缺口，下一句回答会被收进槽位
+      setClarifySlots({ ...slots, targetHint: undefined, missing: ['target' as const] });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `「${q}」对上好几件事，你要取消哪个？`,
+        planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+      }]);
+      setLoading(false);
+      return;
+    }
+    const t = targets[0];
+    const key = (pendingSeq.current += 1);
+    setClarifySlots(null);
+    setPending((p) => ({ ...p, [key]: { kind: 'cancel', title: t.title, tasks: [], weeks: [], cancelTarget: t } }));
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: `找到「${t.title}」（${t.hint}）。还没动手，确认我就取消：`,
+      goalAsk: key,
+    }]);
+    setLoading(false);
+  };
+
+  /** WP9·reschedule 执行器：定位块 → dragTo 同一条合规校验 → 涟漪预览 → 确认落层。
+   *  找不到/多个/没说挪到哪天 → 一律追问，不硬猜。 */
+  const runReschedule = async (slots: IntentSlots, today: string) => {
+    const q = (slots.targetHint || slots.title || '').trim();
+    if (!q) {
+      setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] });
+      setMessages((current) => [...current, { role: 'lbao', text: '要挪的是哪件事？说个名字我好找到它。' }]);
+      setLoading(false);
+      return;
+    }
+    const blocks = await blocksForMatching(today);
+    const targets = findMoveTargets(q, blocks);
+    if (targets.length === 0) {
+      setClarifySlots(null);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `这周日程里没找到「${q}」。只有非课程块能这样挪；改课时间请用周计划的「调课」。`,
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    if (targets.length > 1) {
+      setClarifySlots({ ...slots, targetHint: undefined, missing: ['target' as const] });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `「${q}」对上好几块，挪哪个？`,
+        planPoints: targets.slice(0, 5).map((b) => `${b.title}（周${b.dayOfWeek} ${b.startMin}–${b.endMin}）`),
+      }]);
+      setLoading(false);
+      return;
+    }
+    const src = targets[0];
+    const newDay = slots.when?.weekday
+      ?? (slots.dateFrom ? (() => { const wd = weekdayOf(slots.dateFrom); return wd === 0 ? 7 : wd; })() : undefined);
+    if (!newDay) {
+      setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'when' as const])] });
+      setMessages((current) => [...current, { role: 'lbao', text: `「${src.title}」要挪到哪天？（比如「周五下午」）` }]);
+      setLoading(false);
+      return;
+    }
+    const weekNo = currentWeekNo(schedule.termStart, today);
+    const startMin = slots.window?.fromMin ?? src.startMin;
+    const preview = planReschedule(blocks, src.id, weekNo, newDay, startMin);
+    if (!preview.ok || !preview.move) {
+      setClarifySlots(null);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `挪不过去 —— ${preview.reason ?? '那个时段放不下'}。换个时间试试？`,
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const key = (pendingSeq.current += 1);
+    setClarifySlots(null);
+    setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title: src.title, tasks: [], weeks: [], movePreview: preview } }));
+    const lines = [
+      `${src.title} → 周${preview.move.dayOfWeek} ${String(Math.floor(preview.move.startMin / 60)).padStart(2, '0')}:${String(preview.move.startMin % 60).padStart(2, '0')} 起`,
+      ...preview.displaced.map((d) => `被顺延：${d.title} → 周${d.day} ${d.start}–${d.end}`),
+    ];
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: preview.displaced.length > 0 ? '挪后会有涟漪（还没动手）：' : '挪后不影响别的块（还没动手）：',
+      planPoints: lines,
+      goalAsk: key,
+    }]);
+    setLoading(false);
+  };
+
+  /** WP9·replace 执行器：先 cancel 后 create，两步一次确认、一次快照。 */
+  const runReplace = async (slots: IntentSlots, today: string) => {
+    const q = (slots.targetHint || slots.title || '').trim();
+    if (!q) {
+      setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] });
+      setMessages((current) => [...current, { role: 'lbao', text: '要替换掉哪件事？说个名字我好找到它。' }]);
+      setLoading(false);
+      return;
+    }
+    const blocks = await blocksForMatching(today);
+    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks);
+    if (targets.length !== 1) {
+      // 0 个：没有可替换的既有块 → 走普通 create 通路；多个：追问
+      if (targets.length === 0) {
+        await runGoalSlots({ ...slots, intent: 'create' }, today);
+        return;
+      }
+      setClarifySlots({ ...slots, targetHint: undefined, missing: ['target' as const] });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `「${q}」对上好几件事，替换哪个？`,
+        planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+      }]);
+      setLoading(false);
+      return;
+    }
+    const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
+    if (verdict.kind !== 'ok' && verdict.kind !== 'tight') {
+      setClarifySlots(null);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `新的安排排不进去：`,
+        planPoints: [...describeVerdict(verdict)],
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const tasks = goalToTasks(slots, schedule, today);
+    const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
+    const key = (pendingSeq.current += 1);
+    setClarifySlots(null);
+    setPending((p) => ({ ...p, [key]: { kind: 'replace', title: slots.title, tasks, weeks, cancelTarget: targets[0] } }));
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: '一次替换，两步并作一步（还没动手）：',
+      planPoints: [`取消：${targets[0].title}（${targets[0].hint}）`, `新增：${slots.title} × ${tasks.length} 块`, ...describeVerdict(verdict)],
+      goalAsk: key,
+      goWeek: true,
+    }]);
+    setLoading(false);
+  };
+
   const runGoalSlots = async (slots: IntentSlots, today: string) => {
     const t0 = Date.now();
     try {
+      // ── WP9：非 create 意图走各自执行器，不再全塞进 create 通路 ──
+      if (slots.intent === 'cancel') { await runCancel(slots, today); return; }
+      if (slots.intent === 'reschedule') { await runReschedule(slots, today); return; }
+      if (slots.intent === 'replace') { await runReplace(slots, today); return; }
+
       // ── WP11：重要日意图 → 走提案卡，不进排程干跑（记节点 ≠ 排块）──
       if (slots.intent === 'add_deadline') {
         const prop = deadlineProposal(slots);
@@ -567,7 +878,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_12px_32px_rgba(22,35,63,0.06)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1">
+    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_12px_32px_rgba(22,35,63,0.06)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[264px_minmax(0,1fr)_300px]">
       <aside className="hero-surface flex flex-col px-5 py-5 text-white sm:px-6 lg:py-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold" aria-hidden="true">梨</span>
@@ -622,6 +933,15 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
             {online === true ? '校园资料服务已连接' : online === false ? '校园资料服务未连接' : '正在连接校园资料服务'}
           </div>
         </div>
+      </aside>
+
+      {/* WP9：排程预览侧栏（xl 及以上显示）。只读；草稿态/落盘态由 caption 如实区分。 */}
+      <aside className="hidden min-h-0 flex-col gap-2 overflow-y-auto border-l border-ink/[0.07] bg-paper/40 p-3 xl:flex" data-testid="lbao-plan-sidebar">
+        <MiniWeekPreview
+          draft={previewPlan}
+          caption={Object.keys(pending).length > 0 ? '草稿 · 未落盘' : '本周排程 · 已落盘'}
+        />
+        <p className="text-[10.5px] leading-4 text-ink-faint">随你的确认实时更新；只读预览，改动去周计划或直接跟我说。</p>
       </aside>
 
       <section className="flex min-h-0 flex-col p-3 sm:p-5">

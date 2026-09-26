@@ -538,3 +538,140 @@ export function describeVerdict(v: GoalVerdict): string[] {
   }
   return out;
 }
+
+/* ============================================================
+ * WP9：改排程执行器（cancel / reschedule / replace）
+ * ============================================================
+ * 放在防腐层（libao↔planner 唯一接缝）而不是 LbaoChat：
+ *  · 匹配/落层全是纯函数，node --test 可直测；
+ *  · LbaoChat 只负责「说话与确认」，不碰层结构。
+ *
+ * 目标匹配口径（WP9）：**模糊但可解释** —— 归一空白后互相包含即命中；
+ * 先 user 待办（removeTask 通道），再引擎块（excluded 通道，只认
+ * activity/study —— 课程不取消不拖拽，改课走调课）。
+ * 找不到 / 命中多个 → 返回原样由调用方**追问**，绝不硬猜（core §4）。
+ */
+import { excludeBlock, removeTask, upsertMove, type MoveRecord, type UserPlanLayer } from '@/features/week/userPlanStore';
+import { dragTo } from '@/lib/planner/ripple';
+
+export type DraftKind = 'create' | 'reschedule' | 'cancel' | 'replace' | 'query';
+
+export interface CancelTarget {
+  taskId?: string;   // user 层任务 id（layer.tasks）
+  blockId?: string;  // 引擎块 id（layer.excluded 通道）
+  title: string;
+  origin: 'user' | 'plan';
+  hint: string;      // 给用户看的位置线索
+}
+
+const normTitle = (s: string): string => (s || '').replace(/\s+/g, '');
+
+const dowOfISO = (iso: string): number => {
+  const wd = weekdayOf(iso);
+  return wd === 0 ? 7 : wd;
+};
+
+export function findCancelTargets(
+  query: string,
+  userTasks: readonly UserTask[],
+  planBlocks: readonly TimeBlock[],
+): CancelTarget[] {
+  const needle = normTitle(query);
+  if (!needle) return [];
+  const out: CancelTarget[] = [];
+  for (const t of userTasks) {
+    const title = normTitle(t.title);
+    if (title.includes(needle) || needle.includes(title)) {
+      out.push({
+        taskId: t.id,
+        title: t.title,
+        origin: 'user',
+        hint: `${t.dayOfWeek ? `周${WEEKDAY_CN[t.dayOfWeek - 1]}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
+      });
+    }
+  }
+  for (const b of planBlocks) {
+    if (b.kind !== 'activity' && b.kind !== 'study') continue; // 课程不在此通道
+    const title = normTitle(b.title);
+    if (title.includes(needle) || needle.includes(title)) {
+      out.push({
+        blockId: b.id,
+        title: b.title,
+        origin: 'plan',
+        hint: `周${WEEKDAY_CN[b.dayOfWeek - 1]} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
+      });
+    }
+  }
+  return out;
+}
+
+/** 取消落层：user → removeTask；引擎块 → excluded（重排后也不回来）。纯函数。 */
+export function applyCancel(layer: UserPlanLayer, target: CancelTarget): UserPlanLayer {
+  if (target.origin === 'user' && target.taskId) {
+    return { ...layer, tasks: removeTask(layer.tasks, target.taskId) };
+  }
+  if (target.origin === 'plan' && target.blockId) {
+    return { ...layer, excluded: excludeBlock(layer.excluded, target.blockId) };
+  }
+  return layer;
+}
+
+/** reschedule 候选：非课程块、标题互相包含。返回块本体（调用方做 dragTo）。 */
+export function findMoveTargets(query: string, planBlocks: readonly TimeBlock[]): TimeBlock[] {
+  const needle = normTitle(query);
+  if (!needle) return [];
+  return planBlocks
+    .filter((b) => b.kind !== 'course' && b.source !== 'course')
+    .filter((b) => {
+      const title = normTitle(b.title);
+      return title.includes(needle) || needle.includes(title);
+    })
+    .sort((a, b) => (a.dayOfWeek - b.dayOfWeek) || (a.startMin - b.startMin));
+}
+
+export interface ReschedulePreview {
+  ok: boolean;
+  reason?: string;
+  /** 确认后 upsertMove 落层的记录（source='drag'，用户明确表达） */
+  move?: MoveRecord;
+  /** 「挪后涟漪」：哪些块被顺延（草稿卡预览用） */
+  displaced: Array<{ title: string; day: number; start: string; end: string }>;
+}
+
+/**
+ * 预览一次改期：走 ripple.dragTo 同一条纯函数（合规校验继承拖拽），
+ * ok 时给出确认后要落层的 move 与被顺延清单；不 ok 给人话原因。
+ */
+export function planReschedule(
+  blocks: readonly TimeBlock[],
+  blockId: string,
+  weekNo: number,
+  newDay: number,
+  startMin: number,
+): ReschedulePreview {
+  const res = dragTo(blocks, blockId, newDay, startMin, { dayStartMin: 7 * 60, dayEndMin: 23 * 60 });
+  const drag = res.records.find((r) => r.source === 'drag');
+  if (!res.ok || !drag) {
+    return { ok: false, reason: res.reason ?? '挪不过去', displaced: [] };
+  }
+  const src = blocks.find((b) => b.id === blockId);
+  return {
+    ok: true,
+    move: {
+      weekNo,
+      blockId,
+      dayOfWeek: newDay,
+      startMin: drag.startMin,
+      endMin: drag.endMin,
+      place: src?.place,
+      room: src?.room,
+      source: 'drag',
+    },
+    displaced: res.records
+      .filter((r) => r.source === 'ripple')
+      .map((r) => {
+        const b = blocks.find((x) => x.id === r.blockId);
+        return { title: b?.title ?? r.blockId, day: r.dayOfWeek, start: toHHmm(r.startMin), end: toHHmm(r.endMin) };
+      }),
+  };
+}
