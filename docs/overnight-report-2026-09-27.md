@@ -154,3 +154,19 @@
 - 门禁 5/5 PASS：tsc=0 / engine=350 / ui=267；禁区例外 2 文件申报留痕；md5 未变
 
 ---
+## 总结（早上验收索引）
+
+- **产出**：批 0-6 全部 [x]。beta-v2 分支 9 个 commit：cc901b5(WP0) → bf123f7(WP1) →
+  f93fe5d(WP2) → cfdcf44(WP4b) → c86549a(WP11) → 4294318(WP8) → 04e7673(WP9) → 20303b5(WP10) →
+  d2ebbba(docs)。master 一个字节没动（HEAD 仍 03a11b5）；全程零 push。
+- **基线演进**：tsc 0/0；engine 326→350；ui 237→267；golden v1 冻结未动（零重拍）。
+- **需要人决定**（详见 BLOCKERS.md）：① WP2 分层口径 (a)/(b)；② WP1 跳过引导是否算已引导；③ B6 扩口径确认。
+- **反向验证**：全部批次逐条执行（关实现→红→恢复→绿，恢复后 md5 与改动前一致），记录在台账各 §WP 节。
+- **既有断言调整申报**：仅 tests/identity.test.ts 3 处（grade 字符串→数字，契约演进，见 §WP1 申报）；
+  scripts/test_memory_facts.py 为纯追加（+23/-0）。
+- **验收命令**（与夜班同一条，自证）：
+  ```
+  node scripts/gate_overnight.mjs        # 预期 5/5 PASS（工作树干净 → 禁区门自然过）
+  md5sum scripts/gate_overnight.mjs      # 预期 eb43ce60816d4691a8b209f3904dcb3b
+  git diff master..beta-v2 --stat        # 对照台账 §WP 各节「改动文件清单」
+  ```
