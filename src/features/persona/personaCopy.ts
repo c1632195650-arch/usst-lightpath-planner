@@ -14,6 +14,7 @@
  */
 import type { Archetype, AxisKey, ScenarioFields } from '@/types';
 import type { BasicInfo } from '@/lib/identity';
+import { GRADE_LABELS } from '@/lib/identity';
 import { AXIS_KEYS } from '@/lib/persona';
 
 /* ============================================================
@@ -185,8 +186,13 @@ export function makeEpithet(
     : basicInfo?.college
       ? `${basicInfo.college}同学`
       : basicInfo?.grade
-        ? `${basicInfo.grade}同学`
+        ? `${gradeLabel(basicInfo.grade)}同学`
         : '上理人';
 
   return `${phrase}${role}`;
+}
+
+/** 年级 → 「大二」式标签。grade 自 WP1 起是 1-4 数字；兜底兼容字符串直传（旧数据/测试） */
+function gradeLabel(g: NonNullable<BasicInfo['grade']>): string {
+  return (GRADE_LABELS as Record<number, string>)[g] ?? String(g);
 }

@@ -13,15 +13,40 @@
 const USER_KEY = 'usst.libao.user_id';
 const BASIC_KEY = 'usst.libao.basic_info';
 
+/** 年级（v2 方案 WP1）：收窄为 1-4 数字，供题库分层（WP2）与排程默认值消费 */
+export type Grade = 1 | 2 | 3 | 4;
+/** 校区值域封死（数据红线：地点只允许军工路本部 + 1100） */
+export type Campus = '军工路本部' | '1100';
+
+export const GRADE_LABELS: Record<Grade, string> = { 1: '大一', 2: '大二', 3: '大三', 4: '大四' };
+export const CAMPUS_OPTIONS: readonly Campus[] = ['军工路本部', '1100'];
+
+const GRADE_FROM_LABEL: Record<string, Grade> = {
+  大一: 1, 大二: 2, 大三: 3, 大四: 4, '1': 1, '2': 2, '3': 3, '4': 4,
+};
+
+/** 「大二」/「2」→ 2；解析不了返回 null（调用方必须忽略，不许猜） */
+export function gradeFromLabel(v: string): Grade | null {
+  return GRADE_FROM_LABEL[v.trim()] ?? null;
+}
+
 export interface BasicInfo {
   /** 怎么称呼你 */
   nickname?: string;
-  /** 年级，如「大二」 */
-  grade?: string;
+  /** 年级 1-4（读取时兼容旧版「大二」式字符串，自动迁移成数字） */
+  grade?: Grade;
   /** 学院，如「光电学院」 */
   college?: string;
   /** 专业，如「光电信息科学与工程」 */
   major?: string;
+  /** 校区：军工路本部 | 1100 */
+  campus?: Campus;
+  /** 宿舍楼号，纯文本；禁坐标（数据红线：落盘无 lat/lon） */
+  dorm?: string;
+  /** 平日就寝时间（分钟 0-1440）→ 喂排程 dayEnd */
+  sleepMin?: number;
+  /** 每周运动次数 0-7 → 排程运动条数默认值 */
+  exercisePerWeek?: number;
 }
 
 export const BASIC_INFO_FIELDS = [
@@ -57,17 +82,37 @@ export function getUserId(): string {
   }
 }
 
+function strField(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+function intField(v: unknown, lo: number, hi: number): number | undefined {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= lo && n <= hi ? n : undefined;
+}
+
 export function loadBasicInfo(): BasicInfo {
   try {
     const raw = localStorage.getItem(BASIC_KEY);
     if (!raw) return {};
-    const data = JSON.parse(raw) as Partial<BasicInfo>;
-    // 只认字符串字段，其余丢弃（存储层出错不报错、不污染）
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    // 逐字段白名单校验；非法形状一律丢弃（存储层出错不报错、不污染）
     const out: BasicInfo = {};
-    for (const { key } of BASIC_INFO_FIELDS) {
-      const v = data[key];
-      if (typeof v === 'string' && v.trim()) out[key] = v.trim();
-    }
+    const nickname = strField(data.nickname);
+    if (nickname) out.nickname = nickname;
+    const g = gradeFromLabel(String(data.grade ?? '')); // 数字 1-4 直通；旧版「大二」字符串在此迁移
+    if (g) out.grade = g;
+    const college = strField(data.college);
+    if (college) out.college = college;
+    const major = strField(data.major);
+    if (major) out.major = major;
+    if (data.campus === '军工路本部' || data.campus === '1100') out.campus = data.campus;
+    const dorm = strField(data.dorm);
+    if (dorm) out.dorm = dorm;
+    const sleep = intField(data.sleepMin, 0, 1440);
+    if (sleep !== undefined) out.sleepMin = sleep;
+    const ex = intField(data.exercisePerWeek, 0, 7);
+    if (ex !== undefined) out.exercisePerWeek = ex;
     return out;
   } catch {
     return {};
@@ -91,10 +136,19 @@ export function objectiveKeyToField(key: string): keyof BasicInfo | null {
 }
 
 /** 用户在建议卡点了「确认」→ 把这条客观事实写进本地基础信息。
- *  只覆盖对应单字段，不碰其它字段。 */
+ *  只覆盖对应单字段，不碰其它字段。
+ *  年级走 gradeFromLabel 解析（后端 facts 给的是「大二」式字符串）；
+ *  解析不了的年级一律忽略 —— 不许猜（core §4：不替用户拍板）。 */
 export function applyObjectiveFact(key: string, value: string): BasicInfo {
   const field = objectiveKeyToField(key);
   if (!field) return loadBasicInfo();
+  if (field === 'grade') {
+    const g = gradeFromLabel(value);
+    if (!g) return loadBasicInfo();
+    const next = { ...loadBasicInfo(), grade: g };
+    saveBasicInfo(next);
+    return next;
+  }
   const next = { ...loadBasicInfo(), [field]: value };
   saveBasicInfo(next);
   return next;
@@ -106,8 +160,9 @@ export function basicInfoContext(): string {
   const info = loadBasicInfo();
   const bits: string[] = [];
   if (info.nickname) bits.push(`称呼：${info.nickname}`);
-  if (info.grade) bits.push(`年级：${info.grade}`);
+  if (info.grade) bits.push(`年级：${GRADE_LABELS[info.grade]}`);
   if (info.college) bits.push(`学院：${info.college}`);
   if (info.major) bits.push(`专业：${info.major}`);
+  if (info.campus) bits.push(`校区：${info.campus}`);
   return bits.length ? `[用户基础信息]\n${bits.join('；')}` : '';
 }

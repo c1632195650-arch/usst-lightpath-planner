@@ -48,17 +48,31 @@ test('getUserId 在 localStorage 不可用时降级为 anon 而不抛错', () =>
 });
 
 test('基础信息保存与读取闭环；非法形状被丢弃', () => {
+  // WP1 起 grade 是 1-4 数字；旧版「大二」式字符串在 loadBasicInfo 自动迁移
   saveBasicInfo({ grade: '大二', nickname: '阿 C' });
-  assert.deepEqual(loadBasicInfo(), { grade: '大二', nickname: '阿 C' });
+  assert.deepEqual(loadBasicInfo(), { grade: 2, nickname: '阿 C' });
 
-  // 脏数据：数字/空串一律不认
+  // 脏数据：越界数字/空串一律不认
   const dirty = installStorageStub();
   dirty.set('usst.libao.basic_info', JSON.stringify({ grade: 42, major: '' }));
-  assert.deepEqual(loadBasicInfo(), {}, '非字符串字段必须被丢弃');
+  assert.deepEqual(loadBasicInfo(), {}, '非法年级与空字段必须被丢弃');
 
   // 坏 JSON 不炸
   const store = installStorageStub();
   store.set('usst.libao.basic_info', '{not-json');
+  assert.deepEqual(loadBasicInfo(), {});
+});
+
+test('WP1 新字段：campus 值域封死，sleepMin/exercisePerWeek 越界丢弃', () => {
+  installStorageStub().set('usst.libao.basic_info', JSON.stringify({
+    campus: '军工路本部', sleepMin: 1380, exercisePerWeek: 3,
+  }));
+  assert.deepEqual(loadBasicInfo(), { campus: '军工路本部', sleepMin: 1380, exercisePerWeek: 3 });
+
+  // campus 值域外 / 数字越界 → 字段被丢弃，不污染
+  installStorageStub().set('usst.libao.basic_info', JSON.stringify({
+    campus: '徐汇校区', sleepMin: 2000, exercisePerWeek: 9,
+  }));
   assert.deepEqual(loadBasicInfo(), {});
 });
 
@@ -73,11 +87,19 @@ test('objectiveKeyToField 只认三个身份字段', () => {
 });
 
 test('applyObjectiveFact 只覆盖对应单字段（用户确认才落地）', () => {
+  // WP1 起 grade 落盘为 1-4 数字：后端 facts 给的「大二」式字符串在此解析
   saveBasicInfo({ nickname: '阿 C', grade: '大一' });
   const next = applyObjectiveFact('grade', '大二');
-  assert.equal(next.grade, '大二');
+  assert.equal(next.grade, 2);
   assert.equal(next.nickname, '阿 C', '确认一条事实不能碰别的字段');
-  assert.deepEqual(loadBasicInfo(), { nickname: '阿 C', grade: '大二' });
+  assert.deepEqual(loadBasicInfo(), { nickname: '阿 C', grade: 2 });
+});
+
+test('WP1：解析不了的年级不写入（不许猜）', () => {
+  // 反向：删掉 applyObjectiveFact 里的 gradeFromLabel 解析分支 → 本用例红
+  saveBasicInfo({ nickname: '阿 C', grade: 2 });
+  const next = applyObjectiveFact('grade', '研一');
+  assert.deepEqual(next, { nickname: '阿 C', grade: 2 }, '值域外的年级必须被忽略');
 });
 
 test('basicInfoContext 拼出档案段落；空信息返回空串', () => {
@@ -100,6 +122,6 @@ test('闸门：偏好类 key 绝不能写进基础信息', () => {
   applyObjectiveFact('preferences.忌口', '香菜');
   applyObjectiveFact('weak.高数', '高数');
   applyObjectiveFact('course.C语言', 'C语言');
-  assert.deepEqual(loadBasicInfo(), { grade: '大一' },
+  assert.deepEqual(loadBasicInfo(), { grade: 1 },
     '偏好/薄弱/课程不是客观事实，确认动作不得触碰基础信息');
 });

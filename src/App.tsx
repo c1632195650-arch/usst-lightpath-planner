@@ -6,6 +6,8 @@ import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
 import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
+import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
+import { initialView } from '@/features/welcome/basicInfo';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -14,7 +16,7 @@ import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 
-type View = 'welcome' | 'persona' | 'result' | 'main';
+type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
 /** 周视图子模式：课表网格 vs 排程计划时间轴 */
 type WeekSubTab = 'timetable' | 'plan';
@@ -36,7 +38,7 @@ function isoOf(d: Date): string {
 
 export default function App() {
   const { state, setState } = useAppState();
-  const [view, setView] = useState<View>('welcome');
+  const [view, setView] = useState<View>(() => initialView(state.onboarded));
   const [mainTab, setMainTab] = useState<MainTab>('calendar');
   const [weekMonday, setWeekMonday] = useState<string | null>(null);
   // 默认落在「周计划」：这是感受测试的主体（课表网格是既有功能，随时可切回）
@@ -104,7 +106,7 @@ export default function App() {
   const handleComplete = () => {
     const profile = buildProfile(state.answers ?? {});
     setState((prev) => {
-      const next = { ...prev, persona: profile, onboarded: true };
+      const next = { ...prev, persona: profile };
       saveState(next);
       return next;
     });
@@ -147,10 +149,14 @@ export default function App() {
   if (view === 'welcome') {
     return (
       <Welcome
-        onStart={() => setView('persona')}
+        onStart={() => setView('basicinfo')}
         onSkip={() => { setView('main'); setMainTab('calendar'); }}
       />
     );
+  }
+
+  if (view === 'basicinfo') {
+    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('persona')} />;
   }
 
   if (view === 'persona') {
@@ -168,7 +174,7 @@ export default function App() {
     return (
       <PersonaResult
         profile={state.persona}
-        onEnter={() => { setView('main'); setMainTab('calendar'); }}
+        onEnter={() => { patchState({ onboarded: true }); setView('main'); setMainTab('calendar'); }}
         onRetake={() => setView('persona')}
       />
     );

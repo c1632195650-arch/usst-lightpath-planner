@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
-import { BASIC_INFO_FIELDS, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
+import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
 import { Radar } from '@/components/Radar';
 import { makeEpithet, pickBlurb } from './personaCopy';
 
@@ -23,6 +23,17 @@ function BasicInfoCard() {
   const [info, setInfo] = useState<BasicInfo>(() => loadBasicInfo());
 
   const update = (key: keyof BasicInfo, value: string) => {
+    // 年级自 WP1 起是 1-4 数字：接受「大二」式标签或数字输入，解析不了就不写（不猜）
+    if (key === 'grade') {
+      const g = value.trim() ? gradeFromLabel(value) : undefined;
+      if (value.trim() && !g) return;
+      const next: BasicInfo = { ...info };
+      if (g) next.grade = g;
+      else delete next.grade;
+      setInfo(next);
+      saveBasicInfo(next);
+      return;
+    }
     const next = { ...info, [key]: value.trim() ? value.trim() : undefined };
     // 清空 = 删掉这个字段，而不是留一个空字符串
     if (!value.trim()) delete next[key];
@@ -46,7 +57,7 @@ function BasicInfoCard() {
           <label key={key} className="block">
             <span className="text-xs text-ink-faint">{label}</span>
             <input
-              value={info[key] ?? ''}
+              value={key === 'grade' ? (info.grade !== undefined ? GRADE_LABELS[info.grade] : '') : info[key] ?? ''}
               onChange={(e) => update(key, e.target.value)}
               placeholder={placeholder}
               className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
