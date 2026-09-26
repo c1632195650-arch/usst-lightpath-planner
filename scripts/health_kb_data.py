@@ -101,7 +101,9 @@ SLEEP = [
         parameters={"wakeDriftMin": 60},
         applicable_when=["作息不规律", "周末报复性补觉", "早八与周末作息差异大"],
         evidence_tier="B",
-        citation={"source": "昼夜节律与社交时差研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep hygiene（固定起床时间与规律睡眠日程可改善睡眠）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_hygiene", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "sleep-light-circadian", "sleep", "skill",
@@ -116,7 +118,9 @@ SLEEP = [
         ],
         applicable_when=["入睡困难", "昼夜颠倒", "白天困晚上精神"],
         evidence_tier="B",
-        citation={"source": "光照与褪黑素/昼夜节律研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep hygiene（白天增加自然光照、睡前数小时避强光，有助对齐昼夜节律）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_hygiene", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "caffeine-cutoff", "sleep", "skill",
@@ -194,7 +198,9 @@ SLEEP = [
         parameters={"repayExtraMinPerDay": [30, 60]},
         applicable_when=["周中熬夜", "周末报复性补觉"],
         evidence_tier="B",
-        citation={"source": "睡眠剥夺与恢复研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep debt（慢性睡眠剥夺的代谢与内分泌影响；学界对「睡眠债」细节仍有争议）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_debt", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "nap-hygiene", "sleep", "skill",
@@ -211,7 +217,10 @@ SLEEP = [
         applicable_when=["下午犯困", "午休时间可利用"],
         contraindications=["夜间入睡困难者慎排午睡", "发作性睡病等按医嘱"],
         evidence_tier="B",
-        citation={"source": "小睡与睡眠惯性研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Power nap（20 分钟以内/18–25 分钟最佳；超时入深睡 → 睡眠惯性）；"
+                            "Wikipedia: Sleep hygiene（午后短睡干扰最小）",
+                  "url": "https://en.wikipedia.org/wiki/Power_nap", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "sleep-environment", "sleep", "skill",
@@ -226,7 +235,9 @@ SLEEP = [
         ],
         applicable_when=["宿舍噪声/光线干扰", "认床", "换环境的第一晚"],
         evidence_tier="C",
-        citation={"source": "睡眠卫生与首夜效应（专家共识，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep hygiene（安静、舒适、黑暗的睡眠环境为通行建议）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_hygiene", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "pre-sleep-screen", "sleep", "skill",
@@ -243,7 +254,10 @@ SLEEP = [
         applicable_when=["睡前刷手机停不下来", "越刷越精神"],
         evidence_tier="C",
         status="contested",
-        citation={"source": "屏幕光与褪黑素的证据强度存在争议（结论未统一）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep hygiene（睡前降低生理唤醒与认知活动有助入睡——支持「内容唤醒」部分；"
+                            "屏幕蓝光效应大小证据不一致，故整体仍标争议）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_hygiene", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "red-flag-insomnia", "sleep", "safety",
@@ -390,7 +404,10 @@ EXERCISE = [
         applicable_when=["睡前训练后入睡困难"],
         evidence_tier="C",
         status="contested",
-        citation={"source": "晚间运动与睡眠关系的证据结论不一致", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Sleep hygiene（「太晚运动会延迟入睡」与「运动者睡眠更好」并存——"
+                            "支持个体差异表述，整体结论仍标争议）",
+                  "url": "https://en.wikipedia.org/wiki/Sleep_hygiene", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "consistency-over-intensity", "exercise", "principle",
@@ -423,8 +440,12 @@ EXERCISE = [
         parameters={"weeklyLossKg": [0.5, 1.0], "dailyDeficitKcal": [300, 500]},
         applicable_when=["想减脂", "体重近期上升"],
         contraindications=["进食障碍史、孕哺期、慢性病或服药者需专业指导", "不建议极端节食或断食"],
-        evidence_tier="B",
-        citation={"source": "体重管理与能量平衡研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        evidence_tier="A",
+        citation={"source": "CDC: Losing Weight（「以渐进、稳定的速度减重——每周约 1–2 磅（0.45–0.9 kg）——"
+                            "更容易保持」；减重 5% 已能改善血压/血脂/血糖）",
+                  "url": "https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html",
+                  "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "red-flag-exercise", "exercise", "safety",
@@ -689,7 +710,10 @@ MENTAL = [
         parameters={"dailyMicroGoalMin": 10},
         applicable_when=["提不起劲", "拖延严重", "情绪低落期"],
         evidence_tier="B",
-        citation={"source": "行为激活相关研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Behavioral activation（通过规划可执行的小目标与增加环境强化来克服回避，"
+                            "是抑郁干预的核心行为技术之一）",
+                  "url": "https://en.wikipedia.org/wiki/Behavioral_activation", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "mindfulness-mbsr", "mental", "skill",
@@ -706,7 +730,10 @@ MENTAL = [
         applicable_when=["压力大", "注意力分散", "入睡前的反刍"],
         contraindications=["精神病性症状、严重创伤史者需专业指导"],
         evidence_tier="B",
-        citation={"source": "正念减压（MBSR）相关 meta 分析（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Mindfulness-based stress reduction（8 周结构化课程；"
+                            "正念冥想可减少反刍与担忧，对心理健康有益的证据来自 Khoury 2015、Goldberg 2017 等 meta 分析）",
+                  "url": "https://en.wikipedia.org/wiki/Mindfulness-based_stress_reduction", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "social-connection", "mental", "skill",
@@ -722,7 +749,10 @@ MENTAL = [
         parameters={"weeklySocialContacts": 1},
         applicable_when=["觉得孤独", "换了新环境", "压力大不想说话"],
         evidence_tier="B",
-        citation={"source": "社会连接与孤独感对健康影响的研究（经典文献，本轮未逐条复核）", "url": "", "year": "", "verification": "canonical"},
+        citation={"source": "Wikipedia: Loneliness（慢性孤独与肥胖、抑郁、心血管病、高血压风险上升相关，"
+                            "约 1/6 人口受长期孤独影响）",
+                  "url": "https://en.wikipedia.org/wiki/Loneliness", "year": "2026",
+                  "verification": "verified"},
     ),
     _e(
         "exam-anxiety-reframe", "mental", "skill",

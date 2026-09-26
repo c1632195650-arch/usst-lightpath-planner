@@ -140,13 +140,31 @@ escalate / seg_text`
 **仍为 canonical（本轮未复核，诚实标注）**：BMI 中国界值、久坐打断的具体分钟数、
 正念 MBSR、行为激活、社交支持、减脂能量缺口。
 原因：Jina Reader 对本机代理**按页限流且连接被重置**（第二轮 5 页只有 1 页成功），
-MCP 搜索本次未被索引（需在连接器页重新信任）。下一次补复核时优先走 MCP 搜索。
+
+**复核补录二轮（M8，2026-09-26，MCP 搜索恢复后）**：
+- `Sleep hygiene` 一页核实 4 条：作息规律性 / 白天自然光照与睡前避光 / 安静黑暗环境 /
+  午后短睡干扰最小 → sleep-regularity、sleep-light-circadian、sleep-environment、nap-hygiene 升级 `verified`
+- `Power nap` 钉死 **20 分钟以内、18–25 分钟最佳**与睡眠惯性机制 → nap-hygiene 补强引用
+- `Sleep debt` 证实慢性睡眠剥夺的代谢内分泌影响（并如实标注学界对「睡眠债」细节仍有争议）
+  → sleep-debt-weekend 升级 `verified`
+- `Loneliness` 证实慢性孤独与肥胖/抑郁/心血管病/高血压相关（约 1/6 人口受长期孤独影响）
+  → social-connection 升级 `verified`
+- `Behavioral activation`、`Mindfulness-based stress reduction`（Khoury 2015、Goldberg 2017 meta 分析）
+  → behavioral-activation、mindfulness-mbsr 升级 `verified`
+- `CDC Losing Weight` 钉死减重速度：**每周 1–2 磅（≈0.45–0.9 kg）更易保持**，与条目 0.5–1 kg 一致
+  → weight-management-energy 升级 `verified`，**证据等级 B → A**
+- 睡前屏幕、晚间运动两条**维持 contested**：Sleep hygiene 同时支持「睡前高唤醒活动延迟入睡」
+  与「运动者睡眠更好」，恰证个体差异——引用已补，争议标记不动。
+- **本轮后：verified 30 / canonical 5**。剩余 canonical：stress-sleep-loop、exam-anxiety-reframe、
+  when-to-seek-help、no-crash-diet、red-flag-exercise（多来源一致的通行口径，未逐条读到单一权威原文）。
+- BMI 中国界值（24/28）已定位官方出处《成人肥胖食养指南（2024年版）》PDF（nhc.gov.cn），
+  但 PDF 正文无法机读，未升级——库内无 BMI 条目，仅作参考记录。
 
 ---
 
 ## 十、待办
 
-- M3 已对接 `app.py`（本地检出），**推送前需按 dev 最新版重新应用**（本地基座滞后，同方法库流程）
-- 编译层 `src/lib/planner/health.ts` 在 Ray 目录，属新增叶子文件，需同步告知
-- 与健康相关的 UI 消费点（周计划里的睡眠保底 / 久坐打断提醒）尚未接入
-- canonical 条目下一轮补联网复核
+- ~~M3 对接 app.py~~（已完成）；~~UI 消费点~~（已完成，见 M7）；~~canonical 复核~~（已完成两轮，剩 5 条通行口径）
+- 本地检出 LbaoChat 的 `used_*` 调示信号增强（09-25，未随 PR #37 推送）需单独过一遍
+- 周计划页方法/健康卡片归 Ray 的文件，需协调
+- eval:health 已同步 _full；主检出后续以 PR #34 → #37 顺序合并
