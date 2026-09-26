@@ -10,6 +10,7 @@ import {
   checkGoalFeasibility,
   describeVerdict,
   goalToTasks,
+  healthAdviceForChat,
   methodAdviceForChat,
   planWeekForChat,
   summarizeWeekPlan,
@@ -284,9 +285,15 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         setMessages((current) => [...current, plan ? {
           role: 'lbao',
           text: `第 ${weekNo} 周我按你的课表排了一版，你懂我意思吧：`,
-          // 排程要点（引擎事实）+ 方法建议（方法库编译参数，见 weekPlanForChat.methodAdviceForChat）。
-          // 两类都只提示不拍板 —— 「决策层不替用户做主」的边界在这里原样保持。
-          planPoints: [...summarizeWeekPlan(plan), ...methodAdviceForChat(schedule, profile, weekNo)],
+          // 排程要点（引擎事实）+ 方法建议（方法库编译参数，见 weekPlanForChat.methodAdviceForChat）
+          // + 健康底线（健康库编译参数，见 healthAdviceForChat：只碰睡眠/久坐/活动量这类
+          //   通用常识，个体化健康问题一律走对话层健康库口径，不在这里拼结论）。
+          // 三类都只提示不拍板 —— 「决策层不替用户做主」的边界在这里原样保持。
+          planPoints: [
+            ...summarizeWeekPlan(plan),
+            ...methodAdviceForChat(schedule, profile, weekNo),
+            ...healthAdviceForChat(plan),
+          ],
           goWeek: true,
         } : {
           // 引擎排不了（该周不在学期范围）→ 直说，不编造日程

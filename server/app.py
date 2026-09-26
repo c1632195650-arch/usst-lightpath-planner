@@ -59,6 +59,7 @@ import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 import method_rag  # 方法论库独立检索（第四路上下文，与上理库完全分离）
+import health_rag  # 健康库独立检索（第五路上下文；护栏优先于检索，见 health_context）
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
@@ -250,9 +251,67 @@ def study_context(q, k=3):
     return "\n\n".join(lines), rs
 
 
+# ---------- 健康上下文（健康库 · 独立检索 + 安全护栏） ----------
+# 🔴 与方法库最大的区别：**先守门，再检索**。
+#    health_rag.guard() 是纯函数、确定性：命中 urgent / diagnosis / myth 时
+#    search() 直接返回空列表（检索层一条结果都不给，杜绝给危险做法背书），
+#    由对话层把确定性口径送到用户面前。命中 consult 时不阻断，只在结果上附就医提示。
+def health_context(q, k=3):
+    """返回 (上下文块, 命中条目列表, 护栏等级)。
+
+    等级：urgent / diagnosis / myth（阻断，只给口径）｜consult（检索 + 就医提示）｜ok。
+    """
+    try:
+        g = health_rag.guard(q)
+    except Exception as e:
+        print("[health] 护栏失败（按 ok 处理）：", e)
+        g = {"level": "ok", "advice": "", "block": False}
+
+    if g.get("block"):
+        # 阻断级：只给确定性口径，且即使没有 LLM 也必须送到用户面前（见 api_chat 降级分支）
+        return "【健康·安全口径】\n" + (g.get("advice") or ""), [], g["level"]
+
+    try:
+        rs = health_rag.search(q, k)
+    except Exception as e:
+        print("[health] 检索失败：", e)
+        return ("【健康·安全口径】\n" + g["advice"]) if g.get("advice") else "", [], g["level"]
+
+    if not rs or rs[0].get("raw_vec", 0.0) < health_rag.HEALTH_RAW_LOW:
+        return ("【健康·安全口径】\n" + g["advice"]) if g.get("advice") else "", [], g["level"]
+
+    head = ""
+    if g.get("advice"):
+        head = "【健康·安全口径】\n" + g["advice"] + "\n\n"
+    lines = []
+    for r in rs[:k]:
+        cite = r.get("citation") or {}
+        src = (cite.get("source") or "").strip()
+        yr = (cite.get("year") or "").strip()
+        tier = r.get("evidence_tier") or ""
+        steps = r.get("steps") or []
+        step_txt = "；".join(str(s) for s in steps[:4])
+        seg = [
+            f"《{r['title']}》（证据等级 {tier}｜{src} {yr}）",
+            (r.get("summary") or ""),
+        ]
+        if r.get("principle"):
+            seg.append("原理：" + r["principle"][:160])
+        if step_txt:
+            seg.append("做法：" + step_txt[:200])
+        contra = r.get("contraindications") or []
+        if contra:
+            seg.append("不适用/需谨慎：" + "；".join(str(c) for c in contra[:2]))
+        if r.get("status") == "contested":
+            seg.append("⚠️ 该结论证据不一致，只能作为提示，不可当定论。")
+        lines.append("\n".join(x for x in seg if x))
+    body = head + "【健康常识参考】\n" + "\n\n".join(lines)
+    return body, rs, g["level"]
+
+
 # ---------- LLM ----------
 def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="",
-               study_ctx="", pseudo_ctx=""):
+               study_ctx="", pseudo_ctx="", health_ctx="", health_level="ok"):
     if not LLM_API_KEY:
         return None
     ctx = ""
@@ -300,6 +359,24 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
         )
     if space_ctx:
         blocks.append(space_ctx)
+    if health_ctx:
+        # 🔴 三条硬约束（健康库红线，与方法库的「学习方法参考」不是一回事）：
+        #   ① 阻断级（urgent/diagnosis/myth）只能原样传达给定口径，
+        #      **不得补任何自我处理方案、不得诊断、不得提药名与剂量**；
+        #   ② 普通条目只能引用此处给出的指南信息，禁止编造出处；
+        #   ③ 任何健康回答都必须带「通用参考，不能替代医生」的声明。
+        if health_level in ("urgent", "diagnosis", "myth"):
+            blocks.append(
+                "【健康·安全口径】本轮已触发安全护栏，**只能按下面这段口径回答**：\n" + health_ctx +
+                "\n要求：原样传达，不得自行补充诊断、用药、剂量或自我处理方案；语气要稳、要明确、不要含糊。"
+            )
+        else:
+            blocks.append(
+                "【健康常识参考】下面是面向普通健康成年人的通用结论（附证据等级与指南年份）。"
+                "**只能引用此处给出的出处，不得自行编造指南或文献**；"
+                "必须在回答末尾说明「这是通用参考，不能替代医生的个体判断」，"
+                "涉及数值时说清是人群区间而非针对该用户的处方。\n" + health_ctx
+            )
     blocks.append(ROUTE_RULES[route])
     blocks.append(f"【用户问题】{question}")
 
@@ -806,6 +883,12 @@ def api_chat(body: ChatReq):
     if pseudo_ctx and route == "llm":
         route = "hybrid"  # 同一规则：有注入内容就不算纯边界外
 
+    # 3.7) 健康上下文（健康库：护栏优先于检索）
+    #      blocked 级（急救/转诊/纠正）即使 LLM 不可用也必须送到用户面前 —— 见降级分支。
+    health_ctx, health_hits, health_level = health_context(q)
+    if health_ctx and route == "llm":
+        route = "hybrid"
+
     # 4) 分层记忆（长期画像 + 增量摘要 + 最近原话）
     try:
         mem_ctx = memory.memory_context(body.user_id, body.session_id)
@@ -846,10 +929,14 @@ def api_chat(body: ChatReq):
             tools_used = ag.get("tools") or []
         else:
             answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
-                                study_ctx, pseudo_ctx)
+                                study_ctx, pseudo_ctx, health_ctx, health_level)
             mode = "llm" if answer else "extractive"
             if not answer:
                 answer = extractive_answer(sources, route)
+                # 🔴 护栏级口径走确定性拼接，绝不依赖 LLM 是否可用 ——
+                #    这是健康库区别于其他库的唯一硬性降级要求。
+                if health_level in ("urgent", "diagnosis", "myth") and health_ctx:
+                    answer = (answer + "\n\n" + health_ctx).strip()
                 if pseudo_ctx:
                     # extractive 降级也要把纠正口径送到用户面前（确定性拼接，不走模型）
                     try:
@@ -860,10 +947,13 @@ def api_chat(body: ChatReq):
                         print("[method] 纠正口径（降级）失败：", e)
     else:
         answer = llm_answer(q, sources, route, mem_ctx, space_ctx, profile_ctx,
-                            study_ctx, pseudo_ctx)
+                            study_ctx, pseudo_ctx, health_ctx, health_level)
         mode = "llm" if answer else "extractive"
         if not answer:
             answer = extractive_answer(sources, route)
+            # 🔴 护栏级口径走确定性拼接，绝不依赖 LLM 是否可用（见上）
+            if health_level in ("urgent", "diagnosis", "myth") and health_ctx:
+                answer = (answer + "\n\n" + health_ctx).strip()
             if pseudo_ctx:
                 # extractive 降级也要把纠正口径送到用户面前（确定性拼接，不走模型）
                 try:
@@ -901,6 +991,11 @@ def api_chat(body: ChatReq):
         "study_sources": [h["title"] for h in (study_hits or [])[:3]],
         # 伪科学纠正口径命中：True = 回答含确定性纠正文案；此时 study_sources 必为空
         "study_pseudo": bool(pseudo_ctx),
+        # 健康库（护栏等级 + 命中；urgent/diagnosis/myth 时 health_sources 必为空）
+        "used_health": bool(health_ctx),
+        "health_level": health_level,
+        "health_top_raw": round((health_hits[0]["raw_vec"] if health_hits else 0.0), 4),
+        "health_sources": [h["title"] for h in (health_hits or [])[:3]],
         # 托底层用了哪些工具（search_kb / search_pois / web_search）——
         # 空数组 = L0 模板或 L1 快路径，未进入 agent
         "tools": tools_used,

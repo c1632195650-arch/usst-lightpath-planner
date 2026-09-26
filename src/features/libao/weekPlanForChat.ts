@@ -37,6 +37,7 @@ import { planWeekV2 } from '@/lib/planner/index';
 import type { UserTask } from '@/lib/planner/templates';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { methodCardsForPhase, examSprintStep, type MethodPhase } from '@/lib/planner/methods';
+import { ACTIVITY, SEDENTARY, SLEEP_GUARD } from '@/lib/planner/health';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
@@ -95,6 +96,48 @@ export async function planWeekWithTasks(
     }),
   );
   return result.plan;
+}
+
+/**
+ * 本周的健康底线提示（健康库 M7：health.ts 参数在排程侧的显式消费点）。
+ *
+ * 与 `methodAdviceForChat` 同构，但**只碰可确定的部分**：
+ *   · 睡眠保底、久坐打断、每周活动量 —— 这三条是通用人群常识，不涉及任何医疗判断；
+ *   · 个体化的健康问题（膝痛怎么练、失眠怎么办）走**对话层的健康库口径**
+ *     （health_rag.guard + health_context），绝不在这里拼结论 —— 那会绕过安全护栏。
+ *
+ * 触发规则（纯函数、只看引擎事实）：
+ *   · 有块排到 22:30 之后 → 提睡眠保底（并说明它影响的是次日效率，不是道德要求）
+ *   · 有单个 90 分钟以上的长块 → 提久坐打断
+ *   · 两条都不触发 → 给一条每周活动量提示（正面建议，不硬凑指标）
+ */
+const LATE_BLOCK_MIN = 22 * 60 + 30;
+const LONG_BLOCK_MIN = 90;
+
+export function healthAdviceForChat(plan: WeekPlan): string[] {
+  const out: string[] = [];
+
+  const late = plan.blocks.filter((b) => b.endMin > LATE_BLOCK_MIN);
+  if (late.length > 0) {
+    out.push(
+      `睡眠保底：这周有 ${late.length} 个块排到 22:30 之后 —— 少于 ${SLEEP_GUARD.minHours} 小时，第二天记进去的东西会明显打折；要砍就砍任务，别砍睡眠`,
+    );
+  }
+
+  const long = plan.blocks.filter((b) => b.endMin - b.startMin >= LONG_BLOCK_MIN);
+  if (long.length > 0) {
+    out.push(
+      `久坐打断：有 ${long.length} 个 ${LONG_BLOCK_MIN} 分钟以上的长块 —— 每 ${SEDENTARY.breakEveryMin} 分钟起来动 3–5 分钟，比一直坐着硬扛更出量`,
+    );
+  }
+
+  if (out.length === 0) {
+    out.push(
+      `活动量：每周 ${ACTIVITY.weeklyModerateMin} 分钟中等强度 + ${ACTIVITY.strengthDaysPerWeek} 天力量训练，拆成小段比一次猛练更划算`,
+    );
+  }
+
+  return out.slice(0, 2);
 }
 
 /**
