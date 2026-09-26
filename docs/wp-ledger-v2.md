@@ -8,8 +8,8 @@
 
 - 起点：`03a11b5`（master，2026-09-22 合流后修复提交）
 - 分支：`beta-v2`（扁平名；本机安全软件会拦带斜杠分支名，故不用 feat/*）
-- 当前基线（批 5 收尾）：**tsc=0 / engine=342 / ui=267 / intent=69+8(含于 ui) / golden=v1**
-  - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336；批 5a：ui=267
+- 当前基线（批 6 收尾）：**tsc=0 / engine=350 / ui=267 / intent=69+8(含于 ui) / golden=v1**
+  - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336；批 5a：ui=267；批 6：engine=350
   - 注：`scripts/gate_overnight.mjs` 内置下限为旧值 312/219；台账以实测更高值为「只增」基线。
 - 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = eb43ce60816d4691a8b209f3904dcb3b`（夜里禁改，收尾必核）
 
@@ -36,7 +36,7 @@
 | 3 | WP4b 四 bug（B2/B3/B5/B6） | [x] | |
 | 4 | WP11 重要日体系 | [x] | |
 | 5 | WP8-mini + WP9 梨宝改排程 + 预览卡（5a-5d 四小步） | [x]（5b-5d 合并 commit，见 §WP9 申报） | |
-| 6 | WP10 拖拽合规（仅余力） | [ ] | |
+| 6 | WP10 拖拽合规（仅余力） | [x] | |
 
 状态图例：[ ] 未开始 / [~] 进行中(含卡点) / [x] 完成(含会话证据)
 
@@ -150,9 +150,17 @@
 
 ## §WP10 拖拽合规
 
+- 状态：[x] 完成（ripple.ts + WeekPlanView 2 文件走 GATE_ALLOW_FORBIDDEN 申报）
 - 改动文件清单：
-- 反向验证记录：
+  - `src/lib/planner/ripple.ts` — RippleOptions 增 `compliance?: DragCompliance`（opt-in）；dragTo 落位前两道闸：① 撞用户不可时段 → 「这是你说过没空的时段，我帮你避开它」② 转场余量：相邻块跨校区查 campusLookup 保守转场表、同校区/认不出按 10 分钟 → 「来不及走到 —— 两段安排之间要留出路上的时间」。**引擎主流程不传 compliance，行为与旧版逐字节一致**
+  - `src/features/week/WeekPlanView.tsx` — 拖拽用户路径（updatePreview 预览 + handleDrop 落盘）传同一份 `dragCompliance`（本周生效的 layer.slots），预览=落盘口径
+  - `tests/wp10.test.ts`（新，8 用例：四类拒绝 + 放行 + 不传 compliance 行为不变 + 文案风格）
+- 反向验证记录（关实现 → 红 → 恢复 → 绿）：
+  - RV：compliance 闸禁用（置 undefined）→ ①②③ 三条拒绝用例红（pass5/fail3）→ 恢复 → 8/8 绿
+- 门禁：tsc=0 / engine=350(+8) / ui=267 / 禁区（2 文件申报例外）/ 风格 8 项 — 5/5 PASS
 - 遗留：
+  - 「同校区 10 分钟」是保守二值（方案书允许）；真实路网步行分钟依赖后端 route()，留 WP-OP/H6。
+  - 转场校验按地点字符串查 campusLookup 关键字，认不出的地点不猜跨校区（只按同校区 10 分钟）——与「不猜」纪律一致，但意味着部分地点的跨校区时长未被强制。
 
 ## §TODO 汇总
 

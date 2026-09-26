@@ -19,6 +19,7 @@
  * 纯函数：不读时钟、不随机、同输入必得同输出。
  */
 import type { TimeBlock } from '@/types';
+import { campusFallbackTransfer } from './campusLookup.ts';
 
 /** 一个已被挪动的块：原 starting minute → 新 starting minute */
 export interface RippleMove {
@@ -45,6 +46,8 @@ export interface RippleOptions {
   dayEndMin?: number;
   /** 相邻块之间留的最小间隔（默认 0 —— 顺延是压缩情境，硬塞最少 enforcement） */
   minGap?: number;
+  /** WP10：拖拽合规校验（opt-in）。引擎主流程不传 → 行为与旧版完全一致 */
+  compliance?: DragCompliance;
 }
 
 const overlap = (a1: number, a2: number, b1: number, b2: number) => a1 < b2 && b1 < a2;
@@ -263,6 +266,24 @@ export interface DragResult {
   dropped: string[];
 }
 
+/**
+ * WP10 拖拽合规（2026-09-27）—— **只对用户拖拽路径生效的 opt-in 校验**。
+ *
+ * 引擎主流程从不传 `compliance`（旧 golden 原样绿）；周计划拖拽与梨宝改期
+ * 这条「用户路径」传入后，落位前多两道闸：
+ *   ① 落点撞用户自己声明过的不可时段 → 拒（「这是你说过没空的时段」）；
+ *   ② 转场余量：与落点日相邻块之间留够走路时间 —— 跨校区按保守转场表
+ *      （campusLookup），同校区/认不出的地点按 10 分钟保守值。认不出的
+ *      校区组合**不猜跨校区时长**，只按同校区 10 分钟兜底。
+ */
+export interface DragCompliance {
+  /** 用户声明的不可时段（userPlanStore 的 UnavailableSlot 最小形状） */
+  unavailableSlots?: ReadonlyArray<{ days: readonly number[]; fromMin: number; toMin: number }>;
+}
+
+/** 同校区相邻块之间的最小转场分钟（WP10 保守二值：同 10 / 跨校区查表） */
+const SAME_CAMPUS_TRANSFER_MIN = 10;
+
 export function dragTo(
   blocks: readonly TimeBlock[],
   blockId: string,
@@ -280,6 +301,37 @@ export function dragTo(
   // 落点吸附到 10 分钟（计划书 §二-4）：日程粒度不需要更细，
   // 而且不吸附会让每次拖拽的位置都不同，用户觉得不稳。
   const snapped = Math.round(startMin / 10) * 10;
+
+  // ── WP10 合规闸（opt-in：只有用户路径传 compliance）──
+  const compliance = opts.compliance;
+  if (compliance) {
+    for (const s of compliance.unavailableSlots ?? []) {
+      if (s.days.includes(targetDay) && overlap(s.fromMin, s.toMin, snapped, snapped + dur)) {
+        return { ok: false, reason: '这是你说过没空的时段，我帮你避开它', records: [], dropped: [] };
+      }
+    }
+    const dayBlocks = blocks.filter((b) => b.dayOfWeek === targetDay && b.id !== blockId);
+    const prev = dayBlocks.filter((b) => b.endMin <= snapped).sort((a, b) => b.endMin - a.endMin)[0];
+    const next = dayBlocks.filter((b) => b.startMin >= snapped + dur).sort((a, b) => a.startMin - b.startMin)[0];
+    const transferNeed = (fromPlace?: string, toPlace?: string): number => {
+      if (!fromPlace || !toPlace) return SAME_CAMPUS_TRANSFER_MIN;
+      const t = campusFallbackTransfer(fromPlace, toPlace);
+      return t ? t.minutes : SAME_CAMPUS_TRANSFER_MIN;
+    };
+    if (prev) {
+      const need = transferNeed(prev.place, src.place);
+      if (snapped - prev.endMin < need) {
+        return { ok: false, reason: '来不及走到 —— 两段安排之间要留出路上的时间', records: [], dropped: [] };
+      }
+    }
+    if (next) {
+      const need = transferNeed(src.place, next.place);
+      if (next.startMin - (snapped + dur) < need) {
+        return { ok: false, reason: '来不及走到 —— 两段安排之间要留出路上的时间', records: [], dropped: [] };
+      }
+    }
+  }
+
   const target: TimeBlock = {
     ...src,
     dayOfWeek: targetDay as TimeBlock['dayOfWeek'],

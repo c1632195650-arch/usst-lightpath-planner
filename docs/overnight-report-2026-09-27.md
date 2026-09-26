@@ -142,3 +142,15 @@
 - 偏差申报：5b-5d 改动交织在同一组文件，合并为一个 commit（5a 已独立 WP8: commit）
 
 ---
+## 批 6 · WP10 拖拽合规 —— commit（WP10:）
+
+- `src/lib/planner/ripple.ts` — `RippleOptions.compliance`（opt-in）+ dragTo 两道闸：
+  ① 撞用户不可时段拒「这是你说过没空的时段，我帮你避开它」；② 转场余量
+  （跨校区查 campusLookup 保守表 / 同校区 10 分钟）拒「来不及走到 —— 两段安排之间
+  要留出路上的时间」。引擎主流程不传 → 行为与旧版一致（golden 不受扰）。
+- `src/features/week/WeekPlanView.tsx` — 预览与落盘传同一份 `dragCompliance`（所见即所得）
+- `tests/wp10.test.ts`（新，8 用例：四类拒绝/放行/不传不变/文案风格）
+- 反向验证：compliance 闸禁用 → 红（pass5/fail3）→ 恢复 → 8/8
+- 门禁 5/5 PASS：tsc=0 / engine=350 / ui=267；禁区例外 2 文件申报留痕；md5 未变
+
+---

@@ -845,6 +845,14 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const previewKeyRef = useRef('');
 
+  /** WP10：拖拽合规口径（预览与落盘必须同一份）——
+   *  不可时段取本周生效的声明；转场余量在 dragTo 内按地点校区自查。 */
+  const dragCompliance = useMemo(() => ({
+    unavailableSlots: layer.slots
+      .filter((s) => s.weeks.length === 0 || s.weeks.includes(weekNo))
+      .map((s) => ({ days: s.days, fromMin: s.fromMin, toMin: s.toMin })),
+  }), [layer.slots, weekNo]);
+
   const updatePreview = useCallback((day: number, atMin: number, coord: string) => {
     if (!draggingId || !shownPlan) return;
     // 🔴 去重 key 必须是**鼠标坐标**而不是落点时刻：
@@ -860,6 +868,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       // 与 handleDrop 完全同口径 —— 预览必须严格等于松手结果
       dayStartMin: 7 * 60,
       dayEndMin: 23 * 60,
+      // WP10：用户拖拽路径开合规闸（不可时段 / 转场余量）；引擎主流程不传
+      compliance: dragCompliance,
     });
     const snapped = Math.round(atMin / 10) * 10;
     // ok 时影子画在真实落点；被拒时画在悬停处并标红（用户得知道「这里不行」）
@@ -925,6 +935,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       // 天的可用区间与引擎同口径（`construct` 里 `'07:00'` / `'23:00'` 是默认值）
       dayStartMin: 7 * 60,
       dayEndMin: 23 * 60,
+      // WP10：与预览同一份合规口径 —— 所见即所得
+      compliance: dragCompliance,
     });
     clearPreview();
     if (!res.ok) {
