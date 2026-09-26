@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnswerEntry, AnswerMap } from '@/types';
-import { PERSONA_ITEMS, SECTION_META } from '@/data/personaBank';
+import { buildPersonaSequence, SECTION_META } from '@/data/personaBank';
 import { isAnswered } from '@/lib/persona';
+import { loadBasicInfo } from '@/lib/identity';
 
 interface Props {
   answers: AnswerMap;
@@ -24,7 +25,8 @@ const SECTION_LABELS: Record<string, string> = {
 
 /** 将 35 道画像题组织为单一、可回看的决策流程。 */
 export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
-  const items = useMemo(() => [...PERSONA_ITEMS].sort((a, b) => a.order - b.order), []);
+  /** 按年级出卷（WP2）：基础信息里没年级（跳过引导）→ 全库出卷，与分层前一致。 */
+  const items = useMemo(() => buildPersonaSequence(loadBasicInfo().grade), []);
   const [idx, setIdx] = useState(0);
   const [sortPick, setSortPick] = useState<string[]>(() => {
     const saved = answers.B05;

@@ -41,3 +41,29 @@
 **遗留**：Welcome「先浏览应用」跳过引导不置 onboarded（刷新回欢迎页）——语义正确，未改；如需改请人拍板。
 
 ---
+## 批 2 · WP2 题库年级分层 + 上理场景化 —— commit（WP2:）
+
+**改动文件与关键行号**
+
+| 文件 | 改动 |
+|---|---|
+| `src/data/personaBank.ts` | 35 题题面全量上理场景化（军工路食堂/图书馆通宵区/1100通勤/光电杯/体育大课/校园跑/早八/社团…）；每题加 sceneTag；10 题加 grades 分层标签；新增 `TieredPersonaItem`/`PersonaGrade`/`buildPersonaSequence(grade)`（A03 锚定恒插入）；PERSONA_VERSION → 2026.09.27。**未动 types.ts**（本地 interface extends） |
+| `src/features/persona/PersonaFlow.tsx` | :27 出卷改 `buildPersonaSequence(loadBasicInfo().grade)`；goNext 不变 |
+| `src/features/welcome/Welcome.tsx` | 「35 个日常选择」→「按你年级定制的日常选择」 |
+| `scripts/personaTiering.test.ts`（新） | 8 用例，含结构冻结机械比对（保证只动题面） |
+
+**关键决策（待 CY 复核）**：测试④「分层后总题数 8~14」取保守口径 (b)（分层题总数 10 ∈ 8~14），
+弃口径 (a)（每份卷 8~14 题）——(a) 会使多数轴塌到兜底值 50。详见台账 §WP2。
+
+**命令实据**
+
+- `npm run --silent typecheck` → TSC-OK
+- `node --test scripts/personaTiering.test.ts` → 8/8；`npm run test:ui` 全量 254/254
+- 回归⑤：`git show HEAD:src/data/personaBank.ts`（旧库）vs 新库，同一固定作答 → 8 轴逐值一致
+  （EXP66/PLAN76/SOC84/RES81/ACH75/HEA80/RAT86/BOLD82，healthy，ok）
+- 反向验证 RV1/RV2/RV3（序列还原/A03 恒插入/场景词）均 红→恢复→绿，恢复后 md5 一致
+- 收尾门禁 5/5 PASS：tsc=0 / engine=328 / ui=254；门禁脚本 md5 未变
+
+**遗留**：换年级重测时旧答卷未按当前卷面过滤（buildProfile 属 Ray 属地+计分铁律，夜班不碰）。
+
+---
