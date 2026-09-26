@@ -32,6 +32,26 @@ interface Msg {
   /** 提示去哪儿看完整时间轴 */
   goWeek?: boolean;
   needProfile?: boolean;
+  /* ---- 后端增强信号（让「方法库 / 健康库 / 校园位置 / 记忆」是否生效在 UI 可见） ----
+     为什么要单独存一份而不是只读 `debug`：ChatDebug 只在 DEV 下渲染，
+     而这几个标签是要给**用户**看的（也用于排查「库到底接没接上」），
+     即使 LLM 未配、后端仍会算出 used_study / used_health。 ---- */
+  /** 方法库命中（学习方法参考） */
+  used_study?: boolean;
+  /** 命中的方法库条目标题 */
+  study_sources?: string[];
+  /** 是否触发伪科学纠正口径 */
+  study_pseudo?: boolean;
+  /** 健康库命中（健康常识 / 安全口径） */
+  used_health?: boolean;
+  /** 健康护栏等级：ok / consult / urgent / diagnosis / myth */
+  health_level?: string;
+  /** 命中的健康库条目标题 */
+  health_sources?: string[];
+  /** 本轮是否结合了校园位置上下文（食堂 / 问路等） */
+  used_space?: boolean;
+  /** 本轮是否结合了记忆（长期画像 / 增量摘要 / 最近原话） */
+  used_memory?: boolean;
   /** 后端这一轮的完整元数据（route / intent / top_raw_vec / used_* / 耗时）。
    *  只用于 DEV 调试抽屉 —— 见本目录 ChatDebug.tsx 的说明。 */
   debug?: ChatResult;
@@ -328,6 +348,15 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         // answer/sources/mode，其余当场丢掉 —— 于是「答得不对」时没有第二手信息。
         // 整包存下来给 DEV 调试抽屉，生产构建不渲染。
         debug: response,
+        // 增强信号单独带一份：给下面的来源标签用（用户可见，不只 DEV）
+        used_study: response.used_study,
+        study_sources: response.study_sources,
+        study_pseudo: response.study_pseudo,
+        used_health: response.used_health,
+        health_level: response.health_level,
+        health_sources: response.health_sources,
+        used_space: response.used_space,
+        used_memory: response.used_memory,
       }]);
       setOnline(true);
     } catch {
@@ -441,6 +470,41 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
                 {message.goWeek && (
                   <p className="pl-1 text-[11.5px] text-ink-faint">完整时间轴在「总览 → 选一周 → 周计划」</p>
+                )}
+
+                {/* 来源标签：让这一轮到底用上了什么一眼可见（方法库 / 已纠正误区 /
+                    健康库 / 校园位置 / 记忆）。即使 LLM 未配，命中仍会亮 ——
+                    这是排查「库接没接上」最短的路径。 */}
+                {(message.used_study || message.study_pseudo || message.used_health ||
+                  message.used_space || message.used_memory) && (
+                  <div className="flex w-full flex-wrap gap-1.5 pl-1">
+                    {message.used_study && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                        方法库{message.study_sources?.length ? ` · ${message.study_sources.slice(0, 2).join('、')}` : ''}
+                      </span>
+                    )}
+                    {message.study_pseudo && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+                        已纠正一个误区
+                      </span>
+                    )}
+                    {message.used_health && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700">
+                        健康库{message.health_sources?.length ? ` · ${message.health_sources.slice(0, 2).join('、')}` : ''}
+                        {['urgent', 'diagnosis', 'myth'].includes(message.health_level ?? '') ? '（安全口径）' : ''}
+                      </span>
+                    )}
+                    {message.used_space && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
+                        校园位置
+                      </span>
+                    )}
+                    {message.used_memory && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
+                        记忆
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 {message.sources && message.sources.length > 0 && (

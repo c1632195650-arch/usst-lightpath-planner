@@ -41,6 +41,24 @@ export interface ChatResult {
   request_id?: string;
   /** 后端侧耗时（毫秒，含检索 + 空间 + 记忆 + LLM） */
   elapsed_ms?: number;
+  /* ---- 方法库 / 健康库增强信号：后端 /api/chat 一直在返回，前端没声明也没渲染 →
+     「库生效了也看不见」。不是新增能力，只是把已经算出来的东西如实声明出来。 ---- */
+  /** 方法库命中（学习方法参考）；即使 LLM 未配，后端也会算出来 */
+  used_study?: boolean;
+  /** 方法库 top 原始相似度（与方法库门限 0.60/0.50 相关，区别于 top_raw_vec） */
+  study_top_raw?: number;
+  /** 命中的方法库条目标题 */
+  study_sources?: string[];
+  /** 是否触发伪科学纠正口径：True = 回答含确定性纠正文案 */
+  study_pseudo?: boolean;
+  /** 健康库命中（健康常识 / 安全口径） */
+  used_health?: boolean;
+  /** 健康护栏等级：ok / consult / urgent / diagnosis / myth */
+  health_level?: string;
+  /** 健康库 top 原始相似度（门限 0.70/0.63） */
+  health_top_raw?: number;
+  /** 命中的健康库条目标题 */
+  health_sources?: string[];
 }
 
 export interface SearchResult {
