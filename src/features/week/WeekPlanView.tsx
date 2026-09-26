@@ -72,6 +72,8 @@ import { fillGap } from '@/lib/planner/ripple';
 import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
 import { AchievementPanel } from '@/features/activity/GoalEditor';
 import type { UserTask } from '@/lib/planner/templates';
+// ── WP11：重要日体系 —— 用户重要日 ∪ 静态校历，喂准备块展开与「接下来」横排 ──
+import { loadUserDeadlines, mergeDeadlines, upcomingDeadlines } from '@/features/calendar/deadlineStore';
 // ── 阶段 B/E：偏好校正层 + 自然语言意图 ──────────────────────────
 import { CorrectionCapture } from '@/features/feedback/CorrectionCapture';
 import { LearnedPreferencesPanel } from '@/features/feedback/LearnedPreferencesPanel';
@@ -1111,7 +1113,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         if (!phase) { setPlan(null); return; }
         // 校历事件 → 本周准备块（光电杯材料 / 四六级真题 / 期中复习…）。
         // 这一步就是「把截止日变成日程」：事件不再只是旁边一个倒计时数字。
-        const eventTasks = expandDeadlines(DEADLINES, schedule.termStart, schedule.totalWeeks);
+        // WP11：静态校历 ∪ 用户重要日（title+date 去重）。只在重排发生时自然参与 —— 不因新增节点触发自动重排。
+        const eventTasks = expandDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), schedule.termStart, schedule.totalWeeks);
         // 天气 → 当天提醒块（带伞 / 防暑 / 保暖 / 防风）。
         // 与事件走**同一条 tasks 通道**，引擎完全不知道有「天气」这回事。
         // 差别在权重：天气块优先级只有 45–55（事件准备块是 88），
@@ -1335,9 +1338,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const issues: PlanIssue[] = plan.issues;
   /** 本周与下周的校历节点 —— 让「为什么这周多出准备块」有出处 */
   const nearEvents = eventsNearWeek(DEADLINES, schedule.termStart, weekNo);
+  // WP11：「接下来」横排 —— 静态校历 ∪ 用户重要日，未来 3 个节点，紧急度配色
+  const upcoming = upcomingDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), todayISO(), 3);
 
   return (
     <div className="space-y-4">
+      {/* WP11：「接下来」—— 未来 3 个重要节点。≤3 天红 / ≤7 天黄，其余中性。
+          只提醒，不替用户改日程（L4）。 */}
+      {upcoming.length > 0 && (
+        <div className="panel px-4 py-3 sm:px-5" data-testid="upcoming-deadlines">
+          <p className="section-label">接下来</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {upcoming.map(({ deadline: d, daysLeft }) => {
+              const urgency = daysLeft <= 3
+                ? 'border-red-300 bg-red-50 text-red-700'
+                : daysLeft <= 7
+                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                  : 'border-ink/10 bg-paper text-ink-soft';
+              return (
+                <span key={d.id} className={`rounded-full border px-3 py-1 text-[12px] font-medium ${urgency}`}>
+                  {d.emoji} {d.title} · {daysLeft <= 0 ? '就是今天' : `还剩 ${daysLeft} 天`}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* 阶段头：现在处于什么阶段、策略是什么、为什么 */}
       <div className="panel px-4 py-3.5 sm:px-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

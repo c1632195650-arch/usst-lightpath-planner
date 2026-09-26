@@ -93,3 +93,25 @@
 实现扩为「主语前缀吃进非捕获组 + 右边界」，示例实测修复。
 
 ---
+## 批 4 · WP11 重要日体系 —— commit（WP11:）
+
+**改动文件与关键行号**
+
+| 文件 | 改动 |
+|---|---|
+| `src/features/calendar/deadlineStore.ts`（新） | UserDeadline 存储 + mergeDeadlines（title+date 去重、用户优先）+ upcomingDeadlines |
+| `src/features/libao/libaoIntent.ts` | 'add_deadline' 意图（触发词放最后）+ looksLikeAction DEADLINE_MARK 门 + detectIntent 排程信号守门 + deadlineProposal 纯函数（缺 date 必追问） |
+| `src/features/libao/LbaoChat.tsx` | runGoalSlots add_deadline 分流 → 追问 / 建议卡 + confirmDeadline（只落库不重排） |
+| `src/features/week/WeekPlanView.tsx` | expandDeadlines 吃合并表；「接下来」横排 3 节点（≤3 天红/≤7 天黄） |
+| `scripts/deadlineStore.test.ts`（新） | 8 用例 |
+
+**关键决策**：「备赛」触发词与既有 create 流冲突（旗舰句「帮我规划一下备赛安排」会被抢）——
+在 detectIntent 加守门：带排程动词/投入信号的仍归 create，262 条既有用例全绿佐证。
+
+**命令实据**
+
+- `npm run --silent typecheck` → TSC-OK；`npm run test:ui` → 262/262
+- 反向验证 RV1/RV2/RV3（批量 fail 4）→ 恢复 → 8/8 绿
+- 收尾门禁 5/5 PASS：tsc=0 / engine=336 / ui=262；禁区例外 1 个已申报留痕；md5 未变
+
+---

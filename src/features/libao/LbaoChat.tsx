@@ -6,7 +6,8 @@ import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, type ChatRe
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswer, parseGoalIntent, describeSlots, topQuestions, type IntentSlots } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswer, deadlineProposal, parseGoalIntent, describeSlots, topQuestions, type DeadlineProposal, type IntentSlots } from '@/features/libao/libaoIntent';
+import { addUserDeadline } from '@/features/calendar/deadlineStore';
 import {
   checkGoalFeasibility,
   describeVerdict,
@@ -39,6 +40,8 @@ interface Msg {
   /** 目标草稿卡的确认键 —— 有值且 `pending` 里还有对应草稿时，渲染「就这么排」按钮。
    *  确认前**什么都不写入**：草稿只是草稿，执行权在用户手里（core §4 L4）。 */
   goalAsk?: number;
+  /** WP11 重要日建议卡确认键 —— 有值且 `pendingDeadlines` 里还有对应提案时渲染「好，记下来」。确认前不写入（L4）。 */
+  deadlineAsk?: number;
   /** 记忆建议卡（M2）：客观事实待确认 —— 用户点头才进画像与基础信息 */
   proposals?: MemoryFact[];
   /** 已自动生效的偏好（M2）：出可撤销提示 */
@@ -158,6 +161,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
   /** 待确认的目标草稿。键是消息下标递增号 —— 确认前不写任何状态。 */
   const [pending, setPending] = useState<Record<number, PendingGoal>>(() => boot?.pending ?? {});
+  /** WP11：等确认的重要日提案（确认才写 deadlineStore，且不触发自动重排） */
+  const [pendingDeadlines, setPendingDeadlines] = useState<Record<number, DeadlineProposal>>({});
   const pendingSeq = useRef(boot?.pendingSeq ?? 0);
 
   /** 追问接续态：needs_clarification 时把**半成品槽位**存这里，下一句话先当
@@ -289,6 +294,31 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     }
   };
 
+  /** WP11：重要日建议卡确认 —— 用户点头才写 deadlineStore。
+   *  只落库 + 回执，**不触发任何重排**（WP11 铁律：增补只问询，不自动重排）。 */
+  const confirmDeadline = (key: number) => {
+    const prop = pendingDeadlines[key];
+    if (!prop) return;
+    try {
+      addUserDeadline({ title: prop.title, date: prop.date, leadDays: prop.prepDays });
+      setPendingDeadlines((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `记下了：「${prop.title}」，${prop.date.slice(5).replace('-', '.')} 截止。到点前我会把它排进周计划；现在不动你这一周。`,
+        goWeek: true,
+      }]);
+    } catch {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '记这条重要日的时候出了点小状况，没记上。你可以再说一遍，或去「总览」手动加。',
+      }]);
+    }
+  };
+
   /** 记忆卡操作（M2）：confirm / reject / undo —— 只作用于用户点到的那一条。
    *  客观事实确认后同步写进本地基础信息（AI 只提议、用户拍板的最后一公里）。 */
   const handleFact = async (msgIndex: number, fact: MemoryFact, action: 'confirm' | 'reject' | 'undo') => {
@@ -313,6 +343,33 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
   const runGoalSlots = async (slots: IntentSlots, today: string) => {
     const t0 = Date.now();
     try {
+      // ── WP11：重要日意图 → 走提案卡，不进排程干跑（记节点 ≠ 排块）──
+      if (slots.intent === 'add_deadline') {
+        const prop = deadlineProposal(slots);
+        if ('needDate' in prop) {
+          // 缺截止日 → 必追问，不猜（core §4）。补 'when' 进追问清单，让接续答案能被收进槽位。
+          setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'when' as const])] });
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: `想把「${slots.title || '这件重要日子'}」记成重要日，我还得问一句：`,
+            planPoints: ['它哪天截止？（比如「12 月 19 号」）'],
+          }]);
+          setLoading(false);
+          return;
+        }
+        setClarifySlots(null);
+        const dKey = (pendingSeq.current += 1);
+        setPendingDeadlines((p) => ({ ...p, [dKey]: prop }));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '帮你盯着这个节点（记下不等于现在就重排日程）：',
+          planPoints: [prop.message],
+          deadlineAsk: dKey,
+        }]);
+        setLoading(false);
+        return;
+      }
+
       // 干跑把关：能不能排，由**引擎**说了算，不由 LLM 的嘴说了算。
       // （不传 weekNo —— 干跑按候选块**真正落在的周**逐周跑，见 checkGoalFeasibility。）
       const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
@@ -618,6 +675,24 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
                       className="rounded-xl border border-ink/15 px-3 py-2 text-xs text-ink-soft transition-colors hover:border-ink/30"
                     >
                       先不排
+                    </button>
+                  </div>
+                )}
+
+                {message.deadlineAsk != null && pendingDeadlines[message.deadlineAsk] && (
+                  <div className="flex gap-2 pl-1">
+                    <button onClick={() => confirmDeadline(message.deadlineAsk!)} className="button-primary px-3 py-2 text-xs">
+                      好，记下来
+                    </button>
+                    <button
+                      onClick={() => setPendingDeadlines((p) => {
+                        const next = { ...p };
+                        delete next[message.deadlineAsk as number];
+                        return next;
+                      })}
+                      className="rounded-xl border border-ink/15 px-3 py-2 text-xs text-ink-soft transition-colors hover:border-ink/30"
+                    >
+                      先不用
                     </button>
                   </div>
                 )}

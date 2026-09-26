@@ -8,8 +8,8 @@
 
 - 起点：`03a11b5`（master，2026-09-22 合流后修复提交）
 - 分支：`beta-v2`（扁平名；本机安全软件会拦带斜杠分支名，故不用 feat/*）
-- 当前基线（批 3 收尾）：**tsc=0 / engine=336 / ui=254 / intent=69(含于 ui) / golden=v1**
-  - 批 0 开工基线：tsc=0 / engine=326 / ui=237 / intent=69 / golden=v1；批 1 收尾：engine=328 / ui=246；批 2 收尾：ui=254
+- 当前基线（批 4 收尾）：**tsc=0 / engine=336 / ui=262 / intent=69+8(含于 ui) / golden=v1**
+  - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336
   - 注：`scripts/gate_overnight.mjs` 内置下限为旧值 312/219；台账以实测更高值为「只增」基线。
 - 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = eb43ce60816d4691a8b209f3904dcb3b`（夜里禁改，收尾必核）
 
@@ -34,7 +34,7 @@
 | 1 | WP1 基础信息前置 BasicInfoStep | [x] | （见 git log WP1） |
 | 2 | WP2 题库年级分层 + 上理场景化 | [x]（分层口径待 CY 复核，见 §WP2） | |
 | 3 | WP4b 四 bug（B2/B3/B5/B6） | [x] | |
-| 4 | WP11 重要日体系 | [ ] | |
+| 4 | WP11 重要日体系 | [x] | |
 | 5 | WP8-mini + WP9 梨宝改排程 + 预览卡（5a-5d 四小步） | [ ] | |
 | 6 | WP10 拖拽合规（仅余力） | [ ] | |
 
@@ -113,9 +113,23 @@
 
 ## §WP11 重要日体系
 
+- 状态：[x] 完成（WeekPlanView 1 文件走 GATE_ALLOW_FORBIDDEN 申报）
 - 改动文件清单：
-- 反向验证记录：
+  - `src/features/calendar/deadlineStore.ts`（新）— UserDeadline + localStorage 读写（addUserDeadline title 归一、同 title+date 去重）/ mergeDeadlines（去重键 title+date，用户版优先，按日期排序）/ userDeadlineToDeadline（无准备参数=纯提醒，不编准备块）/ upcomingDeadlines（未来 n 个 + 剩余天数）
+  - `src/features/libao/libaoIntent.ts` — GoalIntent 增 'add_deadline'；INTENT_PATTERNS 追加触发词（放最后，取消/改时间优先）；REQUIRED 增 ['title','when']；looksLikeAction 增 DEADLINE_MARK 门（在 ADVICE 门后，「怎么备赛」仍走 RAG）；detectIntent 守门：带排程动词/投入信号（安排|规划|排|每周|每天|小时|分钟）→ 仍归 create；新增 `deadlineProposal(slots)` 纯函数（缺 date 或明说没定 → needDate，不猜）；describeSlots 增动词映射
+  - `src/features/libao/LbaoChat.tsx` — runGoalSlots 顶部 add_deadline 分流：缺 date → 追问（补 'when' 进追问清单使接续答案可被收）；有 date → 建议卡「要不要按 MM.DD 建立「X」重要日？我会提前 N 天开始帮你安排准备」+ 确认/放弃按钮；confirmDeadline 写 deadlineStore，**不触发任何重排**（铁律）
+  - `src/features/week/WeekPlanView.tsx` — expandDeadlines 喂 mergeDeadlines(DEADLINES, loadUserDeadlines())（只在既有重排时机自然参与）；「接下来」横排未来 3 节点（≤3 天红 / ≤7 天黄）
+  - `scripts/deadlineStore.test.ts`（新，8 用例）
+- 反向验证记录（关实现 → 红 → 恢复 → 绿，批量实验 fail 4）：
+  - RV1 mergeDeadlines 还原成只返回静态 → 合并/展开两条红
+  - RV2 删 add_deadline 意图条目 → 口令用例红
+  - RV3 deadlineProposal 缺日期时返回猜测值 → 「缺 date 必追问」红
+  - 恢复 → 8/8 绿 + tsc 0 错
+- 门禁：tsc=0 / engine=336 / ui=262(+8) / 禁区（WeekPlanView 1 文件申报例外）/ 风格 8 项 — 5/5 PASS
 - 遗留：
+  - 重要日建议卡确认后的重排参与时机 = 下一次既有重排（手动「重新排一遍」或新编辑），这是铁律要求的行为；真机演示时需口头说明。
+  - 「重要日建议卡」消息未接跨会话恢复（history 恢复的行没有 pendingDeadlines），刷新后按钮消失但不丢数据（已确认的进 store）。
+  - WP12 的 deadlineStore→服务端同步不在本批范围。
 
 ## §WP8-mini + WP9 梨宝改排程执行器 + 预览卡
 

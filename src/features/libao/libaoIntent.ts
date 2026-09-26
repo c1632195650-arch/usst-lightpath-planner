@@ -46,7 +46,8 @@ export type GoalIntent =
   | 'replace'     // 用新安排顶掉已排的某块
   | 'reschedule'  // 同一件事换时间
   | 'cancel'      // 取消已排的事
-  | 'query';      // 只问不建议（「我这周忙不忙」）
+  | 'query'       // 只问不建议（「我这周忙不忙」）
+  | 'add_deadline'; // WP11：记一条重要日/截止日（要比赛/要考/截止/备赛/重要日子）
 
 /**
  * 时间的确定程度 —— 决定后面走哪条出口。
@@ -185,6 +186,9 @@ const ACTION_VERBS = [
 /** 第一人称意愿 —— 命中即视为「要动日程」（用户已经在表达自己的事） */
 const SELF_INTENT = ['我要', '我想', '我打算', '我准备', '帮我', '给我', '替我', '想要', '打算要'];
 
+/** WP11：重要日触发词 —— 说的是「有件带截止日的事」，不一定是「排一块」 */
+const DEADLINE_MARK = ['要比赛', '要考', '截止', '备赛', '重要日子'];
+
 /** 纯事实问句 —— 这些是在「问信息」，该走 RAG，不该动日程 */
 const PURE_FACT = [
   '什么时候', '何时', '几号', '哪里', '在哪', '多少', '几个', '是不是',
@@ -227,6 +231,8 @@ const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
   { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到)/ },
   { intent: 'replace', re: /(替换|顶掉|改成|换成|取代)/ },
   { intent: 'query', re: /(忙不忙|排得开|来不来得及|有没有空|有空吗|装得下|排得下)/ },
+  // WP11：重要日。**放最后** —— 「取消备赛」「把备赛挪到周五」得先被既有意图接住
+  { intent: 'add_deadline', re: /(要比赛|要考|截止|备赛|重要日子)/ },
 ];
 
 /** 时段词 → 分钟窗。与作息口径一致（早 7 点起、夜 23 点止）。 */
@@ -336,6 +342,10 @@ export function looksLikeAction(q: string): boolean {
   if (PURE_FACT.some((t) => s.includes(t))) return false;
   if (ADVICE_MARK.some((t) => s.includes(t))) return false;
 
+  // WP11：重要日/截止类诉求 —— 说的是「有件带截止日的事」。
+  // 刻意放在 ADVICE 门**之后**：「怎么备赛」是求方法，不该被拽进来。
+  if (DEADLINE_MARK.some((t) => s.includes(t))) return true;
+
   const hasGoal = GOAL_NOUNS.some((n) => s.includes(n));
   const hasVerb = ACTION_VERBS.some((v) => s.includes(v));
   return hasGoal && hasVerb;
@@ -344,9 +354,46 @@ export function looksLikeAction(q: string): boolean {
 /** 判断 intent。 */
 export function detectIntent(q: string): GoalIntent {
   for (const { intent, re } of INTENT_PATTERNS) {
-    if (re.test(q)) return intent;
+    if (re.test(q)) {
+      // WP11 口径：带排程动词或投入信号的「备赛」等是「排准备块」的 create ——
+      // 「帮我规划备赛」要排块，「快截止了」才是记节点。
+      if (intent === 'add_deadline' && /安排|规划|排|每周|每天|小时|分钟/.test(q)) return 'create';
+      return intent;
+    }
   }
   return 'create';
+}
+
+/* ============================================================
+ * 二·五、重要日提案（WP11）—— 纯函数，LbaoChat 消费
+ * ========================================================== */
+
+export interface DeadlineProposal {
+  title: string;
+  /** 截止日（ISO），来自 resolveWhen 的 dateFrom */
+  date: string;
+  /** 提前几天开始准备（缺省 7；给了总投入按 每 2 小时提前 1 天 估，夹在 3–14） */
+  prepDays: number;
+  /** 建议卡文案（过风格口径：不替用户拍板，先问） */
+  message: string;
+}
+
+/**
+ * add_deadline 槽位 → 重要日提案。
+ * 缺日期（没说到 / 明说没定）→ `{ needDate: true }`，调用方**必须追问**，不许猜。
+ */
+export function deadlineProposal(slots: IntentSlots): DeadlineProposal | { needDate: true } {
+  if (!slots.dateFrom || slots.certainty === 'unknown') return { needDate: true };
+  const title = slots.title || '重要日子';
+  const date = slots.dateFrom;
+  const prepDays = Math.max(3, Math.min(14, slots.totalHours ? Math.ceil(slots.totalHours / 2) : 7));
+  const md = date.slice(5).replace('-', '.');
+  return {
+    title,
+    date,
+    prepDays,
+    message: `要不要按 ${md} 建立「${title}」重要日？我会提前 ${prepDays} 天开始帮你安排准备`,
+  };
 }
 
 /* ============================================================
@@ -676,6 +723,8 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
   reschedule: ['target', 'when'],
   cancel: ['target'],
   query: [],
+  // 重要日只要「什么事 + 哪天截止」；准备量缺省（deadlineStore 有默认值）
+  add_deadline: ['title', 'when'],
 };
 
 /**
@@ -979,6 +1028,7 @@ export function describeSlots(s: IntentSlots): string[] {
     reschedule: '改时间',
     cancel: '取消',
     query: '只看看',
+    add_deadline: '记重要日',
   };
   const out: string[] = [`动作：${verb[s.intent]}`];
   out.push(`事情：${s.title || '（没听清）'}`);
