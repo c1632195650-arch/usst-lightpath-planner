@@ -8,8 +8,8 @@
 
 - 起点：`03a11b5`（master，2026-09-22 合流后修复提交）
 - 分支：`beta-v2`（扁平名；本机安全软件会拦带斜杠分支名，故不用 feat/*）
-- 当前基线（批 2 收尾）：**tsc=0 / engine=328 / ui=254 / intent=69(含于 ui) / golden=v1**
-  - 批 0 开工基线：tsc=0 / engine=326 / ui=237 / intent=69 / golden=v1；批 1 收尾：engine=328 / ui=246
+- 当前基线（批 3 收尾）：**tsc=0 / engine=336 / ui=254 / intent=69(含于 ui) / golden=v1**
+  - 批 0 开工基线：tsc=0 / engine=326 / ui=237 / intent=69 / golden=v1；批 1 收尾：engine=328 / ui=246；批 2 收尾：ui=254
   - 注：`scripts/gate_overnight.mjs` 内置下限为旧值 312/219；台账以实测更高值为「只增」基线。
 - 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = eb43ce60816d4691a8b209f3904dcb3b`（夜里禁改，收尾必核）
 
@@ -33,7 +33,7 @@
 | 0 | beta-v2 分支 + 台账 | [x] | cc901b5 |
 | 1 | WP1 基础信息前置 BasicInfoStep | [x] | （见 git log WP1） |
 | 2 | WP2 题库年级分层 + 上理场景化 | [x]（分层口径待 CY 复核，见 §WP2） | |
-| 3 | WP4b 四 bug（B2/B3/B5/B6） | [ ] | |
+| 3 | WP4b 四 bug（B2/B3/B5/B6） | [x] | |
 | 4 | WP11 重要日体系 | [ ] | |
 | 5 | WP8-mini + WP9 梨宝改排程 + 预览卡（5a-5d 四小步） | [ ] | |
 | 6 | WP10 拖拽合规（仅余力） | [ ] | |
@@ -93,9 +93,23 @@
 
 ## §WP4b 四 bug
 
+- 状态：[x] 完成（触碰 Ray 属地 2 文件，已走 GATE_ALLOW_FORBIDDEN 显式申报留痕）
 - 改动文件清单：
-- 反向验证记录：
-- 遗留：
+  - `src/features/week/WeekPlanView.tsx` — B2：updateLayer 的 pushUndoSnapshot 移出 setState updater（layerRef 镜像，:449-456 附近）；B3：调用点改传 `overrideAffectedDays(schedule, derived.schedule, weekNo)`（:1277 附近），本地 localizedDaysFor 删除（改用 lib 版）；B5：列级 onDragOver 接 `updatePreview(day, dropTargetMin(null, day, baseBlocks), …)` + onDrop 改用 `dropTargetMin(preview, day, baseBlocks)`
+  - `src/lib/planner/localizedReplan.ts` — B3：新增 `localizedDaysFor(layer, overrideDays, weekNo)`（融合天集 = 用户改动天 ∪ 调课天）与 `overrideAffectedDays(base, derived, weekNo)`（原/派生课表逐节比对），均纯函数
+  - `src/features/week/dragPreview.ts`（新）— B5：`dropTargetMin` / `columnTailMin` 纯函数（预览与落点同一来源，所见即所得）
+  - `server/memory.py` — B6：college 正则加主语前缀非捕获组 `我?(?:是|叫|在|来自|就读(?:于)?|考[进入]了?)?` + 右边界 `(?=$|[，。；,;\s大一二三四五])`（:74-79 附近）
+  - `tests/wp4b.test.ts`（新，8 用例）
+  - `scripts/test_memory_facts.py` — 补 4 条 B6 口语变体用例
+- 实现口径备注（B6）：方案书只写「加右边界」，但右边界单独加**修不了**其自举示例（「我是光电学院」在句尾仍会整段被左端吞入）——故实现为「左端主语前缀吃进非捕获组 + 右边界」，实测修复示例且 15/15 通过。
+- 反向验证记录（关实现 → 红 → 恢复 → 绿）：
+  - RV-B2 快照挪回 updater 内 → B2 源码断言红（pass 4/fail 4 批量实验）→ 恢复 → 8/8 绿
+  - RV-B3 localizedDaysFor 去 overrideDays 合并 → B3 两条用例红（同上批量实验）→ 恢复 → 绿
+  - RV-B5 onDrop 还原旧口径 + 删 dragover 兜底 → B5 源码断言红（同上批量实验）→ 恢复 → 绿
+  - RV-B6 还原旧 college 正则 → 4 条口语变体全 FAIL（Ran 15, failures=4）→ 恢复 → 15/15 OK
+  - 恢复一致性：WeekPlanView/localizedReplan/memory.py 均从实验前备份恢复
+- 门禁：tsc=0 / engine=336(+8) / ui=254(持平) / 禁区（2 文件显式申报例外 + dragPreview.ts 新增） / 风格 8 项 — 5/5 PASS
+- 遗留：B2 的 layerRef 镜像在同一事件内连调两次 updateLayer 时第二次快照可能取到旧值（当前代码无此调用形态；StrictMode 双调用已消除）。
 
 ## §WP11 重要日体系
 

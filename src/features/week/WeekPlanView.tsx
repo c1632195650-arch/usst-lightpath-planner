@@ -65,7 +65,8 @@ import { CourseOverrideEditor } from './CourseOverrideEditor';
 import { TimeAskDialog, type TimeAskRequest } from './TimeAskDialog';
 import { DeleteAskDialog } from './DeleteAskDialog';
 import { applyCourseOverrides } from '@/lib/planner/courseOverrides';
-import { localizedPlan, unionAffectedDays } from '@/lib/planner/localizedReplan';
+import { localizedDaysFor, localizedPlan, overrideAffectedDays } from '@/lib/planner/localizedReplan';
+import { dropTargetMin } from './dragPreview';
 import { fillGap } from '@/lib/planner/ripple';
 // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
 import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
@@ -93,27 +94,6 @@ interface Props {
    * 点了「猛攻模式」排得一样松 —— 现在它会真正改变阶段策略的强度。
    */
   lifeMode: string | null;
-}
-
-/**
- * R6.1：这次排程「受影响的天」是哪些 —— `null` = 没有定点诉求，整周重排。
- *
- * 只看**能指出具体星期**的改动：不可时段、调课/停课、拖动/改块的位置、加的事。
- * 任一改动说不清哪天（例如没指定星期的事），就退回整周重排 ——
- * 那样虽然抖，但比「自以为知道其实不知道」安全。
- */
-function localizedDaysFor(
-  layer: UserPlanLayer,
-  applied: ReadonlyArray<{ id: string; courseName: string }>,
-  weekNo: number,
-): number[] | null {
-  const rules: Array<{ days?: number[] }> = [];
-  for (const s of layer.slots) rules.push({ days: s.days });
-  for (const m of layer.moves) if (m.weekNo === weekNo) rules.push({ days: [m.dayOfWeek] });
-  for (const t of layer.tasks) if (t.dayOfWeek != null) rules.push({ days: [t.dayOfWeek] });
-  for (const a of layer.assignments) void a;
-  void applied;
-  return unionAffectedDays(rules, weekNo);
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -443,6 +423,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 再加三类就碎成一地 —— 所以合并；旧数据由 `loadUserPlan()` 自动迁移。
    */
   const [layer, setLayer] = useState<UserPlanLayer>(() => loadUserPlan());
+  /** WP4b-B2：撤销快照的取数镜像 —— 快照必须在 setState updater **外**压栈，
+   *  否则 StrictMode 双调用 updater 会把同一份底压两次（撤销一步变成撤两步）。 */
+  const layerRef = useRef<UserPlanLayer>(layer);
+  layerRef.current = layer;
 
   /**
    * 统一的写回入口：**任何**对覆盖层的改动都走它 ——
@@ -453,8 +437,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 否则某个 handler 忘了标记，用户就会以为按钮没反应。
    */
   const updateLayer = useCallback((fn: (prev: UserPlanLayer) => UserPlanLayer) => {
+    pushUndoSnapshot(layerRef.current); // 撤销栈：任何改动前先留一份底（updater 外，B2）
     setLayer((prev) => {
-      pushUndoSnapshot(prev); // 撤销栈：任何改动前先留一份底
       const next = fn(prev);
       saveUserPlan(next);
       return next;
@@ -1274,7 +1258,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
          * ⚠️ 没有上一版（首次排程）时也只能整体接受。
          */
         const prev = lastPlanRef.current;
-        const days = localizedDaysFor(layer, derived.applied, weekNo);
+        // WP4b-B3：融合天集必须并入本周调课/停课实际影响的天 ——
+        // 否则应用调课后的重排会把调课那天当「未受影响」保留旧版，覆写切周才出现。
+        const days = localizedDaysFor(
+          layer,
+          overrideAffectedDays(schedule, derived.schedule, weekNo),
+          weekNo,
+        );
         const fused = days !== null && prev && prev.weekNo === weekNo
           ? localizedPlan(prev, result.plan, days).plan
           : result.plan;
@@ -1627,12 +1617,16 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                 // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
                 if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
               }}
+              onDragOver={(e) => {
+                // WP4b-B5：列空白处的悬停兜底 —— 影子直接画在「列末尾」，
+                // 与 onDrop 用同一个 dropTargetMin，预览位恒等于松手落位。
+                e.preventDefault();
+                updatePreview(day, dropTargetMin(null, day, baseBlocks), `${day}:tail:${e.clientX}:${e.clientY}`);
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 const id = e.dataTransfer.getData('text/plain') || draggingId;
-                // 没有悬停预览时（直接落到空白），退回「列末尾」
-                const atMin = preview && preview.day === day ? preview.atMin : tailMin + 10;
-                if (id) handleDrop(id, day, atMin);
+                if (id) handleDrop(id, day, dropTargetMin(preview, day, baseBlocks));
                 setDraggingId(null);
                 clearPreview();
               }}

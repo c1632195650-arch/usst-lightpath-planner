@@ -67,3 +67,29 @@
 **遗留**：换年级重测时旧答卷未按当前卷面过滤（buildProfile 属 Ray 属地+计分铁律，夜班不碰）。
 
 ---
+## 批 3 · WP4b 四 bug —— commit（WP4b:）
+
+**改动文件与关键行号**
+
+| 文件 | 改动 |
+|---|---|
+| `src/features/week/WeekPlanView.tsx` | B2 updateLayer 快照移出 updater（layerRef，:449-456）；B3 调用点传 overrideAffectedDays（:1280 附近）；B5 列级 onDragOver 接影子兜底 + onDrop 统一 dropTargetMin（:1630 附近） |
+| `src/lib/planner/localizedReplan.ts` | B3 新增 `localizedDaysFor`（融合天集 ∪ 调课天）与 `overrideAffectedDays`（原/派生课表比对）纯函数 |
+| `src/features/week/dragPreview.ts`（新） | B5 `dropTargetMin`/`columnTailMin`：影子与落点同一来源 |
+| `server/memory.py` | B6 college 正则：主语前缀非捕获组 + 右边界（:74-79） |
+| `tests/wp4b.test.ts`（新） | 8 用例（B3 端到端含「apply 后切周再切回覆写仍在」对拍） |
+| `scripts/test_memory_facts.py` | B6 补 4 条口语变体 |
+
+**命令实据**
+
+- `npm run --silent typecheck` → TSC-OK；`tests/wp4b.test.ts` → 8/8
+- `python scripts/test_memory_facts.py` → Ran 15, OK（含 4 条新变体）
+- 反向验证 RV-B2/B3/B5（批量实验 fail 4）与 RV-B6（failures=4）均 红→恢复→绿
+- 收尾门禁 5/5 PASS：tsc=0 / engine=336 / ui=254；**禁区例外已按门禁机制显式申报**
+  （`GATE_ALLOW_FORBIDDEN="src/features/week/WeekPlanView.tsx,src/lib/planner/localizedReplan.ts"`，
+  输出留痕「人工批准的例外 2 个」）；门禁脚本 md5 未变
+
+**实现口径备注**：B6 方案书的「只加右边界」修不了其自举示例（句尾「我是光电学院」仍整段吞入），
+实现扩为「主语前缀吃进非捕获组 + 右边界」，示例实测修复。
+
+---

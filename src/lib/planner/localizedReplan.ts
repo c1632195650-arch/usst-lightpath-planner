@@ -14,7 +14,7 @@
  *
  * 纯函数：不读时钟、不随机。
  */
-import type { TimeBlock, WeekPlan } from '@/types';
+import type { Course, CourseTimeSlot, Schedule, TimeBlock, WeekPlan } from '@/types';
 import { longRuleApplies } from './longTermRules.ts';
 
 export interface WeeklyLike { weeks?: number[]; createdAtWeek?: number; scope?: 'once' | 'long' }
@@ -45,6 +45,58 @@ export function unionAffectedDays(
     for (const d of days) set.add(d);
   }
   return [...set].sort((a, b) => a - b);
+}
+
+/**
+ * 融合天集 = 用户改动天 ∪ 本周已应用的调课/停课天（WP4b-B3，2026-09-27）。
+ *
+ * 为什么必须有调课天：调课走 `courseOverrides` → 派生课表变化 → 引擎重排。
+ * 若融合只看 layer 的 slots/moves/tasks，调课那天的改动会被判成「未受影响」
+ * 而保留上一版 —— 用户应用了调课，排程里却看不到，切周再切回才出现。
+ * `overrideDays` 为空（本周没有调课）时行为与修复前一致。
+ *
+ * 入参用结构化最小接口（`UserPlanLayer` 天然满足），避免 lib 反向依赖 feature。
+ */
+export interface LocalizedRuleSource {
+  slots: ReadonlyArray<{ days: number[] }>;
+  moves: ReadonlyArray<{ weekNo: number | null; dayOfWeek: number }>;
+  tasks: ReadonlyArray<{ dayOfWeek?: number | null }>;
+}
+
+export function localizedDaysFor(
+  layer: LocalizedRuleSource,
+  overrideDays: ReadonlyArray<number>,
+  weekNo: number,
+): number[] | null {
+  const rules: Array<{ days?: number[] }> = [];
+  for (const s of layer.slots) rules.push({ days: s.days });
+  for (const m of layer.moves) if (m.weekNo === weekNo) rules.push({ days: [m.dayOfWeek] });
+  for (const t of layer.tasks) if (t.dayOfWeek != null) rules.push({ days: [t.dayOfWeek] });
+  if (overrideDays.length > 0) rules.push({ days: [...overrideDays] });
+  return unionAffectedDays(rules, weekNo);
+}
+
+/**
+ * 本周调课/停课实际影响到的星期：原课表 vs 派生课表逐课比对（WP4b-B3 配套）。
+ * 「取消/挪走的节」与「新出现的节」所在的天都要进融合天集。纯函数、不落盘。
+ */
+export function overrideAffectedDays(base: Schedule, derived: Schedule, weekNo: number): number[] {
+  const active = (sch: Schedule): Set<string> => {
+    const set = new Set<string>();
+    for (const c of sch.courses as Course[]) {
+      for (const s of c.slots as CourseTimeSlot[]) {
+        if (s.weeks && !s.weeks.includes(weekNo)) continue;
+        set.add(`${c.id}|${s.dayOfWeek}|${s.startPeriod}|${s.endPeriod}`);
+      }
+    }
+    return set;
+  };
+  const before = active(base);
+  const after = active(derived);
+  const days = new Set<number>();
+  for (const k of before) if (!after.has(k)) days.add(Number(k.split('|')[1]));
+  for (const k of after) if (!before.has(k)) days.add(Number(k.split('|')[1]));
+  return [...days].sort((a, b) => a - b);
 }
 
 /**

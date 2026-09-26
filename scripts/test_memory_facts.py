@@ -70,6 +70,29 @@ class MemoryFactsTest(unittest.TestCase):
         self.assertEqual(r["status"], "applied")
         self.assertEqual(memory.get_profile(self.uid).get("grade"), "大二")
 
+    # ---------- WP4b-B6（2026-09-27）：college 不吞主语，3 条口语变体 ----------
+    # 反向验证：把 _RULES["college"] 还原成旧正则 ([\u4e00-\u9fff]{2,6}学院) → 本组全红
+    # （旧正则会把「我是光电学院」整个吞成 value）。
+    def test_college_b6_plain_self_intro(self):
+        ev = memory.propose_facts(self.uid, "我是光电学院")
+        colleges = [f["value"] for f in ev["pending"] if f["key"] == "college"]
+        self.assertEqual(colleges, ["光电学院"], "值不许带「我是」主语")
+
+    def test_college_b6_comma_variant(self):
+        ev = memory.propose_facts(self.uid, "我来自中俄学院，大二")
+        colleges = [f["value"] for f in ev["pending"] if f["key"] == "college"]
+        self.assertEqual(colleges, ["中俄学院"], "「来自」前缀要剥掉，且在逗号处收住")
+
+    def test_college_b6_at_variant(self):
+        ev = memory.propose_facts(self.uid, "我在管理学院，平时爱打球")
+        colleges = [f["value"] for f in ev["pending"] if f["key"] == "college"]
+        self.assertEqual(colleges, ["管理学院"], "「我在」前缀要剥掉")
+
+    def test_college_b6_grade_suffix_stops_boundary(self):
+        ev = memory.propose_facts(self.uid, "我是光电学院大二的学生")
+        colleges = [f["value"] for f in ev["pending"] if f["key"] == "college"]
+        self.assertEqual(colleges, ["光电学院"], "学院后面跟年级时要在边界收住")
+
     def test_reject_fact_never_enters_profile(self):
         ev = memory.propose_facts(self.uid, "我是大三学生")
         fid = ev["pending"][0]["id"]
