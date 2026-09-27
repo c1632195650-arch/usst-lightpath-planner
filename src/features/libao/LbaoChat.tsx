@@ -54,6 +54,7 @@ import {
   holdSlotFrom,
   holdToUnavailableSlot,
   matchCandidate,
+  proposeReplanOptions,
   type CancelTarget,
   type GoalVerdict,
   type ReschedulePreview,
@@ -1298,6 +1299,15 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       const patch = mapUnderstandPatch(args.patch);
       const t = ctx.topic;
 
+      // D7：用户按编号选中协商方案 → 直接用干跑过的槽位走正常草稿通路（确认卡照旧）
+      if (t?.blocking?.options?.length && args.replan_id) {
+        const opt = t.blocking.options.find((o) => o.id === args.replan_id);
+        if (opt) {
+          await runGoalSlots(opt.slots, ctx.today);
+          return;
+        }
+      }
+
       // 续答（collect 相 + 同一意图）：补丁并进现有槽位，不打断
       if (t && t.phase === 'collect' && intent === t.intent) {
         const merged = mergeLlmPrimary(t.slots, patch, ctx.today);
@@ -1347,16 +1357,28 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       await runGoalSlots(merged, ctx.today);
     },
 
-    negotiate_block: async () => {
-      const blocking = topic?.blocking;
+    negotiate_block: async (_args, ctx) => {
+      const t = ctx.topic;
+      const blocking = t?.blocking;
       if (!blocking) return;
-      // D3 基础版：基于引擎事实复述阻塞 + 给方向（D7 换成引擎干跑过的编号方案）
+      // D7：协商回复基于引擎事实（挡路块），并给出**干跑过、真排得上**的编号方案。
+      // 只提议不落盘 —— 用户选中后仍走 runGoalSlots → 草稿卡 → 确认（L4 不变）。
+      const options = proposeReplanOptions({
+        slots: t!.slots, verdict: blocking.verdict, schedule, profile, today: ctx.today,
+      });
+      setTopic((prev) => (prev?.blocking
+        ? transitionTopic(prev, { blocking: { ...prev.blocking, options } })
+        : prev));
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: '现在这样排不进去 —— 挡路的是这些：',
+        text: options.length > 0
+          ? '现在这样排不进去 —— 挡路的是这些。好在有几条**真排得上**的路（回编号就行）：'
+          : '现在这样排不进去 —— 挡路的是这些：',
         planPoints: [
           ...blocking.blockingBlocks.map((o) => `${o.hint} 已有「${o.title}」`),
-          '可以：① 用新安排顶掉其中一块；② 挪到下一周；③ 少排一点。你说哪个，我来改。',
+          ...(options.length > 0
+            ? options.map((o, i) => `${i + 1}. ${o.label}`)
+            : ['可以：① 换个时间；② 挪到下一周；③ 换掉其中一块。你说哪个，我来改。']),
         ],
         goWeek: true,
       }]);

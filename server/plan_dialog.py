@@ -111,6 +111,10 @@ act 白名单（只能从中选一个）：
 - negotiate_block 排程被既有块挡住，用户在协商 → args.option 取 swap_block/move_next_week/reduce_scope/give_time 之一
 - chit_chat       闲聊或校园问答（与排程无关）→ 无 args；**此时议题保留，不要丢弃 topic**
 
+D7 协商方案：blocked 状态的 blocking.options 列出**引擎干跑过、真排得上**的编号方案（id+label）。
+用户按编号/说法选中其中一个 → new_intent + args.replan_id 取该方案的 id（**照抄，不要改写**），
+不要自己编 patch。
+
 状态读法：
 - topic.phase：collect=等用户补信息；picking=候选清单在等用户挑；draft=草稿在等确认；blocked=排不进去（blocking.blocks 列出挡路的既有块）
 - candidates / blocking.blocks 里的 **idx 与 title 是唯一可信引用**：用户说「第一个/周三那个」就对到清单上
@@ -319,6 +323,10 @@ def _clean_dialog(data, state):
         patch = _clean_patch(args.get("patch") or {})
         if patch:
             out_args["patch"] = patch
+        # D7：用户选中协商方案（blocking.options 里的 id，LLM 照抄）
+        rid = args.get("replan_id")
+        if isinstance(rid, str) and rid.strip():
+            out_args["replan_id"] = rid.strip()[:60]
     # confirm_draft / discard_topic / resume_topic / chit_chat：无 args
 
     note = data.get("reply_note")

@@ -49,6 +49,11 @@ export interface BlockingFacts {
   kind: 'no_placement' | 'partial_placed' | 'conflict';
   verdict: GoalVerdict;
   blockingBlocks: PickOption[];
+  /**
+   * D7：引擎干跑过的协商方案（proposeReplanOptions 产物）——
+   * LLM 只见到 id+label（见 serializeTopic），slots 仅供执行器使用。
+   */
+  options?: Array<{ id: string; label: string; slots: IntentSlots }>;
 }
 
 /** 当前议题：一次排程诉求从听到、问清、到草稿/被阻塞的全程载体 */
@@ -222,6 +227,10 @@ export function serializeTopic(topic: DialogTopic | null): Record<string, unknow
     out.blocking = {
       kind: topic.blocking.kind,
       blocks: topic.blocking.blockingBlocks.slice(0, 5).map(pickOptionLite),
+      // D7：协商方案只发 id+label —— slots 是执行器的，不进 LLM 的上下文
+      ...(topic.blocking.options?.length
+        ? { options: topic.blocking.options.slice(0, 3).map((o) => ({ id: o.id, label: o.label })) }
+        : {}),
     };
   }
   if (topic.priorFailed) out.prior_failed_title = topic.priorFailed.title;
@@ -267,6 +276,8 @@ export interface DialogActArgs {
   pick_kind?: 'cancel' | 'reschedule' | 'replace';
   option?: (typeof NEGOTIATE_OPTIONS)[number];
   intent?: GoalIntent;
+  /** D7：用户按编号选中协商方案的凭据（LLM 从 blocking.options 里照抄 id） */
+  replan_id?: string;
   /** new_intent 的槽位补丁（_clean_patch 产物，结构与 understand 端点 patch 一致） */
   patch?: Record<string, unknown>;
 }

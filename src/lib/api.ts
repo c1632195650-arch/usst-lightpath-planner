@@ -308,6 +308,8 @@ export interface PlanUnderstandResult {
     pick_kind?: 'cancel' | 'reschedule' | 'replace';
     option?: 'swap_block' | 'move_next_week' | 'reduce_scope' | 'give_time';
     intent?: PlanUnderstandResult['intent'];
+    /** D7：用户选中的协商方案 id（blocking.options 照抄） */
+    replan_id?: string;
     patch?: PlanSlotPatch;
   };
   /** 对话管理器的一句话说明（≤80 字，梨宝口吻） */

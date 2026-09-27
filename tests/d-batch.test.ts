@@ -223,3 +223,54 @@ test('D4: 晚上窗内真排上 + 与既有块同日共存（引擎级，evening
   assert.ok(goal!.dayOfWeek === run!.dayOfWeek, '没在同一天共存');
 });
 
+
+/* ---------------- D7 · replan 协商循环 ---------------- */
+
+test('D7: proposeReplanOptions —— 每个方案过引擎干跑，只出真排得上的编号选项', async () => {
+  const { checkGoalFeasibility, goalToTasks, proposeReplanOptions } = await import('@/features/libao/weekPlanForChat');
+  type Schedule = import('@/types').Schedule;
+  type Course = import('@/types').Course;
+  const course = (id: string, day: number, sp: number, ep: number): Course => ({
+    id, name: id, credit: 2, category: '公共基础', campus: 'JG516', building: '第一教学楼',
+    slots: [{ dayOfWeek: day as Course['slots'][number]['dayOfWeek'], startPeriod: sp, endPeriod: ep, weeks: [4] }],
+  });
+  const SCHEDULE: Schedule = {
+    semesterName: '2026-2027-1', semesterType: 'autumn', termStart: '2026-09-07',
+    totalWeeks: 20, source: 'demo', courses: [course('c1', 1, 1, 2)],
+  };
+  // 明天（周一）晚上被三个块占满 → 目标块一块都落不下
+  const heavy = [
+    { id: 'u-run', title: '操场跑步', kind: 'activity' as const, dayOfWeek: 1, startMin: 17 * 60 + 55, durationMin: 60, weeks: [4] },
+    { id: 'u-occ2', title: '占位二', dayOfWeek: 1, startMin: 19 * 60, durationMin: 120, weeks: [4] },
+    { id: 'u-occ3', title: '占位三', dayOfWeek: 1, startMin: 21 * 60, durationMin: 120, weeks: [4] },
+  ];
+  const slots = {
+    intent: 'create', title: '出去玩', certainty: 'exact' as const, priorityHint: 85,
+    missing: [], unclear: [], raw: '明天晚上出去玩一小时',
+    dateFrom: '2026-09-28', dateTo: '2026-09-28', durationMin: 60,
+    when: { text: '明天晚上', kind: 'relative' as const, relativeDays: 1 },
+    window: { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
+  } as Parameters<typeof goalToTasks>[0];
+  const verdict = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, today: '2026-09-27', tasks: heavy });
+  assert.equal(verdict.placedCount, 0, '夹具应当是 blocked');
+  assert.ok((verdict.blockingBlocks?.length ?? 0) > 0, '应当扫出挡路块');
+
+  // 反向：把「干跑过滤」删掉（全部方向直接呈现）→ 本用例红
+  const options = proposeReplanOptions({ slots, verdict, schedule: SCHEDULE, profile: null, tasks: heavy, today: '2026-09-27' });
+  assert.ok(options.length >= 1 && options.length <= 3, `应有 1-3 条可行方案，实际 ${options.length}`);
+  assert.ok(options.some((o) => o.id.startsWith('swap:') || o.id === 'move_next_week'), '至少一条互换/顺延');
+  // 干跑语义自洽：每个选项按其 id 复跑干跑都必须真的排得上
+  for (const o of options) {
+    const v = checkGoalFeasibility({
+      slots: { ...o.slots, missing: [] }, schedule: SCHEDULE, profile: null, today: '2026-09-27',
+      tasks: heavy,
+      ...(o.id.startsWith('swap:') ? { excludeBlockIds: [o.id.slice(5)] } : {}),
+    });
+    assert.ok(v.kind === 'ok' || v.kind === 'tight', `选项 ${o.id} 干跑未通过：${v.kind}`);
+  }
+  // ok 的 verdict 不产生协商方案（没有协商的必要）
+  const okVerdict = checkGoalFeasibility({ slots: { ...slots, dateTo: '2026-10-04' }, schedule: SCHEDULE, profile: null, today: '2026-09-27', tasks: [] });
+  if (okVerdict.kind === 'ok' || okVerdict.kind === 'tight') {
+    assert.deepEqual(proposeReplanOptions({ slots, verdict: okVerdict, schedule: SCHEDULE, profile: null, today: '2026-09-27' }), []);
+  }
+});

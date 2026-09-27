@@ -363,9 +363,14 @@ export function checkGoalFeasibility(args: {
   weekNo?: number;
   /** 本周已经在用的任务（校历事件 / 天气 / 用户自己加的）—— 必须在场，否则基线失真 */
   tasks?: UserTask[];
+  /**
+   * D7：干跑基线里要**挖掉**的引擎块（「与挡路块互换」方案的 dry-run 语义：
+   * 换掉它 = 它先让位）。课程块引擎侧自带保护，挖不掉也无需挖。
+   */
+  excludeBlockIds?: string[];
   today: string;
 }): GoalVerdict {
-  const { slots, schedule, profile, today } = args;
+  const { slots, schedule, profile, today, excludeBlockIds } = args;
   const existing = args.tasks ?? [];
   const caveats: string[] = [];
 
@@ -443,16 +448,20 @@ export function checkGoalFeasibility(args: {
   for (const [w, wkTasks] of [...byWeek.entries()].sort((a, b) => a[0] - b[0])) {
     const wkPhase = phaseOfWeek(semester.plan, w);
     if (!wkPhase) continue; // 该周不在学期内 —— goalToTasks 理论上已滤掉
-    const mkInput = (tasks: UserTask[]) => ({
-      schedule,
-      weekNo: w,
-      policy: wkPhase.policy,
-      scenarios: profile?.scenarios ?? null,
-      tasks,
-    });
+    const mkInput = (tasks: UserTask[]) => {
+      const req = toPlanRequest({
+        schedule,
+        weekNo: w,
+        policy: wkPhase.policy,
+        scenarios: profile?.scenarios ?? null,
+        tasks,
+      });
+      // D7：swap 方案的干跑基线要把被换掉的块挖掉（construct 的排除机制）
+      return excludeBlockIds?.length ? { ...req, excludedBlockIds: excludeBlockIds } : req;
+    };
 
-    const before = planWeekV2(toPlanRequest(mkInput(existing))).plan;
-    const after = planWeekV2(toPlanRequest(mkInput([...existing, ...wkTasks]))).plan;
+    const before = planWeekV2(mkInput(existing)).plan;
+    const after = planWeekV2(mkInput([...existing, ...wkTasks])).plan;
 
     // D4：placed 改按 id 认领（候选 id 内嵌在引擎块 id 的语义键里，`w{w}-d{d}-{kind}-custom-{taskId}`）
     // —— 此前按 title 认领，同名块会误认领「别的块替它落了地」。
@@ -595,6 +604,77 @@ export function describeVerdict(v: GoalVerdict): string[] {
     }
   }
   return out;
+}
+
+/* ============================================================
+ * D7：replan 协商方案（每个方案都过一次引擎干跑，可行的才呈现）
+ * ============================================================
+ * blocked 时的三个方向（工作单 §9）：① 与挡路块互换（replace 语义，干跑时把它
+ * 从基线挖掉）② 顺延一周 ③ 降单次时长。**每个方案必须过引擎干跑**——
+ * 排得上的才作为编号选项呈现；LLM 只负责转述与引用（replan_id），禁止编「排好了」。
+ * 只提议不落盘：用户选中后仍走 runGoalSlots → 草稿卡 → 确认（L4 边界不变）。
+ */
+export interface ReplanOption {
+  /** 稳定 id（swap:<blockId> / move_next_week / reduce_duration），LLM 引用凭据 */
+  id: string;
+  /** 编号选项的人类可读文案 */
+  label: string;
+  /** 选中后直接走 runGoalSlots 的调整槽位 */
+  slots: IntentSlots;
+}
+
+export function proposeReplanOptions(args: {
+  slots: IntentSlots;
+  verdict: GoalVerdict;
+  schedule: Schedule | null;
+  profile: PersonaProfile | null;
+  /** D7：协商基线的既有任务（与干跑同源，否则挡路事实对不上） */
+  tasks?: UserTask[];
+  today: string;
+}): ReplanOption[] {
+  const { slots, verdict, schedule, profile, today, tasks } = args;
+  if (!schedule?.termStart) return [];
+  // RV 锚点：ok/tight 的 verdict 没有协商的必要
+  if (verdict.kind === 'ok' || verdict.kind === 'tight' || verdict.kind === 'needs_clarification') return [];
+
+  const feasible = (s: IntentSlots, excludeBlockIds?: string[]): boolean => {
+    const v = checkGoalFeasibility({
+      slots: { ...s, missing: [] }, schedule, profile, today,
+      ...(tasks?.length ? { tasks } : {}),
+      ...(excludeBlockIds?.length ? { excludeBlockIds } : {}),
+    });
+    return v.kind === 'ok' || v.kind === 'tight';
+  };
+
+  const options: ReplanOption[] = [];
+
+  // ① 与挡路块互换：干跑把该块从基线挖掉 —— 「换掉它」的语义在引擎层面成立
+  for (const b of (verdict.blockingBlocks ?? []).slice(0, 2)) {
+    if (!b.blockId) continue;
+    const s: IntentSlots = { ...slots, intent: 'replace', targetHint: b.title, missing: [] };
+    if (feasible(s, [b.blockId])) {
+      options.push({ id: `swap:${b.blockId}`, label: `用「${slots.title}」换掉 ${b.hint} 的「${b.title}」`, slots: s });
+    }
+  }
+
+  // ② 顺延一周
+  if (slots.dateFrom) {
+    const s: IntentSlots = {
+      ...slots,
+      dateFrom: addDays(slots.dateFrom, 7),
+      ...(slots.dateTo ? { dateTo: addDays(slots.dateTo, 7) } : {}),
+      missing: [],
+    };
+    if (feasible(s)) options.push({ id: 'move_next_week', label: `挪到下一周（${s.dateFrom} 起）`, slots: s });
+  }
+
+  // ③ 降单次时长（≥30 分钟下限）
+  if (slots.durationMin != null && slots.durationMin > 30) {
+    const s: IntentSlots = { ...slots, durationMin: Math.max(30, Math.floor(slots.durationMin / 2)), missing: [] };
+    if (feasible(s)) options.push({ id: 'reduce_duration', label: `单次降到 ${s.durationMin} 分钟`, slots: s });
+  }
+
+  return options.slice(0, 3);
 }
 
 /* ============================================================
