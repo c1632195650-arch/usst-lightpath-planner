@@ -10,6 +10,8 @@ import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
 import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { addTimetableFacts } from '@/lib/api';
+import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist';
+import { loadUserDeadlines } from '@/features/calendar/deadlineStore';
 import { getUserId } from '@/lib/identity';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
@@ -48,6 +50,11 @@ export default function App() {
   const [weekSubTab, setWeekSubTab] = useState<WeekSubTab>('plan');
   // H2：模式问询窗口（导入课表完成 / 周计划「换个节奏」打开）
   const [modeSetupOpen, setModeSetupOpen] = useState(false);
+  // V0-3：checklist「加个重要日」→ 跳梨宝并预填提示（nonce 作 key，只在进入时注入一次）
+  const [libaoSeed, setLibaoSeed] = useState<{ text: string; nonce: number } | null>(null);
+  useEffect(() => {
+    if (mainTab !== 'libao' && libaoSeed) setLibaoSeed(null); // 离开梨宝 tab 即清，防重挂载反复预填
+  }, [mainTab, libaoSeed]);
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
@@ -179,7 +186,12 @@ export default function App() {
     return (
       <PersonaResult
         profile={state.persona}
-        onEnter={() => { patchState({ onboarded: true }); setView('main'); setMainTab('calendar'); }}
+        onEnter={() => {
+          // V0-2：首落点动线 —— 没导入过课表 → 直达「课表」tab（导入完成自动弹模式窗）；老用户维持「总览」
+          patchState({ onboarded: true });
+          setView('main');
+          setMainTab(state.schedule ? 'calendar' : 'import');
+        }}
         onRetake={() => setView('persona')}
       />
     );
@@ -226,17 +238,32 @@ export default function App() {
           }} />
         ) : mainTab === 'libao' ? (
           <LbaoChat
+            key={libaoSeed?.nonce ?? 'chat'}
             profile={state.persona}
             schedule={schedule}
             onGoProfile={() => setView('persona')}
+            seedQuestion={libaoSeed?.text}
           />
         ) : mainTab === 'profile' ? (
           state.persona ? (
-            <PersonaResult
-              profile={state.persona}
-              onEnter={() => setMainTab('calendar')}
-              onRetake={() => setView('persona')}
-            />
+            <div className="space-y-3">
+              <PersonaResult
+                profile={state.persona}
+                onEnter={() => setMainTab('calendar')}
+                onRetake={() => setView('persona')}
+              />
+              {/* V0-1：重看引导 —— 完整重走 标题→基本信息→问卷→结果→导入→模式（新旅程不再被 onboarded 藏起来） */}
+              <div className="flex justify-end px-4 sm:px-6">
+                <button
+                  type="button"
+                  data-testid="replay-onboarding"
+                  onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
+                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                >
+                  重看引导
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="content-shell panel px-6 py-16 text-center sm:px-10">
               <p className="section-label">PROFILE</p>
@@ -300,6 +327,19 @@ export default function App() {
             selectedDate={state.selectedDays[state.selectedDays.length - 1]}
             onOpenWeek={openWeek}
             onStartPersona={() => setView('persona')}
+            onboardingCard={(
+              <OnboardingChecklist
+                hasSchedule={!!state.schedule}
+                lifeMode={state.lifeMode}
+                userDeadlineCount={loadUserDeadlines().length}
+                onGotoImport={() => setMainTab('import')}
+                onOpenModeSetup={() => setModeSetupOpen(true)}
+                onGotoLibao={() => {
+                  setLibaoSeed({ text: '帮我记一个重要日：', nonce: Date.now() });
+                  setMainTab('libao');
+                }}
+              />
+            )}
           />
         )}
       </main>

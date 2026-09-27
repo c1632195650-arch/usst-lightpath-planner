@@ -15,6 +15,8 @@ interface Props {
   selectedDate?: string;
   onOpenWeek: (iso: string) => void;
   onStartPersona: () => void;
+  /** V0-3：onboarding checklist 卡（App 组装，全部完成时组件自隐藏） */
+  onboardingCard?: React.ReactNode;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * 不该比实际内容占更大面积。
  */
 export function OverviewPage({
-  schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona,
+  schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona, onboardingCard,
 }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -39,6 +41,7 @@ export function OverviewPage({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+      {onboardingCard}
       <div className="flex flex-col gap-6">
         <TodayCard
           schedule={schedule}

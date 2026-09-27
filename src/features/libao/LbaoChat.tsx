@@ -158,17 +158,19 @@ function loadChatSnapshot(): ChatSnapshot | null {
 }
 
 /** 将本地排程建议和校园资料问答放进同一段对话，而不混用两种数据来源。 */
-export function LbaoChat({ profile, schedule, onGoProfile }: {
+export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   profile: PersonaProfile | null;
   schedule: Schedule;
   onGoProfile?: () => void;
+  /** V0-3：checklist 跳转时的预填提示（App 用 nonce 作 key 保证只在进入时注入一次） */
+  seedQuestion?: string;
 }) {
   /** 挂载时读一次快照；下面的 state 初始化都从它取 —— 切 tab 回来即恢复。 */
   const [boot] = useState(loadChatSnapshot);
   const [messages, setMessages] = useState<Msg[]>(
     () => boot?.messages ?? [{ role: 'lbao', text: GREETING }],
   );
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(seedQuestion ?? '');
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
