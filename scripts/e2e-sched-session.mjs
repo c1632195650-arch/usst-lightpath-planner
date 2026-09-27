@@ -259,16 +259,16 @@ const run = async () => {
     await page.close();
   }
 
-  // ── 剧本 J：跨刷新快照恢复（v2 字段 + collect 态复活） ──
+  // ── 剧本 J：跨刷新快照恢复（v3 对话管理器状态 + collect 态复活） ──
   {
     const page = await browser.newPage();
     await onboard(page);
     await say(page, SEED);
-    const snap = await page.evaluate(() => sessionStorage.getItem('usst.libao.chat.v2'));
-    ok(snap != null, 'J1 快照 v2 键存在');
+    const snap = await page.evaluate(() => sessionStorage.getItem('usst.libao.chat.v3'));
+    ok(snap != null, 'J1 快照 v3 键存在');
     ok(
-      snap != null && snap.includes('"schedMode":"collect"') && snap.includes('"asked"'),
-      'J2 快照含 v2 字段（schedMode/asked）',
+      snap != null && snap.includes('"mode":"sched"') && snap.includes('"phase":"collect"') && snap.includes('"asked"'),
+      'J2 快照含 v3 字段（mode/topic.phase/asked）',
     );
     await page.reload();
     await page.waitForTimeout(1500);

@@ -17,6 +17,17 @@ import {
   shouldExpireSession,
   type SchedMode,
 } from '@/features/libao/schedSession';
+import {
+  SNAPSHOT_V3_KEY,
+  SNAPSHOT_V2_KEY,
+  SNAPSHOT_V1_KEY,
+  collectTopic,
+  pickingTopic,
+  modeFromV2,
+  sanitizeTopic,
+  topicFromV2,
+  type DialogTopic,
+} from '@/features/libao/dialogManager';
 import { addUserDeadline } from '@/features/calendar/deadlineStore';
 import {
   applyCancel,
@@ -194,33 +205,40 @@ function currentSessionId(): string {
  *  开关 `RESTORE_CHAT`（chatRestore.ts）默认开；关掉即回到旧行为
  *  「隔天从干净问候语开始」。用户随时可点「清空对话」重置（走 /api/memory/reset）。 */
 
-/** 排程会话态（S 批 §3.2）：`asked` = 提问时记下的槽位清单（第 i 问 ↔ 第 i 段答）。 */
+/** 排程会话态（S 批 §3.2）：`asked` = 提问时记下的槽位清单（第 i 问 ↔ 第 i 段答）。
+ *  D1 起这不再是 React state —— 它是 topic{collect} 的**派生形状**（规则链路消费）。 */
 interface ClarifyState {
   slots: IntentSlots;
   asked: SlotKey[];
 }
 
-/** V2-1 多目标挑块接续态（提为命名类型供 updatePicking 使用）。 */
+/** V2-1 多目标挑块接续态。D1 起同样是 topic{picking} 的派生形状：
+ *  candidates 同名同型 —— tests/v2.test.ts 的源码字面量断言与规则链路原样存活。 */
 interface PickingState {
   kind: 'cancel' | 'reschedule';
   slots: IntentSlots;
   candidates: CancelTarget[];
 }
 
+/** 快照 v3：对话管理器状态（mode/topic）取代 v2 的 clarify/schedMode。
+ *  v2/v1 的字段保留为**只读迁移**输入，写永远写 v3。 */
 interface ChatSnapshot {
+  v?: 3;
   messages: Msg[];
   pending: Record<number, PendingGoal>;
   pendingSeq: number;
-  /** 快照 v2：clarify 带 asked 清单（v1 的 clarifySlots 无 asked，按 missing 推） */
-  clarify: ClarifyState | null;
-  /** 快照 v2（S2）：显式排程会话模式与无关轮计数 —— 读取兼容缺省 idle/0 */
+  mode: 'chat' | 'sched';
+  topic: DialogTopic | null;
+  missStreak: number;
+  /* ---- v2 只读迁移 ---- */
+  clarify?: ClarifyState | null;
+  clarifyPicking?: PickingState | null;
   schedMode?: 'idle' | 'collect';
-  missStreak?: number;
-  /** D0 双模式：输入框主模式（问答/排程）。缺省按 schedMode 推导（collect → sched） */
-  mode?: 'chat' | 'sched';
 }
 
-const CHAT_SNAPSHOT_KEY = 'usst.libao.chat.v2';
+const CHAT_SNAPSHOT_KEY = SNAPSHOT_V3_KEY;
+/** v2 快照键：只读不写 —— clarify/clarifyPicking 合成为 topic，mode 推导。 */
+const CHAT_SNAPSHOT_V2_KEY = SNAPSHOT_V2_KEY;
 /** v1 快照键：只读不写 —— 旧快照的 clarifySlots 没有 asked 清单，按 missing 推导。 */
 const CHAT_SNAPSHOT_V1_KEY = 'usst.libao.chat.v1';
 /** 清空标记：本标签页内清空过后不再自动恢复（后端已删则历史本就为空，双保险） */
@@ -228,25 +246,49 @@ const CHAT_CLEARED_KEY = 'usst.libao.chat.cleared';
 
 function loadChatSnapshot(): ChatSnapshot | null {
   try {
+    // v3 主路：对话管理器状态（mode/topic）原样恢复；坏数据当没有
     const raw = sessionStorage.getItem(CHAT_SNAPSHOT_KEY);
     if (raw) {
       const s = JSON.parse(raw) as ChatSnapshot;
-      if (Array.isArray(s.messages) && s.messages.length > 0) return s;
+      if (s.v === 3 && Array.isArray(s.messages) && s.messages.length > 0) {
+        return {
+          v: 3,
+          messages: s.messages,
+          pending: s.pending ?? {},
+          pendingSeq: s.pendingSeq ?? 0,
+          mode: s.mode === 'sched' ? 'sched' : 'chat',
+          topic: sanitizeTopic(s.topic),
+          missStreak: s.missStreak ?? 0,
+        };
+      }
       return null;
     }
-    // v1 兼容：clarifySlots → { slots, asked: missing }，schedMode 缺省 idle
+    // v2 兼容：clarify/clarifyPicking 合成为 topic；mode 按 schedMode 推导
+    const v2raw = sessionStorage.getItem(CHAT_SNAPSHOT_V2_KEY);
+    if (v2raw) {
+      const s = JSON.parse(v2raw) as ChatSnapshot;
+      if (!Array.isArray(s.messages) || s.messages.length === 0) return null;
+      return {
+        messages: s.messages,
+        pending: s.pending ?? {},
+        pendingSeq: s.pendingSeq ?? 0,
+        mode: modeFromV2(s.mode, s.schedMode),
+        topic: topicFromV2(s.clarify ?? null, s.clarifyPicking ?? null),
+        missStreak: s.missStreak ?? 0,
+      };
+    }
+    // v1 兼容：clarifySlots → { slots, asked: missing }，无排程态
     const v1raw = sessionStorage.getItem(CHAT_SNAPSHOT_V1_KEY);
     if (!v1raw) return null;
-    const v1 = JSON.parse(v1raw) as Omit<ChatSnapshot, 'clarify' | 'schedMode' | 'missStreak'> & { clarifySlots: IntentSlots | null };
+    const v1 = JSON.parse(v1raw) as Omit<ChatSnapshot, 'clarify' | 'schedMode' | 'missStreak' | 'mode' | 'topic'> & { clarifySlots: IntentSlots | null };
     if (!Array.isArray(v1.messages) || v1.messages.length === 0) return null;
     return {
       messages: v1.messages,
       pending: v1.pending ?? {},
       pendingSeq: v1.pendingSeq ?? 0,
-      clarify: v1.clarifySlots ? { slots: v1.clarifySlots, asked: [...v1.clarifySlots.missing] } : null,
-      schedMode: 'idle',
-      missStreak: 0,
       mode: 'chat',
+      topic: v1.clarifySlots ? topicFromV2({ slots: v1.clarifySlots, asked: [...v1.clarifySlots.missing] }, null) : null,
+      missStreak: 0,
     };
   } catch {
     return null; // 坏数据当没有，别让一条坏快照挡死整个聊天页
@@ -276,8 +318,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   /** WP11：等确认的重要日提案（确认才写 deadlineStore，且不触发自动重排） */
   const [pendingDeadlines, setPendingDeadlines] = useState<Record<number, DeadlineProposal>>({});
   const pendingSeq = useRef(boot?.pendingSeq ?? 0);
-  /** V2-1：多目标挑块接续 —— 梨宝追问「挪哪个」后挂起候选，下一句回复按名匹配 */
-  const [clarifyPicking, setClarifyPicking] = useState<PickingState | null>(null);
+  /** D1：对话管理器单一状态容器 —— 当前议题（collect/picking/draft/blocked 四相）。
+   *  原先散在 clarify / clarifyPicking / schedMode 三个 state 里的会话态收敛于此：
+   *  规则链路通过下面的派生兼容层照常消费，D3 起对话管理器 LLM 读到的也是这一份。 */
+  const [topic, setTopic] = useState<DialogTopic | null>(() => boot?.topic ?? null);
 
   // ── WP9：侧栏排程预览卡 —— 「必须跟随最新进度」的落点 ──────────────
   // 任何落盘（确认排/取消/挪/替换）都 bumpPlanVersion() → 重算引擎 → 卡片刷新。
@@ -306,39 +350,40 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     return () => { alive = false; };
   }, [schedule, profile, pendingTasksKey, planVersion]);
 
-  /** 追问接续态：needs_clarification 时把**半成品槽位 + 问过的槽位清单**存这里，
-   *  下一句话先当「追问的回应」尝试解析（applyClarifyAnswers），补齐了就继续出草稿。
-   *  没有它，用户的回答会被当成全新消息重新分流 ——「每周 3 次、每次 2 小时」
-   *  不是动作句 → 掉进 RAG 问答（2026-09-20 真实使用翻车的根因）。
-   *  S 批 P5：`asked` 在提问时记录（第 i 问 ↔ 第 i 段答的位置对应全靠它）。 */
-  const [clarify, setClarify] = useState<ClarifyState | null>(
-    () => boot?.clarify ?? null,
+  /** ── D1 派生兼容层 ──────────────────────────────────────────────
+   *  规则链路（send / run* / v2 源码断言）继续用旧形状：clarify / clarifyPicking /
+   *  schedMode 都是 topic 的只读投影，写入只走 updateClarify / updatePicking（落 topic）。 */
+  const clarify: ClarifyState | null = useMemo(
+    () => (topic?.phase === 'collect' ? { slots: topic.slots, asked: [...topic.asked] } : null),
+    [topic],
   );
 
-  /** S 批 S2 · 排程会话状态机：collect = 正在等用户的排程回应。
-   *  collect 态消息**不过** looksLikeAction 闸门，直接进应答通道（P4：动机识别
-   *  从主干上撤下）—— 退出词 / missStreak 判定见 schedSession.ts。 */
-  const [schedMode, setSchedMode] = useState<SchedMode>(() => boot?.schedMode ?? 'idle');
+  const clarifyPicking: PickingState | null = useMemo(() => {
+    if (!topic || topic.phase !== 'picking' || !topic.candidates?.length) return null;
+    return {
+      kind: topic.pickKind === 'reschedule' ? 'reschedule' : 'cancel',
+      slots: topic.slots,
+      candidates: topic.candidates.map((o) => o.target),
+    };
+  }, [topic]);
+
+  /** S 批 S2 · 排程会话状态机：collect = 正在等用户的排程回应。D1 起为 topic 的投影。 */
+  const schedMode: SchedMode = topic ? 'collect' : 'idle';
   const [missStreak, setMissStreak] = useState(() => boot?.missStreak ?? 0);
 
   /** D0 双模式（问答/排程硬区分）：问答模式只答问题，排程意图出切换提示不静默改道；
-   *  排程模式内所有输入走排程流（D3 起 dialog 裁决 → 执行器，离线走规则链）。
-   *  快照恢复：老快照没记 mode → 有活跃追问态就落排程态（对齐「恢复时接续排程」）。 */
-  const [mode, setMode] = useState<'chat' | 'sched'>(
-    () => boot?.mode ?? (boot?.schedMode === 'collect' ? 'sched' : 'chat'),
-  );
+   *  排程模式内所有输入走排程流（D3 起 dialog 裁决 → 执行器，离线走规则链）。 */
+  const [mode, setMode] = useState<'chat' | 'sched'>(() => boot?.mode ?? 'chat');
 
-  /** clarify 的唯一写入口：非空 = 进入 collect（missStreak 清零），清空 = 回 idle。 */
+  /** clarify 的唯一写入口：落 topic{collect}（missStreak 清零语义不变）。 */
   const updateClarify = useCallback((next: ClarifyState | null) => {
-    setClarify(next);
-    setSchedMode(next ? 'collect' : 'idle');
+    setTopic(next ? collectTopic(next.slots, next.asked) : null);
     if (next) setMissStreak(0);
   }, []);
 
-  /** picking 的唯一写入口（与 updateClarify 同一套状态机纪律）。 */
+  /** picking 的唯一写入口：落 topic{picking}（与 updateClarify 同一套状态机纪律）。 */
   const updatePicking = useCallback((next: PickingState | null) => {
-    setClarifyPicking(next);
-    setSchedMode(next ? 'collect' : 'idle');
+    setTopic(next ? pickingTopic(next.kind, next.slots, next.candidates) : null);
     if (next) setMissStreak(0);
   }, []);
 
@@ -346,29 +391,28 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const switchMode = useCallback((to: 'chat' | 'sched') => {
     setMode(to);
     if (to === 'chat') {
-      updateClarify(null);
-      updatePicking(null);
+      setTopic(null);
       setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
     }
   }, [updateClarify, updatePicking]);
 
-  /** 聊天状态 → sessionStorage。量小（纯文本 + 数字），任何一层变了整体重写。 */
+  /** 聊天状态 → sessionStorage（v3）。量小（纯文本 + 数字），任何一层变了整体重写。 */
   useEffect(() => {
     try {
       const snap: ChatSnapshot = {
+        v: 3,
         messages: messages.slice(-200),
         pending,
         pendingSeq: pendingSeq.current,
-        clarify,
-        schedMode,
-        missStreak,
         mode,
+        topic,
+        missStreak,
       };
       sessionStorage.setItem(CHAT_SNAPSHOT_KEY, JSON.stringify(snap));
     } catch {
       /* 隐私模式 / 配额满 → 记录只活在当前挂载期，不影响功能 */
     }
-  }, [messages, pending, clarify, schedMode, missStreak, mode]);
+  }, [messages, pending, mode, topic, missStreak]);
 
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
@@ -421,8 +465,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     } catch { /* 隐私模式写不进就算了 */ }
     setPending({});
     pendingSeq.current = 0;
-    updateClarify(null);
-    updatePicking(null);
+    setTopic(null);
     setMissStreak(0);
     setMode('chat');
     setMessages([{ role: 'lbao', text: GREETING }]);
@@ -717,8 +760,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runCancelWithTarget = async (slots: IntentSlots, t: CancelTarget) => {
     const key = (pendingSeq.current += 1);
-    updateClarify(null);
-    updatePicking(null);
+    setTopic(null);
     setPending((p) => ({ ...p, [key]: { kind: 'cancel', title: t.title, tasks: [], weeks: [], cancelTarget: t } }));
     setMessages((current) => [...current, {
       role: 'lbao',
@@ -806,8 +848,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runRescheduleWithPreview = async (slots: IntentSlots, title: string, preview: ReschedulePreview) => {
     const key = (pendingSeq.current += 1);
-    updateClarify(null);
-    updatePicking(null);
+    setTopic(null);
     setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title, tasks: [], weeks: [], movePreview: preview } }));
     const mv = preview.move!;
     const lines = [
@@ -989,8 +1030,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
    *  记不到的（也刻意不记）是用户问了什么 —— 守 NF-2「个人数据本地优先」。 */
   /** S2：徽章上的「退出」按钮 —— 与打字说退出词同一出口（schedSession.isExitCommand 同款回执）。 */
   const exitSession = () => {
-    updateClarify(null);
-    updatePicking(null);
+    setTopic(null);
     setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
   };
 
@@ -1080,8 +1120,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // ── S2 · 状态机出口①：collect 态显式退出（最高优先）────────────
     // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
     if (schedMode === 'collect' && isExitCommand(q)) {
-      updateClarify(null);
-      updatePicking(null);
+      setTopic(null);
       setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
       setLoading(false);
       return;
