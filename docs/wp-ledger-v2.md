@@ -251,3 +251,21 @@
 - golden：**v4 免拍（实证）**——mealAutoPlace 走 opt-in，golden 语料不带该开关 → construct 默认路径（place 空）零改动；compare 5/5 PASS。
 - 门禁：tsc 0 / engine **368**/368（363+5）/ ui **271**/271（267+5 wp6 -1 迁移）/ 禁区（planner+week 人工操作）/ 风格 8/8。
 - 遗留：图片识别课表（N2-1）；真机手感验收（三餐 place 显示、自由格卡渲染）。
+
+## §S 梨宝追问链路整改（无人值守批次 2026-09-27，工作单：MOSS《梨宝追问链路整改包（S 批）》）
+
+- 状态：[x] 完成（S1–S4 四批全落；金标定稿待 CY 复核，见遗留）
+- 诉求→落点：①完整追问=保留式追问(missStreak 双闸)；②单独排程模式=collect 状态机(退出词/打断/作废全有声)；③语义级意图=/api/plan/understand LLM 端点+llmExtractor 通电(规则字段永不覆盖)；④分号批量回答=splitAnswers+applyClarifyAnswers 位置对应协议；⑤先过 LLM 再追问=应答规则先行+LLM 定位救援(结构化始终在规则层)；⑥多轮测试=E2E 10 剧本 42 断言+在线/离线双通道金标评测
+- 改动文件（全 CY 名下）：
+  - `src/features/libao/libaoIntent.ts` — splitAnswers/stripAnswerNumbering/applyClarifyAnswers/applyClarifyFragments/topQuestionPairs/questionsForSlots（applyClarifyAnswer 保留为单段路径，新协议是其超集）
+  - `src/features/libao/schedSession.ts`（新）— 退出词表(归一后整句相等)/nextMissStreak/作废线=2/回执话术
+  - `src/features/libao/LbaoChat.tsx` — clarify 态 {slots,asked}、schedMode/missStreak、updateClarify/updatePicking 唯一写入口、send 优先级(退出>挑块>应答>打断>保留)、徽章+placeholder、快照 v2、llmExtractor/rescueClarifyAnswer 接线、send 门补 add_deadline 无 title 放行（S4 E2E 抓到的 V 批同族缺口）
+  - `src/lib/api.ts` — planUnderstand 客户端（9s AbortSignal，失败恒 ok:false 不弹错）
+  - `server/plan_dialog.py`（新）+ `server/app.py`（include_router 注册；**动前申报**：既有 WIP=PORT env 1 行+CRLF 行尾，已单独 commit 1a12c53 隔离）
+  - `evals/golden/plan_understand.jsonl`（新，60 条=30 intent+20 answer+10 boundary，**zcode 起草稿**）；`scripts/eval_plan_understand.py`（在线/离线双通道）、`scripts/eval_understand_offline.mjs`（规则对照 harness）；`scripts/schedSession.test.ts`（新 9 用例）；`scripts/libaoIntent.test.ts`（+20 用例）
+  - `scripts/e2e-sched-session.mjs`（新，10 剧本 42 断言，与 e2e-journey 同级手动验收资产）；`docs/libao-clarify-spec.md`（新，设计定稿）；`docs/eval-libao-understand-2026-09-27.md`（新，评测原始数据）
+- 反向验证锚点（删实现必红）：splitAnswers 编号剥离→编号用例红；applyClarifyAnswers 位置对应→乱序用例红；nextMissStreak 算回应清零→折返剧本红/删无关+1→永不过期红；isExitCommand 词表→退出剧本红；plan_dialog 8s 超时→离线评测对照红。E2E 剧本 I2 是 P4 的直接守卫（collect 态非动作句不掉 RAG）。
+- 评测（docs/eval-libao-understand-2026-09-27.md）：离线规则对照 action F1 0.868；在线（deepseek-chat）action P/R/F1=1.0/1.0/**1.0**、intent 槽位 EM=**0.923**（逐槽，门槛≥0.90 ✅；逐条口径 0.862）、answer 槽位命中 0.926（25/27）。评测中修复：answer scene prompt 未规定输出 JSON 形状 → 0/27，补「输出格式」后 25/27。
+- E2E：A 折返(8) B 两轮无关才作废(4) C 退出(3) D 挑块接续(4) E hold(2) F 重要日(2) G LLM 离线降级(2) H 草稿落盘(2) I collect 态不过 looksLikeAction(2) J 跨刷新快照恢复含 v2 字段(4) = **42/0**（测试作用域 vite，跑完即清，端口已核释放）
+- 门禁：tsc 0 / engine 408/0 / ui 309/0（280+20+9）/ 禁区零改动 / 风格 8/8（gate_overnight 全过，S2 时点实测；S3/S4 后复跑见各 commit）
+- 遗留：①金标 60 条待 **CY 复核定稿**（zcode 起草，复核意见直接改 jsonl 后重跑 eval）；②intent 逐条 EM 0.862（i21「我这周忙不忙」首轮被 LLM 判非动作，prompt 已补 query 口径后复跑已入 1.0——逐条口径残留缺口在个别多槽条目）；③无人在场，真实后端 8001 的联网真机手感（含 LLM 在线的对话流畅度）待白天复验；④本批运行过程出现多次工具回显不可信（路径/内容错乱），所有结论均已用原子命令交叉核验，建议白天抽查本台账逐项。

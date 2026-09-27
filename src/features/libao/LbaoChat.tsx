@@ -1128,7 +1128,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // 验收修正（2026-09-27 E2E 抓到）：hold 没有 title（它是「留空一段时间」，
     // 不是一件「事」）—— 门只认 title 会把 hold 整句漏进泛泛安排分支，
     // runHold 永远到不了。放行 hold：when 槽位由 runHold 自己追问补齐。
-    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold')) {
+    // S4 E2E 抓到同族缺口：add_deadline 也常无 title（「我要考驾照」——「驾照」
+    // 不在目标词表），deadlineProposal 有「重要日子」缺省标题，同样放行。
+    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline')) {
       await runGoalSlots(outcome.slots, today);
       return;
     }
