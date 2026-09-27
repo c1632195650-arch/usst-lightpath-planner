@@ -331,3 +331,19 @@
 - **E1–E5 阻塞详情**：五批全部触及 RAY 属地——E1 `lib/planner/knowledge.ts`（新）+ `buildPhases.ts`/`construct.ts` 接入；E2 `placesPolicy.ts`（新）+ `construct.ts`；E3 `profilePrefs.ts`（新）；E4 `features/week/weekViewModel.ts`（新）+ `WeekPlanView.tsx`（1989 行）；E5 `components/ui/` 新组件 + `WeekPlanView.tsx`。工作单 §11 要求动工前获 CY 逐项授权；本轮 /goal 未携带逐项授权，AGENTS.md §8.1（无人值守协议，优先级最高）规定禁区文件一律申报不擅动。全仓检索确认无既有 E 批授权记录（D 批先例：CY 显式逐项授权后才动 construct/templates）。**F 批建议执行顺序：E1→E2→E3（引擎线，各自独立 commit+申报+golden 对比）→E4→E5（呈现线，`WEEK_VIEW_V3=false` 回退开关）→E6 全量收口**。
 - 本批改动文件清单（与 commit 逐一对得上）：`docs/week-view-design.md`（新）/ `AGENTS.md`（+1 行）/ `BLOCKERS.md`（+5 条）/ `docs/wp-ledger-v2.md`（本节）。零代码改动、零依赖改动、零禁区改动。
 - 门禁（E6 收尾复跑）：五门全 PASS（数字同 E0 基线，本批纯文档无增量用例）。
+
+### §D·白天终验独立复核（2026-09-28 白天，模拟 MOSS §10 七条逐项独立执行）
+
+| §10 条目 | 结果 | 证据 |
+|---|---|---|
+| 1 基线对账 | ✅ | D 批 13 commit 链在 HEAD 可回放；gate md5 `7190ca67` 未动；golden 60→100 纯追加（0 行删改）且 100 行 JSONL 全合法（dialog 40/负例 7）；工作树 tracked 零未提交；D 批之后另有 E0 三个纯文档 commit（AGENTS.md/BLOCKERS/两个 docs，无代码面） |
+| 2 全量门禁复跑 | ✅ | tsc 0 / engine 422/0 / ui 319/0 / 禁区 / 风格 8 项——五门全 PASS |
+| 3 RV 抽查 | ✅ | 3 条新组合全红后还原：A 拆 DIALOG_ENABLED→D3 红；B 删 blockingBlocks 扫描→D7 红；C 候选 lite 泄漏 target→D1 红（首版 RV-C 注入点选错未红，已换要点重做——如实记录）；还原后 sha256 与 HEAD 一致、`git status` src/ 零残留 |
+| 4 dialog 金标在线复评 | ✅ | 8001 活 LLM：act 宏 F1 **0.972**（acc 0.975，39/40）/idx EM **1.0**/拦截率 **100%**/零拒收——门槛全过且优于夜班 0.955（LLM 方差正向） |
+| 5 真机重放（8002 活 LLM） | ✅ | 7/0：截图原句 dialog 场景确实被调用且未掉 RAG、模式切换、离线降级规则兜底+确认落盘 |
+| 6 「出去玩 1 小时」全链 | ✅ 6/0 | 草稿卡（真实引擎落点「排到：…」）→ 确认落盘回执 → userPlan 层含任务 → 周计划 **Ctrl+Z 撤销后任务撤下**（localStorage 双向验证） |
+| 7 台账/BLOCKERS 完整性 | ✅ | §D/§D7/终验自查在位；13 个 hash 全部 `git cat-file` 存在；BLOCKERS D 批 4 条在位 |
+
+**终验新发现（如实记录，未改代码）**：
+1. 🔴 跨页撤销按钮禁用（既有缺陷，Ray 名下 `WeekPlanView.tsx`）：`undoDepthState` 初始 0 且不在挂载时同步 `undoDepth()`——梨宝确认落盘压栈的快照，周计划页顶栏 ↩ 按钮显示禁用；Ctrl+Z 通路正常（handleUndo 直读模块栈，⑥-6 即经此通过）。修法一行（挂载 effect 里 setUndoDepth(undoDepth())），因属禁区留白天人工。已记 BLOCKERS。
+2. 🟡 E2E 剧本 A–N 是**离线规则口径**：vite 指向活后端时 A-F/I/J 有 LLM 干扰实测漂移（D3/F1 各挂 1，切离线 vite 后 60/0 复现）——scripts/e2e-sched-session.mjs 头注「后端可选」应升级为「**必须离线或 route.abort understand**（专用 mock 剧本除外）」。属脚本协议备注，非代码缺陷。
