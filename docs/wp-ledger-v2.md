@@ -314,3 +314,20 @@
 - §10.3 RV 抽查 3 条：①dialogManager 防编造 idx 校验拆除→D1 红；②proposeReplanOptions 干跑过滤拆除→D7 红；③confirm_draft 词表闸拆除→D3 红；逐一还原后 sha256 与 HEAD 一致（dialogManager/weekPlanForChat/LbaoChat），`git status` src/ 零残留。
 - §10.5 真机重放（8002 隔离后端 + VITE_API_BASE 指向 8002 的 5173 实例，活 LLM）：7/0 全过——「明天晚上出去玩一小时」「把操场跑步替换掉」dialog 场景确实被调用且未掉 RAG；问答模式提示卡→切换重发直达排程流；route.abort 全断后规则兜底出草稿并确认落盘。首跑 2 挂为旧 vite 实例未死（仍指 8000）所致环境问题，非代码缺陷。
 - §10.2 最终门禁见下（tsc/engine 422/ui 319/禁区/风格）。
+
+### §E 知识融合与周视图交互升级（2026-09-28 夜，MOSS《E 批·全量》工作单，zcode 执行）
+
+- 状态：**E0 完成；E1–E5 阻塞（缺 CY 逐项授权，未擅动）；E6 收口完成**（E2E 新剧本 O/P/Q 与附录 B 步数实测依赖 E4/E5，一并顺延）。
+- 授权对账：开工基线 `4044330` ✓；gate md5 `7190ca671e5c6e5b6d409aac4e10cd92` 未动 ✓；开工时 tracked 零未提交改动 ✓；**执行中途 HEAD 前移至 `dc4bbdf`（§D·终验自查，纯文档 commit，并行会话所加，与本批零文件交集），对账后继续**。
+- **E0 基线实测（本批地板线，只增不减）**：
+  - 门禁五门：tsc 0 错 / engine **422** fail 0 / ui **319** fail 0 / 禁区零改动 / 风格 8 项 — 全 PASS；
+  - playwright smoke（`e2e/smoke.spec.ts`）：3 用例 = 2 过 / 1 挂（「视觉基线：入口页」红——基线快照 PNG 的 IDAT 数据流截断（zlib inflate unexpected end of file），git blob `cb6a88e8` 与工作区逐字节一致 = 入库前（9/20 抓基线时）已损坏，非本批造成，申报见 BLOCKERS）；
+  - E2E A–N（`scripts/e2e-sched-session.mjs`）：隔离 vite 实例（5176，测试作用域起停、端口已核释放）实测 **60 过 / 0 挂**，与 D7 收尾口径一致；
+  - 排查备注：共享 5173 常驻 vite（PID 20176，非本批所起，未杀）上同脚本出 B3/B4/D3/F1 假失败——served 文件含 D7 标记确认服务本树，判定为实例陈旧状态所致（与 §D·终验自查 §10.5「旧 vite 实例未死」同类环境问题），已在 BLOCKERS 留痕。
+- **E0 落地物**：
+  - `docs/week-view-design.md`（新）——设计规范定稿：三原则（视觉重心唯一 / L0-L1-L2 分层 / 动效节制）、令牌表（复用 tailwind 现有色，不新造）、三处"字太多"可量化处置、E5 抽屉与动作条条款、诚实原则（`≈` 估算标注 / L3 口径）、E4/E5 DoD 引用门槛；
+  - `AGENTS.md` §七 文档地图 +1 行索引（AGENTS.md 为 CY 名下协作文档，工作单 E0 明确要求，特此申报）；
+  - `BLOCKERS.md` +5 条：E1–E5 授权申报（主阻塞）、依赖闸门决议（附录 A 候选待拍板，本批零新依赖成立）、smoke 快照既有损坏、`effective_to` schema roadmap 登记（P1 第二步，不动库）、5173 假失败环境备注。
+- **E1–E5 阻塞详情**：五批全部触及 RAY 属地——E1 `lib/planner/knowledge.ts`（新）+ `buildPhases.ts`/`construct.ts` 接入；E2 `placesPolicy.ts`（新）+ `construct.ts`；E3 `profilePrefs.ts`（新）；E4 `features/week/weekViewModel.ts`（新）+ `WeekPlanView.tsx`（1989 行）；E5 `components/ui/` 新组件 + `WeekPlanView.tsx`。工作单 §11 要求动工前获 CY 逐项授权；本轮 /goal 未携带逐项授权，AGENTS.md §8.1（无人值守协议，优先级最高）规定禁区文件一律申报不擅动。全仓检索确认无既有 E 批授权记录（D 批先例：CY 显式逐项授权后才动 construct/templates）。**F 批建议执行顺序：E1→E2→E3（引擎线，各自独立 commit+申报+golden 对比）→E4→E5（呈现线，`WEEK_VIEW_V3=false` 回退开关）→E6 全量收口**。
+- 本批改动文件清单（与 commit 逐一对得上）：`docs/week-view-design.md`（新）/ `AGENTS.md`（+1 行）/ `BLOCKERS.md`（+5 条）/ `docs/wp-ledger-v2.md`（本节）。零代码改动、零依赖改动、零禁区改动。
+- 门禁（E6 收尾复跑）：五门全 PASS（数字同 E0 基线，本批纯文档无增量用例）。
