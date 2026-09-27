@@ -164,8 +164,8 @@ export const GOAL_NOUNS = [
   '四六级', '六级', '四级', '期末考试', '期末', '期中', '考研', '保研',
   '雅思', '托福', '补考', '重修',
   '考试', '测验', '论文', '毕设', '课题', '项目', '实验报告', '作业',
-  // 名义化动词（用户口中的「那件事」）
-  '备赛', '备考', '复习', '刷题', '预习', '练习',
+  // 名义化动词（用户口中的「那件事」）+ 引擎块名（改期/取消的目标常是「自习」——W5 验收抓到）
+  '备赛', '备考', '复习', '刷题', '预习', '练习', '自习', '晚自习',
   // 其他
   '证书', '实习', '社团', '招新',
   // 生活事件（「周四我要吃大餐」这类单日安排 —— 2026-09-20 CY 真实使用翻车）
@@ -184,6 +184,9 @@ export const GOAL_NOUNS = [
 const ACTION_VERBS = [
   '报名', '参加', '加入', '准备', '完成', '冲刺', '突击', '打卡', '坚持',
   '安排', '规划', '计划', '排',
+  // WP9 收口（2026-09-27 真机 W5 验收抓到）：改期/取消语族的动词不在词表 →
+  // detectIntent 认得 reschedule，但 looksLikeAction 拦下 → 整句漏判成 RAG。
+  '挪', '换到', '改到', '调到', '取消',
 ];
 
 /** 第一人称意愿 —— 命中即视为「要动日程」（用户已经在表达自己的事） */
@@ -1013,6 +1016,13 @@ export async function parseGoalIntent(
   }
 
   let slots = parseIntentSlots(q, opts.today);
+  // WP9 收口（2026-09-27 真机 W5 验收抓到）：改/取消/替换类的「目标块名」抽在
+  // targetHint 里，而 send 门槛是 `action && slots.title` —— 不补上，整句会
+  // 漏判成 RAG 问答（草稿卡永远出不来）。
+  if (!slots.title && slots.targetHint
+    && (slots.intent === 'reschedule' || slots.intent === 'cancel' || slots.intent === 'replace')) {
+    slots = { ...slots, title: slots.targetHint };
+  }
   let source: ParseOutcome['source'] = 'rule';
 
   // 只在**确有缺口**时打扰 LLM —— 规则抽全了的句子走 LLM 是白花钱

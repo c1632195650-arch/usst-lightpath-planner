@@ -426,6 +426,7 @@ class ChatReq(BaseModel):
     # 这里不设 max_length：它是内部通道，超长直接截断比返回 422 更不容易把对话打断
     # （截断与脱敏在 api_chat 里做）。
     profile_ctx: str = ""
+    k: StrictInt = 4
     # WP12-H8：最近日程变动 ring（前端 userPlanStore.getRecentPlanEvents）。
     # list[dict] 形状宽松（服务端只读 type/title），extra=forbid 下这是显式声明的合法字段。
     recent_plan_events: list = None

@@ -512,3 +512,17 @@ test('事务性事件词族都在词表里，且「我…有」兜底只认目�
   assert.ok(!looksLikeAction('明天有雨，记得带伞'), '没有目标名词的「有」不许命中');
   assert.ok(!looksLikeAction('学校有什么比赛'), '纯问句仍走 RAG');
 });
+
+test('W5 验收回归：改期/取消语族过 looksLikeAction，parseGoalIntent 出可执行槽位（真机抓到的漏判）', async () => {
+  // 反向：删 ACTION_VERBS 的 挪/取消 或删 targetHint→title 补齐 → 本用例红
+  assert.ok(looksLikeAction('把自习挪到周五下午'), '改期语族必须过动作闸');
+  const out = await parseGoalIntent('把自习挪到周五下午', { today: '2026-09-27' });
+  assert.equal(out.action, true);
+  assert.equal(out.slots.intent, 'reschedule');
+  assert.equal(out.slots.title, '自习', 'reschedule 的目标块名要从 targetHint 补进 title（send 门槛）');
+  assert.ok(looksLikeAction('取消周四的复习'), '取消语族必须过动作闸');
+  const c = await parseGoalIntent('取消周四的复习', { today: '2026-09-27' });
+  assert.equal(c.action, true);
+  assert.equal(c.slots.intent, 'cancel');
+  assert.equal(c.slots.title, '复习');
+});

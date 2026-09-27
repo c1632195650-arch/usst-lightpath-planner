@@ -22,7 +22,7 @@ import {
   type CancelTarget,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import { addTask, getRecentPlanEvents, loadUserPlan, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
+import { addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
@@ -316,7 +316,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       try {
         const layer = loadUserPlan();
         pushUndoSnapshot(layer);
-        saveUserPlan(applyCancel(layer, g.cancelTarget));
+        const nextLayer = applyCancel(layer, g.cancelTarget);
+        saveUserPlan(nextLayer);
+        pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8：梨宝改日程也进记忆信号
         bumpPlanVersion();
         setPending((p) => {
           const next = { ...p };
@@ -342,7 +344,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       try {
         const layer = loadUserPlan();
         pushUndoSnapshot(layer);
-        saveUserPlan({ ...layer, moves: upsertMove(layer.moves, g.movePreview.move) });
+        const nextLayer = { ...layer, moves: upsertMove(layer.moves, g.movePreview.move) };
+        saveUserPlan(nextLayer);
+        pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
         bumpPlanVersion();
         setPending((p) => {
           const next = { ...p };
@@ -371,7 +375,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
         pushUndoSnapshot(layer);
         const afterCancel = applyCancel(layer, target);
         const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), afterCancel.tasks);
-        saveUserPlan({ ...afterCancel, tasks });
+        const nextLayer = { ...afterCancel, tasks };
+        saveUserPlan(nextLayer);
+        pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
         bumpPlanVersion();
         setPending((p) => {
           const next = { ...p };
@@ -398,7 +404,9 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
       const layer = loadUserPlan();
       pushUndoSnapshot(layer);
       const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), layer.tasks);
-      saveUserPlan({ ...layer, tasks });
+      const nextLayer = { ...layer, tasks };
+      saveUserPlan(nextLayer);
+      pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
       bumpPlanVersion();
       setPending((p) => {
         const next = { ...p };
