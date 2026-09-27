@@ -6,7 +6,7 @@ import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderst
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -21,12 +21,23 @@ import {
   SNAPSHOT_V3_KEY,
   SNAPSHOT_V2_KEY,
   SNAPSHOT_V1_KEY,
+  TOPIC_TURNS_LIMIT,
+  blockedTopic,
+  bumpTurns,
   collectTopic,
-  pickingTopic,
+  draftTopic,
   modeFromV2,
+  pickingTopic,
   sanitizeTopic,
+  serializeDialogState,
+  topicExpired,
   topicFromV2,
+  transitionTopic,
+  validateDialogAct,
+  type DialogAct,
+  type DialogActArgs,
   type DialogTopic,
+  type PickOption,
 } from '@/features/libao/dialogManager';
 import { addUserDeadline } from '@/features/calendar/deadlineStore';
 import {
@@ -44,6 +55,7 @@ import {
   holdToUnavailableSlot,
   matchCandidate,
   type CancelTarget,
+  type GoalVerdict,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
 import type { UnavailableSlot } from '@/features/week/userPlanStore';
@@ -159,6 +171,13 @@ const GREETING =
   + '或者直接说要做什么（比如「我要报名数学建模，九月中旬比赛，帮我规划备赛」）——'
   + '我会先排一版草稿给你确认，你不点头我不动日程。';
 
+/** D 批总回退开关（工作单 §11）：false = send 直落规则链路，一行回 S/T 批行为。 */
+const DIALOG_ENABLED = true;
+
+/** D3 confirm_draft 双闸之词表闸：归一后**整句**命中才算同意。
+ *  「好不好嘛」「要不要就这样」都不是同意 —— 决策权在用户（L4）。 */
+const CONFIRM_RE = /^(好|好呀|好啊|行|可以|对|确认|就这么排|就这么办|排吧|嗯+)[吧呢啊。！!]*$/;
+
 /* ---------------- 对话身份 ----------------
  * 后端 `/api/chat` 早就接受 `session_id` / `user_id`，但前端此前**只发一个问题字符串**，
  * 后端只好落回 `default` / `anon` —— 结果三层记忆在前端链路上完全空转，
@@ -213,9 +232,10 @@ interface ClarifyState {
 }
 
 /** V2-1 多目标挑块接续态。D1 起同样是 topic{picking} 的派生形状：
- *  candidates 同名同型 —— tests/v2.test.ts 的源码字面量断言与规则链路原样存活。 */
+ *  candidates 同名同型 —— tests/v2.test.ts 的源码字面量断言与规则链路原样存活。
+ *  D3（B②）：replace 多候选也走这条通道（kind 扩 'replace'）。 */
 interface PickingState {
-  kind: 'cancel' | 'reschedule';
+  kind: 'cancel' | 'reschedule' | 'replace';
   slots: IntentSlots;
   candidates: CancelTarget[];
 }
@@ -361,7 +381,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const clarifyPicking: PickingState | null = useMemo(() => {
     if (!topic || topic.phase !== 'picking' || !topic.candidates?.length) return null;
     return {
-      kind: topic.pickKind === 'reschedule' ? 'reschedule' : 'cancel',
+      kind: topic.pickKind ?? 'cancel',
       slots: topic.slots,
       candidates: topic.candidates.map((o) => o.target),
     };
@@ -385,6 +405,37 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const updatePicking = useCallback((next: PickingState | null) => {
     setTopic(next ? pickingTopic(next.kind, next.slots, next.candidates) : null);
     if (next) setMissStreak(0);
+  }, []);
+
+  /** D3 topic 生命周期：出草稿卡 → topic{draft,draftKey}（保留 priorFailed——
+   *  confirm_draft 的 voice 通道、B① 议题续用都靠它）。 */
+  const markDraft = useCallback((key: number, slots: IntentSlots) => {
+    setTopic((prev) => {
+      const base = prev ?? draftTopic(slots, key);
+      return transitionTopic(base, { phase: 'draft', draftKey: key, intent: slots.intent, slots });
+    });
+  }, []);
+
+  /** D3 topic 生命周期：conflict/infeasible → topic{blocked} + priorFailed 记录。
+   *  blockingBlocks 由引擎干跑给出（D4）；LLM 协商（negotiate_block）只许引用这些事实。 */
+  const markBlocked = useCallback((slots: IntentSlots, kind: 'no_placement' | 'partial_placed' | 'conflict', verdict: GoalVerdict) => {
+    setTopic((prev) => {
+      const base = prev ?? blockedTopic(slots, { kind, verdict, blockingBlocks: [] });
+      return transitionTopic(base, {
+        phase: 'blocked',
+        intent: slots.intent,
+        slots,
+        blocking: {
+          kind,
+          verdict,
+          blockingBlocks: (verdict.blockingBlocks ?? []).map((b, i) => ({
+            idx: i, title: b.title, hint: b.hint, origin: 'plan' as const,
+            target: { blockId: b.blockId, title: b.title, origin: 'plan' as const, hint: b.hint },
+          })),
+        },
+        priorFailed: { title: slots.title, slots },
+      });
+    });
   }, []);
 
   /** D0：模式切换唯一入口。切回问答 = 显式退出排程态（复用退出回执语义，不静默清态）。 */
@@ -708,7 +759,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     const blocks = await blocksForMatching(today);
-    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks);
+    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
+      termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
+    });
     if (targets.length === 0) {
       updateClarify(null);
       setMessages((current) => [...current, {
@@ -746,8 +799,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const weekNo = currentWeekNo(schedule.termStart, today);
     const slot = holdToUnavailableSlot(draft, weekNo);
     const key = (pendingSeq.current += 1);
-    updateClarify(null);
     setPending((p) => ({ ...p, [key]: { kind: 'hold', title: slot.title ?? '留空时段', tasks: [], weeks: [], holdSlot: slot } }));
+    markDraft(key, slots); // D3：草稿卡挂 topic{draft}
     const hh = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     setMessages((current) => [...current, {
       role: 'lbao',
@@ -760,8 +813,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runCancelWithTarget = async (slots: IntentSlots, t: CancelTarget) => {
     const key = (pendingSeq.current += 1);
-    setTopic(null);
     setPending((p) => ({ ...p, [key]: { kind: 'cancel', title: t.title, tasks: [], weeks: [], cancelTarget: t } }));
+    markDraft(key, slots); // D3：草稿卡挂 topic{draft} —— 语音「确认」也能走 confirm_draft
     setMessages((current) => [...current, {
       role: 'lbao',
       text: `找到「${t.title}」（${t.hint}）。还没动手，确认我就取消：`,
@@ -848,8 +901,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runRescheduleWithPreview = async (slots: IntentSlots, title: string, preview: ReschedulePreview) => {
     const key = (pendingSeq.current += 1);
-    setTopic(null);
     setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title, tasks: [], weeks: [], movePreview: preview } }));
+    markDraft(key, slots); // D3：草稿卡挂 topic{draft}
     const mv = preview.move!;
     const lines = [
       `${title} → 周${mv.dayOfWeek} ${String(Math.floor(mv.startMin / 60)).padStart(2, '0')}:${String(mv.startMin % 60).padStart(2, '0')} 起`,
@@ -874,14 +927,18 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     const blocks = await blocksForMatching(today);
-    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks);
+    const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
+      termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
+    });
     if (targets.length !== 1) {
-      // 0 个：没有可替换的既有块 → 走普通 create 通路；多个：追问
+      // 0 个：没有可替换的既有块 → 走普通 create 通路
       if (targets.length === 0) {
         await runGoalSlots({ ...slots, intent: 'create' }, today);
         return;
       }
-      updateClarify({ slots: { ...slots, targetHint: undefined, missing: ['target' as const] }, asked: ['target'] });
+      // D3（B② 根治）：多候选改道 picking（带日期 hint 的候选挂进议题）——
+      // 下一句「明天的那个」由 dialog 裁决/规则挑块接续，不再进 clarify 收槽死胡同
+      updatePicking({ kind: 'replace', slots, candidates: targets });
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `「${q}」对上好几件事，替换哪个？`,
@@ -892,7 +949,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
     const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
     if (verdict.kind !== 'ok' && verdict.kind !== 'tight') {
-      updateClarify(null);
+      markBlocked(slots, 'conflict', verdict);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `新的安排排不进去：`,
@@ -902,15 +959,33 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
+    await runReplaceWithTarget(slots, targets[0], today);
+  };
+
+  /** D3（B②）：replace 候选已定 → 取消该目标 + 新任务草稿，两步一次确认。
+   *  从 runReplace（唯一命中）与 pick_candidate 执行器两处进入。 */
+  const runReplaceWithTarget = async (slots: IntentSlots, target: CancelTarget, today: string) => {
+    const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
+    if (verdict.kind !== 'ok' && verdict.kind !== 'tight') {
+      markBlocked(slots, 'conflict', verdict);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '新的安排排不进去：',
+        planPoints: [...describeVerdict(verdict)],
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
     const tasks = goalToTasks(slots, schedule, today);
     const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
     const key = (pendingSeq.current += 1);
-    updateClarify(null);
-    setPending((p) => ({ ...p, [key]: { kind: 'replace', title: slots.title, tasks, weeks, cancelTarget: targets[0] } }));
+    setPending((p) => ({ ...p, [key]: { kind: 'replace', title: slots.title, tasks, weeks, cancelTarget: target } }));
+    markDraft(key, slots); // D3：草稿卡挂 topic{draft}
     setMessages((current) => [...current, {
       role: 'lbao',
       text: '一次替换，两步并作一步（还没动手）：',
-      planPoints: [`取消：${targets[0].title}（${targets[0].hint}）`, `新增：${slots.title} × ${tasks.length} 块`, ...describeVerdict(verdict)],
+      planPoints: [`取消：${target.title}（${target.hint}）`, `新增：${slots.title} × ${tasks.length} 块`, ...describeVerdict(verdict)],
       goalAsk: key,
       goWeek: true,
     }]);
@@ -976,7 +1051,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
 
       // 走到这就不再等答案了：出草稿或说清冲突，都算「这轮问完了」。
-      updateClarify(null);
+      // （D3：不再 setTopic(null) —— 相位由下面的 draft/blocked 路径接管，priorFailed 保留。）
 
       if (verdict.kind === 'ok' || verdict.kind === 'tight') {
         // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
@@ -989,6 +1064,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           tasks: goalTasks,
           weeks,
         } }));
+        markDraft(key, slots); // D3：草稿卡挂 topic{draft}
         setMessages((current) => [...current, {
           role: 'lbao',
           text: verdict.kind === 'ok'
@@ -1002,7 +1078,15 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         return;
       }
 
-      // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**
+      // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**。
+      // D3：挂 topic{blocked} + priorFailed —— B① 议题续用与 negotiate_block 的依据。
+      markBlocked(
+        slots,
+        verdict.kind === 'infeasible'
+          ? 'no_placement'
+          : verdict.placedCount > 0 && verdict.placedCount < verdict.candidateCount ? 'partial_placed' : 'conflict',
+        verdict,
+      );
       setMessages((current) => [...current, {
         role: 'lbao',
         text: verdict.kind === 'conflict'
@@ -1091,6 +1175,235 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
   }, []);
 
+  /** 问答通路（D3 从 send 主干抽出）：chit_chat act 与 RAG 兜底共用同一段。
+   *  排程模式下由 chit_chat 调用时**不动 topic** —— 议题保留。 */
+  const ragReply = async (q: string) => {
+    const t1 = Date.now();
+    try {
+      const response = await lbaoChat(q, identity, profileCtx, getRecentPlanEvents());
+      track('search', { ok: true, ms: Date.now() - t1, n: response.sources?.length ?? 0 });
+      setMessages((current) => [...current, {
+        role: 'lbao', text: response.answer, sources: response.sources,
+        mode: response.mode,
+        debug: response,
+        proposals: response.memory_proposals?.length ? response.memory_proposals : undefined,
+        applied: response.memory_applied?.length ? response.memory_applied : undefined,
+      }]);
+      setOnline(true);
+    } catch {
+      track('degrade', { id: 'chat-offline' });
+      setOnline(false);
+      setMessages((current) => [
+        ...current,
+        { role: 'lbao', text: '校园资料服务暂时未连接。启动 server/app.py 后，我就可以继续查询资料。' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** D3 · ACT_EXECUTORS —— dialog 裁决的 8 个动作执行器。
+   *  ctx 携带发送时刻的快照（topic/confidence），执行器不读渲染态旧值以外的状态。
+   *  白名单校验（validateDialogAct）已在 tryDialogAct 里前置，这里只管执行。 */
+  const ACT_EXECUTORS: Record<DialogAct, (args: DialogActArgs, ctx: {
+    q: string; today: string; topic: DialogTopic | null; confidence: number;
+  }) => Promise<void>> = {
+    ask_slot: async (args, ctx) => {
+      const slot = (args.slot ?? 'when') as SlotKey;
+      const t = ctx.topic;
+      if (!t) return;
+      if (t.phase === 'draft') {
+        // 犹豫/追问 → 重列草稿要点（confirm 双闸不过时的同一口径），草稿卡不动
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '先不急 —— 草稿还没落盘，要点再对一遍：',
+          planPoints: describeSlots(t.slots),
+        }]);
+        setLoading(false);
+        return;
+      }
+      // collect / blocked / picking → 把该槽位挂进追问清单（落 topic{collect}）
+      const slots: IntentSlots = { ...t.slots, missing: [...new Set([...t.slots.missing, slot])] };
+      const asked = [...new Set([...t.asked, slot])];
+      setTopic(collectTopic(slots, asked));
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '好，那我还得问一句：',
+        planPoints: numberedQuestions(questionsForSlots(slots, [slot])),
+      }]);
+      setLoading(false);
+    },
+
+    pick_candidate: async (args, ctx) => {
+      const t = ctx.topic;
+      if (!t?.candidates?.length) return;
+      const cands = t.candidates;
+      let option: PickOption | undefined;
+      if (args.candidate_idx != null) {
+        option = cands.find((o) => o.idx === args.candidate_idx);
+      } else if (args.target_text) {
+        const hits = matchCandidate(args.target_text, cands.map((o) => o.target));
+        if (hits.length === 1) option = cands.find((o) => o.target === hits[0]);
+      }
+      if (!option) {
+        // 诚实重列，不硬猜
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '没对上唯一一个，候选是这些：',
+          planPoints: cands.map((o) => `${o.origin === 'user' ? '待办' : '日程'}：${o.title}（${o.hint}）`),
+        }]);
+        setLoading(false);
+        return;
+      }
+      if (t.pickKind === 'reschedule') await runRescheduleWithTarget(t.slots, ctx.today, option.target);
+      else if (t.pickKind === 'replace') await runReplaceWithTarget(t.slots, option.target, ctx.today);
+      else await runCancelWithTarget(t.slots, option.target);
+    },
+
+    confirm_draft: async (_args, ctx) => {
+      const t = ctx.topic;
+      if (!t?.draftKey) return;
+      // 双闸：confidence≥0.8 且整句命中确认词表；不过 → 重列草稿要点
+      if (ctx.confidence >= 0.8 && CONFIRM_RE.test(ctx.q.replace(/\s+/g, ''))) {
+        setTopic(null);
+        confirmGoal(t.draftKey);
+        return;
+      }
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '先别急 —— 草稿还没落盘，要点再对一遍：',
+        planPoints: describeSlots(t.slots),
+      }]);
+      setLoading(false);
+    },
+
+    discard_topic: async () => {
+      setTopic(null);
+      setMessages((current) => [...current, { role: 'lbao', text: '好，这件事先放下。想排再叫我。' }]);
+      setLoading(false);
+    },
+
+    resume_topic: async (_args, ctx) => {
+      const pf = ctx.topic?.priorFailed;
+      if (!pf) return;
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: pf.title ? `好，回到刚才那件事（${pf.title}）——` : '好，回到刚才那件事 ——',
+      }]);
+      await runGoalSlots(pf.slots, ctx.today);
+    },
+
+    new_intent: async (args, ctx) => {
+      const intent = args.intent ?? 'create';
+      const patch = mapUnderstandPatch(args.patch);
+      const t = ctx.topic;
+
+      // 续答（collect 相 + 同一意图）：补丁并进现有槽位，不打断
+      if (t && t.phase === 'collect' && intent === t.intent) {
+        const merged = mergeLlmPrimary(t.slots, patch, ctx.today);
+        merged.intent = intent;
+        merged.missing = missingSlots(merged);
+        if (merged.missing.length === 0) {
+          await runGoalSlots(merged, ctx.today);
+          return;
+        }
+        const pairs = topQuestionPairs(merged);
+        setTopic(collectTopic(merged, pairs.map((p) => p.slot)));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '还差一点：',
+          planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      // 「把 X 替换掉」隐含「用刚才想排的事替换」（B① 议题续用）：
+      // 替换诉求没带新事的投入信息、而刚才有一件没排成的 → 用它的槽位当新事
+      let merged = mergeLlmPrimary(parseIntentSlots(ctx.q, ctx.today), patch, ctx.today);
+      merged.intent = intent;
+      if (intent === 'replace' && t?.priorFailed
+        && merged.durationMin == null && merged.totalHours == null && merged.perWeekCount == null) {
+        merged = {
+          ...t.priorFailed.slots,
+          intent: 'replace',
+          targetHint: merged.targetHint || merged.title,
+          title: t.priorFailed.title,
+          raw: ctx.q,
+        };
+      }
+      if (!merged.title && merged.targetHint
+        && (merged.intent === 'reschedule' || merged.intent === 'cancel' || merged.intent === 'replace')) {
+        merged.title = merged.targetHint;
+      }
+      merged.missing = missingSlots(merged);
+      if (t) {
+        // 有声打断：旧议题先放下（blocked 的 priorFailed 会被新议题的 blocked 重记）
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '好，先按新说的办 —— 刚才那件事先放下。',
+        }]);
+      }
+      await runGoalSlots(merged, ctx.today);
+    },
+
+    negotiate_block: async () => {
+      const blocking = topic?.blocking;
+      if (!blocking) return;
+      // D3 基础版：基于引擎事实复述阻塞 + 给方向（D7 换成引擎干跑过的编号方案）
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '现在这样排不进去 —— 挡路的是这些：',
+        planPoints: [
+          ...blocking.blockingBlocks.map((o) => `${o.hint} 已有「${o.title}」`),
+          '可以：① 用新安排顶掉其中一块；② 挪到下一周；③ 少排一点。你说哪个，我来改。',
+        ],
+        goWeek: true,
+      }]);
+      setLoading(false);
+    },
+
+    chit_chat: async (_args, ctx) => {
+      await ragReply(ctx.q); // 议题保留：不动 topic、不清 missStreak 之外的状态
+    },
+  };
+
+  /** D3 · 对话管理器入口：一次 dialog 裁决 → 双层校验 → 执行器。
+   *  返回 true = 本轮已被接管；false（端点挂/校验拒/执行器异常）= 规则链路兜底。 */
+  const tryDialogAct = async (q: string, today: string, history: string[]): Promise<boolean> => {
+    try {
+      const res = await planUnderstand({
+        scene: 'dialog',
+        q,
+        today,
+        history,
+        state: serializeDialogState({ topic, missStreak }),
+      });
+      if (!res.ok || !res.act) return false;
+      const args = (res.args ?? {}) as DialogActArgs;
+      const confidence = typeof res.confidence === 'number' ? res.confidence : 0.5;
+      // 双层校验的前端层：act 枚举 / idx 必须在候选清单（防编造）/ negotiate 要有阻塞事实
+      if (!validateDialogAct(res.act, args, { topic })) return false;
+      // 议题轮数上限：> TOPIC_TURNS_LIMIT 自动作废并说明（不静默）
+      if (topic && topicExpired({ ...topic, turns: topic.turns + 1 }) && res.act !== 'discard_topic') {
+        setTopic(null);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '这件事咱们来回聊了挺多轮，先放下歇歇 —— 想继续就重新说一遍。',
+        }]);
+        setLoading(false);
+        return true;
+      }
+      await ACT_EXECUTORS[res.act as DialogAct](args, { q, today, topic, confidence });
+      // 本轮已被对话管理器接管：参与过对话 → missStreak 清零；还活着的议题轮数 +1
+      setMissStreak(0);
+      setTopic((prev) => (prev ? bumpTurns(prev) : null));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const send = async (raw?: string, opts?: { forceMode?: 'chat' | 'sched' }) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
@@ -1117,13 +1430,21 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       .slice(-4)
       .map((m) => `${m.role === 'user' ? '用户' : '梨宝'}: ${m.text.slice(0, 80)}`);
 
-    // ── S2 · 状态机出口①：collect 态显式退出（最高优先）────────────
+    // ── S2 · 状态机出口①：collect 态显式退出（最高优先，确定性，不耗 LLM）────
     // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
     if (schedMode === 'collect' && isExitCommand(q)) {
       setTopic(null);
       setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
       setLoading(false);
       return;
+    }
+
+    // ── D3 · 对话管理器主干：排程模式 + 后端在线 → 每轮恰一次 dialog 裁决 ──
+    // act 接管本轮（含 chit_chat，议题保留）；端点挂/超时/校验拒 → 原样落回
+    // 下面的规则链路（S/T 批产出全保留为 fallback，离线可用性不变）。
+    if (DIALOG_ENABLED && activeMode === 'sched' && online !== false) {
+      const handled = await tryDialogAct(q, today, history);
+      if (handled) return;
     }
 
     // ── V2-1：多目标挑块接续 —— 上一条在等「挪哪个/取消哪个」→ 这句按名匹配候选 ──
@@ -1134,6 +1455,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         const { kind, slots } = clarifyPicking;
         updatePicking(null);
         if (kind === 'cancel') await runCancelWithTarget(slots, target);
+        else if (kind === 'replace') await runReplaceWithTarget(slots, target, today);
         else await runRescheduleWithTarget(slots, today, target);
         return;
       }
@@ -1291,36 +1613,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
 
-    /** 问答意图经过后端检索；服务不可用时保留当前对话并给出恢复方式。 */
-    const t1 = Date.now();
-    try {
-      // 带上身份与档案：前者让后端记忆层生效，后者让回答建立在「你是谁」之上
-      // WP12-H8：带上最近日程变动（后端 summarize 后注入 prompt；M4 前只转述）
-      const response = await lbaoChat(q, identity, profileCtx, getRecentPlanEvents());
-      // `n` = 召回到的资料来源条数：0 条就是「白问了一次」，是召回质量最直接的信号
-      track('search', { ok: true, ms: Date.now() - t1, n: response.sources?.length ?? 0 });
-      setMessages((current) => [...current, {
-        role: 'lbao', text: response.answer, sources: response.sources,
-        mode: response.mode,
-        // 后端本来就把 route/intent/top_raw_vec/used_* 一起返回了，此前只取
-        // answer/sources/mode，其余当场丢掉 —— 于是「答得不对」时没有第二手信息。
-        // 整包存下来给 DEV 调试抽屉，生产构建不渲染。
-        debug: response,
-        // 记忆回写（M2）：客观事实出建议卡等确认；偏好已自动生效，出可撤销提示
-        proposals: response.memory_proposals?.length ? response.memory_proposals : undefined,
-        applied: response.memory_applied?.length ? response.memory_applied : undefined,
-      }]);
-      setOnline(true);
-    } catch {
-      track('degrade', { id: 'chat-offline' });
-      setOnline(false);
-      setMessages((current) => [
-        ...current,
-        { role: 'lbao', text: '校园资料服务暂时未连接。启动 server/app.py 后，我就可以继续查询资料。' },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    /** 问答意图经过后端检索；服务不可用时保留当前对话并给出恢复方式。
+     *  D3：抽出为 ragReply —— chit_chat act 与这里共用同一段（议题保留由调用方控制）。 */
+    await ragReply(q);
   };
 
   return (

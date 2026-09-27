@@ -329,9 +329,9 @@ export interface V2ClarifyShape {
   asked: SlotKey[];
 }
 
-/** v2 快照里挑块态的形状（与 LbaoChat 旧 PickingState 同构） */
+/** v2 快照里挑块态的形状（与 LbaoChat 旧 PickingState 同构；D3 起 kind 含 replace） */
 export interface V2PickingShape {
-  kind: 'cancel' | 'reschedule';
+  kind: 'cancel' | 'reschedule' | 'replace';
   slots: IntentSlots;
   candidates: CancelTarget[];
 }

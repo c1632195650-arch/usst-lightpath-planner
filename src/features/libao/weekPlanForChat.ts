@@ -301,6 +301,18 @@ export interface GoalVerdict {
   caveats: string[];
   /** 结论的一句话理由，供梨宝回话直接引用 */
   reasons: string[];
+  /**
+   * D4：排不进去时**挡路的既有块**（引擎干跑扫出，≤5 条，hint 含 `周X(M.D) HH:MM–HH:MM`）。
+   * 有了它，describeVerdict 列事实而不是硬编码「①②③」，协商话术才有依据（B③）。
+   */
+  blockingBlocks?: BlockingBlockInfo[];
+}
+
+/** 挡路块的最小描述（PickOption 的素材；blockId 供「顶掉这块」的 replace 语义用） */
+export interface BlockingBlockInfo {
+  title: string;
+  hint: string;
+  blockId?: string;
 }
 
 /** 问题归并键：`code` 优先。中文 `message` 会变（含动态数字），拿它当键会让 diff 失真。 */
@@ -576,18 +588,30 @@ export function findCancelTargets(
   query: string,
   userTasks: readonly UserTask[],
   planBlocks: readonly TimeBlock[],
+  /**
+   * D3（B②）：给了学期锚点就把 hint 升级成「周X(M.D) HH:MM–HH:MM」。
+   * 候选带日期，LLM/规则才有依据消歧「明天的那个」这类指代 ——
+   * 此前 hint 只有「周X HH:MM」，「明天」结构上不可命中，只能反复追问。
+   */
+  weekInfo?: { termStart: string; weekNo: number },
 ): CancelTarget[] {
   const needle = normTitle(query);
   if (!needle) return [];
+  const md = (dow: number): string | null => {
+    if (!weekInfo) return null;
+    const monday = addDays(weekInfo.termStart, (weekInfo.weekNo - 1) * 7);
+    return addDays(monday, dow - 1).slice(5).replace('-', '.');
+  };
   const out: CancelTarget[] = [];
   for (const t of userTasks) {
     const title = normTitle(t.title);
     if (title.includes(needle) || needle.includes(title)) {
+      const d = t.dayOfWeek ? md(t.dayOfWeek) : null;
       out.push({
         taskId: t.id,
         title: t.title,
         origin: 'user',
-        hint: `${t.dayOfWeek ? `周${WEEKDAY_CN[t.dayOfWeek - 1]}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
+        hint: `${t.dayOfWeek ? `周${WEEKDAY_CN[t.dayOfWeek - 1]}${d ? `(${d})` : ''}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
       });
     }
   }
@@ -595,11 +619,12 @@ export function findCancelTargets(
     if (b.kind !== 'activity' && b.kind !== 'study') continue; // 课程不在此通道
     const title = normTitle(b.title);
     if (title.includes(needle) || needle.includes(title)) {
+      const d = md(b.dayOfWeek);
       out.push({
         blockId: b.id,
         title: b.title,
         origin: 'plan',
-        hint: `周${WEEKDAY_CN[b.dayOfWeek - 1]} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
+        hint: `周${WEEKDAY_CN[b.dayOfWeek - 1]}${d ? `(${d})` : ''} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
       });
     }
   }

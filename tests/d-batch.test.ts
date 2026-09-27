@@ -126,3 +126,33 @@ test('D1: sanitizeTopic —— 跨版本脏数据当没有（不挡死聊天页�
   assert.deepEqual(ok?.asked, ['when']);
 });
 
+/* ---------------- D3 · ActExecutor 与 send() 优先级链 ---------------- */
+
+test('D3 源码: send() 优先级链 —— 出口①确定性退出 → dialog 裁决 → 规则链路兜底', () => {
+  const chat = src('/src/features/libao/LbaoChat.tsx');
+  // 反向：删掉 DIALOG_ENABLED 闸 → 总回退开关失灵（§11 一行回 S/T 批行为的承诺落空）
+  assert.match(chat, /const DIALOG_ENABLED = true;/, '总回退开关在位');
+  assert.match(chat, /if \(DIALOG_ENABLED && activeMode === 'sched' && online !== false\)/,
+    '排程模式+在线才走 dialog 主干');
+  assert.match(chat, /await tryDialogAct\(q, today, history\)/, '每轮恰一次 dialog 裁决');
+  assert.match(chat, /const ACT_EXECUTORS: Record<DialogAct,/, '8 个 act 执行器映射在位');
+});
+
+test('D3 源码: confirm_draft 双闸（confidence≥0.8 且整句命中确认词表）', () => {
+  const chat = src('/src/features/libao/LbaoChat.tsx');
+  // 反向：删掉词表闸 → 「好不好嘛」这类犹豫句也会被当成同意，L4 失守
+  assert.match(chat, /ctx\.confidence >= 0\.8 && CONFIRM_RE\.test\(ctx\.q/);
+  assert.match(chat, /\^\(好\|好呀\|好啊\|行\|可以\|对\|确认\|就这么排\|就这么办\|排吧\|嗯\+\)/);
+});
+
+test('D3 源码: topic 生命周期（草稿/阻塞/议题续用）在位', () => {
+  const chat = src('/src/features/libao/LbaoChat.tsx');
+  assert.match(chat, /const markDraft = useCallback/, '草稿→topic{draft}');
+  assert.match(chat, /const markBlocked = useCallback/, '阻塞→topic{blocked}');
+  assert.match(chat, /priorFailed: \{ title: slots\.title, slots \}/, 'B① 议题续用记录');
+  assert.match(chat, /kind: 'replace', slots, candidates: targets/, 'B② replace 多候选改道 picking');
+  assert.match(chat, /t\?\.priorFailed\n\s+&& merged\.durationMin == null/, 'replace 隐含用刚才失败的事');
+  assert.match(chat, /await ragReply\(ctx\.q\)/, 'chit_chat 走 RAG 且议题保留');
+  assert.match(chat, /topicExpired\(\{ \.\.\.topic, turns: topic\.turns \+ 1 \}\)/, 'turns 超限自动作废');
+});
+
