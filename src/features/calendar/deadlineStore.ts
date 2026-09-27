@@ -124,3 +124,11 @@ export function upcomingDeadlines(
       daysLeft: Math.round((Date.parse(d.date) - Date.parse(today)) / 86400000),
     }));
 }
+
+/** V1-3：紧急度三档（≤3 天红 / ≤7 天橙 / 其余灰）。纯函数。 */
+export type UrgencyLevel = 'red' | 'orange' | 'gray';
+export function urgencyLevel(daysLeft: number): UrgencyLevel {
+  if (daysLeft <= 3) return 'red';
+  if (daysLeft <= 7) return 'orange';
+  return 'gray';
+}

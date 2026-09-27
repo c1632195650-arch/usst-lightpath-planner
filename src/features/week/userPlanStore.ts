@@ -505,6 +505,26 @@ export function diffPlanEvents(prev: UserPlanLayer, next: UserPlanLayer): Array<
   return events;
 }
 
+/** V1-5：「留空白」→ 留白块实体（kind:'blank' 的固定任务，construct 落成 locked blank 块）。
+ *  口径：blank 不进自习/活动分钟（daySaturation/statsOf 按 kind 排除），与远方模式共用同一 kind。 */
+export function blankTaskFor(
+  deleted: { title: string; day: number; startMin: number; endMin: number },
+  weekNo: number,
+): UserTask {
+  return {
+    id: makeLayerId('blank'),
+    title: '留白',
+    emoji: '⬚',
+    kind: 'blank',
+    category: 'custom',
+    dayOfWeek: deleted.day,
+    startMin: deleted.startMin,
+    durationMin: Math.max(30, deleted.endMin - deleted.startMin),
+    weeks: [weekNo],
+    note: '「' + deleted.title + '」原来的时间 —— 留给你自己',
+  };
+}
+
 export function pushUndoSnapshot(prev: UserPlanLayer): void {
   undoStack.push(prev);
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();

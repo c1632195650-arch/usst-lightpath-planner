@@ -69,7 +69,9 @@ import { localizedDaysFor, localizedPlan, overrideAffectedDays } from '@/lib/pla
 import { dropTargetMin } from './dragPreview';
 import { fillGap } from '@/lib/planner/ripple';
 // ── WP7-E6：满溢度条（MOSS 预置）──
-import { daySaturation, SaturationBar } from './SaturationBar';
+import { SaturationBar } from './SaturationBar';
+import { dayBreakdown, daySaturation } from './saturation';
+import { blankTaskFor } from './userPlanStore';
 // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
 import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
 import { AchievementPanel } from '@/features/activity/GoalEditor';
@@ -1409,6 +1411,16 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
         {/* WP7-E5：编辑模式开关（浏览态附提示，L4：只看不动手） */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          {onOpenModeSetup && (
+            <button
+              type="button"
+              data-testid="open-mode-setup"
+              onClick={onOpenModeSetup}
+              className="rounded-lg bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+            >
+              换个节奏
+            </button>
+          )}
           <button
             type="button"
             data-testid="edit-mode-toggle"
@@ -1421,16 +1433,6 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             {editMode ? '✏️ 编辑中' : '✏️ 编辑'}
           </button>
           {!editMode && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
-          {onOpenModeSetup && (
-            <button
-              type="button"
-              data-testid="open-mode-setup"
-              onClick={onOpenModeSetup}
-              className="rounded-lg bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-            >
-              换个节奏
-            </button>
-          )}
         </div>
         <ul className="mt-2 space-y-0.5">
           {phase.reasons.slice(0, 3).map((r, i) => (
@@ -1635,12 +1637,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         onRemoveBlocks={handleRemoveBlocks}
       />
 
-      {/* R5：投入与成就 —— 所有数字由 `aggregate.ts` 现算，面板里不存累计值 */}
-      <AchievementPanel key={activityVersion} weekNo={weekNo} />
-
+      {/* R5：投入与成就 —— V1-1 移到编辑门之外常驻（见下方）；数字由 aggregate.ts 现算 */}
       <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
       </>
       )}
+
+      {/* V1-1：投入与成就 —— CY 要求常驻（编辑模式之外也能看到），不再包在 editMode 门里 */}
+      <AchievementPanel key={activityVersion} weekNo={weekNo} />
 
       {/* 天气（2026-09-19 改版）：单独的天气栏已移除 ——
           天气的唯一落点在下面每一天列的标题下方（有数据的日子才显示）。 */}
@@ -1725,7 +1728,14 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                 <span className="text-[13px] font-semibold text-ink">{name}</span>
                 <span className="inline-flex items-center gap-2">
                   {study > 0 && <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>}
-                  <SaturationBar sat={daySaturation(baseBlocks, 7 * 60, 23 * 60)} />
+                  <SaturationBar
+                    sat={daySaturation(baseBlocks, 7 * 60, 23 * 60)}
+                    detail={(() => {
+                      const d = dayBreakdown(baseBlocks);
+                      const h = (m: number) => (m / 60).toFixed(1).replace(/.0$/, '') + 'h';
+                      return ['课程 ' + h(d.courseMin), '自习 ' + h(d.studyMin), '活动 ' + h(d.activityMin), '留白 ' + h(d.blankMin)];
+                    })()}
+                  />
                 </span>
               </div>
 
@@ -1917,7 +1927,15 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           }}
           onKeepGap={() => {
             setDeleteAsk(null);
-            notify('delete', `已删除「${deleteAsk.title}」· 空档留白`, undoAction());
+            // V1-5（CY 原话）：留空白 = 生成留白块实体，钉在被删块原时段
+            //   · layer.tasks 通道（kind:'blank' 固定任务 → construct 落成 locked blank 块，重排不动）
+            //   · blank 不进自习/活动分钟口径（daySaturation/statsOf 按 kind 排除）
+            //   · updateLayer 统一压 undo 快照 → Ctrl+Z 整体撤销（连排除一起退）
+            updateLayer((prev) => ({
+              ...prev,
+              tasks: addTask(prev.tasks, blankTaskFor(deleteAsk, weekNo)),
+            }));
+            notify('delete', `已删除「${deleteAsk.title}」· 原时段留了「⬚ 留白」块 · Ctrl+Z 可整体撤销`, undoAction());
           }}
           onReplan={() => {
             setDeleteAsk(null);

@@ -46,3 +46,17 @@ export function daySaturation(
     ratio >= 0.85 ? 'over' : ratio >= 0.7 ? 'full' : ratio >= 0.5 ? 'warm' : 'ok';
   return { occupiedMin, capacityMin, ratio, level };
 }
+
+/** V1-2：当天分类分钟小计（满溢度 hover 悬浮详情用）。纯函数。 */
+export function dayBreakdown(
+  blocks: readonly TimeBlock[],
+): { courseMin: number; studyMin: number; activityMin: number; blankMin: number } {
+  const sum = (pred: (b: TimeBlock) => boolean) =>
+    blocks.filter(pred).reduce((n, b) => n + (b.endMin - b.startMin), 0);
+  return {
+    courseMin: sum((b) => b.kind === 'course' || b.source === 'course'),
+    studyMin: sum((b) => b.kind === 'study'),
+    blankMin: sum((b) => b.kind === 'blank'),
+    activityMin: sum((b) => b.kind !== 'course' && b.source !== 'course' && b.kind !== 'study' && b.kind !== 'blank'),
+  };
+}
