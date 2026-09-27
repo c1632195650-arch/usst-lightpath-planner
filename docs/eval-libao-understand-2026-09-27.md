@@ -250,3 +250,14 @@ a01–a20（answer 定位）、b01–b10（边界反例）逐条复核全部通�
 - 端点拒收（dialog_act_rejected/超时等）: 无
 - 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
 
+
+## 评测运行 · 2026-09-28 05:20（生产忠实口径 v3）
+
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.972（逐 act: {'ask_slot': 0.947, 'chit_chat': 1.0, 'confirm_draft': 0.857, 'discard_topic': 1.0, 'new_intent': 1.0, 'pick_candidate': 1.0, 'resume_topic': 1.0}）｜准确率 = 0.975（39/40）
+- 混淆 Top: [(('confirm_draft', 'ask_slot'), 1)]
+- idx 消歧 EM = 1.0（8/8）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: 无
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
+
