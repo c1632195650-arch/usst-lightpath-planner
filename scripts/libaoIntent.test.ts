@@ -18,6 +18,7 @@ import {
   applyClarifyAnswer,
   describeSlots,
   detectIntent,
+  GOAL_NOUNS,
   extractEffort,
   extractFrequency,
   extractPlace,
@@ -468,4 +469,46 @@ test('聚餐也能听懂', () => {
   const s = parseIntentSlots('周五晚上班级聚餐', TODAY);
   assert.ok(s.title.includes('聚餐'), `title=${s.title}`);
   assert.ok(looksLikeAction('周五晚上我要去聚餐'));
+});
+
+/* ============================================================
+ * 九、2026-09-27 真机三连翻车（学生会面试）—— 事务性事件必须被接住
+ * ========================================================== */
+// 翻车现场：三句话要么掉进 RAG 聊天（面试攻略问答），要么被当成「泛泛一周建议」
+// 只回课表总结卡，日程一块不排。根因：目标词表里只有大餐/聚餐等饭局，
+// 「面试」这类事务性事件不在 → 标题抽空 → LbaoChat 分流进老路径。
+
+test('真机翻车①：「我明天有一个学生会面试」—— 陈述句也要接住', () => {
+  const q = '我明天有一个学生会面试';
+  assert.ok(looksLikeAction(q), '陈述一件已有的事 ≠ 普通聊天（我…有 + 目标名词）');
+  const s = parseIntentSlots(q, TODAY);
+  assert.ok(s.title.includes('面试'), `title=${s.title}`);
+  assert.equal(s.when?.text, '明天');
+  assert.deepEqual(s.missing, ['effort'], '单日事件只差投入');
+  assert.match(topQuestions(s, 2)[0], /占多久/);
+});
+
+test('真机翻车②：「排出一段面试时间」—— 显式排程诉求，标题不许抽空', () => {
+  const q = '我报的是组织部，我希望你在日程中给我排出一段面试时间';
+  assert.ok(looksLikeAction(q));
+  const s = parseIntentSlots(q, TODAY);
+  assert.equal(s.title, '面试', `title=${s.title}（抽空就会掉进一周建议老路径）`);
+  assert.ok(s.missing.includes('when'), '没说时间 → 必须追问，不许自己定');
+  assert.ok(s.missing.includes('effort'));
+});
+
+test('真机翻车③：「明天晚上我要面试，大概是操场跑步的时间」—— 时段窗要保留', () => {
+  const s = parseIntentSlots('明天晚上我要面试，大概是操场跑步的时间', TODAY);
+  assert.equal(s.title, '面试');
+  assert.equal(s.window?.text, '晚上', '「晚上」是用户给的排程约束，不能丢');
+  assert.deepEqual(s.missing, ['effort']);
+});
+
+test('事务性事件词族都在词表里，且「我…有」兜底只认目标名词', () => {
+  for (const n of ['面试', '答辩', '宣讲', '讲座', '体检']) {
+    assert.ok(GOAL_NOUNS.includes(n), `${n} 应在 GOAL_NOUNS`);
+  }
+  assert.ok(looksLikeAction('我下周有一场答辩'));
+  assert.ok(!looksLikeAction('明天有雨，记得带伞'), '没有目标名词的「有」不许命中');
+  assert.ok(!looksLikeAction('学校有什么比赛'), '纯问句仍走 RAG');
 });
