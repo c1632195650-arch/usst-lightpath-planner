@@ -11,9 +11,12 @@ LLM 覆盖）早就写好了，但从未接线 —— 意图判定 100% 靠词�
   scene=intent   新句子判动作：是否要动日程 + intent 枚举 + 槽位 patch
   scene=answer   追问应答抽槽：把用户回复按 asked 清单定位成「槽位 → 原话片段」
                  （片段仍由前端规则抽取器结构化 —— LLM 只做语义定位，可审计）
+  scene=dialog   D 批 D2：排程模式下的对话管理器——读前端递来的对话状态（topic/missStreak），
+                 从 8 个 act 白名单里选下一步动作；前端 validateDialogAct 再验一层，
+                 candidate_idx 必须真的在候选清单里（防编造）
 
 响应契约（HTTP 恒 200，失败一律 {ok:false}，前端视作「走规则兜底」不算错误）：
-  { ok: true, action?, intent?, patch?, answers?, confidence }
+  { ok: true, action?, intent?, patch?, answers?, act?, args?, reply_note?, confidence }
   { ok: false, reason }
 
 环境变量沿用 app.py 同一套：LLM_BASE_URL / LLM_API_KEY / LLM_MODEL。
@@ -54,10 +57,21 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
 
 UNDERSTAND_TIMEOUT = float(os.environ.get("PLAN_UNDERSTAND_TIMEOUT", "8"))
 UNDERSTAND_MAX_TOKENS = 300
+# D 批 D2：dialog 场景要输出 act+args+话术，预算单独放宽（per-scene 拆分）
+DIALOG_MAX_TOKENS = 400
 
 router = APIRouter()
 
 INTENTS = ("create", "replace", "reschedule", "cancel", "query", "add_deadline", "hold")
+
+# D 批 D2：dialog 场景的 act 白名单（与前端 dialogManager.ts 的 DIALOG_ACTS 同源）
+DIALOG_ACTS = (
+    "ask_slot", "pick_candidate", "confirm_draft", "discard_topic",
+    "resume_topic", "new_intent", "negotiate_block", "chit_chat",
+)
+ASKABLE_SLOTS = ("title", "when", "effort", "target")
+NEGOTIATE_OPTIONS = ("swap_block", "move_next_week", "reduce_scope", "give_time")
+PICK_KINDS = ("cancel", "reschedule", "replace")
 
 # 槽位定义表（system prompt 用）。口径与 src/features/libao/libaoIntent.ts 一致：
 # 抽不到就缺省，禁止编造；不确定给低 confidence（纪律②「抽不到就说抽不到」）。
@@ -83,14 +97,42 @@ _SYSTEM_BASE = (
     "或需要修正的槽位。禁止编造用户没说的内容；不确定就必须给低 confidence（<0.5）；只输出 JSON，不要输出别的。"
 )
 
+# D 批 D2：dialog 场景的对话管理器骨架。act 表逐条 + 状态读法 + 防编造三约束
+# + 「决策权在用户」—— confirm 只在用户明确同意时输出（L4 边界）。
+_SYSTEM_DIALOG = """你是排程助手「梨宝」的**对话管理器**：用户正处于排程会话里，前端把当前对话状态（topic）递给你，你只做一件事——为这句话选下一个动作（act），不执行、不编造。
+
+act 白名单（只能从中选一个）：
+- ask_slot        还缺信息 → args.slot 取 title/when/effort/target 之一，追问它
+- pick_candidate  用户在候选里挑定了一个 → args.candidate_idx 取候选清单里的 idx（整数）
+- confirm_draft   用户明确同意当前草稿 → 无 args
+- discard_topic   用户明确不要了/放弃 → 无 args
+- resume_topic    用户要回到之前没排成的那件事 → 无 args
+- new_intent      用户提出（或改口为）一个新的排程诉求 → args.intent 取 create/replace/reschedule/cancel/query/add_deadline/hold 之一，args.patch 放听到的槽位
+- negotiate_block 排程被既有块挡住，用户在协商 → args.option 取 swap_block/move_next_week/reduce_scope/give_time 之一
+- chit_chat       闲聊或校园问答（与排程无关）→ 无 args；**此时议题保留，不要丢弃 topic**
+
+状态读法：
+- topic.phase：collect=等用户补信息；picking=候选清单在等用户挑；draft=草稿在等确认；blocked=排不进去（blocking.blocks 列出挡路的既有块）
+- candidates / blocking.blocks 里的 **idx 与 title 是唯一可信引用**：用户说「第一个/周三那个」就对到清单上
+- prior_failed_title 存在 = 之前有一件没排成的事，用户说「还是刚才那个」→ resume_topic
+
+防编造三约束（违反任何一条都会被系统拦截、整轮作废）：
+1. candidate_idx 只能取候选清单里**真实存在**的 idx；清单对不上就 ask_slot 重列，绝不猜编号
+2. title/引用一律照抄清单或用户原话，不要改写、不要发明
+3. 拿不准就选 ask_slot 或 chit_chat，并把 confidence 给低（<0.5）
+
+决策权在用户：confirm_draft **只在用户明确同意**（好/行/可以/就这么排这类整句认可）时输出；
+犹豫、反问、讨价还价都不是同意。只输出 JSON，不要输出别的。"""
+
 
 class UnderstandReq(BaseModel):
-    scene: Literal["intent", "answer"]
+    scene: Literal["intent", "answer", "dialog"]
     q: str = Field(min_length=1, max_length=500)
     asked: Optional[List[str]] = None          # scene=answer：已问槽位（"slot: 话术" 形式）
     slots: Optional[dict] = None               # scene=intent：规则层已抽到的槽位（LLM 只补空）
     today: Optional[str] = None                # ISO，供相对时间语义锚定
     history: Optional[List[str]] = None        # 最近 ≤4 条「角色:文本」，防指代断裂
+    state: Optional[dict] = None               # scene=dialog：{topic, missStreak}（前端白名单序列化）
 
 
 def _num(v):
@@ -160,7 +202,7 @@ def _clean_answers(answers, asked_keys):
     return out
 
 
-def _chat(system, user):
+def _chat(system, user, max_tokens: int = UNDERSTAND_MAX_TOKENS):
     """DeepSeek 调用。8s 超时；任何异常上抛由调用方转 ok:false。"""
     r = requests.post(
         f"{LLM_BASE_URL}/chat/completions",
@@ -172,7 +214,7 @@ def _chat(system, user):
                 {"role": "user", "content": user},
             ],
             "temperature": 0.1,
-            "max_tokens": UNDERSTAND_MAX_TOKENS,
+            "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
         },
         timeout=UNDERSTAND_TIMEOUT,
@@ -192,6 +234,76 @@ def _parse_json(content):
         if m:
             return json.loads(m.group(0))
         raise
+
+
+def _clean_dialog(data, state):
+    """dialog 场景响应白名单：act 枚举 + args 防御 + 与 state 对账（防编造）。
+
+    返回 None = 整轮不可信（调用方回 ok:false，前端走规则兜底）。
+    candidate_idx 的存在性校验在这里做（后端第一层），前端 validateDialogAct 再验一层。
+    """
+    if not isinstance(data, dict):
+        return None
+    act = data.get("act")
+    if act not in DIALOG_ACTS:
+        return None
+    args = data.get("args") or {}
+    if not isinstance(args, dict):
+        args = {}
+    out_args = {}
+
+    topic = (state or {}).get("topic") if isinstance(state, dict) else None
+    candidates = (topic or {}).get("candidates") if isinstance(topic, dict) else None
+    cand_idx_set = None
+    if isinstance(candidates, list):
+        cand_idx_set = {c.get("idx") for c in candidates if isinstance(c, dict)}
+
+    if act == "ask_slot":
+        slot = args.get("slot")
+        if slot not in ASKABLE_SLOTS:
+            return None
+        out_args["slot"] = slot
+    elif act == "pick_candidate":
+        idx = _num(args.get("candidate_idx"))
+        if idx is not None:
+            idx = int(idx)
+            # 防编造：state 里带候选清单就必须对得上；没带清单则留给前端验
+            if cand_idx_set is not None and idx not in cand_idx_set:
+                return None
+            out_args["candidate_idx"] = idx
+        tt = args.get("target_text")
+        if isinstance(tt, str) and tt.strip():
+            out_args["target_text"] = tt.strip()[:60]
+        if not out_args:
+            return None
+        pk = args.get("pick_kind")
+        if pk in PICK_KINDS:
+            out_args["pick_kind"] = pk
+    elif act == "negotiate_block":
+        opt = args.get("option")
+        if opt not in NEGOTIATE_OPTIONS:
+            return None
+        out_args["option"] = opt
+    elif act == "new_intent":
+        intent = args.get("intent")
+        if intent not in INTENTS:
+            return None
+        out_args["intent"] = intent
+        patch = _clean_patch(args.get("patch") or {})
+        if patch:
+            out_args["patch"] = patch
+    # confirm_draft / discard_topic / resume_topic / chit_chat：无 args
+
+    note = data.get("reply_note")
+    note = note.strip()[:80] if isinstance(note, str) else ""
+    conf = _num(data.get("confidence"))
+    conf = float(conf) if conf is not None else 0.5
+    return {
+        "act": act,
+        "args": out_args,
+        "reply_note": note,
+        "confidence": max(0.0, min(1.0, conf)),
+    }
 
 
 @router.post("/api/plan/understand")
@@ -236,6 +348,36 @@ def plan_understand(req: UnderstandReq):
                 "elapsed_ms": int((time.time() - t0) * 1000),
             }
 
+        # ── D 批 D2：dialog —— 排程会话的对话管理器（act 白名单 + 防编造） ──
+        # 放在 answer 之前：dialog 不带 asked，先走会被 no_asked 守卫拦死。
+        if req.scene == "dialog":
+            # 防御性收敛状态与历史：历史 ≤6 条 × 80 字，状态体 ≤4KB（前端已白名单，这里兜底）
+            hist = []
+            for h in (req.history or [])[-6:]:
+                if isinstance(h, str) and h.strip():
+                    hist.append(h.strip()[:80])
+            state = req.state if isinstance(req.state, dict) else {}
+            try:
+                if len(json.dumps(state, ensure_ascii=False).encode("utf-8")) > 4096:
+                    state = {"topic": None, "missStreak": state.get("missStreak", 0)}
+            except (TypeError, ValueError):
+                state = {"topic": None, "missStreak": 0}
+            user = json.dumps({
+                "今天": req.today,
+                "当前对话状态": state,
+                "最近对话": hist,
+                "用户的话": req.q,
+                "任务": "按 system 里的 act 白名单，为这句话选下一个动作。reply_note 用一句 ≤80 字的话说明你要做什么（梨宝口吻）。",
+                "输出格式": '{"act": "...", "args": {...}, "reply_note": "≤80字", "confidence": 0到1}',
+            }, ensure_ascii=False)
+            data = _parse_json(_chat(_SYSTEM_DIALOG, user, max_tokens=DIALOG_MAX_TOKENS))
+            cleaned = _clean_dialog(data, state)
+            if cleaned is None:
+                # 模型输出不可信（act 出白名单 / 编造 idx / args 非法）→ 整轮作废，前端走规则兜底
+                return {"ok": False, "reason": "dialog_act_rejected",
+                        "elapsed_ms": int((time.time() - t0) * 1000)}
+            return {"ok": True, **cleaned, "elapsed_ms": int((time.time() - t0) * 1000)}
+
         # scene=answer：把回复按 asked 定位成「槽位 → 原话片段」
         if not asked_keys:
             return {"ok": False, "reason": "no_asked"}
@@ -259,6 +401,7 @@ def plan_understand(req: UnderstandReq):
             "confidence": float(conf) if conf is not None else 0.5,
             "elapsed_ms": int((time.time() - t0) * 1000),
         }
+
     except requests.Timeout:
         return {"ok": False, "reason": "timeout"}
     except Exception as e:  # 任何失败都不算错误 —— 前端走规则兜底

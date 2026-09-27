@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-S 批 S3 · /api/plan/understand 金标评测（CY 复核后修订版 v3）
+S 批 S3 · /api/plan/understand 金标评测（CY 复核后修订版 v3 + D 批 dialog 组）
 ==========================================================
-金标：evals/golden/plan_understand.jsonl（60 条 = 30 intent + 20 answer + 10 boundary）。
+金标：evals/golden/plan_understand.jsonl（100 条 = 30 intent + 20 answer + 10 boundary
++ 40 dialog【D 批 D2：act 分类 25 + idx 消歧 8 + 防编造负例 7】）。
 CY 复核结论（2026-09-27）落地方：
   ① a09 归位不稳 → **双侧同归一**：金标片段与预测片段都过规则层 canon
     （生产落库的本来就是归一值——「还没定，到时候再说」落库为「时间待定」），
@@ -294,6 +295,107 @@ def _hit_when(want_canon, pred_canon):
     return True
 
 
+# ── D 批 D2：dialog 组评测 ──────────────────────────────────────
+
+DIALOG_ACTS = {
+    "ask_slot", "pick_candidate", "confirm_draft", "discard_topic",
+    "resume_topic", "new_intent", "negotiate_block", "chit_chat",
+}
+
+
+def validate_dialog_response(res, state):
+    """独立复核响应合法性（镜像后端 _clean_dialog + 前端 validateDialogAct 的合法域）。
+
+    ok:false = 已被拦截（走规则兜底）——不算非法输出；
+    ok:true  = act 必须在白名单里，且编造的 candidate_idx 必须不存在。
+    """
+    if not res.get("ok"):
+        return True
+    act = res.get("act")
+    if act not in DIALOG_ACTS:
+        return False
+    args = res.get("args") or {}
+    topic = ((state or {}).get("topic") or {})
+    cands = [c for c in (topic.get("candidates") or []) if isinstance(c, dict)]
+    if act == "pick_candidate":
+        idx = args.get("candidate_idx")
+        if idx is not None:
+            if cands and idx not in [c.get("idx") for c in cands]:
+                return False
+            if not cands:
+                return False  # 无候选清单还敢给 idx = 编造
+        elif not args.get("target_text"):
+            return False
+    return True
+
+
+def eval_dialog(base, items):
+    """dialog 组在线评测：逐条发 scene=dialog，act 分类 + idx + 拦截率。"""
+    records = []
+    for it in items:
+        res = post_understand(base, {
+            "scene": "dialog",
+            "q": it["q"],
+            "today": TODAY,
+            "state": it.get("state") or {},
+        })
+        records.append({"id": it["id"], "res": res})
+    return records
+
+
+def score_dialog(items, records):
+    from collections import Counter
+    rec_by_id = {r["id"]: r["res"] for r in records}
+    y_true, y_pred = [], []
+    idx_hit = idx_total = 0
+    idx_miss = []
+    intercepted = 0
+    n_neg = 0
+    fails = []
+    for it in items:
+        res = rec_by_id[it["id"]]
+        pred = res["act"] if res.get("ok") else "FAIL"
+        if not res.get("ok"):
+            fails.append((it["id"], res.get("reason")))
+        y_true.append(it["expect"]["act"])
+        y_pred.append(pred)
+        if it.get("negative"):
+            n_neg += 1
+            if validate_dialog_response(res, it.get("state")):
+                intercepted += 1
+        want_idx = (it.get("expect", {}).get("args") or {}).get("candidate_idx")
+        if want_idx is not None:
+            idx_total += 1
+            got = (res.get("args") or {}).get("candidate_idx") if res.get("ok") else None
+            if got == want_idx:
+                idx_hit += 1
+            else:
+                idx_miss.append((it["id"], want_idx, got))
+    # 逐 act F1 → 宏平均；另报准确率与混淆
+    per = {}
+    tp_all = 0
+    for act in set(y_true) | set(y_pred):
+        tp = sum(1 for t, p in zip(y_true, y_pred) if t == act and p == act)
+        fp = sum(1 for t, p in zip(y_true, y_pred) if t != act and p == act)
+        fn = sum(1 for t, p in zip(y_true, y_pred) if t == act and p != act)
+        prec = tp / (tp + fp) if tp + fp else 0.0
+        rec = tp / (tp + fn) if tp + fn else 0.0
+        f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
+        per[act] = round(f1, 3)
+        tp_all += tp
+    macro_f1 = round(sum(per.values()) / len(per), 3) if per else 0.0
+    acc = round(tp_all / len(y_true), 3) if y_true else 0.0
+    confusions = Counter((t, p) for t, p in zip(y_true, y_pred) if t != p)
+    return {
+        "macro_f1": macro_f1, "acc": acc, "per_act": per,
+        "acc_raw": f"{tp_all}/{len(y_true)}",
+        "idx_em": round(idx_hit / idx_total, 3) if idx_total else None,
+        "idx_hit": idx_hit, "idx_total": idx_total, "idx_miss": idx_miss,
+        "intercept_rate": round(intercepted / n_neg, 3) if n_neg else None,
+        "n_neg": n_neg, "fails": fails, "confusions": confusions.most_common(8),
+    }
+
+
 def main():
     items = load_golden()
     lines = ["", "## 评测运行 · " + time.strftime("%Y-%m-%d %H:%M") + "（生产忠实口径 v3）", ""]
@@ -324,6 +426,7 @@ def main():
             "### 离线对照（规则层，无 LLM）",
             f"- action P/R/F1 = {round(prec,3)} / {round(rec_,3)} / {round(f1,3)}"
             f"（TP {tp} · FP {fp} · FN {fn} · TN {tn}）｜FN: {fn_ids}",
+            "- dialog 组（40 条）离线不评：规则链路没有对话管理器，dialog 是纯 LLM 场景。",
         ]
     else:
         base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8001"
@@ -349,6 +452,24 @@ def main():
             f"{s['ep_acc'] if s['ep_acc'] is not None else 'n/a'}",
             f"- 门槛（action F1≥0.95 且 槽位 EM≥0.90）：{'✅ 过' if gates else '❌ 未过'}",
         ]
+
+        # ── D 批 D2：dialog 组 ──
+        dialog_items = [it for it in items if it["scene"] == "dialog"]
+        if dialog_items:
+            drecs = eval_dialog(base, dialog_items)
+            ds = score_dialog(dialog_items, drecs)
+            d_gates = (ds["macro_f1"] >= 0.9) and (ds["intercept_rate"] == 1.0)
+            lines += [
+                "### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）",
+                f"- act 宏 F1 = {ds['macro_f1']}（逐 act: {ds['per_act']}）｜准确率 = {ds['acc']}（{ds['acc_raw']}）",
+                f"- 混淆 Top: {ds['confusions'] or '无'}",
+                f"- idx 消歧 EM = {ds['idx_em']}（{ds['idx_hit']}/{ds['idx_total']}）"
+                f"｜未命中: {ds['idx_miss'] or '无'}",
+                f"- 非法输出拦截率 = {ds['intercept_rate']}（负例 {ds['n_neg']} 条；"
+                "ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）",
+                f"- 端点拒收（dialog_act_rejected/超时等）: {ds['fails'] or '无'}",
+                f"- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：{'✅ 过' if d_gates else '❌ 未过'}",
+            ]
 
     text = "\n".join(lines) + "\n"
     print(text)

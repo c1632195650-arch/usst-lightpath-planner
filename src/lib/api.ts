@@ -299,8 +299,27 @@ export interface PlanUnderstandResult {
   patch?: PlanSlotPatch;
   /** scene=answer：槽位 → 原话片段（LLM 只做定位，结构化仍在规则层） */
   answers?: Record<string, string>;
+  /** scene=dialog（D 批 D2）：对话管理器的动作裁决 */
+  act?: string;
+  args?: {
+    slot?: string;
+    candidate_idx?: number;
+    target_text?: string;
+    pick_kind?: 'cancel' | 'reschedule' | 'replace';
+    option?: 'swap_block' | 'move_next_week' | 'reduce_scope' | 'give_time';
+    intent?: PlanUnderstandResult['intent'];
+    patch?: PlanSlotPatch;
+  };
+  /** 对话管理器的一句话说明（≤80 字，梨宝口吻） */
+  reply_note?: string;
   confidence?: number;
   elapsed_ms?: number;
+}
+
+/** dialog 场景递给后端的对话状态（前端已做白名单序列化，后端再兜一层 ≤4KB） */
+export interface PlanDialogState {
+  topic: Record<string, unknown> | null;
+  missStreak: number;
 }
 
 /**
@@ -308,7 +327,7 @@ export interface PlanUnderstandResult {
  * 用户干等：超时同样落 { ok:false }，前端走规则兜底。
  */
 export async function planUnderstand(body: {
-  scene: 'intent' | 'answer';
+  scene: 'intent' | 'answer' | 'dialog';
   q: string;
   /** scene=answer：已问槽位清单，"slot: 话术原文" 形式 */
   asked?: string[];
@@ -317,6 +336,8 @@ export async function planUnderstand(body: {
   today?: string;
   /** 最近 ≤4 条「角色:文本」，防指代断裂 */
   history?: string[];
+  /** scene=dialog：对话管理器状态（topic 白名单序列化 + missStreak） */
+  state?: PlanDialogState;
 }): Promise<PlanUnderstandResult> {
   try {
     const res = await fetch(`${API_BASE}/api/plan/understand`, {
