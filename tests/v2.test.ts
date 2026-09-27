@@ -78,3 +78,16 @@ test('V2 源码: 挑块接续与重排广播在位', () => {
   const wv = readFileSync(fileURLToPath(new URL('../src/features/week/WeekPlanView.tsx', import.meta.url)), 'utf8');
   assert.match(wv, /addEventListener\('usst:replan'/);
 });
+
+test('V2-2 源码: send 门放行 hold（hold 无 title，门只认 title 会漏进泛泛分支）', () => {
+  // 反向：删掉 || outcome.slots.intent === 'hold' → 本用例红
+  const src = readFileSync(fileURLToPath(new URL('../src/features/libao/LbaoChat.tsx', import.meta.url)), 'utf8');
+  assert.match(src, /outcome\.slots\.title \|\| outcome\.slots\.intent === 'hold'/);
+});
+
+test('V2-2 源码: looksLikeAction 放行 hold 语族（入口闸与 send 门双闸都要过）', () => {
+  // 反向：删掉 libaoIntent 的 hold 语族行 → 本用例红
+  const src = readFileSync(fileURLToPath(new URL('../src/features/libao/libaoIntent.ts', import.meta.url)), 'utf8');
+  assert.match(src, /\(别排\|不要排\|留出来\|空出来\|这段时间有空\|没空\)/);
+  assert.match(src, /looksLikeAction[\s\S]*?别排[\s\S]*?return true;/s);
+});

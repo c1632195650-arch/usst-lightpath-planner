@@ -190,7 +190,10 @@ export default function App() {
           // V0-2：首落点动线 —— 没导入过课表 → 直达「课表」tab（导入完成自动弹模式窗）；老用户维持「总览」
           patchState({ onboarded: true });
           setView('main');
-          setMainTab(state.schedule ? 'calendar' : 'import');
+          // V0-2（验收修正 2026-09-27）：MOCK 演示兜底不算「已有课表」——
+          // state.schedule 会被 :76 的 effect 按引用种入 MOCK_SCHEDULE，
+          // 只比真值会让「首落点=导入」与 checklist 的导入项永远误判为已完成。
+          setMainTab(state.schedule && state.schedule !== MOCK_SCHEDULE ? 'calendar' : 'import');
         }}
         onRetake={() => setView('persona')}
       />
@@ -217,7 +220,10 @@ export default function App() {
             {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
-                onClick={() => { setMainTab(t); if (t === 'profile') setWeekMonday(null); }}
+                // 验收修正（2026-09-27）：「总览」tab 回归字面语义 —— 进入过周计划后
+                // 点「总览」必须能回总览页（onboarding checklist 卡在那里），否则卡被
+                // 周计划劫持埋掉（E2E 走查抓到）。周计划从总览页「打开本周安排」再进。
+                onClick={() => { setMainTab(t); if (t === 'profile' || t === 'calendar') setWeekMonday(null); }}
                 className={`nav-item whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
               >
                 {TAB_LABEL[t]}
@@ -329,7 +335,7 @@ export default function App() {
             onStartPersona={() => setView('persona')}
             onboardingCard={(
               <OnboardingChecklist
-                hasSchedule={!!state.schedule}
+                hasSchedule={!!state.schedule && state.schedule !== MOCK_SCHEDULE}
                 lifeMode={state.lifeMode}
                 userDeadlineCount={loadUserDeadlines().length}
                 onGotoImport={() => setMainTab('import')}

@@ -358,6 +358,11 @@ export function looksLikeAction(q: string): boolean {
   // 刻意放在 ADVICE 门**之后**：「怎么备赛」是求方法，不该被拽进来。
   if (DEADLINE_MARK.some((t) => s.includes(t))) return true;
 
+  // V2-2（2026-09-27 E2E 走查抓到）：「这段时间别排」族 —— hold 也是**动日程**的
+  // 动作（留白），但动词不在 ACTION_VERBS、名词不在 GOAL_NOUNS → 整句漏成 RAG。
+  // 触发词与 INTENT_PATTERNS 的 hold 条目同源（别排/不要排/留出来/空出来/这段时间有空/没空）。
+  if (/(别排|不要排|留出来|空出来|这段时间有空|没空)/.test(s)) return true;
+
   const hasGoal = GOAL_NOUNS.some((n) => s.includes(n));
   const hasVerb = ACTION_VERBS.some((v) => s.includes(v));
   if (hasGoal && hasVerb) return true;

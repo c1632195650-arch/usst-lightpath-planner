@@ -48,7 +48,8 @@ test('V0-1 源码: 「重看引导」按钮在位（onboarded:false + 回 welcom
 
 test('V0-2 源码: 结果页 onEnter 首落点 = 有课表落总览、没课表落导入', () => {
   const src = APP_SRC();
-  assert.match(src, /setMainTab\(state\.schedule \? 'calendar' : 'import'\)/);
+  // 验收修正（2026-09-27）：MOCK 兜底按引用判别（App:76 effect 会种入 MOCK_SCHEDULE，只比真值恒落总览）
+  assert.match(src, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/);
 });
 
 test('V0-3 源码: OverviewPage 渲染 onboardingCard；梨宝 seedQuestion 预填链路在位', () => {

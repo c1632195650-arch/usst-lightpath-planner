@@ -20,7 +20,9 @@ test('V3: 首访旅程 ①→④ 连线（标题→基本信息→问卷→结�
   assert.match(app, /<BasicInfoStep/, '② BasicInfoStep 挂载');             // 3
   assert.match(app, /<PersonaFlow/, '③ 问卷挂载');                          // 4
   assert.match(app, /view === 'result' && state\.persona/, '④ 结果页入口'); // 5
-  assert.match(app, /setMainTab\(state\.schedule \? 'calendar' : 'import'\)/, '⑤ 首落点=导入'); // 6
+  // 验收修正（2026-09-27）：MOCK 兜底按引用判别——真课表才落「总览」，否则首落「导入」
+  assert.match(app, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/, '⑤ 首落点=导入（MOCK 不算已有课表）'); // 6
+  assert.match(app, /hasSchedule=\{!!state\.schedule && state\.schedule !== MOCK_SCHEDULE\}/, '⑤ checklist 导入项：MOCK 兜底不亮勾'); // 6b
 });
 
 test('V3: ⑥→⑦ 模式窗双入口 + 确认落 lifeMode', () => {

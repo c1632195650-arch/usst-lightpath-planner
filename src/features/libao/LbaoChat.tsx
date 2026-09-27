@@ -921,7 +921,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
     const outcome = await parseGoalIntent(q, { today });
 
-    if (outcome.action && outcome.slots.title) {
+    // 验收修正（2026-09-27 E2E 抓到）：hold 没有 title（它是「留空一段时间」，
+    // 不是一件「事」）—— 门只认 title 会把 hold 整句漏进泛泛安排分支，
+    // runHold 永远到不了。放行 hold：when 槽位由 runHold 自己追问补齐。
+    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold')) {
       await runGoalSlots(outcome.slots, today);
       return;
     }
