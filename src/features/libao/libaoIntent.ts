@@ -813,13 +813,30 @@ export function clarifyQuestions(s: IntentSlots): Array<{ slot: SlotKey; questio
 
 /** 只取最关键的 n 条追问（默认 2）—— 一次问太多，用户就不答了。 */
 export function topQuestions(s: IntentSlots, n = 2): string[] {
+  return topQuestionPairs(s, n).map((p) => p.question);
+}
+
+/**
+ * `topQuestions` 的带槽位版：问出去的同时**记下问了哪些槽位**。
+ *
+ * 为什么必须有它（S 批 P5）：此前追问话术由 `topQuestions` 生成、应答由
+ * `applyClarifyAnswer` 解析，两边各管各的 —— 应答方根本不知道当时问了什么，
+ * 「第几问 ↔ 第几段答案」的位置对应无从谈起。现在追问出口统一用本函数，
+ * 把 `slot` 清单存进会话态，`applyClarifyAnswers` 按位置消费。
+ */
+export function topQuestionPairs(s: IntentSlots, n = 2): Array<{ slot: SlotKey; question: string }> {
   // 顺序即优先级：目标 > 对象 > 时间 > 投入。
   // 「做什么」都没弄清时先问时长，是浪费一轮对话。
   const order: SlotKey[] = ['title', 'target', 'when', 'effort'];
   return order
     .filter((k) => s.missing.includes(k))
     .slice(0, Math.max(0, n))
-    .map((k) => questionFor(s, k));
+    .map((k) => ({ slot: k, question: questionFor(s, k) }));
+}
+
+/** 指定槽位清单 → 对应话术（failed 只重问失败槽位时用，不走 topQuestions 的截断排序）。 */
+export function questionsForSlots(s: IntentSlots, slots: SlotKey[]): Array<{ slot: SlotKey; question: string }> {
+  return slots.map((slot) => ({ slot, question: questionFor(s, slot) }));
 }
 
 /* ============================================================
@@ -892,6 +909,171 @@ export function applyClarifyAnswer(
 
   out.missing = missingSlots(out);
   return { slots: out, contributed };
+}
+
+/* ============================================================
+ * 五·六、分号批量应答协议（S 批 · 一次多问、一句多答）
+ * ========================================================== */
+
+/**
+ * 剥离回答开头的编号前缀（`1.` `1、` `1．` `（1）` `(1)` `1️⃣` `①` `第一问`…）。
+ *
+ * 为什么单列一个函数：追问带编号渲染后，用户照着编号答（「1. 周五下午 2. 每天两小时」）
+ * —— 编号是**我们的渲染**带进去的，解析时必须剥掉，否则 `extractWhen('1. 周五下午')`
+ * 什么都抽不到。循环剥离最多 3 层，处理「（一）1.」这类嵌套编号。
+ * ⚠️ `[0-9]+[.．]` 带 `(?!\d)` 守卫：「1.5小时」的「1.」是数字的一部分，不是编号。
+ */
+const ANSWER_NUM_RE =
+  /(?:[①②③④⑤⑥⑦⑧⑨⑩]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|[（(]\s*[0-9一二三四五六七八九十]{1,3}\s*[)）]|第\s*[0-9一二三四五六七八九十]{1,3}\s*[问条题]|[0-9]{1,3}\s*[.、．](?!\d)|[一二三四五六七八九十]\s*[、.．])/;
+
+export function stripAnswerNumbering(s: string): string {
+  let t = (s || '').trim();
+  for (let i = 0; i < 3; i++) {
+    const next = t.replace(new RegExp(`^\\s*${ANSWER_NUM_RE.source}\\s*`), '');
+    if (next === t) break;
+    t = next;
+  }
+  // 「第一问：十月中旬」剥完编号会残留冒号 —— 顺带剥掉编号后的引导标点
+  return t.replace(/^[:：、,，.．\s]+/, '').trim();
+}
+
+/**
+ * 把一句可能含多段回答的话切开。
+ *
+ * 规则（S 批 §3.2）：按 `；` / `;` / 换行切分；每段剥编号前缀；空段丢弃。
+ * 没有任何分隔符 → 原样单段返回（单段回答走旧协议也成立 —— 本函数是兼容层，不是闸门）。
+ */
+/**
+ * 把一句可能含多段回答的话切开。
+ *
+ * 规则（S 批 §3.2）：按 `；` / `;` / 换行切分；每段剥编号前缀；空段丢弃。
+ * 没有任何分隔符 → 原样单段返回（单段回答走旧协议也成立 —— 本函数是兼容层，不是闸门）。
+ *
+ * 编号即分隔：追问是带编号渲染的，用户很可能照编号连写（「1. 十月中旬 2. 一共20小时」，
+ * 中间只有空格没有分号）。这类**行内编号**也按切段处理 —— 但只有「空白后的数字编号」
+ * 才切（防「1.5小时」「20.30」被腰斩）；圈号/emoji 编号自身就是边界，直接切。
+ */
+const INLINE_NUM_SPLIT =
+  /(?:^|(?<=\s))(?:[（(]\s*[0-9]{1,2}\s*[)）]|[（(]?\s*[0-9]{1,2}\s*[.、．](?!\d)|[①②③④⑤⑥⑦⑧⑨⑩]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|第[0-9一二三四五六七八九十]{1,3}[问条题])\s*/;
+
+export function splitAnswers(q: string): string[] {
+  const s = (q || '').replace(/\r\n?/g, '\n');
+  if (!s.trim()) return [];
+  const out: string[] = [];
+  for (const seg of s.split(/[；;\n]+/)) {
+    for (const piece of seg.split(INLINE_NUM_SPLIT)) {
+      const t = stripAnswerNumbering(piece);
+      if (t) out.push(t);
+    }
+  }
+  return out;
+}
+
+/** 把一次规则解析的产物按「只填空位」纪律并进 `out`。有任一字段写进 → true。 */
+function mergeReplyIntoEmpties(out: IntentSlots, reply: IntentSlots): boolean {
+  let ok = false;
+  if (!out.title && reply.title) { out.title = reply.title; ok = true; }
+  if (!out.when && reply.when) {
+    out.when = reply.when;
+    if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+    if (reply.dateTo) out.dateTo = reply.dateTo;
+    out.certainty = reply.certainty;
+    ok = true;
+  }
+  if (reply.perWeekCount != null && out.perWeekCount == null) { out.perWeekCount = reply.perWeekCount; ok = true; }
+  if (reply.durationMin != null && out.durationMin == null) { out.durationMin = reply.durationMin; ok = true; }
+  if (reply.totalHours != null && out.totalHours == null) { out.totalHours = reply.totalHours; ok = true; }
+  if (!out.targetHint && reply.targetHint) { out.targetHint = reply.targetHint; ok = true; }
+  return ok;
+}
+
+/** 单段文本按指定槽位解析并写入 `out`（只写还空着的）。写进 → true。 */
+function fillOneSlot(out: IntentSlots, slot: SlotKey, text: string, today?: string): boolean {
+  const reply = parseIntentSlots(text, today);
+  switch (slot) {
+    case 'title':
+      if (out.title || !reply.title) return false;
+      out.title = reply.title;
+      return true;
+    case 'when':
+      if (out.when || !reply.when) return false;
+      out.when = reply.when;
+      if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+      if (reply.dateTo) out.dateTo = reply.dateTo;
+      out.certainty = reply.certainty;
+      return true;
+    case 'effort': {
+      let ok = false;
+      if (reply.perWeekCount != null && out.perWeekCount == null) { out.perWeekCount = reply.perWeekCount; ok = true; }
+      if (reply.durationMin != null && out.durationMin == null) { out.durationMin = reply.durationMin; ok = true; }
+      if (reply.totalHours != null && out.totalHours == null) { out.totalHours = reply.totalHours; ok = true; }
+      return ok;
+    }
+    case 'target':
+      if (out.targetHint || !reply.targetHint) return false;
+      out.targetHint = reply.targetHint;
+      return true;
+  }
+}
+
+export interface ClarifyAnswersResult {
+  slots: IntentSlots;
+  contributed: boolean;
+  /** 没被答上（或答了但解析不出）的槽位 —— 调用方**只重问这些**。 */
+  failed: SlotKey[];
+}
+
+/**
+ * 分号批量应答：第 i 段回答 ↔ `asked[i]` 第 i 问。
+ *
+ * ── 为什么不沿用 `applyClarifyAnswer` ─────────────────────────
+ * 旧协议把整句重新过一遍解析器，没有位置对应：问了两条、用户用分号分开答
+ * （「周五下午；每天两小时」）时，全句解析的抽取器会跨段乱配。本函数把
+ * 「问过什么」（调用方在提问时用 `topQuestionPairs` 记下的 `asked` 清单）
+ * 与「答了什么」按序对上，段内用同一套单槽抽取器。
+ *
+ * 纪律：
+ *  · `asked` 为空（v1 兼容 / 未接线的出口）→ 整体退回 `applyClarifyAnswer`
+ *    旧协议 —— 本函数必须是旧路径的**超集**，不允许比它懂得更少。
+ *  · 段数 > 问数 → 多余段拼回全句按「剩余空位」兜底再试一次（用户多说了不丢）。
+ *  · 某段解析不出对应槽位 → 该槽进 `failed`，调用方**只重问失败的**，
+ *    不把用户已给的半份信息扔掉再问一遍全量。
+ */
+export function applyClarifyAnswers(
+  q: string,
+  prev: IntentSlots,
+  asked: SlotKey[],
+  today?: string,
+): ClarifyAnswersResult {
+  const askedList: SlotKey[] = [];
+  for (const k of asked) if (!askedList.includes(k)) askedList.push(k);
+
+  if (askedList.length === 0) {
+    const r = applyClarifyAnswer(q, prev, today);
+    return { slots: r.slots, contributed: r.contributed, failed: [...r.slots.missing] };
+  }
+
+  const out: IntentSlots = { ...prev };
+  const segs = splitAnswers(q);
+  const failed: SlotKey[] = [];
+  let contributed = false;
+
+  const n = Math.min(segs.length, askedList.length);
+  for (let i = 0; i < n; i++) {
+    if (fillOneSlot(out, askedList[i], segs[i], today)) contributed = true;
+    else failed.push(askedList[i]);
+  }
+  // 问了但没答到的（段不够）—— 同样记 failed，只重问这些
+  for (let i = n; i < askedList.length; i++) failed.push(askedList[i]);
+
+  // 段多于问：多余的话按全句兜底，只往仍空着的槽位收
+  if (segs.length > askedList.length) {
+    const rest = segs.slice(askedList.length).join('；');
+    if (mergeReplyIntoEmpties(out, parseIntentSlots(rest, today))) contributed = true;
+  }
+
+  out.missing = missingSlots(out);
+  return { slots: out, contributed, failed };
 }
 
 /* ============================================================
