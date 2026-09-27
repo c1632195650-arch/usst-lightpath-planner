@@ -29,7 +29,7 @@
 🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
    真实坐标只用于后端算路与排序，不出现在任何响应体里。
 """
-import os, re, sys, io, json, time, uuid
+import os, re, sys, io, json, time, uuid, hashlib
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -206,6 +206,67 @@ def route_query(q, results):
         # 有相关知识；建议型提问几乎都走 hybrid（RAG 给事实 + LLM 给方法）
         return "hybrid", top_raw, intent
     return "llm", top_raw, intent
+
+
+# ---------- D 批 D5：问答相关性门（grounded/hybrid 的假命中防线） ----------
+# 病灶（D 批工作单 §0-5）：「关键词命中就套用」—— 检索分是归一化+时效加权的**排序分**，
+# 对假命中无防护：问「功率自行车」可能召回宿舍「大功率电器」规定，grounded 就把
+# 不相干的内容当依据硬套（答非所问且带假来源）。
+#
+# 门 = 一次廉价 LLM 调用（问题 + top3 标题/摘要 → relevant true/false，≤40 字理由）。
+#   · relevant=false → route 降级 'llm'（边界外诚实口径，不套用无关命中）；
+#   · LLM 不可用/超时 → **保持现状**并如实打印（没有判断能力却假装判断过，比不判断更糟）；
+#   · 同问题短 TTL 缓存，防同一句话反复花钱。
+RELEVANCE_TTL = int(os.environ.get("LIBAO_RELEVANCE_TTL", "300"))
+_relevance_cache = {}
+
+_RELEVANCE_SYSTEM = (
+    "你是校园资讯检索的相关性审核员。判断给出的资料是否真的能回答用户的问题。"
+    "只看语义相关性：字面有重叠但话题无关 = 不相关。只输出 JSON，不要输出别的。"
+)
+
+
+def relevance_gate(q, sources):
+    """True=相关（照旧 grounded/hybrid）；False=假命中（降级 llm）；None=门不可用。"""
+    if not LLM_API_KEY:
+        return None
+    key = hashlib.md5(q.encode("utf-8")).hexdigest()
+    now = time.time()
+    hit = _relevance_cache.get(key)
+    if hit and now - hit[0] < RELEVANCE_TTL:
+        return hit[1]
+    top = [{"title": s["title"], "snippet": s["snippet"][:120]} for s in (sources or [])[:3]]
+    try:
+        import requests
+        r = requests.post(
+            f"{LLM_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": _RELEVANCE_SYSTEM},
+                    {"role": "user", "content": json.dumps({
+                        "问题": q,
+                        "检索到的资料": top,
+                        "任务": "这些资料能否真的回答这个问题？能 → relevant=true；"
+                              "只是字面相似、话题无关 → relevant=false。",
+                        "输出格式": '{"relevant": true/false, "reason": "不超过40字"}',
+                    }, ensure_ascii=False)},
+                ],
+                "temperature": 0.0,
+                "max_tokens": 60,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=6,
+        )
+        r.raise_for_status()
+        data = json.loads(r.json()["choices"][0]["message"]["content"])
+        relevant = bool(data.get("relevant"))
+        _relevance_cache[key] = (now, relevant)
+        return relevant
+    except Exception as e:
+        print("[relevance] 门调用失败（按现状放行，不加伪门）：", e)
+        return None
 
 # ---------- 方法库 / 健康库上下文（2026-09-21 三树合流自 usst-planner 版） ----------
 # 校园资讯库回答「上理有什么/是什么」——**事实**；方法库回答「该怎么学/怎么练/怎么备考」——**方法**；
@@ -902,6 +963,19 @@ def api_chat(body: ChatReq):
     if health_ctx and route == "llm":
         route = "hybrid"
 
+    # 3.8) D 批 D5：相关性门 —— grounded/hybrid 的假命中防线。
+    #      只在 route 已命中知识库时花一次廉价 LLM 调用；判不相关 → 降级 'llm'
+    #      （边界外诚实口径）。None = LLM 不可用 → 保持现状，不加伪门。
+    relevance_result = None
+    if route in ("grounded", "hybrid"):
+        rel = relevance_gate(q, sources)
+        if rel is False:
+            route = "llm"
+            relevance_result = "irrelevant_downgraded"
+        elif rel is True:
+            relevance_result = "ok"
+        # rel is None → 保持现状（门不可用，如实申报，不伪造判定）
+
     # 4) 分层记忆（长期画像 + 增量摘要 + 最近原话）
     try:
         mem_ctx = memory.memory_context(body.user_id, body.session_id)
@@ -997,6 +1071,8 @@ def api_chat(body: ChatReq):
         "sources": sources,
         "used_space": bool(space_ctx),
         "used_memory": bool(mem_ctx),
+        # D5 相关性门观测信号：ok=门判相关｜irrelevant_downgraded=假命中已降级 llm｜None=门未触发/不可用
+        "relevance": relevance_result,
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
         # 方法库命中（2026-09-22 合流补漏：实现一直在跑，但响应字段在三树合流时丢了）。
