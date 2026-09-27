@@ -109,6 +109,36 @@ function numberedQuestions(pairs: Array<{ question: string }>): string[] {
   return pts;
 }
 
+/** understand 端点的 patch → 意图层 Partial<IntentSlots>。
+ *  时间结构化留在规则层：这里只把端点的结构化数字拼成 WhenHint 形状，
+ *  日期换算（resolveWhen）由 `mergeLlmPrimary` 做 —— 防 LLM 直接编 ISO 日期。
+ *  window_text 不在此映射：时段窗的分钟换算留在规则层（extractWindow），LLM 只定位。 */
+function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']): Partial<IntentSlots> {
+  const patch: Partial<IntentSlots> = {};
+  if (!p) return patch;
+  if (p.title) patch.title = p.title;
+  if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
+    || p.relativeWeeks != null || p.weekday != null) {
+    patch.when = {
+      text: p.when_text ?? '',
+      kind: (p.month != null || p.day != null) ? 'exact'
+        : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
+        : 'window',
+    };
+    if (p.month != null) patch.when.month = p.month;
+    if (p.day != null) patch.when.day = p.day;
+    if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
+    if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
+    if (p.weekday != null) patch.when.weekday = p.weekday;
+  }
+  if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
+  if (p.durationMin != null) patch.durationMin = p.durationMin;
+  if (p.totalHours != null) patch.totalHours = p.totalHours;
+  if (p.place) patch.place = p.place;
+  if (p.targetHint) patch.targetHint = p.targetHint;
+  return patch;
+}
+
 /** 对话初始说明，明确问答与排程两个能力。 */
 const GREETING =
   '我是梨宝，咱上理的校园助手。可以问四六级、选课、放假等校园问题；也可以说「帮我安排这周」，'
@@ -939,11 +969,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
   };
 
-  /** S3 · LLM 理解钩子 —— `parseGoalIntent` 的 `llmExtractor` 从此通电（P3）。
-   *  纪律①不变：mergeSlots 保证规则抽到的字段不被 LLM 覆盖，LLM 只补空。
-   *  understand 把规则层已抽到的槽位一起发给后端（LLM 只补它没抽到的）；
-   *  任何失败（后端没开 / 超时 / 解析坏 / action=false）返回 null → 规则兜底，不算错误。 */
-  const llmExtractor = useCallback(async (raw: string, seed: IntentSlots): Promise<Partial<IntentSlots> | null> => {
+  /** T 批换向 · LLM 裁决钩子 —— 所有消息（含关键词闸判 false 的句子）先让 LLM 看一眼。
+   *  返回 verdict：action=true → mergeLlmPrimary（LLM 槽位为主，规则层结构化校验）；
+   *  action=false 且置信 ≥0.6 → 直接交回 RAG；null = 端点挂/离线 → 规则链路兜底。
+   *  CY 2026-09-27 晚拍板：关键词闸门数学上不可穷尽，「周二晚上；6点到7点」这类
+   *  续答句只有 LLM 先看才接得住。 */
+  const llmJudge = useCallback(async (raw: string, seed: IntentSlots, history?: string[]) => {
     try {
       const res = await planUnderstand({
         scene: 'intent',
@@ -958,32 +989,15 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           targetHint: seed.targetHint,
         },
         today: todayISO(),
+        history,
       });
-      if (!res.ok || !res.action || !res.patch) return null;
-      const p = res.patch;
-      const patch: Partial<IntentSlots> = {};
-      if (p.title) patch.title = p.title;
-      if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
-        || p.relativeWeeks != null || p.weekday != null) {
-        patch.when = {
-          text: p.when_text ?? '',
-          kind: (p.month != null || p.day != null) ? 'exact'
-            : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
-            : 'window',
-        };
-        if (p.month != null) patch.when.month = p.month;
-        if (p.day != null) patch.when.day = p.day;
-        if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
-        if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
-        if (p.weekday != null) patch.when.weekday = p.weekday;
-      }
-      if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
-      if (p.durationMin != null) patch.durationMin = p.durationMin;
-      if (p.totalHours != null) patch.totalHours = p.totalHours;
-      if (p.place) patch.place = p.place;
-      if (p.targetHint) patch.targetHint = p.targetHint;
-      // window_text 不在此映射：时段窗的分钟换算留在规则层（extractWindow），LLM 只定位
-      return patch;
+      if (!res.ok) return null;
+      return {
+        action: !!res.action,
+        intent: (res.intent ?? undefined) as IntentSlots['intent'] | undefined,
+        patch: mapUnderstandPatch(res.patch),
+        confidence: typeof res.confidence === 'number' ? res.confidence : 0.5,
+      };
     } catch {
       return null;
     }
@@ -991,9 +1005,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   /** S3 · 应答救援：规则 applyClarifyAnswers 没接住时，LLM 把回答按 asked 定位成
    *  「槽位 → 原话片段」，片段回规则抽取器结构化（applyClarifyFragments）。
+   *  T 批：端点把回答里**任何**槽位信息都归位（asked 只是提示），带历史防指代。
    *  没接住 / 失败返回 null —— 走规则结论（保留式追问），不算错误。 */
   const rescueClarifyAnswer = useCallback(async (
-    q: string, c: ClarifyState, today: string,
+    q: string, c: ClarifyState, today: string, history?: string[],
   ): Promise<ClarifyAnswersResult | null> => {
     try {
       const res = await planUnderstand({
@@ -1001,6 +1016,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         q,
         asked: c.asked.map((slot) => `${slot}: ${questionsForSlots(c.slots, [slot])[0]?.question ?? slot}`),
         today,
+        history,
       });
       if (!res.ok || !res.answers) return null;
       const r = applyClarifyFragments(res.answers as Partial<Record<SlotKey, string>>, c.slots, c.asked, today);
@@ -1024,6 +1040,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
      *  老的 `isRecommendIntent` 已被 `looksLikeAction` 取代 —— 后者是它的
      *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
     const today = todayISO();
+
+    /** T 批：最近对话尾巴随理解请求发出 —— 「周二晚上；6点到7点」这类续答句
+     *  靠它接住被打断的排程上下文。只发角色+截断文本，不带 planPoints 等渲染噪音。 */
+    const history = messages.slice(-8)
+      .filter((m) => m.text.length > 0 && m.text.length <= 300)
+      .slice(-4)
+      .map((m) => `${m.role === 'user' ? '用户' : '梨宝'}: ${m.text.slice(0, 80)}`);
 
     // ── S2 · 状态机出口①：collect 态显式退出（最高优先）────────────
     // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
@@ -1066,9 +1089,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     if (clarify) {
       let merged = applyClarifyAnswers(q, clarify.slots, clarify.asked, today);
       if (!merged.contributed) {
-        // S3：规则没接住 → LLM 语义定位救援（纪律①：结构化仍在规则层，LLM 只补空；
-        // 救援失败静默走规则结论 —— 保留式追问，不算错误）
-        const rescue = await rescueClarifyAnswer(q, clarify, today);
+        // S3：规则没接住 → LLM 语义定位救援（结构化仍在规则层；救援失败静默走
+        // 规则结论 —— 保留式追问，不算错误）。T 批：带历史防指代。
+        const rescue = await rescueClarifyAnswer(q, clarify, today, history);
         if (rescue) merged = rescue;
       }
       if (merged.contributed) {
@@ -1094,7 +1117,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 状态机出口④前哨：完全无关 —— 先给**新动作句**一次打断机会（以新句为准）。
       // 打断是有声的：回应里说明旧追问作废，不让用户猜自己上一轮的回答去哪了。
-      const interrupt = await parseGoalIntent(q, { today, llm: llmExtractor });
+      const interrupt = await parseGoalIntent(q, { today, llmJudge, history });
       if (interrupt.action) {
         updateClarify(null);
         setMessages((current) => [...current, {
@@ -1123,7 +1146,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
     }
 
-    const outcome = await parseGoalIntent(q, { today, llm: llmExtractor });
+    const outcome = await parseGoalIntent(q, { today, llmJudge, history });
 
     // 验收修正（2026-09-27 E2E 抓到）：hold 没有 title（它是「留空一段时间」，
     // 不是一件「事」）—— 门只认 title 会把 hold 整句漏进泛泛安排分支，

@@ -68,8 +68,8 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - relativeDays: 相对天数（今天=0 明天=1 后天=2 大后天=3）
 - relativeWeeks: 相对周数（这周=0 下周=1）
 - weekday: 星期几（周一=1 … 周日=7）
-- perWeekCount: 每周几次（「每天」=7）
-- durationMin: 单次时长（分钟）（「每次2小时」=120）
+- perWeekCount: 每周几次（「每天」=7；「隔天/每两天」≈每周3-4次，按 4 记）
+- durationMin: 单次时长（分钟）（「每次2小时」=120；「6点到7点」这种回答时长的说法=60）
 - totalHours: 总投入（小时）（「一共20小时」=20）
 - place: 地点（如「图书馆」）
 - window_text: 时段窗原话（如「晚上」「下午」「18点之后」）
@@ -78,8 +78,9 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 _SYSTEM_BASE = (
     "你是日程排程助手「梨宝」的理解层。用户的话可能是要安排日程，也可能只是闲聊或提问。"
     + _SLOT_SPEC
-    + "\n规则：规则层（关键词/正则）已经跑过一遍，你只负责补它抽不到的语义；"
-    "禁止编造用户没说的内容；不确定就必须给低 confidence（<0.5）；只输出 JSON，不要输出别的。"
+    + "\n规则：你是**第一理解层**，独立判断这句话的意思；规则层（关键词/正则）先跑过一遍，"
+    "但它的词表不可能穷尽口语 —— 它的输出仅供参考，可能不全也可能抽错，你可以给出它没抽到"
+    "或需要修正的槽位。禁止编造用户没说的内容；不确定就必须给低 confidence（<0.5）；只输出 JSON，不要输出别的。"
 )
 
 
@@ -146,11 +147,13 @@ def _clean_patch(patch):
 
 
 def _clean_answers(answers, asked_keys):
-    """answers 只保留 asked 清单里的槽位，值必须是原话片段（≤80 字）。"""
+    """answers 白名单 = 全部槽位键（T 批：asked 只是提示，用户答了别的槽位也要收）；
+    值必须是原话片段（≤80 字）。"""
     if not isinstance(answers, dict):
         return {}
+    allowed = ("title", "when", "effort", "target")
     out = {}
-    for k in asked_keys:
+    for k in allowed:
         v = answers.get(k)
         if isinstance(v, str) and v.strip():
             out[k] = v.strip()[:80]
@@ -210,9 +213,12 @@ def plan_understand(req: UnderstandReq):
         if req.scene == "intent":
             user = json.dumps({
                 "今天": req.today,
-                "规则层已抽到的槽位": req.slots or {},
+                "规则层已抽到的槽位（仅供参考，可能不全或抽错）": req.slots or {},
+                "最近对话（可能有指代，排程会话刚被打断时靠它接续）": (req.history or [])[-4:],
                 "用户的话": req.q,
-                "任务": "判断这句话是否要动日程（action）。要动日程包括：要排/要加/要改/要取消/要替换某件事、要记截止日、要把某段时间留空别排、以及问自己日程忙闲（query）。纯问信息、求建议、闲聊 → action=false。",
+                "任务": "判断这句话是否要动日程（action）。要动日程包括：要排/要加/要改/要取消/要替换某件事、要记截止日、要把某段时间留空别排、以及问自己日程忙闲（query）。"
+                    "注意：用户只报时间/时段（如「周二晚上；6点到7点」）而最近对话里正有一件待定安排时，这是在**续答**，算 action=true。"
+                    "纯问信息、求建议、闲聊 → action=false。",
                 "输出格式": '{"action": true/false, "intent": "create|replace|reschedule|cancel|query|add_deadline|hold", "patch": {槽位...}, "confidence": 0到1}（patch 只放抽到的槽位，抽不到就省略该键）',
             }, ensure_ascii=False)
             data = _parse_json(_chat(_SYSTEM_BASE, user))
@@ -235,9 +241,14 @@ def plan_understand(req: UnderstandReq):
             return {"ok": False, "reason": "no_asked"}
         user = json.dumps({
             "问过的问题（槽位: 话术）": asked_lines,
+            "最近对话（可能有指代）": (req.history or [])[-4:],
             "用户的回答": req.q,
-            "任务": "把回答拆到对应的槽位，值为**原话片段**（照抄，不要改写）。没答到的槽位不要出现在输出里。回答里可能用分号/编号分隔多段，按位置或语义对应。",
-            "输出格式": '{"answers": {"槽位": "原话片段", ...}, "confidence": 0到1}（answers 键只能取问过的槽位）',
+            "任务": "把回答拆到对应的槽位，值为**原话片段**（照抄，不要改写）。注意：问过的问题是**提示**，"
+                "不是过滤器 —— 回答里出现的**任何**槽位信息都要归位，即使不是被问的那一项"
+                "（比如问的是投入多少、用户答了「周二晚上」，时间也要输出到 when）。"
+                "「还没定/待定/到时候再说」这类回答也是有效回答，照抄归到对应槽位。"
+                "回答里可能用分号/编号分隔多段，按位置或语义对应。完全与槽位无关的内容不要输出。",
+            "输出格式": '{"answers": {"槽位": "原话片段", ...}, "confidence": 0到1}（answers 键只能取 title/when/effort/target）',
         }, ensure_ascii=False)
         data = _parse_json(_chat(_SYSTEM_BASE, user))
         answers = _clean_answers(data.get("answers") or {}, asked_keys)

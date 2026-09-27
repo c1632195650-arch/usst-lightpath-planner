@@ -142,11 +142,33 @@ export interface ParseOutcome {
   /** 是否属于「要动日程」的句子。false = 交回 RAG 问答老路径 */
   action: boolean;
   slots: IntentSlots;
-  source: 'rule' | 'rule+llm';
+  /** `llm+rule` = LLM 主理解（T 批换向）；`rule+llm` = 规则先行 LLM 补空；`rule` = 纯规则 */
+  source: 'rule' | 'rule+llm' | 'llm+rule';
 }
 
 /** LLM 抽取器 —— 由调用方注入（后端 tool call / 本地模型皆可），本模块不关心实现 */
 export type LlmExtractor = (raw: string, seed: IntentSlots) => Promise<Partial<IntentSlots> | null>;
+
+/**
+ * LLM 裁决（T 批换向 · 「LLM 先看一眼」）。
+ *
+ * 与 `LlmExtractor`（只补空）的区别：这是**主理解层**的 verdict ——
+ * LLM 先于关键词闸门看到每一句话，独立判断「要不要动日程」并给出槽位
+ * patch；规则层退到结构化校验位（mergeLlmPrimary）与离线兜底位。
+ *
+ * CY 真机翻车（2026-09-27 晚）：「周二晚上；6点到7点」这类无名词无动词的
+ * 续答句，关键词闸门数学上不可能穷尽 —— 只有让 LLM 先看才关得掉这个洞。
+ */
+export interface LlmVerdict {
+  action: boolean;
+  intent?: GoalIntent;
+  patch: Partial<IntentSlots>;
+  /** 0–1。action=false 且置信 < 0.6 → 调用方落回规则链路（不信 LLM 的含糊否决） */
+  confidence: number;
+}
+
+/** 返回 null = 端点挂/离线/解析坏 → 调用方整体落回规则链路（不是「判非动作」）。 */
+export type LlmJudge = (raw: string, seed: IntentSlots, history?: string[]) => Promise<LlmVerdict | null>;
 
 /* ============================================================
  * 一、词表（全部显式列在这里，便于 review 与扩充）
@@ -969,26 +991,84 @@ export function splitAnswers(q: string): string[] {
   return out;
 }
 
-/** 把一次规则解析的产物按「只填空位」纪律并进 `out`。有任一字段写进 → true。 */
-function mergeReplyIntoEmpties(out: IntentSlots, reply: IntentSlots): boolean {
+/**
+ * 时间表达的「具体度」—— 回答语境下判断新听到的时间要不要替换旧值。
+ * 「周二晚上」（relative+weekday=3）应当替换「这周」（relative 周级=2）；
+ * 反过来「十月中旬吧」（window+month=2）不该顶掉已听到的「下周三」（3）。
+ * 纯比较函数，不决定「谁权威」—— 权威性由调用语境（是不是在被问 when）定。
+ */
+function whenScore(w: WhenHint): number {
+  if (w.kind === 'vague') return 0;
+  if (w.kind === 'exact') return 4;
+  if (w.kind === 'relative') return w.relativeDays != null || w.weekday != null ? 3 : 2;
+  // window：落到月份的 > 学期词 / 循环约定
+  return w.month != null ? 2 : 1;
+}
+
+/** 把一次规则解析的产物按「只填空位」纪律并进 `out`。有任一字段写进 → true。
+ *  `refineWhen` = 回答语境的跨槽收编：when 已有时，只在**更具体**时替换
+ *  （问的是投入、用户顺口答了「周二晚上」—— 比「这周」具体，该收）。
+ *  `rawText` = 原话（回答语境传入）：规则数词抽不到时长时，再试「6点到7点」
+ *  这类时间段口语（spanDurationMin 只在回答语境生效，不进全局 parseIntentSlots）。 */
+function mergeReplyIntoEmpties(out: IntentSlots, reply: IntentSlots, refineWhen = false, rawText?: string): boolean {
   let ok = false;
   if (!out.title && reply.title) { out.title = reply.title; ok = true; }
-  if (!out.when && reply.when) {
-    out.when = reply.when;
-    if (reply.dateFrom) out.dateFrom = reply.dateFrom;
-    if (reply.dateTo) out.dateTo = reply.dateTo;
-    out.certainty = reply.certainty;
-    ok = true;
+  if (reply.when) {
+    if (!out.when) {
+      out.when = reply.when;
+      if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+      if (reply.dateTo) out.dateTo = reply.dateTo;
+      out.certainty = reply.certainty;
+      ok = true;
+    } else if (refineWhen && whenScore(reply.when) > whenScore(out.when)) {
+      out.when = reply.when;
+      out.dateFrom = reply.dateFrom;
+      out.dateTo = reply.dateTo;
+      out.certainty = reply.certainty;
+      ok = true;
+    }
   }
   if (reply.perWeekCount != null && out.perWeekCount == null) { out.perWeekCount = reply.perWeekCount; ok = true; }
   if (reply.durationMin != null && out.durationMin == null) { out.durationMin = reply.durationMin; ok = true; }
   if (reply.totalHours != null && out.totalHours == null) { out.totalHours = reply.totalHours; ok = true; }
   if (!out.targetHint && reply.targetHint) { out.targetHint = reply.targetHint; ok = true; }
+  if (!ok && rawText && out.durationMin == null) {
+    const span = spanDurationMin(rawText);
+    if (span != null) { out.durationMin = span; ok = true; }
+  }
   return ok;
 }
 
-/** 单段文本按指定槽位解析并写入 `out`（只写还空着的）。写进 → true。 */
-function fillOneSlot(out: IntentSlots, slot: SlotKey, text: string, today?: string): boolean {
+/**
+ * 「6点到7点」「六点半到八点」→ 时长分钟。
+ *
+ * ⚠️ 只在**回答投入追问**的语境里调用（`fillOneSlot` 的 effort 分支）——
+ * 事件陈述里的「下午2点到4点」是**时间窗**不是时长（「明天下午两点到四点
+ * 在图书馆自习」排的是那个时段，不是 120 分钟的运动量），全局套用会污染
+ * 正常解析。CY 真机翻车（2026-09-27 晚）：追问「占多久」，用户答
+ * 「6点到7点」被整段丢弃。
+ */
+export function spanDurationMin(text: string): number | undefined {
+  const s = text || '';
+  const m = /([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]+)\s*点(半)?\s*[到至~～－—-]\s*([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]+)\s*点(半)?/.exec(s);
+  if (!m) return undefined;
+  const val = (num: string, half?: string): number | undefined => {
+    const base = cnAmount(num);
+    if (base == null) return undefined;
+    return base + (half ? 0.5 : 0);
+  };
+  const a = val(m[1], m[2]);
+  const b = val(m[3], m[4]);
+  if (a == null || b == null || b <= a || b > 24) return undefined;
+  return Math.round((b - a) * 60);
+}
+
+/**
+ * 单段文本按指定槽位解析并写入 `out`。
+ *  `answer` 模式（用户**直接回答这个槽位**的追问）：when 权威替换 ——
+ *  问「什么时候」用户答「改到十月中旬吧」，哪怕旧值更具体也是用户改了主意。
+ */
+function fillOneSlot(out: IntentSlots, slot: SlotKey, text: string, today?: string, mode: 'fill' | 'answer' = 'fill'): boolean {
   const reply = parseIntentSlots(text, today);
   switch (slot) {
     case 'title':
@@ -996,17 +1076,27 @@ function fillOneSlot(out: IntentSlots, slot: SlotKey, text: string, today?: stri
       out.title = reply.title;
       return true;
     case 'when':
-      if (out.when || !reply.when) return false;
-      out.when = reply.when;
-      if (reply.dateFrom) out.dateFrom = reply.dateFrom;
-      if (reply.dateTo) out.dateTo = reply.dateTo;
-      out.certainty = reply.certainty;
-      return true;
+      if (!reply.when) return false;
+      // answer 模式 = 用户**直接回答 when 追问** → 权威替换（「改到十月中旬吧」
+      // 哪怕比旧值模糊也是用户改了主意）；fill 模式只填空位。
+      if (!out.when || mode === 'answer') {
+        out.when = reply.when;
+        if (reply.dateFrom) out.dateFrom = reply.dateFrom;
+        if (reply.dateTo) out.dateTo = reply.dateTo;
+        out.certainty = reply.certainty;
+        return true;
+      }
+      return false;
     case 'effort': {
       let ok = false;
       if (reply.perWeekCount != null && out.perWeekCount == null) { out.perWeekCount = reply.perWeekCount; ok = true; }
       if (reply.durationMin != null && out.durationMin == null) { out.durationMin = reply.durationMin; ok = true; }
       if (reply.totalHours != null && out.totalHours == null) { out.totalHours = reply.totalHours; ok = true; }
+      // 回答「占多久」的高频口语：用时间段表达时长（「6点到7点」= 1 小时）
+      if (!ok && out.durationMin == null) {
+        const span = spanDurationMin(text);
+        if (span != null) { out.durationMin = span; ok = true; }
+      }
       return ok;
     }
     case 'target':
@@ -1032,12 +1122,16 @@ export interface ClarifyAnswersResult {
  * 「问过什么」（调用方在提问时用 `topQuestionPairs` 记下的 `asked` 清单）
  * 与「答了什么」按序对上，段内用同一套单槽抽取器。
  *
+ * ── T 批换向（CY 真机翻车 2026-09-27 晚）───────────────────────
+ * `asked` 是**位置提示，不是过滤器**：问投入、用户答「周二晚上；正好是操场
+ * 跑步的时间」—— 对位解析失败就把整段丢掉，等于把有效信息当无关消息，
+ * missStreak 连累会话作废。改为：每段先试对位槽位，失败再按「剩余空位 +
+ * when 细化」收进任何槽位；`failed` = 问了**仍然缺**的（只重问这些）。
+ *
  * 纪律：
  *  · `asked` 为空（v1 兼容 / 未接线的出口）→ 整体退回 `applyClarifyAnswer`
  *    旧协议 —— 本函数必须是旧路径的**超集**，不允许比它懂得更少。
  *  · 段数 > 问数 → 多余段拼回全句按「剩余空位」兜底再试一次（用户多说了不丢）。
- *  · 某段解析不出对应槽位 → 该槽进 `failed`，调用方**只重问失败的**，
- *    不把用户已给的半份信息扔掉再问一遍全量。
  */
 export function applyClarifyAnswers(
   q: string,
@@ -1055,35 +1149,38 @@ export function applyClarifyAnswers(
 
   const out: IntentSlots = { ...prev };
   const segs = splitAnswers(q);
-  const failed: SlotKey[] = [];
   let contributed = false;
 
   const n = Math.min(segs.length, askedList.length);
   for (let i = 0; i < n; i++) {
-    if (fillOneSlot(out, askedList[i], segs[i], today)) contributed = true;
-    else failed.push(askedList[i]);
+    // 对位：直接答这个槽位 → answer 模式（when 权威替换）
+    if (fillOneSlot(out, askedList[i], segs[i], today, 'answer')) { contributed = true; continue; }
+    // 对位不上 → 本段可能答的是**别的**槽位（或顺带给了更具体的时间）——按空位收编
+    if (mergeReplyIntoEmpties(out, parseIntentSlots(segs[i], today), true, segs[i])) contributed = true;
   }
-  // 问了但没答到的（段不够）—— 同样记 failed，只重问这些
-  for (let i = n; i < askedList.length; i++) failed.push(askedList[i]);
-
   // 段多于问：多余的话按全句兜底，只往仍空着的槽位收
   if (segs.length > askedList.length) {
     const rest = segs.slice(askedList.length).join('；');
-    if (mergeReplyIntoEmpties(out, parseIntentSlots(rest, today))) contributed = true;
+    if (mergeReplyIntoEmpties(out, parseIntentSlots(rest, today), true, rest)) contributed = true;
   }
 
+  // failed = 问了**仍然缺**的（对位失败但被别的段/别的槽补上的不算）
   out.missing = missingSlots(out);
+  const failed = askedList.filter((k) => out.missing.includes(k));
   return { slots: out, contributed, failed };
 }
 
 /**
- * LLM 定位片段 → 槽位（S 批 S3 的应答通路）。
+ * LLM 定位片段 → 槽位（S 批 S3 的应答通路；T 批升级为「asked 只是提示」）。
  *
  * `understand` 端点（scene=answer）只做**语义定位**：把用户的回答拆成
  * 「槽位 → 原话片段」；结构化仍由本层规则抽取器完成 —— 片段可审计、
- * 数值可复现，与「规则优先，LLM 只补空」纪律①同源。
+ * 数值可复现。
  *
- * 只处理 `asked` 清单里的槽位；某片段解析不出对应结构 → 记入 `failed`。
+ * T 批：端点被要求把回答里**任何**槽位信息都归位（不只 asked）——
+ * 问投入、用户答了时间，时间也要收。所以这里处理 asked ∪ 碎片键的并集：
+ * asked 槽位走 answer 模式（权威），多余碎片走跨槽收编（when 仅更具体才替换）。
+ * `failed` = asked 里仍然缺的。
  */
 export function applyClarifyFragments(
   fragments: Partial<Record<SlotKey, string>>,
@@ -1091,19 +1188,28 @@ export function applyClarifyFragments(
   asked: SlotKey[],
   today?: string,
 ): ClarifyAnswersResult {
+  const askedList: SlotKey[] = [];
+  for (const k of asked) if (!askedList.includes(k)) askedList.push(k);
+
   const out: IntentSlots = { ...prev };
-  const failed: SlotKey[] = [];
   let contributed = false;
-  for (const slot of asked) {
+
+  for (const slot of askedList) {
     const frag = fragments[slot];
-    if (typeof frag !== 'string' || !frag.trim()) {
-      failed.push(slot);
-      continue;
-    }
-    if (fillOneSlot(out, slot, frag, today)) contributed = true;
-    else failed.push(slot);
+    if (typeof frag !== 'string' || !frag.trim()) continue;
+    if (fillOneSlot(out, slot, frag, today, 'answer')) contributed = true;
   }
+  // asked 之外的碎片（LLM 归位出的跨槽信息）→ 跨槽收编
+  const EXTRA = ['title', 'when', 'effort', 'target'] as const;
+  for (const k of EXTRA) {
+    if (askedList.includes(k)) continue;
+    const frag = fragments[k];
+    if (typeof frag !== 'string' || !frag.trim()) continue;
+    if (fillOneSlot(out, k, frag, today)) contributed = true;
+  }
+
   out.missing = missingSlots(out);
+  const failed = askedList.filter((k) => out.missing.includes(k));
   return { slots: out, contributed, failed };
 }
 
@@ -1225,21 +1331,92 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
 }
 
 /**
- * 对外唯一入口。
+ * T 批换向：LLM 主理解后的合并 —— **LLM 槽位为主，规则层只兜底**。
  *
- * 流程：快筛 → 规则解析 → （可选）LLM 补空 → 重算缺口。
- * `action === false` 时调用方应把问题交回 RAG 问答老路径 —— 这不是失败，
- * 是「这句不该动日程」的正常判定。
+ * 与 `mergeSlots`（规则字段永不被覆盖）方向相反：LLM 先看懂了整句话，
+ * 规则的词表/正则只是便宜但残缺的初筛，不该压住 LLM 的判断。
+ * 时间结构化（WhenHint → dateFrom/dateTo）仍在本层完成 —— LLM 给的是
+ * 结构化数字（month/day/relativeDays/…），日期换算走 `resolveWhen`，
+ * 防止 LLM 直接编 ISO 日期。
+ */
+export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> | null, today?: string): IntentSlots {
+  if (!patch) return rule;
+  const out: IntentSlots = { ...rule };
+
+  if (patch.title) out.title = patch.title;
+  if (patch.when) {
+    out.when = patch.when;
+    if (today) {
+      const r = resolveWhen(patch.when, today);
+      out.dateFrom = r.from;
+      out.dateTo = r.to;
+      out.certainty = r.certainty;
+    } else {
+      out.dateFrom = patch.dateFrom;
+      out.dateTo = patch.dateTo;
+      out.certainty = patch.certainty ?? out.certainty;
+    }
+    if (patch.when.unspecified) out.certainty = 'unknown';
+  }
+  if (!patch.when && patch.dateFrom) out.dateFrom = patch.dateFrom;
+  if (!patch.when && patch.dateTo) out.dateTo = patch.dateTo;
+  if (patch.perWeekCount != null) out.perWeekCount = patch.perWeekCount;
+  if (patch.durationMin != null) out.durationMin = patch.durationMin;
+  if (patch.totalHours != null) out.totalHours = patch.totalHours;
+  if (patch.place) out.place = patch.place;
+  if (patch.window) out.window = patch.window;
+  if (patch.targetHint) out.targetHint = patch.targetHint;
+
+  out.missing = missingSlots(out);
+  return out;
+}
+
+/**
+ * 对外唯一入口（T 批换向后）。
+ *
+ * 流程：**LLM 先看**（在线时所有消息都过理解层，含关键词闸判 false 的句子）
+ * → 要动日程则 LLM 槽位为主 + 规则结构化校验；明确不动且置信够 → 交回 RAG；
+ * 端点挂/超时/低置信 → 落回原规则链路（`looksLikeAction` 闸 + LLM 补空），
+ * 离线可用性不变。`action === false` 时调用方把问题交回 RAG 问答老路径。
  */
 export async function parseGoalIntent(
   q: string,
-  opts: { today?: string; llm?: LlmExtractor } = {},
+  opts: { today?: string; llm?: LlmExtractor; llmJudge?: LlmJudge; history?: string[] } = {},
 ): Promise<ParseOutcome> {
-  if (!looksLikeAction(q)) {
-    return { action: false, slots: parseIntentSlots(q, opts.today), source: 'rule' };
+  const ruleSlots = parseIntentSlots(q, opts.today);
+
+  // ── T 批换向：LLM 先看一眼（CY 2026-09-27 晚拍板「不能每次都靠找关键词」）──
+  if (opts.llmJudge) {
+    try {
+      const verdict = await opts.llmJudge(q, ruleSlots, opts.history);
+      if (verdict) {
+        if (verdict.action) {
+          let slots = mergeLlmPrimary(ruleSlots, verdict.patch ?? null, opts.today);
+          if (verdict.intent) slots = { ...slots, intent: verdict.intent };
+          // WP9 同族：改/取消/替换的目标块名在 targetHint —— send 门要 title
+          if (!slots.title && slots.targetHint
+            && (slots.intent === 'reschedule' || slots.intent === 'cancel' || slots.intent === 'replace')) {
+            slots = { ...slots, title: slots.targetHint };
+          }
+          slots.missing = missingSlots(slots);
+          return { action: true, slots, source: 'llm+rule' };
+        }
+        // LLM 明确说不动日程且置信够 → 信它（关键词闸可能误判的句子被纠偏）。
+        // 低置信的否决不可信（LLM 自己也没底）→ 落回规则链路。
+        if (verdict.confidence >= 0.6) {
+          return { action: false, slots: ruleSlots, source: 'llm+rule' };
+        }
+      }
+    } catch {
+      // 端点异常 → 规则链路兜底，不算错误
+    }
   }
 
-  let slots = parseIntentSlots(q, opts.today);
+  if (!looksLikeAction(q)) {
+    return { action: false, slots: ruleSlots, source: 'rule' };
+  }
+
+  let slots = ruleSlots;
   // WP9 收口（2026-09-27 真机 W5 验收抓到）：改/取消/替换类的「目标块名」抽在
   // targetHint 里，而 send 门槛是 `action && slots.title` —— 不补上，整句会
   // 漏判成 RAG 问答（草稿卡永远出不来）。
