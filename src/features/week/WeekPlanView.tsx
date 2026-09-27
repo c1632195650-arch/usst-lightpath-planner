@@ -475,6 +475,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
   };
 
+  // V2-2：梨宝「这段时间别排」确认后广播的重排请求 —— 收到就手动触发一次重排
+  useEffect(() => {
+    const onReplan = () => setReplanToken((v) => v + 1);
+    window.addEventListener('usst:replan', onReplan);
+    return () => window.removeEventListener('usst:replan', onReplan);
+  }, []);
+
   /* ---------- Toast 操作反馈（2026-09-19） ---------- */
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastSeq = useRef(0);

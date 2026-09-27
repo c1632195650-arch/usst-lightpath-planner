@@ -28,3 +28,15 @@
 **命令实据**：tsc 0 错；v1 7/7；golden-compare 5/5；gate 5/5（engine 394 / ui 280；week/ 4 文件例外申报）
 
 **反向验证**：RV1 kind 改 activity + RV2 阈值位移 + RV3 挪回包裹内 → 批量 fail 3 → 恢复 → 7/7
+
+## 批 V2 —— commit `V2:`
+
+| 项 | 改动 |
+|---|---|
+| V2-1 挑块接续 | `weekPlanForChat.ts` 增 `matchCandidate`（归一互相包含，0/1/N 分发）；`LbaoChat.tsx` 增 `clarifyPicking` 状态：runCancel/runReschedule 多命中挂候选 → 下一句按名匹配 → 单命中重进执行器出草稿卡；未命中诚实重列 |
+| V2-2 hold 意图 | `libaoIntent.ts` 增 `hold`（别排/不要排/留出来/空出来/这段时间有空/没空；置于 cancel 之前——「别排」从 cancel 让位，台账申报）；`weekPlanForChat.ts` 增 `holdSlotFrom`（窗缺省整天，缺天追问）+ `holdToUnavailableSlot`（一次性，当前周）；`LbaoChat.tsx` runHold → 草稿卡确认 → addSlot 落层 + `window.dispatchEvent('usst:replan')`；`WeekPlanView.tsx` 监听 → replanToken+1 触发重排 |
+| V2-3 我的卡文案 | 核对通过：desc 已讲清「梨宝按你的画像、记忆与校正记录量身定制」，不改（纯数据核对项） |
+
+**命令实据**：tsc 0 错；v2 6/6；golden-compare 5/5；gate 5/5（engine 394 / ui 280）
+
+**反向验证**：RV1 模糊匹配删 + RV2 hold 条目删（批量 fail 2）；RV3 缺天猜整天（fail 1）→ 恢复 → 6/6

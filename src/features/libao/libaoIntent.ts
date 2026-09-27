@@ -47,7 +47,8 @@ export type GoalIntent =
   | 'reschedule'  // 同一件事换时间
   | 'cancel'      // 取消已排的事
   | 'query'       // 只问不建议（「我这周忙不忙」）
-  | 'add_deadline'; // WP11：记一条重要日/截止日（要比赛/要考/截止/备赛/重要日子）
+  | 'add_deadline' // WP11：记一条重要日/截止日（要比赛/要考/截止/备赛/重要日子）
+  | 'hold';        // V2-2：这段时间别排（写 unavailableSlots —— 与调课语义不同，见 weekPlanForChat 注释）
 
 /**
  * 时间的确定程度 —— 决定后面走哪条出口。
@@ -233,7 +234,10 @@ const LEGACY_RECOMMEND_ACT = /(怎么|干嘛|做啥|干点|过|安排|干什么|
 
 /** 动作识别（决定 intent 枚举）。顺序敏感：取消 > 改时间 > 替换 > 只问 > 新增。 */
 const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
-  { intent: 'cancel', re: /(取消|删掉|不去了|不参加了|退掉|别排|不要了)/ },
+  // V2-2：hold 在 cancel 之前 —— 「周三下午别排东西」是「留空一段时间」，
+  // 不是「取消某块」；cancel 的「别排」让位给 hold（台账申报）。
+  { intent: 'hold', re: /(别排|不要排|留出来|空出来|这段时间有空|没空)/ },
+  { intent: 'cancel', re: /(取消|删掉|不去了|不参加了|退掉|不要了)/ },
   { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到)/ },
   { intent: 'replace', re: /(替换|顶掉|改成|换成|取代)/ },
   { intent: 'query', re: /(忙不忙|排得开|来不来得及|有没有空|有空吗|装得下|排得下)/ },
@@ -740,6 +744,8 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
   query: [],
   // 重要日只要「什么事 + 哪天截止」；准备量缺省（deadlineStore 有默认值）
   add_deadline: ['title', 'when'],
+  // hold 只要「哪段时间」（哪天 + 起止）；没说窗就整天
+  hold: ['when'],
 };
 
 /**
@@ -1051,6 +1057,7 @@ export function describeSlots(s: IntentSlots): string[] {
     cancel: '取消',
     query: '只看看',
     add_deadline: '记重要日',
+    hold: '留空',
   };
   const out: string[] = [`动作：${verb[s.intent]}`];
   out.push(`事情：${s.title || '（没听清）'}`);

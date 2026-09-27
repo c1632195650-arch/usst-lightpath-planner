@@ -552,7 +552,7 @@ export function describeVerdict(v: GoalVerdict): string[] {
  * activity/study —— 课程不取消不拖拽，改课走调课）。
  * 找不到 / 命中多个 → 返回原样由调用方**追问**，绝不硬猜（core §4）。
  */
-import { excludeBlock, removeTask, upsertMove, type MoveRecord, type UserPlanLayer } from '@/features/week/userPlanStore';
+import { addSlot, excludeBlock, makeLayerId, removeTask, upsertMove, type MoveRecord, type UnavailableSlot, type UserPlanLayer } from '@/features/week/userPlanStore';
 import { dragTo } from '@/lib/planner/ripple';
 
 export type DraftKind = 'create' | 'reschedule' | 'cancel' | 'replace' | 'query';
@@ -740,4 +740,53 @@ export function modePreview(req: PlanRequest, modeId: string): ModePreviewResult
   } catch (e) {
     return { mode: modeId, error: e instanceof Error ? e.message : '这个模式排不出来，换一个试试' };
   }
+}
+
+
+/* ============================================================
+ * V2-1：多目标挑块 —— 候选匹配（LbaoChat clarify 接续消费）
+ * ============================================================ */
+/** 用户回复 → 命中的候选（归一后互相包含）。可能 0/1/N 个：调用方按数分发，不硬猜。 */
+export function matchCandidate(reply: string, candidates: readonly CancelTarget[]): CancelTarget[] {
+  const needle = normTitle(reply);
+  if (!needle) return [];
+  return candidates.filter((c) => {
+    const t = normTitle(c.title);
+    return t.includes(needle) || needle.includes(t);
+  });
+}
+
+/* ============================================================
+ * V2-2：「这段时间别排」（hold）执行器
+ * ------------------------------------------------------------
+ * 与调课的边界：hold =「这段时间不可用」（写 layer.slots，引擎重排时让位、
+ * 拖拽合规闸同源拒收）；调课 =「某节课时间变了」（CourseOverrideEditor，覆盖层）。
+ * 两者语义不同，入口也不同 —— 别混。
+ */
+export interface HoldSlotDraft {
+  day: number;
+  fromMin: number;
+  toMin: number;
+}
+
+/** hold 槽位 → 时段草稿：要天（weekday/日期），窗缺省整天（07:00–23:00）；没有天 = 追问 */
+export function holdSlotFrom(slots: IntentSlots): HoldSlotDraft | { need: 'time' } {
+  const day = slots.when?.weekday
+    ?? (slots.dateFrom ? (() => { const wd = weekdayOf(slots.dateFrom); return wd === 0 ? 7 : wd; })() : undefined);
+  if (day == null) return { need: 'time' };
+  return { day, fromMin: slots.window?.fromMin ?? 7 * 60, toMin: slots.window?.toMin ?? 23 * 60 };
+}
+
+/** 时段草稿 → UnavailableSlot（一次性，只作用于当前周；引擎与拖拽闸同源消费） */
+export function holdToUnavailableSlot(d: HoldSlotDraft, weekNo: number, title?: string): UnavailableSlot {
+  return {
+    id: makeLayerId('hold'),
+    days: [d.day],
+    fromMin: d.fromMin,
+    toMin: d.toMin,
+    weeks: [weekNo],
+    scope: 'once',
+    createdAtWeek: weekNo,
+    ...(title ? { title } : {}),
+  };
 }

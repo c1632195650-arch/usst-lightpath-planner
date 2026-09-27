@@ -19,10 +19,14 @@ import {
   planWeekForChat,
   planWeekWithTasks,
   summarizeWeekPlan,
+  holdSlotFrom,
+  holdToUnavailableSlot,
+  matchCandidate,
   type CancelTarget,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import { addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
+import type { UnavailableSlot } from '@/features/week/userPlanStore';
+import { addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
@@ -61,7 +65,7 @@ interface Msg {
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
  *  WP9：kind 区分执行器（确认时走不同落层通道），缺省 create 兼容旧草稿。 */
 interface PendingGoal {
-  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query';
+  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold';
   title: string;
   tasks: UserTask[];
   /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
@@ -70,6 +74,8 @@ interface PendingGoal {
   cancelTarget?: CancelTarget;
   /** reschedule：确认后 upsertMove 的记录与涟漪预览 */
   movePreview?: ReschedulePreview;
+  /** V2-2 hold：确认后 addSlot 的不可时段（一次性，只作用于当前周） */
+  holdSlot?: UnavailableSlot;
 }
 
 /** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
@@ -180,6 +186,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   /** WP11：等确认的重要日提案（确认才写 deadlineStore，且不触发自动重排） */
   const [pendingDeadlines, setPendingDeadlines] = useState<Record<number, DeadlineProposal>>({});
   const pendingSeq = useRef(boot?.pendingSeq ?? 0);
+  /** V2-1：多目标挑块接续 —— 梨宝追问「挪哪个」后挂起候选，下一句回复按名匹配 */
+  const [clarifyPicking, setClarifyPicking] = useState<{
+    kind: 'cancel' | 'reschedule';
+    slots: IntentSlots;
+    candidates: CancelTarget[];
+  } | null>(null);
 
   // ── WP9：侧栏排程预览卡 —— 「必须跟随最新进度」的落点 ──────────────
   // 任何落盘（确认排/取消/挪/替换）都 bumpPlanVersion() → 重算引擎 → 卡片刷新。
@@ -312,6 +324,30 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const confirmGoal = (key: number) => {
     const g = pending[key];
     if (!g) return;
+
+    // ── V2-2·hold：确认 → addSlot 落层 + 广播重排（被屏蔽块让位）──
+    if (g.kind === 'hold' && g.holdSlot) {
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        saveUserPlan({ ...layer, slots: addSlot(layer.slots, g.holdSlot) });
+        bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan')); // WeekPlanView 监听 → replanToken+1
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '好，这段时间空出来了，日程正在重新排。不合适按 ↩ 撤销。',
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, { role: 'lbao', text: '落盘的时候出了点小状况，没写成。可以再说一遍。' }]);
+      }
+      return;
+    }
 
     // ── WP9·cancel：确认 → applyCancel 落层（一次 undo 快照）──
     if (g.kind === 'cancel' && g.cancelTarget) {
@@ -511,8 +547,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     if (targets.length > 1) {
-      // 走既有追问通道：把 'target' 塞回缺口，下一句回答会被收进槽位
-      setClarifySlots({ ...slots, targetHint: undefined, missing: ['target' as const] });
+      // V2-1：候选挂进 picking —— 下一句回复按名匹配，不再依赖 applyClarifyAnswer 认 target
+      setClarifySlots(null);
+      setClarifyPicking({ kind: 'cancel', slots, candidates: targets });
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `「${q}」对上好几件事，你要取消哪个？`,
@@ -521,9 +558,37 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
-    const t = targets[0];
+    await runCancelWithTarget(slots, targets[0]);
+  };
+
+  /** V2-2·hold 执行器：「这段时间别排」→ 不可时段草稿（写 slots 通道，确认后落盘+广播重排） */
+  const runHold = async (slots: IntentSlots, today: string) => {
+    const draft = holdSlotFrom(slots);
+    if ('need' in draft) {
+      setClarifySlots({ ...slots, missing: [...new Set([...slots.missing, 'when' as const])] });
+      setMessages((current) => [...current, { role: 'lbao', text: '好，哪段时间要空出来？（比如「周三下午」「周五晚上」）' }]);
+      setLoading(false);
+      return;
+    }
+    const weekNo = currentWeekNo(schedule.termStart, today);
+    const slot = holdToUnavailableSlot(draft, weekNo);
     const key = (pendingSeq.current += 1);
     setClarifySlots(null);
+    setPending((p) => ({ ...p, [key]: { kind: 'hold', title: slot.title ?? '留空时段', tasks: [], weeks: [], holdSlot: slot } }));
+    const hh = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: '把这段时间空出来（还没动手）：',
+      planPoints: [`周${draft.day} ${hh(draft.fromMin)}–${hh(draft.toMin)} 不排任何事`, '确认后我会重新排，让开这段时间'],
+      goalAsk: key,
+    }]);
+    setLoading(false);
+  };
+
+  const runCancelWithTarget = async (slots: IntentSlots, t: CancelTarget) => {
+    const key = (pendingSeq.current += 1);
+    setClarifySlots(null);
+    setClarifyPicking(null);
     setPending((p) => ({ ...p, [key]: { kind: 'cancel', title: t.title, tasks: [], weeks: [], cancelTarget: t } }));
     setMessages((current) => [...current, {
       role: 'lbao',
@@ -556,7 +621,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     if (targets.length > 1) {
-      setClarifySlots({ ...slots, targetHint: undefined, missing: ['target' as const] });
+      // V2-1：候选挂进 picking（块级候选，title+day 可辨）
+      setClarifySlots(null);
+      setClarifyPicking({
+        kind: 'reschedule', slots,
+        candidates: targets.map((b) => ({ blockId: b.id, title: b.title, origin: 'plan' as const, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` })),
+      });
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `「${q}」对上好几块，挪哪个？`,
@@ -587,11 +657,31 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
+    await runRescheduleWithPreview(slots, src.title, preview);
+  };
+
+  /** V2-1：候选已定块 → 按 blockId 找回块本体，直接进拖拽预览 */
+  const runRescheduleWithTarget = async (slots: IntentSlots, today: string, target: CancelTarget) => {
+    const blocks = await blocksForMatching(today);
+    const src = blocks.find((b) => b.id === target.blockId);
+    if (!src) {
+      setMessages((current) => [...current, { role: 'lbao', text: '这块刚被日程刷新弄没了，再说一遍要挪的事？' }]);
+      setLoading(false);
+      return;
+    }
+    const weekNo = currentWeekNo(schedule.termStart, today);
+    const preview = planReschedule(blocks, src.id, weekNo, src.dayOfWeek, src.startMin);
+    await runRescheduleWithPreview(slots, src.title, preview);
+  };
+
+  const runRescheduleWithPreview = async (slots: IntentSlots, title: string, preview: ReschedulePreview) => {
     const key = (pendingSeq.current += 1);
     setClarifySlots(null);
-    setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title: src.title, tasks: [], weeks: [], movePreview: preview } }));
+    setClarifyPicking(null);
+    setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title, tasks: [], weeks: [], movePreview: preview } }));
+    const mv = preview.move!;
     const lines = [
-      `${src.title} → 周${preview.move.dayOfWeek} ${String(Math.floor(preview.move.startMin / 60)).padStart(2, '0')}:${String(preview.move.startMin % 60).padStart(2, '0')} 起`,
+      `${title} → 周${mv.dayOfWeek} ${String(Math.floor(mv.startMin / 60)).padStart(2, '0')}:${String(mv.startMin % 60).padStart(2, '0')} 起`,
       ...preview.displaced.map((d) => `被顺延：${d.title} → 周${d.day} ${d.start}–${d.end}`),
     ];
     setMessages((current) => [...current, {
@@ -659,10 +749,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const runGoalSlots = async (slots: IntentSlots, today: string) => {
     const t0 = Date.now();
     try {
-      // ── WP9：非 create 意图走各自执行器，不再全塞进 create 通路 ──
+      // ── WP9 + V2-2：非 create 意图走各自执行器，不再全塞进 create 通路 ──
       if (slots.intent === 'cancel') { await runCancel(slots, today); return; }
       if (slots.intent === 'reschedule') { await runReschedule(slots, today); return; }
       if (slots.intent === 'replace') { await runReplace(slots, today); return; }
+      if (slots.intent === 'hold') { await runHold(slots, today); return; }
 
       // ── WP11：重要日意图 → 走提案卡，不进排程干跑（记节点 ≠ 排块）──
       if (slots.intent === 'add_deadline') {
@@ -778,6 +869,29 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
      *  老的 `isRecommendIntent` 已被 `looksLikeAction` 取代 —— 后者是它的
      *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
     const today = todayISO();
+
+    // ── V2-1：多目标挑块接续 —— 上一条在等「挪哪个/取消哪个」→ 这句按名匹配候选 ──
+    if (clarifyPicking) {
+      const hits = matchCandidate(q, clarifyPicking.candidates);
+      if (hits.length === 1) {
+        const target = hits[0];
+        const { kind, slots } = clarifyPicking;
+        setClarifyPicking(null);
+        if (kind === 'cancel') await runCancelWithTarget(slots, target);
+        else await runRescheduleWithTarget(slots, today, target);
+        return;
+      }
+      // 未命中 / 多命中 → 诚实重列，不硬猜
+      const list = (hits.length > 0 ? hits : clarifyPicking.candidates).slice(0, 5)
+        .map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`);
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: hits.length === 0 ? `没找到「${q}」。候选是这些：` : '这几条还挑不出唯一一个，再说具体点：',
+        planPoints: list,
+      }]);
+      setLoading(false);
+      return;
+    }
 
     // ── 追问接续：上一条梨宝消息在等答案 → 这句先当「回应」解析 ──
     // 「每周 3 次、每次 2 小时」单独看不是动作句，looksLikeAction 判 false 是对的；
