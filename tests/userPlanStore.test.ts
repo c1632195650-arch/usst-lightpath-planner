@@ -107,18 +107,19 @@ test('R2: addSlot / removeSlot', () => {
   assert.equal(removeSlot(a, 's1').length, 0);
 });
 
-test('R2: setMealPlace 设置与清空（传 undefined 删掉该餐次）', () => {
+// WP6（2026-09-27）申报：setMealPlace 已废弃为 no-op 存根（「常去食堂」删除，
+// 三餐由引擎 mealAutoPlace 自动就近接管）—— 旧断言迁移为「存根不写入」。
+test('R2: setMealPlace 已废弃为 no-op 存根（WP6 删常去食堂）', () => {
   let mp = setMealPlace({}, 'lunch', '第一食堂');
-  assert.equal(mp.lunch, '第一食堂');
+  assert.equal(mp.lunch, undefined, '存根不再写入（自动就近接管）');
   mp = setMealPlace(mp, 'breakfast', '第二食堂');
-  assert.equal(mp.breakfast, '第二食堂');
+  assert.equal(mp.breakfast, undefined);
   mp = setMealPlace(mp, 'lunch', undefined);
-  assert.equal(mp.lunch, undefined, '传 undefined 应当清空该餐次');
-  assert.equal(mp.breakfast, '第二食堂', '不该影响别的餐次');
+  assert.equal(mp.lunch, undefined, '传 undefined 亦不写入');
 });
 
-test('R2: setMealPlace 空串视为清空', () => {
-  assert.equal(setMealPlace({ lunch: 'x' }, 'lunch', '   ').lunch, undefined);
+test('R2: setMealPlace 空串亦 no-op（废弃存根）', () => {
+  assert.equal(setMealPlace({ lunch: 'x' }, 'lunch', '   ').lunch, 'x');
 });
 
 /* ============================================================

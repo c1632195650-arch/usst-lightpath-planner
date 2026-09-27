@@ -274,16 +274,19 @@ export function removeAssignment(list: readonly Assignment[], id: string): Assig
   return list.filter((a) => a.id !== id);
 }
 
-/** 更新「我常去的食堂」；传 `undefined` = 清空该餐次 */
+/**
+ * @deprecated WP6（2026-09-27）：「常去食堂」功能已删除 —— 三餐由引擎自动就近
+ * （`PlanRequest.mealAutoPlace`，离下一节课最近的食堂）。保留 deprecated 存根
+ * 是为了旧调用方/旧 localStorage 数据不炸；下下版连本存根一起删。
+ */
 export function setMealPlace(
   mp: MealPlaces,
-  meal: keyof MealPlaces,
-  place: string | undefined,
+  _meal: keyof MealPlaces,
+  _place: string | undefined,
 ): MealPlaces {
-  const next: MealPlaces = { ...mp };
-  if (place && place.trim()) next[meal] = place.trim();
-  else delete next[meal];
-  return next;
+  void _meal;
+  void _place;
+  return { ...mp }; // no-op：不再写入
 }
 
 /* ============================================================

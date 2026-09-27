@@ -16,6 +16,7 @@
 import type { LifeMode, PersonaProfile } from '@/types';
 import { AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { LIFE_MODES } from '@/data/usst';
+import { normalizeLifeModeId } from '@/lib/planner/lifeModePolicy';
 
 /** `LbaoPlanView` 的渲染单位（一个卡片） */
 export interface LbaoBlock {
@@ -68,31 +69,33 @@ function axisReason(p: PersonaProfile, key: keyof typeof AXIS_META): string {
   return `${m.label} ${level}（${Math.round(v)}）`;
 }
 
-/** 每种模式的开场白 —— 说的是「这周打算怎么过」，不是「几点做什么」 */
+/** 每种模式的开场白 —— 说的是「这周打算怎么过」，不是「几点做什么」（WP5 新六模式） */
 const HEADLINES: Record<string, string> = {
   grind: '这周火力全开，把空余时间都留给重点课程',
-  health: '稳住作息，用规律的运动和睡眠给身体充能',
-  food: '每天给自己安排一顿「值得期待」的饭',
-  social: '把空档留给人和活动，日子过得热闹些',
-  slack: '允许自己慢下来，张弛有度才能走得远',
   balance: '保持你的节奏，学习休息两不误',
+  faraway: '允许自己慢下来，把大片时间留给诗和远方',
+  sport: '稳住作息，用规律的运动和睡眠给身体充能',
+  snack: '每天给自己安排一顿「值得期待」的饭',
+  mine: '不套模板 —— 这一周按你的画像来',
 };
 
 /**
  * 画像 → 生活方案的「外壳」（模式 + 开场白 + 依据）。
  *
  * @param modeId 用户手动指定的生活模式（周程页选择）；缺省按画像自动选。
+ *   WP5：旧 id（slack/food/health/social）在这里归一成新六模式。
  */
 export function lbaoShell(profile: PersonaProfile, modeId?: string | null): LbaoShell {
   const autoMode = pickMode(profile);
-  const mode = modeId
-    ? (LIFE_MODES.find((m) => m.id === modeId) ?? autoMode)
+  const normalized = normalizeLifeModeId(modeId);
+  const mode = normalized
+    ? (LIFE_MODES.find((m) => m.id === normalized) ?? autoMode)
     : autoMode;
 
-  const focusAxis = mode.id === 'social' ? 'SOC'
-    : mode.id === 'food' ? 'EXP'
+  const focusAxis = mode.id === 'snack' ? 'EXP'
+    : mode.id === 'faraway' ? 'EXP'
       : mode.id === 'grind' ? 'PLAN'
-        : mode.id === 'health' ? 'HEA'
+        : mode.id === 'sport' ? 'HEA'
           : 'RES';
 
   const reasons = [

@@ -398,6 +398,16 @@ export interface PlanRequest {
   mealPlaces?: { breakfast?: string; lunch?: string; dinner?: string } | null;
 
   /**
+   * WP6（2026-09-27）：三餐自动就近食堂。
+   *
+   * 开启后：用户未显式指定（mealPlaces）的那几餐，引擎按「离下一节课上课地点
+   * 最近的食堂」自动填 `place`（候选来自模块库的 MEALS，距离走注入的 transfer
+   * provider —— 与全引擎同一份步行分钟数据，无 lat/lon）。
+   * 缺省 false = T2 行为（不填地点）—— golden 语料不带此开关，默认路径零改动。
+   */
+  mealAutoPlace?: boolean;
+
+  /**
    * WP5（2026-09-27）：生活模式的引擎附加参数（sportSessions/extraMeals/blankBlocks）。
    *
    * 由调用方从 `lifeModeExtrasOf(lifeMode)` 取得后下发；**缺省 undefined = 不生效** ——

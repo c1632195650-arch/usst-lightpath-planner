@@ -205,3 +205,18 @@
 - golden：**v3 免拍（实证）**——extras 走 opt-in，golden 语料不带 lifeMode → construct 默认路径零改动；compare 5/5 PASS 零漂移 + construct.test（冻结 JSON 比对）全绿。
 - 门禁：tsc 0 / engine **363**/363（354+9）/ 禁区（planner+data 人工操作）/ 风格 8/8。
 - 遗留：WeekView 模式卡配图（N1-5）；「我的」模式的三滑杆自调（当前=画像+校正原样，不加戏）。
+
+## §WP6 三餐自动就近食堂 + 删「常去食堂」（白天批次 2026-09-27）
+
+- 状态：[x] 完成
+- 改动文件：
+  - `src/lib/planner/construct.ts` — 新增导出 `pickCanteen()`（候选=主导校区食堂池、排除教职工食堂；规则：饭后有课→「食堂→下节课教学楼」步行分钟最少者；没课→priority 最高者；平局按 priority+名字，确定性）+ placeMeal 集成（`autoCanteen` 参数：显式 mealPlaces 仍最优先；未核实候选如实标 unverified）+ `PlanRequest.mealAutoPlace` 开关消费
+  - `src/lib/planner/model.ts` — `PlanRequest.mealAutoPlace?`（opt-in，缺省 = T2 行为）
+  - `src/features/week/WeekPlanView.tsx` — req 改传 `mealAutoPlace: true`；**删 MealPlaceSetting 三处接线**（import/handleMealPlacesChange/渲染行）+ 删 MealPlaces 导入
+  - `src/features/week/userPlanStore.ts` — `setMealPlace` 废弃为 no-op 存根（防旧数据/旧调用方断裂，下下版删）
+  - `src/lib/lbao.ts` — HEADLINES/focusAxis 迁移到新六模式 id + 入口归一（lbaoShell 吃旧 id 也不崩）
+  - `tests/wp6.test.ts`（新，5 用例）；`tests/userPlanStore.test.ts`（申报：R2 两条 setMealPlace 断言迁移为「存根不写入」）
+- 反向验证：RV-1（拆 auto 分支）红 fail=1 ✓；RV-2（最近比较还原取第一个）红 fail=1 ✓（各自精确命中）。
+- golden：**v4 免拍（实证）**——mealAutoPlace 走 opt-in，golden 语料不带该开关 → construct 默认路径（place 空）零改动；compare 5/5 PASS。
+- 门禁：tsc 0 / engine **368**/368（363+5）/ ui **271**/271（267+5 wp6 -1 迁移）/ 禁区（planner+week 人工操作）/ 风格 8/8。
+- 遗留：图片识别课表（N2-1）；真机手感验收（三餐 place 显示、自由格卡渲染）。

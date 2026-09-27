@@ -436,11 +436,20 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       for (const meal of MEAL_SLOTS) {
         // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
         if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
+        // WP6：S4 显式指定 > 自动就近（mealAutoPlace 开启时按「离下一节课最近的食堂」）
+        const explicit = req.mealPlaces?.[meal.id];
+        const auto = (!explicit && req.mealAutoPlace
+          ? pickCanteen({
+              mealNominalMin: toMinutes(meal.nominal),
+              daySlots, campusId: dayCampus, templates, transfer,
+            })
+          : undefined) ?? undefined;
         const res = placeMeal({
           // 三餐同属软块：`fromNow` 之后不再「补排」已经过去的饭点
           day, meal, placed, dayStartMin: softFloorMin, dayEndMin, mkId,
           // S4：用户为这一餐指定的食堂（缺省 undefined = 不指定）
-          mealPlace: req.mealPlaces?.[meal.id],
+          mealPlace: explicit ?? auto?.name,
+          autoCanteen: auto,
         });
         if (res.block) {
           placed = [...placed, res.block];
@@ -654,6 +663,70 @@ function commitPlaceName(c: Commit): string | undefined {
  * 五、三餐
  * ========================================================== */
 
+/**
+ * WP6（2026-09-27）：自动就近食堂。
+ *
+ * 恢复 T2 时移除的能力，但口径改成 CY 拍板的规则：
+ * **「离下一节课上课地点最近的食堂」**——不再按画像就餐半径猜，也不需要
+ * 经纬度：候选池来自 `templates.ts` 的 MEALS（带校区），距离用调用方注入的
+ * `transfer` provider（与全引擎同一份步行分钟数据，无 lat/lon 落盘）。
+ *
+ * 规则（全部确定性）：
+ *   1. 候选 = 当天主导校区（dominantCampus）的食堂，**排除教职工食堂**；
+ *   2. 这顿饭之后还有课 → 取「食堂 → 下节课教学楼」步行分钟最少者；
+ *   3. 之后没课 / 教学楼缺地点 → 取候选中 priority 最高者（如北校第一食堂）；
+ *   4. 平局按 priority、再按名字（全序，保证可复现）。
+ */
+export interface CanteenPick {
+  name: string;
+  /** 下一节课名（给 reason 用；没有下一节课则缺省） */
+  nextCourseTitle?: string;
+  /** 候选食堂数据是否未核实（如南校）→ 汇总进 notes 如实标注 */
+  verified: boolean;
+}
+
+export function pickCanteen(args: {
+  mealNominalMin: number;
+  daySlots: EffectiveSlot[];
+  campusId: string;
+  templates: ActivityTemplate[];
+  transfer: TransferProvider;
+}): CanteenPick | null {
+  const { mealNominalMin, daySlots, campusId, templates, transfer } = args;
+  const label = campusLabel(campusId);
+  const canteens = templates.filter(
+    (t) => t.category === 'meal' && t.campus === label && t.id !== 'meal-yue',
+  );
+  if (!canteens.length) return null;
+
+  const next = daySlots
+    .filter((s) => s.startMin >= mealNominalMin && s.course.building)
+    .sort((a, b) => a.startMin - b.startMin)[0];
+
+  if (!next) {
+    const best = [...canteens].sort(
+      (a, b) => b.priority - a.priority || a.name.localeCompare(b.name),
+    )[0];
+    return { name: best.place ?? best.name, verified: !!best.verified };
+  }
+
+  let best = canteens[0];
+  let bestMin = Number.POSITIVE_INFINITY;
+  for (const c of canteens) {
+    const info = transfer(c.place ?? c.name, next.course.building as string);
+    const m = info ? info.minutes : Number.POSITIVE_INFINITY;
+    if (m < bestMin || (m === bestMin && c.priority > best.priority)) {
+      best = c;
+      bestMin = m;
+    }
+  }
+  return {
+    name: best.place ?? best.name,
+    nextCourseTitle: next.course.name,
+    verified: !!best.verified,
+  };
+}
+
 interface MealPick {
   block: TimeBlock | null;
   skippedReason?: string;
@@ -690,10 +763,13 @@ function placeMeal(args: {
   /**
    * 用户为这一餐指定的食堂（S4）。给了就填进 `place`；不填 = 不指定（T2 行为）。
    * 引擎**不做任何推断** —— 这正是 T2 之后的分工：地点由用户定，引擎只管时间。
+   * WP6：`mealAutoPlace` 开启时由调用方传入 `autoCanteen`（自动就近结果），同样填 place。
    */
   mealPlace?: string;
+  /** WP6：自动就近的候选结果（含下一节课名与未核实标记），供 place 与 reason 使用 */
+  autoCanteen?: { name: string; nextCourseTitle?: string; verified: boolean };
 }): MealPick {
-  const { day, meal, placed, dayStartMin, dayEndMin, mkId, mealPlace } = args;
+  const { day, meal, placed, dayStartMin, dayEndMin, mkId, mealPlace, autoCanteen } = args;
   const nominal = toMinutes(meal.nominal);
   const dur = meal.durationMin;
 
@@ -731,14 +807,18 @@ function placeMeal(args: {
       endMin: start + dur,
       // 标题只留餐次 —— 不再拼「· 第一食堂」（T2：地点不由引擎决定）
       title: meal.label,
-      // S4：用户指定了食堂就填上；没指定则留空（地点交给用户）
+      // S4 显式指定 / WP6 自动就近：任一存在就填 place
       ...(mealPlace ? { place: mealPlace } : {}),
       emoji: meal.id === 'breakfast' ? '🥣' : meal.id === 'lunch' ? '🍚' : '🍜',
-      reason: mealPlace
-        ? `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间；去「${mealPlace}」是你在设置里指定的`
-        : `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间，去哪吃你自己定`,
+      reason: autoCanteen
+        ? `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间；去「${autoCanteen.name}」—— 离你${autoCanteen.nextCourseTitle ? `下一节课（${autoCanteen.nextCourseTitle}）` : '接下来的安排'}最近的食堂`
+        : mealPlace
+          ? `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间；去「${mealPlace}」是你在设置里指定的`
+          : `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间，去哪吃你自己定`,
       source: 'template',
     },
+    // WP6：自动选中的食堂数据未核实（如南校推算时段）→ notes 如实标注
+    ...(autoCanteen && !autoCanteen.verified ? { unverified: true } : {}),
   };
 }
 

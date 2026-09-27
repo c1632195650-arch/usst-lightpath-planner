@@ -51,7 +51,7 @@ import {
   makeLayerId, movesOfWeek, popRedo, popUndo, pushRedoSnapshot, pushUndoSnapshot,
   removeAssignment, removeMove, saveUserPlan, undoDepth, redoDepth,
   upsertAssignment, upsertMove,
-  type Assignment, type MealPlaces, type UserPlanLayer,
+  type Assignment, type UserPlanLayer,
 } from './userPlanStore';
 import { dragTo } from '@/lib/planner/ripple';
 import { freeGapsOf, snap10, type TimeGap } from './timeScale';
@@ -59,7 +59,6 @@ import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
-import { MealPlaceSetting } from './MealPlaceSetting';
 import { SlotEditor } from './SlotEditor';
 // ── R3：调课/停课覆盖层 + 时间追问 ────────────────────────────
 import { CourseOverrideEditor } from './CourseOverrideEditor';
@@ -744,11 +743,6 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   /** 🆕 新日程标注：新加任务的任务 id 列表（块的 id 以 `-{taskId}` 结尾，可可靠匹配） */
   const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
 
-  /** S4：改「我常去的食堂」 */
-  const handleMealPlacesChange = useCallback((next: MealPlaces) => {
-    updateLayer((prev) => ({ ...prev, mealPlaces: next }));
-  }, [updateLayer]);
-
   /* ============================================================
    * R2：块级编辑（改时间/时长/地点）
    * ========================================================== */
@@ -1217,8 +1211,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           // 注意用 **effective*** 版本：已并入用户改/拖过的位置（见上方 R2 注释）。
           lockLevels: effectiveLockLevels,
           lockedPlacements: effectivePlacements,
-          // S4：用户指定的食堂（早/午/晚可分别设；留空 = 引擎不填地点）
-          mealPlaces: layer.mealPlaces,
+          // WP6：三餐自动就近食堂（离下一节课最近的；显式 mealPlaces 仍优先——已停用 UI）
+          mealAutoPlace: true,
           // WP5：生活模式的引擎附加参数（运动配额/加餐窗口/自由格）。
           // 缺省（没选模式）= undefined → 引擎默认路径，与不传逐位一致。
           lifeModeExtras: lifeModeExtrasOf(lifeMode),
@@ -1552,7 +1546,6 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       <AddTaskPanel onAdd={handleAddTask} weekNo={weekNo} />
 
       {/* S4：我常去的食堂 —— 引擎不猜（T2），但给用户一个显式设定的地方 */}
-      <MealPlaceSetting value={layer.mealPlaces} onChange={handleMealPlacesChange} />
 
       {/* R4：不可时段声明（多条并存）+ 用途追问 */}
       <SlotEditor
