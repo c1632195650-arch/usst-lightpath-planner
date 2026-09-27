@@ -254,7 +254,7 @@
 
 ## §S 梨宝追问链路整改（无人值守批次 2026-09-27，工作单：MOSS《梨宝追问链路整改包（S 批）》）
 
-- 状态：[x] 完成（S1–S4 四批全落；金标定稿待 CY 复核，见遗留）
+- 状态：[x] 完成（S1–S4 四批全落；**金标已 CY 复核定稿 2026-09-27 晚**，见评测报告 🔒 段）
 - 诉求→落点：①完整追问=保留式追问(missStreak 双闸)；②单独排程模式=collect 状态机(退出词/打断/作废全有声)；③语义级意图=/api/plan/understand LLM 端点+llmExtractor 通电(规则字段永不覆盖)；④分号批量回答=splitAnswers+applyClarifyAnswers 位置对应协议；⑤先过 LLM 再追问=应答规则先行+LLM 定位救援(结构化始终在规则层)；⑥多轮测试=E2E 10 剧本 42 断言+在线/离线双通道金标评测
 - 改动文件（全 CY 名下）：
   - `src/features/libao/libaoIntent.ts` — splitAnswers/stripAnswerNumbering/applyClarifyAnswers/applyClarifyFragments/topQuestionPairs/questionsForSlots（applyClarifyAnswer 保留为单段路径，新协议是其超集）
@@ -268,4 +268,4 @@
 - 评测（docs/eval-libao-understand-2026-09-27.md）：离线规则对照 action F1 0.868；在线（deepseek-chat）action P/R/F1=1.0/1.0/**1.0**、intent 槽位 EM=**0.923**（逐槽，门槛≥0.90 ✅；逐条口径 0.862）、answer 槽位命中 0.926（25/27）。评测中修复：answer scene prompt 未规定输出 JSON 形状 → 0/27，补「输出格式」后 25/27。
 - E2E：A 折返(8) B 两轮无关才作废(4) C 退出(3) D 挑块接续(4) E hold(2) F 重要日(2) G LLM 离线降级(2) H 草稿落盘(2) I collect 态不过 looksLikeAction(2) J 跨刷新快照恢复含 v2 字段(4) = **42/0**（测试作用域 vite，跑完即清，端口已核释放）
 - 门禁：tsc 0 / engine 408/0 / ui 309/0（280+20+9）/ 禁区零改动 / 风格 8/8（gate_overnight 全过，S2 时点实测；S3/S4 后复跑见各 commit）
-- 遗留：①金标 60 条待 **CY 复核定稿**（zcode 起草，复核意见直接改 jsonl 后重跑 eval）；②intent 逐条 EM 0.862（i21「我这周忙不忙」首轮被 LLM 判非动作，prompt 已补 query 口径后复跑已入 1.0——逐条口径残留缺口在个别多槽条目）；③无人在场，真实后端 8001 的联网真机手感（含 LLM 在线的对话流畅度）待白天复验；④本批运行过程出现多次工具回显不可信（路径/内容错乱），所有结论均已用原子命令交叉核验，建议白天抽查本台账逐项。
+- 遗留：①~~金标 60 条待 CY 复核定稿~~ → **已定稿（2026-09-27 19:50）**：CY 复核 8 处修正（1 处语义错误 i10 title 驾照→科目一、2 处 title 精确化、4 个 create 补 title、i15 补 when/i14 补 window），其余 52 条通过；定稿金标重跑在线门槛三轮全过（action F1 1.0/0.983、逐槽 EM 0.966/0.931），详见评测报告 🔒 段；②intent 逐条 EM 残留缺口与 a09「还没定」归位不稳，已记评测报告已知缺口 1–3（含改法候选）；③无人在场，真实后端 8001 的联网真机手感（含 LLM 在线的对话流畅度）待白天复验；④本批运行过程出现多次工具回显不可信（路径/内容错乱），所有结论均已用原子命令交叉核验，建议白天抽查本台账逐项（CY 复核轮已原子命令复验金标 60 行 JSONL 合法、8 处修改落盘、评测数字与报告一致）。

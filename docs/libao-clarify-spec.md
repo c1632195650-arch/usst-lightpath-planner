@@ -72,7 +72,7 @@ answer  响应: { ok, answers?: {slot: 原话片段}, confidence } // LLM 只做
 | E2E 10 剧本 42 断言 | 42 过 / 0 挂 | 全过 ✅ |
 | 单测 | ui 309/0（+29）、engine 408/0、tsc 0 | 全绿 ✅ |
 
-已知缺口：intent **逐条** EM 0.862（个别条目仍差 1 槽，明细见评测报告）；金标 60 条为 zcode 起草稿，**CY 复核后才算定稿**——复核意见直接改 `evals/golden/plan_understand.jsonl` 后重跑：
+已知缺口：intent **逐条** EM 偶差 1 槽（LLM 非确定性，明细见评测报告）；金标 60 条**已经 CY 复核定稿（2026-09-27 19:50）**——8 处修正（i10 语义错误等，逐条依据见评测报告 🔒 段），定稿后在线门槛三轮全过：action F1 1.0/0.983、逐槽 EM 0.966/0.931；离线规则对照 F1 0.868。重跑命令不变：
 `python scripts/eval_plan_understand.py http://127.0.0.1:8001`（离线对照加 `LLM_EVAL_OFFLINE=1`）。
 
 ## 6. 产品边界（不变）
