@@ -7,7 +7,7 @@
 ## 环境对账（开工时）
 
 - `git rev-parse --abbrev-ref HEAD` → master；`git log --oneline -1` → `03a11b5`
-- `md5sum scripts/gate_overnight.mjs` → `eb43ce60816d4691a8b209f3904dcb3b`（每批收尾复核，未变）
+- `md5sum scripts/gate_overnight.mjs` → `7190ca671e5c6e5b6d409aac4e10cd92`（每批收尾复核，未变）
 - 开工门禁：tsc=0 / engine=326 / ui=237 / 禁区零改动 / 风格 8 项 → 5/5 PASS
 
 ## 批 0 · beta-v2 分支 + 台账 —— commit `cc901b5`
@@ -167,6 +167,6 @@
 - **验收命令**（与夜班同一条，自证）：
   ```
   node scripts/gate_overnight.mjs        # 预期 5/5 PASS（工作树干净 → 禁区门自然过）
-  md5sum scripts/gate_overnight.mjs      # 预期 eb43ce60816d4691a8b209f3904dcb3b
+  md5sum scripts/gate_overnight.mjs      # 预期 7190ca671e5c6e5b6d409aac4e10cd92
   git diff master..beta-v2 --stat        # 对照台账 §WP 各节「改动文件清单」
   ```

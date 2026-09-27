@@ -37,6 +37,13 @@ function run(line) {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
+  // 🔴 fail-open 修复（2026-09-27）：spawnSync 失败（如沙箱禁 cmd.exe → EBUSY）时
+  //    status === null。旧行为把空输出当「成功」处理 —— 禁区门会**静默假 PASS**
+  //    （读不到 git status = 零改动误判）。现在一律判 FAIL，并带上错误信息。
+  if (r.error || r.status === null) {
+    const why = r.error?.message ?? 'status=null（子进程未能启动）';
+    return { code: 1, out: `[gate] spawn 失败，本门按 FAIL 处理：${why}` };
+  }
   return {
     code: r.status,
     out: (r.stdout || '') + (r.stderr || ''),
@@ -99,30 +106,37 @@ const ALLOW = (process.env.GATE_ALLOW_FORBIDDEN || '')
   let ok = true;
   let detail = '禁区文件零改动';
   if (existsSync('.git')) {
-    const { out } = run('git status --porcelain');
-    const hit = [];
-    const added = [];
-    const approved = [];
-    for (const l of out.split('\n')) {
-      const st = l.slice(0, 2);
-      const p = l.slice(3).trim().replace(/^"|"$/g, '');
-      if (!p || !FORBIDDEN.some((f) => p.startsWith(f))) continue;
-      if (st === '??' || st.includes('A')) added.push(p);
-      else if (ALLOW.includes(p)) approved.push(p);
-      else hit.push(p);
-    }
-    const notes = [];
-    if (approved.length) {
-      notes.push('人工批准的例外 ' + approved.length + ' 个：\n      ' + approved.join('\n      '));
-    }
-    if (added.length) {
-      notes.push('合流新增 ' + added.length + ' 个（未动既有文件）：\n      ' + added.join('\n      '));
-    }
-    if (hit.length) {
+    const g = run('git status --porcelain');
+    // 🔴 fail-open 修复：git status 读不到（spawn 失败）≠ 零改动 —— 必须判 FAIL
+    if (g.code !== 0) {
       ok = false;
-      detail = '禁区文件被改动：\n      ' + hit.join('\n      ');
+      detail = `无法读取 git 状态（spawn 失败），按 FAIL 处理：${g.out.slice(0, 120)}`;
     } else {
-      detail = '禁区文件零改动' + (notes.length ? '（' + notes.join('；') + '）' : '');
+      const out = g.out;
+      const hit = [];
+      const added = [];
+      const approved = [];
+      for (const l of out.split('\n')) {
+        const st = l.slice(0, 2);
+        const p = l.slice(3).trim().replace(/^"|"$/g, '');
+        if (!p || !FORBIDDEN.some((f) => p.startsWith(f))) continue;
+        if (st === '??' || st.includes('A')) added.push(p);
+        else if (ALLOW.includes(p)) approved.push(p);
+        else hit.push(p);
+      }
+      const notes = [];
+      if (approved.length) {
+        notes.push('人工批准的例外 ' + approved.length + ' 个：\n      ' + approved.join('\n      '));
+      }
+      if (added.length) {
+        notes.push('合流新增 ' + added.length + ' 个（未动既有文件）：\n      ' + added.join('\n      '));
+      }
+      if (hit.length) {
+        ok = false;
+        detail = '禁区文件被改动：\n      ' + hit.join('\n      ');
+      } else {
+        detail = '禁区文件零改动' + (notes.length ? '（' + notes.join('；') + '）' : '');
+      }
     }
   } else {
     detail = '未检测到 .git，跳过（建议先做 P0-A 快照）';

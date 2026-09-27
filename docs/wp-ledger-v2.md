@@ -11,7 +11,7 @@
 - 当前基线（批 6 收尾）：**tsc=0 / engine=350 / ui=267 / intent=69+8(含于 ui) / golden=v1**
   - 批 0 开工：tsc=0 / engine=326 / ui=237 / intent=69；批 1：engine=328 / ui=246；批 2：ui=254；批 3：engine=336；批 5a：ui=267；批 6：engine=350
   - 注：`scripts/gate_overnight.mjs` 内置下限为旧值 312/219；台账以实测更高值为「只增」基线。
-- 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = eb43ce60816d4691a8b209f3904dcb3b`（夜里禁改，收尾必核）
+- 门禁脚本指纹：`md5(scripts/gate_overnight.mjs) = 7190ca671e5c6e5b6d409aac4e10cd92`（夜里禁改，收尾必核）
 
 ## §R 规则抄录（夜班铁律）
 
@@ -169,3 +169,9 @@
   2. 真机走查：WP1 引导流程 / 批3 四 bug 手感 / 梨宝「取消 XX」「把 XX 挪到周五」/ 重要日建议卡 / 侧栏预览卡
   3. beta-v2 → dev 合并评审（人工；注意 AGENTS.md 的他人改动从未被本分支触碰）
 - 待后续 WP：WP3(E7·PR)、WP4a(golden v2)、WP5(六模式·golden v3)、WP6(就近食堂·golden v4)、WP7(E5+E6)、WP12(H7 导入+回写)、ModeSetupDialog(依赖 WP5)、WP-OP
+
+### 🔒 2026-09-27 09:05 门禁 fail-open 修复（白天批次）
+- `gate_overnight.mjs` 旧版 spawnSync 失败（status===null，如沙箱禁 cmd.exe → EBUSY）时把空输出当成功：
+  **禁区门会静默假 PASS**（读不到 git status = 零改动误判）。
+- 修复：run() 对 `r.error || r.status === null` 一律返回 code=1；禁区门对 `git status` 读取失败显式 FAIL。
+- 门禁脚本新指纹：`md5 = 7190ca671e5c6e5b6d409aac4e10cd92`（旧锚 eb43ce60… 已废止，历史 commit 可查）。
