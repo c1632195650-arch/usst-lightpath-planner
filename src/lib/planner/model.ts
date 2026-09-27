@@ -398,9 +398,20 @@ export interface PlanRequest {
   mealPlaces?: { breakfast?: string; lunch?: string; dinner?: string } | null;
 }
 
+/**
+ * ripple 的「不动针」（WP4a-B4，2026-09-27）—— makeRoom 与 fillGap 的统一口径。
+ *
+ * 背景：makeRoom 的 movable 只排除课程（可被顺延到饭点之后），
+ * 而 fillGap 把课程与三餐都当屏障 —— 同一份「让位」语义两套口径。
+ * 统一后：**课程（既成事实）与三餐（生理锚点）都纹丝不动**；
+ * 需要落位的目标撞上它们时一律拒绝/跳过，绝不顺延一餐。
+ */
+export function isRippleBarrier(b: Pick<TimeBlock, 'kind' | 'source'>): boolean {
+  return b.kind === 'course' || b.source === 'course' || b.kind === 'meal';
+}
+
 /** 求解诊断（面向开发者与验收，不直接展示给用户） */
-export interface Diagnostics {
-  solver: 'greedy' | 'lns';
+export interface Diagnostics {  solver: 'greedy' | 'lns';
   iterations: number;
   elapsedMs: number;
   cost: { total: number; parts: Record<string, number> };

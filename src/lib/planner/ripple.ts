@@ -19,6 +19,7 @@
  * 纯函数：不读时钟、不随机、同输入必得同输出。
  */
 import type { TimeBlock } from '@/types';
+import { isRippleBarrier } from './model.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 
 /** 一个已被挪动的块：原 starting minute → 新 starting minute */
@@ -37,6 +38,11 @@ export interface RippleResult {
   dropped: string[];
   /** 目标时段被课程占着（一个块都没动，由调用方决定怎么处置） */
   blockedByCourse: boolean;
+  /**
+   * WP4a-B4：目标时段被**三餐**占着。与课程同款处置（拒绝/跳过）——
+   * 饭点是生理锚点，不参与「往后顺延」。与 `blockedByCourse` 互斥（不会同时为 true）。
+   */
+  blockedByMeal?: boolean;
 }
 
 export interface RippleOptions {
@@ -72,7 +78,9 @@ export function makeRoom(
   const day = target.dayOfWeek;
   const others = blocks.filter((b) => b.dayOfWeek === day && b.id !== target.id);
   const courseBlocks = others.filter(isCourse);
-  const movable = others.filter((b) => !isCourse(b));
+  // WP4a-B4：三餐升格为「不动针」—— 与课程同一谓词（makeRoom/fillGap 统一口径）
+  const movable = others.filter((b) => !isRippleBarrier(b));
+  const mealBlocks = others.filter((b) => b.kind === 'meal');
 
   const moved: RippleMove[] = [];
   const dropped: string[] = [];
@@ -87,6 +95,13 @@ export function makeRoom(
   if (blockedByCourse) {
     // 与课程冲突：一个块都不动，由调用方处置（S1 = 本周跳过，拖拽 = 拒绝落位）
     return { blocks: [...blocks], moved, dropped, blockedByCourse: true };
+  }
+  // WP4a-B4：撞上饭点同理 —— 餐不顺延，目标也不硬压
+  const blockedByMeal = mealBlocks.some(
+    (m) => overlap(target.startMin, target.endMin, m.startMin, m.endMin),
+  );
+  if (blockedByMeal) {
+    return { blocks: [...blocks], moved, dropped, blockedByCourse: false, blockedByMeal: true };
   }
 
   const hitlist = movable
@@ -120,14 +135,29 @@ export function makeRoom(
   const placed: TimeBlock[] = [...keep, target];
   let cursor = target.endMin;
 
+  /** 不动针 = 课程 + 三餐（WP4a-B4）。顺延撞上它们：跳到它后面接着排，绝不挪它 */
+  const fixed = others.filter(isRippleBarrier);
+
   for (const b of tail) {
     const dur = duration(b);
     // 起点不能早于「上一件事的结束 + 间隔」，也尽量保留原本的时刻（能不动就不动）
     let start = Math.max(b.startMin, cursor + (placed.length > 1 ? gap : 0));
 
-    // 遇到课程就跳过它后面接着排 —— 课程既不参与排队，也不许被压
-    for (const c of courseBlocks) {
-      if (start < c.endMin && c.startMin < start + dur) start = c.endMin;
+    // 遇到不动针（课/饭）就跳到它后面接着排。
+    // WP4a-B1：单遍扫描在「未排序的课程数组」下会漏检 —— 跳过 K1 落进 K2 的时段
+    // （K2 在数组里排在 K1 前面、已检查过）。对齐 fillGap 的 while(changed) 收敛写法，
+    // 并设 maxIter 保险（不动针数量有限，收敛必然发生）。
+    let iter = 0;
+    let changed = true;
+    while (changed && iter < 50) {
+      changed = false;
+      iter += 1;
+      for (const f of fixed) {
+        if (start < f.endMin && f.startMin < start + dur) {
+          start = f.endMin;
+          changed = true;
+        }
+      }
     }
     if (start < dayStartMin) start = dayStartMin;
 
@@ -141,10 +171,11 @@ export function makeRoom(
     cursor = next.endMin;
   }
 
-  // 组装：其它天原样 + 本天的课程原位 + 本天排队结果（含新落位的 target）
+  // 组装：其它天原样 + 本天的不动针（课/饭）原位 + 本天排队结果（含新落位的 target）
+  // ⚠️ WP4a-B4：三餐也是不动针 —— 必须随 fixed 一起回填（只回填 courseBlocks 会把饭弄丢）
   const resultBlocks: TimeBlock[] = [
     ...blocks.filter((b) => b.dayOfWeek !== day),
-    ...courseBlocks,
+    ...fixed,
     ...placed,
   ].sort((a, b) => (a.dayOfWeek - b.dayOfWeek) || (a.startMin - b.startMin));
 
@@ -186,8 +217,8 @@ export function fillGap(
   // 只往前挪，不会越过 dayEnd —— 不需要下界参数；保留 opts 与 makeRoom 对齐
   void opts;
 
-  const isFixed = (b: TimeBlock) =>
-    b.kind === 'course' || b.source === 'course' || b.kind === 'meal';
+  // WP4a-B4：与 makeRoom 统一「不动针」口径（原本地 isFixed 与之逐字等价）
+  const isFixed = isRippleBarrier;
 
   const dayBlocks = blocks.filter((b) => b.dayOfWeek === day && b.id !== deletedId);
   const fixed = dayBlocks.filter(isFixed);
@@ -343,6 +374,10 @@ export function dragTo(
   if (room.blockedByCourse) {
     return { ok: false, reason: '那个时段有课，课不能让位', records: [], dropped: [] };
   }
+  if (room.blockedByMeal) {
+    // WP4a-B4：饭点不让位（顺延三餐的旧口径已废止）
+    return { ok: false, reason: '那个时段是吃饭时间 —— 饭点是硬锚点，换个时间落吧', records: [], dropped: [] };
+  }
   if (room.dropped.length > 0) {
     return {
       ok: false,
@@ -378,5 +413,5 @@ export function canMakeRoom(
   opts: RippleOptions = {},
 ): boolean {
   const r = makeRoom(blocks, target, opts);
-  return r.dropped.length === 0 && !r.blockedByCourse;
+  return r.dropped.length === 0 && !r.blockedByCourse && !r.blockedByMeal;
 }

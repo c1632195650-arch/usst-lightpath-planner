@@ -175,3 +175,16 @@
   **禁区门会静默假 PASS**（读不到 git status = 零改动误判）。
 - 修复：run() 对 `r.error || r.status === null` 一律返回 code=1；禁区门对 `git status` 读取失败显式 FAIL。
 - 门禁脚本新指纹：`md5 = 7190ca671e5c6e5b6d409aac4e10cd92`（旧锚 eb43ce60… 已废止，历史 commit 可查）。
+
+## §WP4a 引擎语义修复（白天批次 2026-09-27）
+
+- 状态：[x] 完成
+- 改动文件：
+  - `src/lib/planner/model.ts` — 新增 `isRippleBarrier()`（makeRoom/fillGap 统一「不动针」口径：course+meal）
+  - `src/lib/planner/ripple.ts` — B1：tail 顺延跳课改 while(changed) 收敛（maxIter 50，修未排序课程数组的漏检）；B4：movable 排除三餐 + `blockedByMeal` + 结果组装回填 fixed（修「只回填 courseBlocks 会把饭弄丢」）；dragTo 撞饭点给人话理由；canMakeRoom 含 blockedByMeal；fillGap 改用统一谓词（语义逐字等价）
+  - `src/lib/planner/longLocks.ts` — S1 定住撞饭点 → 同课程款「本周跳过」处置
+  - `tests/wp4a.test.ts`（新，4 用例）
+- 反向验证：RV-B1（收敛→单遍）红 fail=1 ✓；RV-B4（movable 还原只排课程）红 fail=1 ✓（首版断言咬不住变异——变异产出双份午餐块被 find 掩盖，补「不得出现在顺延清单+块不重复」两条断言后红）。
+- golden：**v2 免拍（实证）**——makeRoom 仅被 solver/longLocks/用户路径消费，construct 不引用；`tests/golden-compare.ts` 五快照 ⓪/AC-1/AC-2/AC-3 全 PASS，零漂移。
+- 门禁：tsc 0 / engine **354**/354（350+4）/ ui 267 / 禁区（planner 3 文件白天人工操作）/ 风格 8/8。
+- 教训：恢复未提交改动**严禁 `git checkout HEAD -- <file>`**（会把 WP4a 改动一起清掉，已重放修复）；用 python 精确反向替换。

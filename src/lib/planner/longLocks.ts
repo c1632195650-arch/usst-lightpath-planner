@@ -155,14 +155,16 @@ export function applyLongLocks(
       reason: '你定住的时段 —— 这一周的同一个时间去见它',
     };
     const room = makeRoom(blocks, block, dayBounds);
-    if (room.blockedByCourse) {
-      // S1.5：本周取消这个块，只留 info —— 不报 warn（「在课上自习」不算用户犯错）
-      skipped.push({ key: t.key, title: t.title, reason: '这个时段这周有课' });
+    if (room.blockedByCourse || room.blockedByMeal) {
+      // S1.5：本周取消这个块，只留 info —— 不报 warn（「在课上自习」不算用户犯错）。
+      // WP4a-B4：撞上饭点同款处置（餐不顺延，锁让位）。
+      const why = room.blockedByCourse ? '这个时段这周有课' : '这个时段正好是饭点';
+      skipped.push({ key: t.key, title: t.title, reason: why });
       issues.push({
         level: 'info',
         code: 'lock-conflict',
         blockId: t.key,
-        message: `「${t.title}」这周没排 —— ${DAY_NAME[t.dayOfWeek] ?? `周${t.dayOfWeek}`}这个时段有课，下次不占时间的周次会自动恢复`,
+        message: `「${t.title}」这周没排 —— ${DAY_NAME[t.dayOfWeek] ?? `周${t.dayOfWeek}`}${room.blockedByCourse ? '这个时段有课' : '正好撞上饭点'}，下次不占时间的周次会自动恢复`,
       });
       continue;
     }
