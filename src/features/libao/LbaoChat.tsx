@@ -7,6 +7,16 @@ import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } 
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
 import { applyClarifyAnswers, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import {
+  EXIT_ACK,
+  EXPIRE_NOTE,
+  HOLD_ON_PREFIX,
+  MISS_STREAK_LIMIT,
+  isExitCommand,
+  nextMissStreak,
+  shouldExpireSession,
+  type SchedMode,
+} from '@/features/libao/schedSession';
 import { addUserDeadline } from '@/features/calendar/deadlineStore';
 import {
   applyCancel,
@@ -157,6 +167,13 @@ interface ClarifyState {
   asked: SlotKey[];
 }
 
+/** V2-1 多目标挑块接续态（提为命名类型供 updatePicking 使用）。 */
+interface PickingState {
+  kind: 'cancel' | 'reschedule';
+  slots: IntentSlots;
+  candidates: CancelTarget[];
+}
+
 interface ChatSnapshot {
   messages: Msg[];
   pending: Record<number, PendingGoal>;
@@ -224,11 +241,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const [pendingDeadlines, setPendingDeadlines] = useState<Record<number, DeadlineProposal>>({});
   const pendingSeq = useRef(boot?.pendingSeq ?? 0);
   /** V2-1：多目标挑块接续 —— 梨宝追问「挪哪个」后挂起候选，下一句回复按名匹配 */
-  const [clarifyPicking, setClarifyPicking] = useState<{
-    kind: 'cancel' | 'reschedule';
-    slots: IntentSlots;
-    candidates: CancelTarget[];
-  } | null>(null);
+  const [clarifyPicking, setClarifyPicking] = useState<PickingState | null>(null);
 
   // ── WP9：侧栏排程预览卡 —— 「必须跟随最新进度」的落点 ──────────────
   // 任何落盘（确认排/取消/挪/替换）都 bumpPlanVersion() → 重算引擎 → 卡片刷新。
@@ -266,6 +279,26 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     () => boot?.clarify ?? null,
   );
 
+  /** S 批 S2 · 排程会话状态机：collect = 正在等用户的排程回应。
+   *  collect 态消息**不过** looksLikeAction 闸门，直接进应答通道（P4：动机识别
+   *  从主干上撤下）—— 退出词 / missStreak 判定见 schedSession.ts。 */
+  const [schedMode, setSchedMode] = useState<SchedMode>(() => boot?.schedMode ?? 'idle');
+  const [missStreak, setMissStreak] = useState(() => boot?.missStreak ?? 0);
+
+  /** clarify 的唯一写入口：非空 = 进入 collect（missStreak 清零），清空 = 回 idle。 */
+  const updateClarify = useCallback((next: ClarifyState | null) => {
+    setClarify(next);
+    setSchedMode(next ? 'collect' : 'idle');
+    if (next) setMissStreak(0);
+  }, []);
+
+  /** picking 的唯一写入口（与 updateClarify 同一套状态机纪律）。 */
+  const updatePicking = useCallback((next: PickingState | null) => {
+    setClarifyPicking(next);
+    setSchedMode(next ? 'collect' : 'idle');
+    if (next) setMissStreak(0);
+  }, []);
+
   /** 聊天状态 → sessionStorage。量小（纯文本 + 数字），任何一层变了整体重写。 */
   useEffect(() => {
     try {
@@ -274,12 +307,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         pending,
         pendingSeq: pendingSeq.current,
         clarify,
+        schedMode,
+        missStreak,
       };
       sessionStorage.setItem(CHAT_SNAPSHOT_KEY, JSON.stringify(snap));
     } catch {
       /* 隐私模式 / 配额满 → 记录只活在当前挂载期，不影响功能 */
     }
-  }, [messages, pending, clarify]);
+  }, [messages, pending, clarify, schedMode, missStreak]);
 
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
@@ -332,7 +367,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     } catch { /* 隐私模式写不进就算了 */ }
     setPending({});
     pendingSeq.current = 0;
-    setClarify(null);
+    updateClarify(null);
+    updatePicking(null);
+    setMissStreak(0);
     setMessages([{ role: 'lbao', text: GREETING }]);
   };
 
@@ -567,7 +604,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const runCancel = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
-      setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
+      updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
       setMessages((current) => [...current, { role: 'lbao', text: '好，取消哪件事？说个名字我好找到它。' }]);
       setLoading(false);
       return;
@@ -575,7 +612,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const blocks = await blocksForMatching(today);
     const targets = findCancelTargets(q, loadUserPlan().tasks, blocks);
     if (targets.length === 0) {
-      setClarify(null);
+      updateClarify(null);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `日程和待办里都没找到「${q}」。可能不在这周，或者叫法不一样；你也可以去周计划直接删。`,
@@ -586,8 +623,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
     if (targets.length > 1) {
       // V2-1：候选挂进 picking —— 下一句回复按名匹配，不再依赖 applyClarifyAnswer 认 target
-      setClarify(null);
-      setClarifyPicking({ kind: 'cancel', slots, candidates: targets });
+      updateClarify(null);
+      updatePicking({ kind: 'cancel', slots, candidates: targets });
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `「${q}」对上好几件事，你要取消哪个？`,
@@ -603,7 +640,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const runHold = async (slots: IntentSlots, today: string) => {
     const draft = holdSlotFrom(slots);
     if ('need' in draft) {
-      setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
+      updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
       setMessages((current) => [...current, { role: 'lbao', text: '好，哪段时间要空出来？（比如「周三下午」「周五晚上」）' }]);
       setLoading(false);
       return;
@@ -611,7 +648,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const weekNo = currentWeekNo(schedule.termStart, today);
     const slot = holdToUnavailableSlot(draft, weekNo);
     const key = (pendingSeq.current += 1);
-    setClarify(null);
+    updateClarify(null);
     setPending((p) => ({ ...p, [key]: { kind: 'hold', title: slot.title ?? '留空时段', tasks: [], weeks: [], holdSlot: slot } }));
     const hh = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     setMessages((current) => [...current, {
@@ -625,8 +662,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runCancelWithTarget = async (slots: IntentSlots, t: CancelTarget) => {
     const key = (pendingSeq.current += 1);
-    setClarify(null);
-    setClarifyPicking(null);
+    updateClarify(null);
+    updatePicking(null);
     setPending((p) => ({ ...p, [key]: { kind: 'cancel', title: t.title, tasks: [], weeks: [], cancelTarget: t } }));
     setMessages((current) => [...current, {
       role: 'lbao',
@@ -641,7 +678,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const runReschedule = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
-      setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
+      updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
       setMessages((current) => [...current, { role: 'lbao', text: '要挪的是哪件事？说个名字我好找到它。' }]);
       setLoading(false);
       return;
@@ -649,7 +686,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const blocks = await blocksForMatching(today);
     const targets = findMoveTargets(q, blocks);
     if (targets.length === 0) {
-      setClarify(null);
+      updateClarify(null);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `这周日程里没找到「${q}」。只有非课程块能这样挪；改课时间请用周计划的「调课」。`,
@@ -660,8 +697,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
     if (targets.length > 1) {
       // V2-1：候选挂进 picking（块级候选，title+day 可辨）
-      setClarify(null);
-      setClarifyPicking({
+      updateClarify(null);
+      updatePicking({
         kind: 'reschedule', slots,
         candidates: targets.map((b) => ({ blockId: b.id, title: b.title, origin: 'plan' as const, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` })),
       });
@@ -677,7 +714,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const newDay = slots.when?.weekday
       ?? (slots.dateFrom ? (() => { const wd = weekdayOf(slots.dateFrom); return wd === 0 ? 7 : wd; })() : undefined);
     if (!newDay) {
-      setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
+      updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
       setMessages((current) => [...current, { role: 'lbao', text: `「${src.title}」要挪到哪天？（比如「周五下午」）` }]);
       setLoading(false);
       return;
@@ -686,7 +723,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const startMin = slots.window?.fromMin ?? src.startMin;
     const preview = planReschedule(blocks, src.id, weekNo, newDay, startMin);
     if (!preview.ok || !preview.move) {
-      setClarify(null);
+      updateClarify(null);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `挪不过去 —— ${preview.reason ?? '那个时段放不下'}。换个时间试试？`,
@@ -714,8 +751,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   const runRescheduleWithPreview = async (slots: IntentSlots, title: string, preview: ReschedulePreview) => {
     const key = (pendingSeq.current += 1);
-    setClarify(null);
-    setClarifyPicking(null);
+    updateClarify(null);
+    updatePicking(null);
     setPending((p) => ({ ...p, [key]: { kind: 'reschedule', title, tasks: [], weeks: [], movePreview: preview } }));
     const mv = preview.move!;
     const lines = [
@@ -735,7 +772,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const runReplace = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
-      setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
+      updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, asked: ['target'] });
       setMessages((current) => [...current, { role: 'lbao', text: '要替换掉哪件事？说个名字我好找到它。' }]);
       setLoading(false);
       return;
@@ -748,7 +785,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         await runGoalSlots({ ...slots, intent: 'create' }, today);
         return;
       }
-      setClarify({ slots: { ...slots, targetHint: undefined, missing: ['target' as const] }, asked: ['target'] });
+      updateClarify({ slots: { ...slots, targetHint: undefined, missing: ['target' as const] }, asked: ['target'] });
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `「${q}」对上好几件事，替换哪个？`,
@@ -759,7 +796,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
     const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
     if (verdict.kind !== 'ok' && verdict.kind !== 'tight') {
-      setClarify(null);
+      updateClarify(null);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: `新的安排排不进去：`,
@@ -772,7 +809,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const tasks = goalToTasks(slots, schedule, today);
     const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
     const key = (pendingSeq.current += 1);
-    setClarify(null);
+    updateClarify(null);
     setPending((p) => ({ ...p, [key]: { kind: 'replace', title: slots.title, tasks, weeks, cancelTarget: targets[0] } }));
     setMessages((current) => [...current, {
       role: 'lbao',
@@ -798,7 +835,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         const prop = deadlineProposal(slots);
         if ('needDate' in prop) {
           // 缺截止日 → 必追问，不猜（core §4）。补 'when' 进追问清单，让接续答案能被收进槽位。
-          setClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
+          updateClarify({ slots: { ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, asked: ['when'] });
           setMessages((current) => [...current, {
             role: 'lbao',
             text: `想把「${slots.title || '这件重要日子'}」记成重要日，我还得问一句：`,
@@ -807,7 +844,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           setLoading(false);
           return;
         }
-        setClarify(null);
+        updateClarify(null);
         const dKey = (pendingSeq.current += 1);
         setPendingDeadlines((p) => ({ ...p, [dKey]: prop }));
         setMessages((current) => [...current, {
@@ -832,7 +869,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         // 半成品槽位 + **问过的槽位清单**存起来 —— 用户的下一句话是「答案」，
         // 且第 i 段答案对应第 i 问（分号批量应答协议，S 批 §3.2）。
         const pairs = topQuestionPairs(slots);
-        setClarify({ slots, asked: pairs.map((p) => p.slot) });
+        updateClarify({ slots, asked: pairs.map((p) => p.slot) });
         setMessages((current) => [...current, {
           role: 'lbao',
           text: `想把「${slots.title}」排进日程，我还得问${pairs.length > 1 ? '两' : ''}句：`,
@@ -843,7 +880,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
 
       // 走到这就不再等答案了：出草稿或说清冲突，都算「这轮问完了」。
-      setClarify(null);
+      updateClarify(null);
 
       if (verdict.kind === 'ok' || verdict.kind === 'tight') {
         // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
@@ -880,7 +917,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }]);
     } catch {
       track('degrade', { id: 'goal-engine-error' });
-      setClarify(null);
+      updateClarify(null);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: '排的时候出了点小状况，这次没排出来。完整时间轴在「周计划」里，可以先看着。',
@@ -895,6 +932,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
    *  埋点（`@/lib/telemetry`）只记**数字与枚举**，且只落本机：
    *  这里记得到的是「这一次排程/检索花了多久、成没成、召回了几条、哪条链路降级了」，
    *  记不到的（也刻意不记）是用户问了什么 —— 守 NF-2「个人数据本地优先」。 */
+  /** S2：徽章上的「退出」按钮 —— 与打字说退出词同一出口（schedSession.isExitCommand 同款回执）。 */
+  const exitSession = () => {
+    updateClarify(null);
+    updatePicking(null);
+    setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
+  };
+
   const send = async (raw?: string) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
@@ -910,13 +954,23 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
      *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
     const today = todayISO();
 
+    // ── S2 · 状态机出口①：collect 态显式退出（最高优先）────────────
+    // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
+    if (schedMode === 'collect' && isExitCommand(q)) {
+      updateClarify(null);
+      updatePicking(null);
+      setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
+      setLoading(false);
+      return;
+    }
+
     // ── V2-1：多目标挑块接续 —— 上一条在等「挪哪个/取消哪个」→ 这句按名匹配候选 ──
     if (clarifyPicking) {
       const hits = matchCandidate(q, clarifyPicking.candidates);
       if (hits.length === 1) {
         const target = hits[0];
         const { kind, slots } = clarifyPicking;
-        setClarifyPicking(null);
+        updatePicking(null);
         if (kind === 'cancel') await runCancelWithTarget(slots, target);
         else await runRescheduleWithTarget(slots, today, target);
         return;
@@ -937,6 +991,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // 「每周 3 次、每次 2 小时」单独看不是动作句，looksLikeAction 判 false 是对的；
     // 没有这段，答案就会掉进 RAG 问答被记忆层带偏（2026-09-20 真实翻车）。
     // S 批 P2/P5：按提问时记下的 asked 清单做**位置对应**解析，支持分号一句多答。
+    // S 批 P1：答非所问**不再静默丢态** —— 保留式追问（missStreak≥2 才作废并说明）。
     if (clarify) {
       const merged = applyClarifyAnswers(q, clarify.slots, clarify.asked, today);
       if (merged.contributed) {
@@ -945,7 +1000,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           const nextAsked = merged.failed.length > 0
             ? merged.failed
             : topQuestionPairs(merged.slots).map((p) => p.slot);
-          setClarify({ slots: merged.slots, asked: nextAsked });
+          updateClarify({ slots: merged.slots, asked: nextAsked });
           setMessages((current) => [...current, {
             role: 'lbao',
             text: '还差一点：',
@@ -955,12 +1010,40 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           return;
         }
         // 补齐了 → 带着完整槽位走同一条干跑通路
-        setClarify(null);
+        updateClarify(null);
         await runGoalSlots(merged.slots, today);
         return;
       }
-      // 答非所问 → 按普通消息分流；若命中新目标，旧追问自然作废
-      setClarify(null);
+
+      // 状态机出口④前哨：完全无关 —— 先给**新动作句**一次打断机会（以新句为准）。
+      // 打断是有声的：回应里说明旧追问作废，不让用户猜自己上一轮的回答去哪了。
+      const interrupt = await parseGoalIntent(q, { today });
+      if (interrupt.action) {
+        updateClarify(null);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '好，先按新说的办 —— 刚才那条追问先放下。',
+        }]);
+        await runGoalSlots(interrupt.slots, today);
+        return;
+      }
+
+      // 状态机出口③前哨：保留式追问 —— 记下这句，提醒还差什么，不静默掉 RAG。
+      const streak = nextMissStreak(missStreak, false);
+      if (shouldExpireSession(streak)) {
+        // 出口③：连续两轮无关 → 作废并说明（不静默）。本句继续走下面的普通分流。
+        updateClarify(null);
+        setMessages((current) => [...current, { role: 'lbao', text: EXPIRE_NOTE }]);
+      } else {
+        setMissStreak(streak);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: HOLD_ON_PREFIX,
+          planPoints: numberedQuestions(questionsForSlots(clarify.slots, clarify.asked)),
+        }]);
+        setLoading(false);
+        return;
+      }
     }
 
     const outcome = await parseGoalIntent(q, { today });
@@ -1124,6 +1207,19 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           </div>
         )}
 
+        {schedMode === 'collect' && (
+          <div
+            data-testid="sched-badge"
+            className="mb-3 flex items-center gap-2 rounded-xl border border-brand/25 bg-brand/5 px-3 py-2 text-xs leading-5 text-ink-soft"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+            排程中 —— 回答上面的问题就行；多个答案用分号隔开。
+            <button onClick={exitSession} className="shrink-0 font-medium text-brand underline underline-offset-2">
+              退出
+            </button>
+          </div>
+        )}
+
         <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2 sm:px-2" aria-live="polite">
           {messages.map((message, index) => (
             <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
@@ -1259,7 +1355,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && send()}
-            placeholder="问梨宝，或说「帮我安排这周」…"
+            placeholder={schedMode === 'collect'
+              ? '排程中 —— 回答上面的问题，多个答案用分号隔开；说「退出排程」结束…'
+              : '问梨宝，或说「帮我安排这周」…'}
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-4 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
           <button onClick={() => send()} disabled={loading || !input.trim()} className="button-primary shrink-0 px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">
