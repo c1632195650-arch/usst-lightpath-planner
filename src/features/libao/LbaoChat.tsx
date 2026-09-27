@@ -22,7 +22,7 @@ import {
   type CancelTarget,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import { addTask, loadUserPlan, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
+import { addTask, getRecentPlanEvents, loadUserPlan, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
@@ -850,7 +850,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
     const t1 = Date.now();
     try {
       // 带上身份与档案：前者让后端记忆层生效，后者让回答建立在「你是谁」之上
-      const response = await lbaoChat(q, identity, profileCtx);
+      // WP12-H8：带上最近日程变动（后端 summarize 后注入 prompt；M4 前只转述）
+      const response = await lbaoChat(q, identity, profileCtx, getRecentPlanEvents());
       // `n` = 召回到的资料来源条数：0 条就是「白问了一次」，是召回质量最直接的信号
       track('search', { ok: true, ms: Date.now() - t1, n: response.sources?.length ?? 0 });
       setMessages((current) => [...current, {

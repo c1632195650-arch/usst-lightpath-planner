@@ -426,7 +426,9 @@ class ChatReq(BaseModel):
     # 这里不设 max_length：它是内部通道，超长直接截断比返回 422 更不容易把对话打断
     # （截断与脱敏在 api_chat 里做）。
     profile_ctx: str = ""
-    k: StrictInt = 4
+    # WP12-H8：最近日程变动 ring（前端 userPlanStore.getRecentPlanEvents）。
+    # list[dict] 形状宽松（服务端只读 type/title），extra=forbid 下这是显式声明的合法字段。
+    recent_plan_events: list = None
 
 # 2026-09-19 schemathesis 契约修复：非法编码 body（非 UTF-8 字节）时 Starlette 底层
 # 抛 HTTPException(400)，但 OpenAPI 只声明 200/422 → 契约与实现不符。
@@ -831,6 +833,14 @@ def api_chat(body: ChatReq):
     # 注意档案里**不该**出现学号/姓名/手机号，但信任边界不能靠前端单方面保证。
     profile_ctx = desensitize((body.profile_ctx or "").strip())[:1200]
 
+    # WP12-H8：最近日程变动 → 一行人话摘要并入档案段（memory.summarize_plan_events 纯函数；M4 前只转述不抽取）
+    try:
+        plan_event_note = memory.summarize_plan_events(body.recent_plan_events or [])
+        if plan_event_note:
+            profile_ctx = (profile_ctx + "\n" + plan_event_note)[:1200]
+    except Exception as e:
+        print("[memory] plan events 注入失败（不影响主流程）：", e)
+
     # 1) 检索（拿 raw_vec 作为边界信号）
     results = rag.search(q, max(1, min(body.k, 6)))
     sources = [{
@@ -1067,6 +1077,24 @@ def api_list_facts(user_id: str = "anon", status: str = ""):
     except Exception as e:
         print("[memory] facts 查询失败：", e)
         return {"facts": []}
+
+class MemoryFactReq(BaseModel):
+    """WP12-H7：课表回写等系统侧事实（前端生成纯统计摘要，无坐标）。"""
+    model_config = ConfigDict(extra="forbid")
+    user_id: str = "anon"
+    content: str = Field(min_length=1, max_length=300)
+
+
+@app.post("/api/memory/facts")
+def api_add_fact(body: MemoryFactReq):
+    """课表事实回写：只落 pending（add_pending_fact 状态机闸门），MemoryPanel 可拒。"""
+    try:
+        fact = memory.add_pending_fact(body.user_id, "objective.timetable_summary", body.content, source="timetable")
+        return {"ok": fact is not None, "fact": fact}
+    except Exception as e:
+        print("[memory] 课表事实回写失败：", e)
+        return {"ok": False, "fact": None}
+
 
 @app.post("/api/memory/facts/{fact_id}/confirm")
 def api_confirm_fact(fact_id: int):

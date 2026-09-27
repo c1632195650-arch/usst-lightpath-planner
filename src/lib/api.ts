@@ -186,6 +186,8 @@ export function lbaoChat(
   q: string,
   identity: ChatIdentity = {},
   profileCtx = '',
+  /** WP12-H8：最近日程变动（userPlanStore ring buffer），后端 summarize 后注入 prompt */
+  recentPlanEvents?: Array<{ type: string; title: string; ts: number }>,
 ): Promise<ChatResult> {
   // 值为 undefined 时 JSON.stringify 会省略该键 → 后端沿用自身默认值，天然向后兼容
   return post<ChatResult>('/api/chat', {
@@ -193,6 +195,31 @@ export function lbaoChat(
     user_id: identity.userId,
     session_id: identity.sessionId,
     profile_ctx: profileCtx || undefined,
+    recent_plan_events: recentPlanEvents?.length ? recentPlanEvents : undefined,
+  });
+}
+
+/** WP12-C2：课表事实回写 —— 纯统计摘要，无任何坐标（数据红线）；失败由调用方静默。 */
+export async function addTimetableFacts(
+  schedule: { courses?: Array<{ slots?: Array<{ startPeriod?: number }> }> },
+  userId: string,
+): Promise<{ ok: boolean }> {
+  const courses = schedule.courses ?? [];
+  if (courses.length === 0) return { ok: false };
+  let slots = 0;
+  let evening = 0;
+  for (const c of courses) {
+    for (const slot of c.slots ?? []) {
+      slots += 1;
+      if (periodStartMin(slot.startPeriod ?? 1) >= 18 * 60) evening += 1; // 晚间课 ≥18:00
+    }
+  }
+  if (slots === 0) return { ok: false };
+  const pct = Math.round((evening / slots) * 100);
+  const content = ['课表共', courses.length, '门课，每周约', slots, '节，晚间课(≥18:00)占比', pct + '%'].join(' ');
+  return post<{ ok: boolean }>('/api/memory/facts', {
+    user_id: userId || 'anon',
+    content,
   });
 }
 
@@ -240,4 +267,5 @@ export function routeBatch(
   return post<{ routes: Record<string, RouteResult | null>; mode: string }>(
     '/api/route/batch', { pairs, mode },
   );
-}
+}import { periodStartMin } from '@/constants/time';
+

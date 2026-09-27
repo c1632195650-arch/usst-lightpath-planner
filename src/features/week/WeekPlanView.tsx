@@ -47,8 +47,8 @@ import { AddTaskPanel } from './AddTaskPanel';
 import { EditBlockPanel } from './EditBlockPanel';
 // ── R2：用户覆盖层（一次性收口所有用户改动）────────────────────
 import {
-  addTask, applyPendingMoves, canUndo, clearRedo, excludeBlock, includeBlock, loadUserPlan,
-  makeLayerId, movesOfWeek, popRedo, popUndo, pushRedoSnapshot, pushUndoSnapshot,
+  addTask, applyPendingMoves, canUndo, clearRedo, diffPlanEvents, excludeBlock, includeBlock, loadUserPlan,
+  makeLayerId, movesOfWeek, popRedo, popUndo, pushPlanEvents, pushRedoSnapshot, pushUndoSnapshot,
   removeAssignment, removeMove, saveUserPlan, undoDepth, redoDepth,
   upsertAssignment, upsertMove,
   type Assignment, type UserPlanLayer,
@@ -448,6 +448,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    */
   const updateLayer = useCallback((fn: (prev: UserPlanLayer) => UserPlanLayer) => {
     pushUndoSnapshot(layerRef.current); // 撤销栈：任何改动前先留一份底（updater 外，B2）
+    // WP12-H8：前后 diff → 日程变动事件（在 updater 外算，StrictMode 双调用不会重复发）
+    const projected = fn(layerRef.current);
+    pushPlanEvents(diffPlanEvents(layerRef.current, projected));
     setLayer((prev) => {
       const next = fn(prev);
       saveUserPlan(next);

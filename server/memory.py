@@ -449,3 +449,56 @@ def memory_context(user_id, session_id):
         lines = "\n".join(f"{'用户' if r == 'user' else '梨宝'}：{t}" for r, t in recent)
         blocks.append("[最近几轮原话]\n" + lines)
     return "\n\n".join(blocks)
+
+# ---------- WP12-H7：课表回写（系统侧事实，只挂起） ----------
+def add_pending_fact(user_id, key, value, source="timetable"):
+    """课表导入等系统侧产生的客观事实：**只落 pending 态**，等用户在记忆面板确认/拒绝。
+
+    ⚠️ 状态机闸门（与 propose_facts 的 objective 分流同一纪律）：
+    这里**严禁**直落 applied —— 系统observe 到的也要用户点头（core §4）。
+    """
+    if not user_id or not key or not value:
+        return None
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    c = _conn()
+    cur = c.execute(
+        "INSERT INTO facts(user_id, kind, key, value, status, source, created_at) "
+        "VALUES(?,?,?,?,?,?,?)",
+        (user_id, "objective", key, str(value)[:200], "pending", str(source)[:40], now))
+    c.commit()
+    row = {"id": cur.lastrowid, "kind": "objective", "key": key,
+           "value": str(value)[:200], "status": "pending"}
+    c.close()
+    return row
+
+# ---------- WP12-H8：日程变动摘要（Node 端 ring buffer → 注入 chat） ----------
+_EVENT_LABEL = {
+    "task_added": "新增", "task_removed": "移除",
+    "blocks_excluded": "跳过", "blocks_restored": "恢复",
+    "move_added": "挪动",
+}
+
+def summarize_plan_events(events):
+    """日程变动事件 → 一行人话摘要（纯函数，不经 LLM）。
+
+    「连续两次把自习挪到晚上」这类偏好信号本期**只如实转述、不做抽取**（留给 M4）。
+    events 形状：[{type, title, ts}]（前端 userPlanStore 的 PlanEvent）。
+    """
+    if not events:
+        return ""
+    counts = {}
+    last = None
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        t = str(e.get("type", ""))
+        if t in _EVENT_LABEL:
+            counts[t] = counts.get(t, 0) + 1
+            last = e
+    parts = [f"{_EVENT_LABEL[t]} {counts[t]} 次"
+             for t in ("task_added", "task_removed", "blocks_excluded", "blocks_restored", "move_added")
+             if counts.get(t)]
+    if not parts:
+        return ""
+    tail = f"；最近一次：{last.get('title', '')}" if last and last.get("title") else ""
+    return "最近你在日程里：" + "、".join(parts) + tail

@@ -42,3 +42,25 @@
 
 **反向验证**：RV1 去 extras 注入 + RV2 删 try/catch → 批量 fail 4（sport/snack/faraway/error 四条红）→ 恢复 → 8/8
 
+
+## 批 C · WP12 导入正式化 + 双向记忆回写 —— commit（WP12:）
+
+**改动文件与关键行号**
+
+| 文件 | 改动 |
+|---|---|
+| `src/App.tsx` | C1：`SHOW_IMPORT = true`（:26，正式构建常驻导入入口）；onApply 增 `addTimetableFacts(s, getUserId()).catch(()=>{})`（失败静默） |
+| `server/memory.py` | C2：`add_pending_fact()`（只落 pending，source='timetable'，状态机闸门注释）；C3：`summarize_plan_events()` 纯函数（计数+最近一次转述，unknown/非法形状忽略） |
+| `server/app.py` | `POST /api/memory/facts`（MemoryFactReq，extra=forbid）；ChatReq 增 `recent_plan_events: list = None`；api_chat 档案段注入（desensitize 后 [:1200]） |
+| `src/lib/api.ts` | `lbaoChat` 增第 4 参 recentPlanEvents → body.recent_plan_events（undefined 时省略键，向后兼容）；`addTimetableFacts()`（N 门课/每周 X 节/晚间课占比，无坐标） |
+| `src/features/week/userPlanStore.ts` | `PlanEvent` + ring buffer（≤20，pushPlanEvents/getRecentPlanEvents）+ `diffPlanEvents` 纯函数（tasks 增删 / excluded 差 / moves 增量） |
+| `src/features/week/WeekPlanView.tsx` | updateLayer 用 layerRef 投影算 diff → pushPlanEvents（updater 外，StrictMode 不重发） |
+| `src/features/libao/LbaoChat.tsx` | lbaoChat 调用传 `getRecentPlanEvents()` |
+| `tests/wp12.test.ts`（新） | 6 用例：diff/上限 20/SHOW_IMPORT/注入源码/无坐标 |
+| `scripts/test_plan_events.py`（新） | 6 用例 + `--reverse`（add_pending_fact 直落 applied → 红） |
+
+**命令实据**：tsc 0 错；wp12 6/6；test_plan_events.py 6/6 OK 且 --reverse 红（failures=2）；golden-compare 5/5；gate 5/5（engine 381 / ui 279；WeekPlanView+userPlanStore 例外申报）；锚 7190ca67 未变
+
+**反向验证**：RV1 updateLayer 摘掉发事件 + RV2 diffPlanEvents 删 excluded 分支 → 批量 fail 2；RV3 python --reverse → failures=2；恢复后全绿
+
+**遗留**：① 课表回写确认后进画像的 key 为 `objective.timetable_summary`（_merge_into_profile 原样存 key）；② MemoryPanel 对该条目的文案显示走 factLabel 的兜底，样式一般但可用；③ app.py 检出 CRLF 行尾（白天批次带入），本次未整文件归一（守行尾纪律：不碰他人文件）。

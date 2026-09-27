@@ -445,6 +445,66 @@ const UNDO_LIMIT = 30;
 let undoStack: UserPlanLayer[] = [];
 
 /** 改动发生前调用：把当前层压入撤销栈 */
+/* ============================================================
+ * WP12-H8：日程变动事件 ring buffer（≤20 条）
+ * ------------------------------------------------------------
+ * 谁发：WeekPlanView.updateLayer 在落层时对前后两层做 diff；
+ * 谁吃：LbaoChat 调 chat() 时带上 getRecentPlanEvents() → 后端
+ * memory.summarize_plan_events 转成一行人话注入 prompt（M4 前只转述不抽取）。
+ */
+export type PlanEventType =
+  | 'task_added' | 'task_removed'
+  | 'blocks_excluded' | 'blocks_restored'
+  | 'move_added';
+
+export interface PlanEvent {
+  type: PlanEventType;
+  /** 人话摘要（块/任务标题；excluded 用 blockId） */
+  title: string;
+  ts: number;
+}
+
+const PLAN_EVENT_LIMIT = 20;
+let planEvents: PlanEvent[] = [];
+
+/** 追加事件（超出 20 条丢最旧）；ts 在入队时刻生成 —— diff 纯函数不碰时钟 */
+export function pushPlanEvents(events: ReadonlyArray<Omit<PlanEvent, 'ts'>>): void {
+  if (events.length === 0) return;
+  const now = Date.now();
+  planEvents = [...planEvents, ...events.map((e) => ({ ...e, ts: now }))].slice(-PLAN_EVENT_LIMIT);
+}
+
+/** 最近日程变动（LbaoChat 调 chat 时带上）；返回副本，防外泄可变引用 */
+export function getRecentPlanEvents(): PlanEvent[] {
+  return [...planEvents];
+}
+
+/**
+ * 前后两层 diff → 事件列表。纯函数（ts 由 pushPlanEvents 填）：
+ *   · tasks 按 id 增删 → task_added / task_removed（title = 任务标题）
+ *   · excluded 集合差 → blocks_excluded / blocks_restored（title = blockId）
+ *   · moves 数量增加 → move_added（title 汇总条数）
+ */
+export function diffPlanEvents(prev: UserPlanLayer, next: UserPlanLayer): Array<Omit<PlanEvent, 'ts'>> {
+  const events: Array<Omit<PlanEvent, 'ts'>> = [];
+  const prevTasks = new Map(prev.tasks.map((t) => [t.id, t.title]));
+  const nextTasks = new Map(next.tasks.map((t) => [t.id, t.title]));
+  for (const [id, title] of nextTasks) {
+    if (!prevTasks.has(id)) events.push({ type: 'task_added', title });
+  }
+  for (const [id, title] of prevTasks) {
+    if (!nextTasks.has(id)) events.push({ type: 'task_removed', title });
+  }
+  const prevEx = new Set(prev.excluded);
+  const nextEx = new Set(next.excluded);
+  for (const id of nextEx) if (!prevEx.has(id)) events.push({ type: 'blocks_excluded', title: id });
+  for (const id of prevEx) if (!nextEx.has(id)) events.push({ type: 'blocks_restored', title: id });
+  if (next.moves.length > prev.moves.length) {
+    events.push({ type: 'move_added', title: '挪动了 ' + (next.moves.length - prev.moves.length) + ' 处安排' });
+  }
+  return events;
+}
+
 export function pushUndoSnapshot(prev: UserPlanLayer): void {
   undoStack.push(prev);
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();

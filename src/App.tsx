@@ -9,6 +9,8 @@ import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
 import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
+import { addTimetableFacts } from '@/lib/api';
+import { getUserId } from '@/lib/identity';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -22,8 +24,8 @@ type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
 /** 周视图子模式：课表网格 vs 排程计划时间轴 */
 type WeekSubTab = 'timetable' | 'plan';
 
-/** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
-const SHOW_IMPORT = import.meta.env.DEV;
+/** WP12-H7：导入入口正式化 —— 正式构建也常驻（解析服务缺席时 ImportTester 自带降级提示，不白屏） */
+const SHOW_IMPORT = true;
 
 /** Navigation copy stays close to the shell so development-only entries cannot drift from their labels. */
 const TAB_LABEL: Record<MainTab, string> = {
@@ -216,7 +218,12 @@ export default function App() {
 
       <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
         {mainTab === 'import' ? (
-          <ImportTester onApply={(s) => { patchState({ schedule: s }); setModeSetupOpen(true); }} />
+          <ImportTester onApply={(s) => {
+            patchState({ schedule: s });
+            setModeSetupOpen(true);
+            // WP12-C2：课表事实回写（pending 态，MemoryPanel 可拒）；失败静默 —— 不挡导入主流程
+            addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
+          }} />
         ) : mainTab === 'libao' ? (
           <LbaoChat
             profile={state.persona}
