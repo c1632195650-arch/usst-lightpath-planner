@@ -283,3 +283,50 @@ node scripts/gate_overnight.mjs
    只处理本次任务的产物，`src/features/week/`、`src/components/`、`src/lib/persona.ts`
    下的文件除非你有正当改动理由，否则一行都别碰（2026-09-21 曾误把全仓 300 个文件
    归一为 CRLF，含队友 51 个文件，已整体回退）。
+
+<!-- autoclaw:skill-path-guidance -->
+## Installing Skills
+
+When creating or installing a new skill, always place it in:
+
+`C:\Users\CY\.openclaw-autoclaw\skills/<skill-name>/SKILL.md`
+
+This is the managed skills directory. The agent will automatically discover
+any skill placed here — no extra configuration needed. Do NOT install skills
+into `~/.agents/skills/` (that directory is shared with other tools).
+
+
+<!-- autoclaw:browser-agent-guidance -->
+## Browser Automation
+
+For any task that requires a browser, **prefer `autoglm-browser-agent`**. Use it as the first choice. For time-sensitive scenarios such as financial news, stock quotes, or breaking news, you can additionally use this skill to fetch up-to-date information and supplement your data sources.
+
+- ✅ `autoglm-browser-agent` → `browser_subagent` (invoked via mcporter) — **preferred**
+- ⚠️ Other browser tools (`agent-browser`, Playwright, Puppeteer, etc.) — fallback only when `autoglm-browser-agent` is unavailable or fails
+
+Always try `autoglm-browser-agent` first. Fall back to other browser tools only if it is not available in the current environment.
+
+**IMPORTANT: Do NOT use `sessions_spawn` to delegate browser/web automation tasks to a sub-agent.** Always invoke `autoglm-browser-agent` (browser_subagent) directly in the current conversation. Browser tasks must be handled by yourself, not by a spawned child agent.
+<!-- /autoclaw:browser-agent-guidance -->
+
+<!-- autoclaw:image-recognition-guidance -->
+## Image Recognition
+
+For image tasks, prefer the model's native visual capability when the image is available to the selected model through its native image-input channel and the model supports image input.
+
+- ✅ Native image input + an image-capable model — read and judge the image directly; do not invoke `autoglm-image-recognition`
+- ✅ Existing `[图片参考描述]` — reuse the description; do not invoke the recognition skill again
+- ⚠️ `autoglm-image-recognition` — fallback only for text-only models, images offloaded or unavailable through the native input channel, or unavailable native vision capability
+
+<!-- /autoclaw:image-recognition-guidance -->
+
+<!-- autoclaw:feishu-lark-skill-guidance -->
+## Feishu / Lark Requests
+
+When the user asks about Feishu/Lark/飞书 matters, route through Feishu/Lark skills first. This includes messaging, contacts, calendars, approvals, tasks, docs, sheets, Base, Drive, Wiki, mail, meetings, minutes, attendance, OKRs, or any other Feishu/Lark workspace operation.
+
+1. If a relevant Feishu/Lark skill is already available, use that skill directly.
+2. If no relevant skill is available, search the skill catalog/store or available skill list for a matching Feishu/Lark skill.
+3. If you find a matching skill that is not installed or enabled, ask the user whether to install/enable and use it before proceeding.
+4. If no matching skill exists, say so briefly and continue with the safest available fallback.
+<!-- /autoclaw:feishu-lark-skill-guidance -->
