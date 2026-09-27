@@ -308,3 +308,9 @@
 - blocked 时 negotiate_block 执行器调用 `proposeReplanOptions`（防腐层新纯函数）生成 ≤3 条编号方案：①与挡路块互换（replace 语义，干跑基线经 `excludeBlockIds` 挖掉该块——construct 排除机制复用）②顺延一周 ③降单次时长；**每个方案必须过一次引擎干跑**，排得上的才呈现——「禁止 LLM 编排好了」由两层保证（方案由引擎产出；选中后仍走 runGoalSlots→草稿卡→确认，L4 不变）。
 - LLM 只做引用：blocking.options 序列化只发 id+label（slots 不进 LLM 上下文）；用户回编号 → dialog act=new_intent + replan_id（照抄 id，_clean_dialog 白名单透传）→ 执行器取干跑过的槽位直走草稿通路。
 - 测试：D7 引擎级用例（blocked 夹具三块占满晚间→方案逐条干跑自洽；RV：删干跑过滤即红）engine 421→422；E2E A-N 60/0 回归；门禁五项全过。M 剧本回归时 negotiate 回复升级为「事实+可行方案」口径，M1-M3 断言不受影响。
+
+### §D·终验自查（2026-09-28 凌晨，对应工作单 §10）
+
+- §10.3 RV 抽查 3 条：①dialogManager 防编造 idx 校验拆除→D1 红；②proposeReplanOptions 干跑过滤拆除→D7 红；③confirm_draft 词表闸拆除→D3 红；逐一还原后 sha256 与 HEAD 一致（dialogManager/weekPlanForChat/LbaoChat），`git status` src/ 零残留。
+- §10.5 真机重放（8002 隔离后端 + VITE_API_BASE 指向 8002 的 5173 实例，活 LLM）：7/0 全过——「明天晚上出去玩一小时」「把操场跑步替换掉」dialog 场景确实被调用且未掉 RAG；问答模式提示卡→切换重发直达排程流；route.abort 全断后规则兜底出草稿并确认落盘。首跑 2 挂为旧 vite 实例未死（仍指 8000）所致环境问题，非代码缺陷。
+- §10.2 最终门禁见下（tsc/engine 422/ui 319/禁区/风格）。
