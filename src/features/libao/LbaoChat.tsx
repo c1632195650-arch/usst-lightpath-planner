@@ -64,6 +64,9 @@ interface Msg {
   goalAsk?: number;
   /** WP11 重要日建议卡确认键 —— 有值且 `pendingDeadlines` 里还有对应提案时渲染「好，记下来」。确认前不写入（L4）。 */
   deadlineAsk?: number;
+  /** D0 双模式：问答模式下听到排程意图 → 出切换提示卡（原句存这，点击切模式后原句重发）。
+   *  不静默改道 —— 「揣测用意直接排」正是 D 批要消灭的议题断层来源之一。 */
+  modeHint?: string;
   /** 记忆建议卡（M2）：客观事实待确认 —— 用户点头才进画像与基础信息 */
   proposals?: MemoryFact[];
   /** 已自动生效的偏好（M2）：出可撤销提示 */
@@ -213,6 +216,8 @@ interface ChatSnapshot {
   /** 快照 v2（S2）：显式排程会话模式与无关轮计数 —— 读取兼容缺省 idle/0 */
   schedMode?: 'idle' | 'collect';
   missStreak?: number;
+  /** D0 双模式：输入框主模式（问答/排程）。缺省按 schedMode 推导（collect → sched） */
+  mode?: 'chat' | 'sched';
 }
 
 const CHAT_SNAPSHOT_KEY = 'usst.libao.chat.v2';
@@ -241,6 +246,7 @@ function loadChatSnapshot(): ChatSnapshot | null {
       clarify: v1.clarifySlots ? { slots: v1.clarifySlots, asked: [...v1.clarifySlots.missing] } : null,
       schedMode: 'idle',
       missStreak: 0,
+      mode: 'chat',
     };
   } catch {
     return null; // 坏数据当没有，别让一条坏快照挡死整个聊天页
@@ -315,6 +321,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const [schedMode, setSchedMode] = useState<SchedMode>(() => boot?.schedMode ?? 'idle');
   const [missStreak, setMissStreak] = useState(() => boot?.missStreak ?? 0);
 
+  /** D0 双模式（问答/排程硬区分）：问答模式只答问题，排程意图出切换提示不静默改道；
+   *  排程模式内所有输入走排程流（D3 起 dialog 裁决 → 执行器，离线走规则链）。
+   *  快照恢复：老快照没记 mode → 有活跃追问态就落排程态（对齐「恢复时接续排程」）。 */
+  const [mode, setMode] = useState<'chat' | 'sched'>(
+    () => boot?.mode ?? (boot?.schedMode === 'collect' ? 'sched' : 'chat'),
+  );
+
   /** clarify 的唯一写入口：非空 = 进入 collect（missStreak 清零），清空 = 回 idle。 */
   const updateClarify = useCallback((next: ClarifyState | null) => {
     setClarify(next);
@@ -329,6 +342,16 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     if (next) setMissStreak(0);
   }, []);
 
+  /** D0：模式切换唯一入口。切回问答 = 显式退出排程态（复用退出回执语义，不静默清态）。 */
+  const switchMode = useCallback((to: 'chat' | 'sched') => {
+    setMode(to);
+    if (to === 'chat') {
+      updateClarify(null);
+      updatePicking(null);
+      setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
+    }
+  }, [updateClarify, updatePicking]);
+
   /** 聊天状态 → sessionStorage。量小（纯文本 + 数字），任何一层变了整体重写。 */
   useEffect(() => {
     try {
@@ -339,12 +362,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         clarify,
         schedMode,
         missStreak,
+        mode,
       };
       sessionStorage.setItem(CHAT_SNAPSHOT_KEY, JSON.stringify(snap));
     } catch {
       /* 隐私模式 / 配额满 → 记录只活在当前挂载期，不影响功能 */
     }
-  }, [messages, pending, clarify, schedMode, missStreak]);
+  }, [messages, pending, clarify, schedMode, missStreak, mode]);
 
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
@@ -400,6 +424,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     updateClarify(null);
     updatePicking(null);
     setMissStreak(0);
+    setMode('chat');
     setMessages([{ role: 'lbao', text: GREETING }]);
   };
 
@@ -1026,12 +1051,16 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
   }, []);
 
-  const send = async (raw?: string) => {
+  const send = async (raw?: string, opts?: { forceMode?: 'chat' | 'sched' }) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
     setInput('');
     setMessages((current) => [...current, { role: 'user', text: q }]);
     setLoading(true);
+
+    /** D0：本轮生效的模式。切换提示卡的「继续」按钮带着 forceMode 重发原句，
+     *  避免 setMode 还没落地时 send 读到旧值。 */
+    const activeMode = opts?.forceMode ?? mode;
 
     /** 意图分流（`libaoIntent.ts`，规则优先、可测试）：
      *  · 说得出**名字**的事 → 目标草稿路径（干跑把关 → 用户确认 → 落盘）；
@@ -1154,6 +1183,17 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // S4 E2E 抓到同族缺口：add_deadline 也常无 title（「我要考驾照」——「驾照」
     // 不在目标词表），deadlineProposal 有「重要日子」缺省标题，同样放行。
     if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline')) {
+      // D0 双模式：问答模式听到排程意图 → 出切换提示，**不静默改道**。
+      // 「揣测用意直接排」是议题断层的来源；用户点「继续」才切排程模式并原句重发。
+      if (activeMode === 'chat') {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '看起来你是想安排日程。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+          modeHint: q,
+        }]);
+        setLoading(false);
+        return;
+      }
       await runGoalSlots(outcome.slots, today);
       return;
     }
@@ -1161,7 +1201,17 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     if (outcome.action) {
       /** 泛泛的「帮我安排这周」→ 老路径（一周建议）。
        *  这里维持原样，是因为用户没点名任何一件具体的事 ——
-       *  追问「你要排什么」反而答非所问。 */
+       *  追问「你要排什么」反而答非所问。
+       *  D0：问答模式同样不静默改道 —— 出切换提示。 */
+      if (activeMode === 'chat') {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '看起来你是想安排日程。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+          modeHint: q,
+        }]);
+        setLoading(false);
+        return;
+      }
       if (!profile && schedule.courses.length === 0) {
         track('degrade', { id: 'plan-no-input' });
         setMessages((current) => [...current, {
@@ -1342,6 +1392,22 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                   <button onClick={onGoProfile} className="button-primary ml-1 px-3 py-2 text-xs">完成画像</button>
                 )}
 
+                {/* D0：问答模式下的排程意图提示卡 —— 点击 = 切模式 + 原句重发进排程流。
+                    不自动排：切不切、排不排，决定权都在用户手里（L4）。 */}
+                {message.modeHint != null && (
+                  <button
+                    data-testid="switch-to-sched"
+                    onClick={() => {
+                      const q = message.modeHint as string;
+                      setMode('sched');
+                      void send(q, { forceMode: 'sched' });
+                    }}
+                    className="button-primary ml-1 px-3 py-2 text-xs"
+                  >
+                    切到排程模式并继续
+                  </button>
+                )}
+
                 {message.planPoints && message.planPoints.length > 0 && (
                   <ul className="w-full space-y-1 pl-1">
                     {message.planPoints.map((point, i) => (
@@ -1452,6 +1518,36 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           <div ref={bottomRef} />
         </div>
 
+        {/* D0：输入框主模式分段切换 —— 问答/排程硬区分，消灭「揣测用意」。
+            切到问答 = 显式退出排程态（switchMode 内有声回执）。 */}
+        <div className="mb-2 flex items-center gap-2" data-testid="mode-switch">
+          <div className="flex rounded-xl border border-ink/15 bg-paper p-0.5">
+            <button
+              data-testid="mode-chat"
+              onClick={() => switchMode('chat')}
+              aria-pressed={mode === 'chat'}
+              className={`min-h-8 rounded-[10px] px-3 py-1 text-xs transition-colors ${
+                mode === 'chat' ? 'bg-ink text-white' : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              问答
+            </button>
+            <button
+              data-testid="mode-sched"
+              onClick={() => switchMode('sched')}
+              aria-pressed={mode === 'sched'}
+              className={`min-h-8 rounded-[10px] px-3 py-1 text-xs transition-colors ${
+                mode === 'sched' ? 'bg-ink text-white' : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              排程
+            </button>
+          </div>
+          <span className="text-[11px] leading-4 text-ink-faint">
+            {mode === 'sched' ? '排程模式：说要排的事，梨宝出草稿、你确认才落盘' : '问答模式：只查资料答问题，不动你的日程'}
+          </span>
+        </div>
+
         <div className="mt-3 flex items-center gap-2 border-t border-ink/10 pt-3">
           <input
             value={input}
@@ -1459,7 +1555,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             onKeyDown={(event) => event.key === 'Enter' && send()}
             placeholder={schedMode === 'collect'
               ? '排程中 —— 回答上面的问题，多个答案用分号隔开；说「退出排程」结束…'
-              : '问梨宝，或说「帮我安排这周」…'}
+              : mode === 'sched'
+                ? '排程模式：说一件要安排的事（如「周四晚上出去玩一小时」）…'
+                : '问梨宝，或说「帮我安排这周」…'}
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-4 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
           <button onClick={() => send()} disabled={loading || !input.trim()} className="button-primary shrink-0 px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">

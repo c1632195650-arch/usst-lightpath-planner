@@ -62,12 +62,17 @@ async function onboard(page) {
   await T(900);
   await page.getByRole('button', { name: /梨宝/ }).first().click();
   await T(600);
+  // D0 双模式：输入框默认落「问答」模式 —— A-J 全是排程剧本，先进排程模式再说话。
+  // （问答模式下排程句会出「切到排程模式」提示卡而不自动排，剧本 N 专门验证它。）
+  await page.locator('[data-testid="mode-sched"]').click().catch(() => {});
+  await T(300);
 }
 
 /** 发一句话并等梨宝回完（loading 消失）。
- *  placeholder 在 collect 态会换成「排程中 ——」文案（S2 的 UI 信号之一），两个都要认。 */
+ *  placeholder 在 collect 态会换成「排程中 ——」文案（S2 的 UI 信号之一）；
+ *  D0 起排程模式（非 collect）也有专属 placeholder，三个都要认。 */
 async function say(page, text) {
-  await page.getByPlaceholder(/问梨宝|排程中/).fill(text);
+  await page.getByPlaceholder(/问梨宝|排程中|排程模式/).fill(text);
   await page.getByRole('button', { name: '发送' }).click();
   await page.waitForFunction(
     () => !document.body.innerText.includes('掐指一算'),
