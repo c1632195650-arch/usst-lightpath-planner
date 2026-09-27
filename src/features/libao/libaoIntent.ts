@@ -1076,6 +1076,37 @@ export function applyClarifyAnswers(
   return { slots: out, contributed, failed };
 }
 
+/**
+ * LLM 定位片段 → 槽位（S 批 S3 的应答通路）。
+ *
+ * `understand` 端点（scene=answer）只做**语义定位**：把用户的回答拆成
+ * 「槽位 → 原话片段」；结构化仍由本层规则抽取器完成 —— 片段可审计、
+ * 数值可复现，与「规则优先，LLM 只补空」纪律①同源。
+ *
+ * 只处理 `asked` 清单里的槽位；某片段解析不出对应结构 → 记入 `failed`。
+ */
+export function applyClarifyFragments(
+  fragments: Partial<Record<SlotKey, string>>,
+  prev: IntentSlots,
+  asked: SlotKey[],
+  today?: string,
+): ClarifyAnswersResult {
+  const out: IntentSlots = { ...prev };
+  const failed: SlotKey[] = [];
+  let contributed = false;
+  for (const slot of asked) {
+    const frag = fragments[slot];
+    if (typeof frag !== 'string' || !frag.trim()) {
+      failed.push(slot);
+      continue;
+    }
+    if (fillOneSlot(out, slot, frag, today)) contributed = true;
+    else failed.push(slot);
+  }
+  out.missing = missingSlots(out);
+  return { slots: out, contributed, failed };
+}
+
 /* ============================================================
  * 六、对外：解析一句话
  * ========================================================== */

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
-import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -939,6 +939,77 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
   };
 
+  /** S3 · LLM 理解钩子 —— `parseGoalIntent` 的 `llmExtractor` 从此通电（P3）。
+   *  纪律①不变：mergeSlots 保证规则抽到的字段不被 LLM 覆盖，LLM 只补空。
+   *  understand 把规则层已抽到的槽位一起发给后端（LLM 只补它没抽到的）；
+   *  任何失败（后端没开 / 超时 / 解析坏 / action=false）返回 null → 规则兜底，不算错误。 */
+  const llmExtractor = useCallback(async (raw: string, seed: IntentSlots): Promise<Partial<IntentSlots> | null> => {
+    try {
+      const res = await planUnderstand({
+        scene: 'intent',
+        q: raw,
+        slots: {
+          title: seed.title || undefined,
+          when_text: seed.when?.text,
+          perWeekCount: seed.perWeekCount,
+          durationMin: seed.durationMin,
+          totalHours: seed.totalHours,
+          place: seed.place,
+          targetHint: seed.targetHint,
+        },
+        today: todayISO(),
+      });
+      if (!res.ok || !res.action || !res.patch) return null;
+      const p = res.patch;
+      const patch: Partial<IntentSlots> = {};
+      if (p.title) patch.title = p.title;
+      if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
+        || p.relativeWeeks != null || p.weekday != null) {
+        patch.when = {
+          text: p.when_text ?? '',
+          kind: (p.month != null || p.day != null) ? 'exact'
+            : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
+            : 'window',
+        };
+        if (p.month != null) patch.when.month = p.month;
+        if (p.day != null) patch.when.day = p.day;
+        if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
+        if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
+        if (p.weekday != null) patch.when.weekday = p.weekday;
+      }
+      if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
+      if (p.durationMin != null) patch.durationMin = p.durationMin;
+      if (p.totalHours != null) patch.totalHours = p.totalHours;
+      if (p.place) patch.place = p.place;
+      if (p.targetHint) patch.targetHint = p.targetHint;
+      // window_text 不在此映射：时段窗的分钟换算留在规则层（extractWindow），LLM 只定位
+      return patch;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** S3 · 应答救援：规则 applyClarifyAnswers 没接住时，LLM 把回答按 asked 定位成
+   *  「槽位 → 原话片段」，片段回规则抽取器结构化（applyClarifyFragments）。
+   *  没接住 / 失败返回 null —— 走规则结论（保留式追问），不算错误。 */
+  const rescueClarifyAnswer = useCallback(async (
+    q: string, c: ClarifyState, today: string,
+  ): Promise<ClarifyAnswersResult | null> => {
+    try {
+      const res = await planUnderstand({
+        scene: 'answer',
+        q,
+        asked: c.asked.map((slot) => `${slot}: ${questionsForSlots(c.slots, [slot])[0]?.question ?? slot}`),
+        today,
+      });
+      if (!res.ok || !res.answers) return null;
+      const r = applyClarifyFragments(res.answers as Partial<Record<SlotKey, string>>, c.slots, c.asked, today);
+      return r.contributed ? r : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const send = async (raw?: string) => {
     const q = (raw ?? input).trim();
     if (!q || loading) return;
@@ -993,7 +1064,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // S 批 P2/P5：按提问时记下的 asked 清单做**位置对应**解析，支持分号一句多答。
     // S 批 P1：答非所问**不再静默丢态** —— 保留式追问（missStreak≥2 才作废并说明）。
     if (clarify) {
-      const merged = applyClarifyAnswers(q, clarify.slots, clarify.asked, today);
+      let merged = applyClarifyAnswers(q, clarify.slots, clarify.asked, today);
+      if (!merged.contributed) {
+        // S3：规则没接住 → LLM 语义定位救援（纪律①：结构化仍在规则层，LLM 只补空；
+        // 救援失败静默走规则结论 —— 保留式追问，不算错误）
+        const rescue = await rescueClarifyAnswer(q, clarify, today);
+        if (rescue) merged = rescue;
+      }
       if (merged.contributed) {
         if (merged.slots.missing.length > 0) {
           // 补了一半（或某段没答上）→ 只重问 failed 的槽位（asked 空时兜底重算）
@@ -1017,7 +1094,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 状态机出口④前哨：完全无关 —— 先给**新动作句**一次打断机会（以新句为准）。
       // 打断是有声的：回应里说明旧追问作废，不让用户猜自己上一轮的回答去哪了。
-      const interrupt = await parseGoalIntent(q, { today });
+      const interrupt = await parseGoalIntent(q, { today, llm: llmExtractor });
       if (interrupt.action) {
         updateClarify(null);
         setMessages((current) => [...current, {
@@ -1046,7 +1123,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
     }
 
-    const outcome = await parseGoalIntent(q, { today });
+    const outcome = await parseGoalIntent(q, { today, llm: llmExtractor });
 
     // 验收修正（2026-09-27 E2E 抓到）：hold 没有 title（它是「留空一段时间」，
     // 不是一件「事」）—— 门只认 title 会把 hold 整句漏进泛泛安排分支，

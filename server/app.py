@@ -56,8 +56,10 @@ import health_rag   # 健康库（独立检索 + 安全护栏，先守门再检�
 import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
+import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand（LLM 听懂，规则兜底在前端）
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
+app.include_router(plan_dialog.router)
 
 # CORS 白名单：默认本机前端；演示/局域网真机测试时用环境变量临时放开
 # 例：LIBAO_CORS_ORIGINS=http://localhost:5173,http://192.168.1.100:5173
