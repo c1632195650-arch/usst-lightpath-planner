@@ -33,7 +33,7 @@ function policy() {
 test('lifeMode: 猛攻模式上调目标时长', () => {
   const r = applyLifeMode(policy(), 'grind');
   assert.equal(r.policy.dailyStudyMin, Math.round(120 * 1.3));
-  assert.ok(r.note && r.note.includes('猛攻'), `应当留下说明，实际：${r.note}`);
+  assert.ok(r.note && r.note.includes('内卷'), `应当留下说明，实际：${r.note}`); // WP5 重命名
 });
 
 test('lifeMode: 摸鱼模式下调目标时长并增加留白', () => {
@@ -102,7 +102,7 @@ test('buildPhases: 传猛攻模式 → 各阶段目标时长上调，且在理�
     const g = grind.plan.phases[i];
     assert.equal(g.policy.dailyStudyMin, Math.round(b.policy.dailyStudyMin * 1.3),
       `阶段「${b.name}」应上调三成`);
-    assert.ok(g.reasons.some((x) => x.includes('猛攻')),
+    assert.ok(g.reasons.some((x) => x.includes('内卷')),
       `理由里应当出现模式说明，实际：${JSON.stringify(g.reasons)}`);
   }
 });

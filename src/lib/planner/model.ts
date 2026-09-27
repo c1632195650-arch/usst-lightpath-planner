@@ -396,6 +396,19 @@ export interface PlanRequest {
    * 触发「改引擎侧类型就要登记规格书」的额外动作。放在 `PlanRequest` 上更轻。
    */
   mealPlaces?: { breakfast?: string; lunch?: string; dinner?: string } | null;
+
+  /**
+   * WP5（2026-09-27）：生活模式的引擎附加参数（sportSessions/extraMeals/blankBlocks）。
+   *
+   * 由调用方从 `lifeModeExtrasOf(lifeMode)` 取得后下发；**缺省 undefined = 不生效** ——
+   * golden 语料不带 lifeMode，因此默认路径零改动（opt-in 纪律，同 WP10 compliance）。
+   * 语义详见 `lifeModePolicy.ts` 的 `LifeModeExtras`。
+   */
+  lifeModeExtras?: {
+    sportSessions?: number;
+    extraMeals?: number;
+    blankBlocks?: number;
+  } | null;
 }
 
 /**

@@ -23,6 +23,7 @@ import type {
 } from '@/types';
 import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
+import { lifeModeExtrasOf } from '@/lib/planner/lifeModePolicy';
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
 import { fetchRouteBatch } from '@/lib/planner/transfer';
@@ -1218,6 +1219,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           lockedPlacements: effectivePlacements,
           // S4：用户指定的食堂（早/午/晚可分别设；留空 = 引擎不填地点）
           mealPlaces: layer.mealPlaces,
+          // WP5：生活模式的引擎附加参数（运动配额/加餐窗口/自由格）。
+          // 缺省（没选模式）= undefined → 引擎默认路径，与不传逐位一致。
+          lifeModeExtras: lifeModeExtrasOf(lifeMode),
           // R6.2：用户声明的不可时段 → 硬约束
           unavailable: layer.slots.map((s) => ({
             id: s.id,

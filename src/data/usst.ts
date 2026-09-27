@@ -1,18 +1,24 @@
 import type { CalEvent, Course, LifeMode, Schedule } from '@/types';
+import { normalizeLifeModeId } from '@/lib/planner/lifeModePolicy';
 
 /* ============================================================
- * 上理工 · 生活模式
+ * 上理工 · 生活模式（WP5 重命名 + 参数化，2026-09-27）
  * ========================================================== */
 
 /** color 取自光谱色板（constants/chartColors.ts 的 SPECTRUM），改色请两边同步。 */
 export const LIFE_MODES: LifeMode[] = [
-  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#2B4C9B', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
-  { id: 'slack', name: '摸鱼模式', emoji: '🐟', color: '#147A8B', tagline: '今天不想努力', desc: '降低任务密度，多安排休息与娱乐，见缝插针放松，拒绝内卷。' },
-  { id: 'grind', name: '猛攻模式', emoji: '🚀', color: '#C24B3A', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，适合考试周或赶 ddl。' },
-  { id: 'food', name: '吃饭模式', emoji: '🍜', color: '#B9762A', tagline: '好好吃饭是大事', desc: '每天规划探店 / 食堂路线，兼顾营养与新鲜感。' },
-  { id: 'health', name: '健康模式', emoji: '🏃', color: '#1E7A4F', tagline: '早睡早起多运动', desc: '规律作息 + 每日运动打卡，给身体充能。' },
-  { id: 'social', name: '社交模式', emoji: '🎉', color: '#6B4BA3', tagline: '把日子过热闹', desc: '空余时间留给活动、约饭、搭子，拓展朋友圈。' },
+  { id: 'grind', name: '内卷模式', emoji: '🚀', color: '#C24B3A', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，每周一练保持状态，适合考试周或赶 ddl。' },
+  { id: 'balance', name: '均衡模式', emoji: '⚖️', color: '#2B4C9B', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，每周两次运动。' },
+  { id: 'faraway', name: '远方模式', emoji: '🫙', color: '#147A8B', tagline: '把时间留给诗和远方', desc: '大幅压缩任务密度，空档实体化成「自由格」，探索想去的任何地方。' },
+  { id: 'sport', name: '运动模式', emoji: '🏃', color: '#1E7A4F', tagline: '隔天一练，科学安排', desc: '按健康库指引每周四次锻炼，错开课程与饭点，给身体充能。' },
+  { id: 'snack', name: '小馋猫模式', emoji: '🧋', color: '#B9762A', tagline: '好好吃饭是大事', desc: '不与课程冲突的前提下，把下午茶和夜宵时刻也排进日程。' },
+  { id: 'mine', name: '我的模式', emoji: '🪞', color: '#6B4BA3', tagline: '按我的画像来', desc: '不套固定模板 —— 梨宝按你的画像、记忆与校正记录量身定制。' },
 ];
+
+/** 旧模式 id 归一（localStorage 里可能还存着 slack/food/health/social） */
+export function normalizeLifeMode(id: string | null | undefined): string | null {
+  return normalizeLifeModeId(id);
+}
 
 /* ============================================================
  * 上理工 · 校历（2026–2027 学年第一学期，模拟）

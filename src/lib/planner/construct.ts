@@ -22,7 +22,7 @@ import type {
 } from '@/types';
 import { periodEndMin, periodStartMin, toMinutes } from '../../constants/time.ts';
 import {
-  DEFAULT_TEMPLATES, MEAL_SLOTS, customTemplate, openAt,
+  DEFAULT_TEMPLATES, EXTRA_MEAL_SLOTS, MEAL_SLOTS, customTemplate, openAt,
   type ActivityCategory, type ActivityTemplate, type UserTask,
 } from './templates.ts';
 import { campusOfPlace, resolvePlace } from './places.ts';
@@ -306,6 +306,15 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const floatingTasks = tasks.filter((t) => !(t.dayOfWeek != null && t.startMin != null));
   const taskActive = (t: UserTask) => !t.weeks?.length || t.weeks.includes(weekNo);
 
+  /**
+   * WP5（2026-09-27）：生活模式的引擎附加参数。
+   * 缺省 undefined = 全部不生效（golden 语料不带 lifeMode → 默认路径零改动）。
+   */
+  const extras = req.lifeModeExtras ?? null;
+  const sportQuota = extras?.sportSessions ?? null;
+  /** 本周已排的运动次数（sportQuota 的周计数器） */
+  let sportPlaced = 0;
+
   // 提交项（规格书 §5.1 步骤 3 / §9-T0.2）：固定落点的当硬块，其余走 EDF × urgency 择序
   const commitActive = (c: Commit) => !c.weeks?.length || c.weeks.includes(weekNo);
   const activeCommits = commits.filter(commitActive);
@@ -316,6 +325,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   let studyMin = 0;
   let courseMin = 0;
   let blankMin = 0;
+  /** WP5：本周已排的自由格数（blankBlocks 的周计数器） */
+  let blankPlaced = 0;
   /** 排到了「数据未核实」的食堂几次（南校食堂营业时段为推算值）→ 汇总成一条 note */
   let unverifiedMeals = 0;
   /** 提交项的落点（id → 结束时间），用于 `deps` 的先后约束（AC-9） */
@@ -438,6 +449,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
           issues.push(issueMealSkipped(dayName, res.skippedReason));
         }
       }
+
+      // WP5 小馋猫模式：按 extraMeals 追加下午茶/夜宵窗口（复用同一台 placeMeal 机器，
+      // 同样「离名义时刻最近的空档」口径；找不到就算了，不硬塞）。
+      const extraCount = extras?.extraMeals ?? 0;
+      if (extraCount > 0) {
+        for (const meal of EXTRA_MEAL_SLOTS.slice(0, extraCount)) {
+          const res = placeMeal({ day, meal, placed, dayStartMin: softFloorMin, dayEndMin, mkId });
+          if (res.block) placed = [...placed, res.block];
+        }
+      }
     }
 
     /* --- 6.4 空档与预算 --- */
@@ -476,7 +497,10 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.5 活动模块（运动/午休/取快递/夜宵/自定义…） --- */
-    const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day);
+    const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day, {
+      // WP5 运动模式：sportQuota 生效时绕过画像触发（模式本身就是对运动的显式表达）
+      forceSport: sportQuota != null,
+    });
     const perCat: Record<string, number> = {};
     let activityMin = 0;
     /**
@@ -493,6 +517,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       const cat = tpl.category as ActivityCategory;
       const cap = cat === 'social' ? socialCap : (CATEGORY_PER_DAY[cat] ?? 1);
       if ((perCat[cat] ?? 0) >= cap) continue;
+      // WP5 运动模式：周配额 —— 本周已排满 sportSessions 次就不再排（每天 1 次天然隔天）
+      if (cat === 'sport' && sportQuota != null && sportPlaced >= sportQuota) continue;
       if (activityMin + Math.min(...tpl.durations) > activityBudget) continue;
       const block = placeTemplate({
         tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
@@ -501,6 +527,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         placed = [...placed, block];
         perCat[cat] = (perCat[cat] ?? 0) + 1;
         activityMin += block.endMin - block.startMin;
+        if (cat === 'sport' && sportQuota != null) sportPlaced += 1;
       }
     }
 
@@ -521,6 +548,36 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     /* --- 6.7 转场 + 组装 --- */
     const dayBlocks = sortBlocks(placed);
     attachTransfers(dayBlocks, transfer, dayName, issues);
+
+    /* --- 6.7b 自由格（WP5 远方模式）：把 ≥60 分钟的大空档实体化成 blank 块 ---
+     * 在 attachTransfers **之后**插入：blank 无地点，若先插会被转场检查当成
+     * 「缺地点盲区」刷 info。挤进去的空档本来就是留白预算的一部分，
+     * stats.blankMin 的口径不受影响（filled 的三项都不含 blank）。 */
+    if (extras?.blankBlocks && blankPlaced < extras.blankBlocks) {
+      const gaps = freeGaps(softFloorMin, dayEndMin, placed)
+        .filter((g) => g.endMin - g.startMin >= 60)
+        .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
+      for (const g of gaps) {
+        if (blankPlaced >= extras.blankBlocks) break;
+        const dur = Math.min(120, Math.floor((g.endMin - g.startMin) / 5) * 5);
+        if (dur < 60) continue;
+        const freeBlock: TimeBlock = {
+          id: mkId(day, 'blank', `free-${blankPlaced + 1}`),
+          kind: 'blank',
+          dayOfWeek: day,
+          startMin: g.startMin,
+          endMin: g.startMin + dur,
+          title: '自由格',
+          emoji: '🫙',
+          reason: '远方模式：这段时间留给你自己 —— 想去哪、想干什么自己填',
+          source: 'template',
+        };
+        dayBlocks.push(freeBlock);
+        placed = [...placed, freeBlock];
+        blankPlaced += 1;
+      }
+      dayBlocks.sort((a, b) => a.startMin - b.startMin);
+    }
 
     // ⚠️ 提交项也算「已占用」——否则留白会被高估（只有带 commits 时才有区别）
     const filled = activityMin
@@ -546,6 +603,11 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
 
   // 跨周降档必须**说出来**（§4.1 表第 5 行「诚实」）——否则用户只会觉得「这周怎么排少了」
   notes.push(...rollingNotes(loadDecisions, rollingRes.source));
+
+  // WP5：模式附加参数生效了就要说出来（同「诚实」纪律 —— 否则用户不知道模式干了什么）
+  if (sportQuota != null) notes.push(`运动安排：本周为你铺开 ${sportPlaced} 次锻炼（隔天一次）`);
+  if (extras?.extraMeals) notes.push('加餐窗口：下午茶与夜宵已避开课程排入');
+  if (extras?.blankBlocks) notes.push(`自由格：本周留出 ${blankPlaced} 大格空白，想去哪自己填`);
 
   /* --- 6.9 用户明确排除的块（阶段 A：用户干预） --- */
   /**
@@ -619,7 +681,8 @@ interface MealPick {
  */
 function placeMeal(args: {
   day: DayOfWeek;
-  meal: (typeof MEAL_SLOTS)[number];
+  /** 三餐（MEAL_SLOTS）或 WP5 加餐窗口（EXTRA_MEAL_SLOTS）—— 形状一致 */
+  meal: { id: string; label: string; nominal: string; durationMin: number };
   placed: TimeBlock[];
   dayStartMin: number;
   dayEndMin: number;
@@ -689,6 +752,7 @@ function buildCandidates(
   floatingTasks: UserTask[],
   taskActive: (t: UserTask) => boolean,
   day: DayOfWeek,
+  opts: { forceSport?: boolean } = {},
 ): ActivityTemplate[] {
   const tpls = templates.filter((t) => {
     // 食堂由 placeMeal 专门处理（要按校区与营业时段选），自习由 fillStudy 处理（要按策略分块），
@@ -696,6 +760,8 @@ function buildCandidates(
     if (t.category === 'meal' || t.category === 'study') return false;
     if (t.autoPlace === false) return false; // 只进模块库，等用户自己挑（取快递/洗澡等）
     if (t.trigger) {
+      // WP5 运动模式：sportQuota 生效时运动模板绕过画像触发（用户选模式已是显式表达）
+      if (opts.forceSport && t.category === 'sport') return true;
       if (!scenarios) return false; // 没有画像就不擅自替用户安排（运动等）
       if (!t.trigger.in.includes(String(scenarios[t.trigger.field]))) return false;
     }

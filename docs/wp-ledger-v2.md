@@ -188,3 +188,20 @@
 - golden：**v2 免拍（实证）**——makeRoom 仅被 solver/longLocks/用户路径消费，construct 不引用；`tests/golden-compare.ts` 五快照 ⓪/AC-1/AC-2/AC-3 全 PASS，零漂移。
 - 门禁：tsc 0 / engine **354**/354（350+4）/ ui 267 / 禁区（planner 3 文件白天人工操作）/ 风格 8/8。
 - 教训：恢复未提交改动**严禁 `git checkout HEAD -- <file>`**（会把 WP4a 改动一起清掉，已重放修复）；用 python 精确反向替换。
+
+## §WP5 六模式重做（白天批次 2026-09-27）
+
+- 状态：[x] 完成
+- 改动文件：
+  - `src/lib/planner/lifeModePolicy.ts` — LifeModeFactor 扩 `sportSessions/extraMeals/blankBlocks`；新六模式因子表（grind 内卷/balance 均衡/faraway 远方/sport 运动/snack 小馋猫/mine 我的）；旧 id 迁移表 `normalizeLifeModeId`（slack→faraway/food→snack/health→sport/social→balance）；`lifeModeExtrasOf()`
+  - `src/data/usst.ts` — LIFE_MODES 换新六模式 + `normalizeLifeMode` 转出口
+  - `src/lib/planner/templates.ts` — `EXTRA_MEAL_SLOTS`（下午茶 15:30 / 夜宵 21:00）
+  - `src/lib/planner/model.ts` — `PlanRequest.lifeModeExtras?`（opt-in，缺省不生效）
+  - `src/lib/planner/construct.ts` — 三参数消费：运动周配额（forceSport 绕过画像触发+隔天分布）/ 加餐窗口（复用 placeMeal 机器，placeMeal 的 meal 类型放宽）/ 自由格（attachTransfers 之后插入防「缺地点盲区」误报，blank 不进 filled 口径）+ notes 诚实汇报
+  - `src/features/week/WeekPlanView.tsx` — req 下发 `lifeModeExtras: lifeModeExtrasOf(lifeMode)`
+  - `src/App.tsx` — lifeMode 读取口归一（旧 localStorage id 不失效）
+  - `tests/wp5.test.ts`（新，9 用例）；`tests/lifeModeAndSocial.test.ts`（申报：2 处「猛攻」→「内卷」，模式重命名的行为级变更）
+- 反向验证：RV-1（extras 置 null）红 fail=5 ✓；RV-2（删 forceSport 绕过）红 fail=1（精确命中 bypass 用例）✓。
+- golden：**v3 免拍（实证）**——extras 走 opt-in，golden 语料不带 lifeMode → construct 默认路径零改动；compare 5/5 PASS 零漂移 + construct.test（冻结 JSON 比对）全绿。
+- 门禁：tsc 0 / engine **363**/363（354+9）/ 禁区（planner+data 人工操作）/ 风格 8/8。
+- 遗留：WeekView 模式卡配图（N1-5）；「我的」模式的三滑杆自调（当前=画像+校正原样，不加戏）。

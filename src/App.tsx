@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AnswerEntry, AppState, Schedule } from '@/types';
-import { MOCK_SCHEDULE } from '@/data/usst';
+import { MOCK_SCHEDULE, normalizeLifeMode } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
@@ -260,7 +260,8 @@ export default function App() {
                 planState={state.planState}
                 onPlanStateChange={(ps) => patchState({ planState: ps })}
                 // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
-                lifeMode={state.lifeMode}
+                // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
+                lifeMode={normalizeLifeMode(state.lifeMode)}
               />
             ) : (
               <WeekView

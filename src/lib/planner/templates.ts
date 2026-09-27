@@ -309,6 +309,21 @@ export const MEAL_SLOTS: Array<{
 ];
 
 /**
+ * WP5 加餐窗口（小馋猫模式）：按 lifeModeExtras.extraMeals 取前 N 个。
+ * 形状与 MEAL_SLOTS 一致 —— placeMeal 直接吃，id 作语义键（mkId(day,'meal','tea')）。
+ * 时段刻意避开课程高峰与正餐：下午茶 15:30、夜宵 21:00。
+ */
+export const EXTRA_MEAL_SLOTS: Array<{
+  id: 'tea' | 'night-snack';
+  label: string;
+  nominal: string;
+  durationMin: number;
+}> = [
+  { id: 'tea', label: '下午茶', nominal: '15:30', durationMin: 30 },
+  { id: 'night-snack', label: '夜宵', nominal: '21:00', durationMin: 30 },
+];
+
+/**
  * 用户自定义模块 —— 「时间 + 地点 + 事件」三要素。
  * 指定了 dayOfWeek/startMin 就是固定块（重排时不动），没指定就交给引擎找空档。
  */
