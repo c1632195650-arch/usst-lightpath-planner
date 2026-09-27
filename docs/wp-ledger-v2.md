@@ -302,3 +302,9 @@
 - 在线评测（8001 隔离实例，报告 docs/eval-libao-understand-2026-09-27.md）：**dialog 组门槛全过**——act 宏 F1 0.955（acc 0.95，38/40）/idx EM 1.0（8/8）/非法输出拦截率 100%（7/7）✅✅；D5 相关性门负例 5/5 拦下+正例 3/3 不受影响 ✅。**S/T 组本晚 F1 0.868 未过（申报）**：端点 ok 42/67，DeepSeek 超时率高所致——直接复验 FN 条目（i02 553ms/i03 1056ms）端点均正确应答，属环境方差非 D 批回归（D 批未触碰 intent/answer 链路代码），白天空闲时复跑即可。
 - 门禁（D6 收尾）：tsc 0 / engine 421/0（408+13 新增）/ ui 319/0 / 禁区零改动（D4 两文件经显式申报放行）/ 风格 8/8。
 - 遗留：①dialog 金标 40 条待 CY/MOSS 终验复核（工作单 §10.4）；②S/T 组空闲时复跑取干净门槛数据；③8002 真机重放三截图原句+离线降级待白天（§10.5）；④updateClarify/updatePicking 适配器偏差（见 D1）若 CY 拍板「彻底删除」，改动面=12 处调用点机械替换，无行为差异；⑤D7 replan 协商循环按余力批处理（见下节）。
+
+### §D7 replan 协商循环（2026-09-28 凌晨，余力批照做，commit 9639399）
+
+- blocked 时 negotiate_block 执行器调用 `proposeReplanOptions`（防腐层新纯函数）生成 ≤3 条编号方案：①与挡路块互换（replace 语义，干跑基线经 `excludeBlockIds` 挖掉该块——construct 排除机制复用）②顺延一周 ③降单次时长；**每个方案必须过一次引擎干跑**，排得上的才呈现——「禁止 LLM 编排好了」由两层保证（方案由引擎产出；选中后仍走 runGoalSlots→草稿卡→确认，L4 不变）。
+- LLM 只做引用：blocking.options 序列化只发 id+label（slots 不进 LLM 上下文）；用户回编号 → dialog act=new_intent + replan_id（照抄 id，_clean_dialog 白名单透传）→ 执行器取干跑过的槽位直走草稿通路。
+- 测试：D7 引擎级用例（blocked 夹具三块占满晚间→方案逐条干跑自洽；RV：删干跑过滤即红）engine 421→422；E2E A-N 60/0 回归；门禁五项全过。M 剧本回归时 negotiate 回复升级为「事实+可行方案」口径，M1-M3 断言不受影响。
