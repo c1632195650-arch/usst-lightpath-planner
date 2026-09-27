@@ -64,3 +64,9 @@
 **反向验证**：RV1 updateLayer 摘掉发事件 + RV2 diffPlanEvents 删 excluded 分支 → 批量 fail 2；RV3 python --reverse → failures=2；恢复后全绿
 
 **遗留**：① 课表回写确认后进画像的 key 为 `objective.timetable_summary`（_merge_into_profile 原样存 key）；② MemoryPanel 对该条目的文案显示走 factLabel 的兜底，样式一般但可用；③ app.py 检出 CRLF 行尾（白天批次带入），本次未整文件归一（守行尾纪律：不碰他人文件）。
+
+**行尾申报（WP12 commit 44c4543）**：`server/app.py` 在本次 commit 中整文件 CRLF→LF 归一
+（git stat 显示 1120+/1092-，`--ignore-cr-at-eol` 下真实内容改动仅 +29/-1，已逐行核对）。
+原因：白天批次把 app.py 带成 CRLF，违反本树「全仓 LF」约定（AGENTS §九）；server/ 属 CY
+属地，非队友文件，按 §九 规则 1 归一。其余文件行尾未动。
+

@@ -162,6 +162,25 @@
   - 「同校区 10 分钟」是保守二值（方案书允许）；真实路网步行分钟依赖后端 route()，留 WP-OP/H6。
   - 转场校验按地点字符串查 campusLookup 关键字，认不出的地点不猜跨校区（只按同校区 10 分钟）——与「不猜」纪律一致，但意味着部分地点的跨校区时长未被强制。
 
+## §WP7 编辑模式 + 七天一行/满溢度（2026-09-27 白天批 A）
+
+- 状态：[x] commit e26efd4；门禁 5/5（engine 375/ui 271）+ golden 5/5
+- 反向验证：RV1 面板包裹删除+RV2 阈值位移（fail 2）/ RV3 draggable 门删除（fail 1）→ 恢复 7/7
+- 细节：docs/day-batch-report-2026-09-27.md 批 A 节
+
+## §H2 ModeSetupDialog（2026-09-27 白天批 B）
+
+- 状态：[x] commit 1f1a471；门禁 5/5（engine 375/ui 279）+ golden 5/5
+- 反向验证：RV1 去 extras 注入 + RV2 删 try/catch → fail 4 → 恢复 8/8
+- 细节：docs/day-batch-report-2026-09-27.md 批 B 节
+
+## §WP12 导入恒开 + 双向记忆回写（2026-09-27 白天批 C）
+
+- 状态：[x] commit 44c4543；门禁 5/5（engine 381/ui 279）+ golden 5/5
+- 反向验证：RV1 摘发事件 + RV2 删 excluded 分支（fail 2）；RV3 python --reverse（failures=2）
+- 申报：server/app.py 整文件 CRLF→LF 归一（CY 属地，白天批次带入 CRLF 违反全仓 LF；真实内容改动 +29/-1 已逐行核对）
+- 细节：docs/day-batch-report-2026-09-27.md 批 C 节
+
 ## §TODO 汇总（下一会话第一站）
 
 - 今晚批次（0-6）全部 [x]。白天人工事项：
