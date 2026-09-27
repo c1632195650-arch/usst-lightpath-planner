@@ -663,6 +663,9 @@ export function findCancelTargets(
   }
   for (const b of planBlocks) {
     if (b.kind !== 'activity' && b.kind !== 'study') continue; // 课程不在此通道
+    // D3：同一任务会同时出现在 layer.tasks 与引擎 plan（用户任务渲染成块）——
+    // 不去重的话，取消/替换任何固定用户任务都会得到「两个候选」，被迫挑块。
+    if (b.id.includes('-user-') && out.some((c) => c.taskId && b.id.endsWith(`-user-${c.taskId}`))) continue;
     const title = normTitle(b.title);
     if (title.includes(needle) || needle.includes(title)) {
       const d = md(b.dayOfWeek);

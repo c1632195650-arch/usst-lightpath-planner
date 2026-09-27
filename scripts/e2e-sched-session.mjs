@@ -109,7 +109,10 @@ const run = async () => {
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
       'A5 分号答案被收进槽位 → 草稿卡出现',
     );
-    ok(!(await page.locator(BADGE).isVisible().catch(() => false)), 'A6 补齐出草稿 → 会话回 idle，徽章消失');
+    ok(
+      await page.getByText('草稿待确认', { exact: false }).first().isVisible().catch(() => false),
+      'A6 补齐出草稿 → 徽章换「草稿待确认」口径（D3：草稿也是议题相位，会话未结束，可语音确认）',
+    );
     await page.close();
   }
 
@@ -283,9 +286,232 @@ const run = async () => {
     await page.close();
   }
 
+  // ── D 批剧本 K/L/M/N ──
+  await D_SCENARIOS(browser);
+
   await browser.close();
   console.log(`\n结果：${passed} 过 / ${failed} 挂`);
   process.exit(failed > 0 ? 1 : 0);
+};
+
+/* ============================================================
+ * D 批剧本 K/L/M/N（2026-09-27 夜）
+ * ============================================================
+ * LLM 边界用 route.mock 定死（dialog 场景按 q 回罐头、intent/answer 拔线走规则兜底，
+ * 与剧本 G 同一手法）——E2E 只测**前端执行器链**这半边；LLM 裁决那半边由
+ * evals/golden/plan_understand.jsonl 的 dialog 组在线评测覆盖（eval_plan_understand.py）。
+ * 引擎级「真排上/真 blocked」由 tests/d-batch.test.ts 的 D4 用例覆盖。
+ */
+const DOW_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const TERM_START = '2026-08-31'; // MOCK 学期第一周周一（src/data/usst.ts）
+
+/** 明天（相对真机时钟）的落盘要素：ISO、教学周号、星期数、中文星期、M.D */
+function tomorrowInfo() {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  const iso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const dow = t.getDay() === 0 ? 7 : t.getDay();
+  const weekNo = Math.floor((t - new Date(`${TERM_START}T00:00:00`)) / (7 * 864e5)) + 1;
+  return { iso, dow, weekNo, dowCN: DOW_CN[t.getDay()], md: iso.slice(5).replace('-', '.') };
+}
+
+/** 预置用户待办（layer.tasks）：操场跑步固定在明天傍晚 —— 替换/取消的真实目标 */
+async function seedUserPlan(page, tasks) {
+  await page.evaluate((list) => {
+    localStorage.setItem('usst-user-plan-v1', JSON.stringify({
+      schemaVersion: 2, tasks: list, excluded: [], moves: [], slots: [],
+      courseOverrides: [], mealPlaces: {}, assignments: [],
+    }));
+  }, tasks);
+}
+
+/** 预置对话快照 v3：直接落一个指定相位的 topic（绕过引擎裁决，专测执行器链） */
+async function seedTopicSnapshot(page, topic, messages) {
+  await page.evaluate(([topic, messages]) => {
+    sessionStorage.setItem('usst.libao.chat.v3', JSON.stringify({
+      v: 3, messages, pending: {}, pendingSeq: 0, mode: 'sched', topic, missStreak: 0,
+    }));
+  }, [topic, messages]);
+}
+
+/** dialog 场景罐头路由：q 命中 responder 则回裁决；intent/answer 一律拔线（规则兜底） */
+function mockDialogLLM(respond) {
+  return async (route) => {
+    const req = route.request();
+    if (!req.url().includes('/api/plan/understand')) return route.continue();
+    let body = {};
+    try { body = JSON.parse(req.postData() || '{}'); } catch { /* 拔线 */ }
+    if (body.scene !== 'dialog') return route.abort();
+    const res = respond(body);
+    if (!res) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, reason: 'dialog_no_mock' }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(res) });
+  };
+}
+
+const D_SCENARIOS = async (browser) => {
+  // ── 剧本 K（B① 议题续用）：blocked 之后「把操场跑步替换掉」≤1 轮出 replace 草稿卡 ──
+  {
+    const page = await browser.newPage();
+    const tm = tomorrowInfo();
+    await page.route('**/api/health', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, llm: true, model: 'mock' }) }));
+    await page.route('**/api/plan/understand', mockDialogLLM((body) => {
+      if (body.q.includes('操场跑步替换')) {
+        return { ok: true, act: 'new_intent', args: { intent: 'replace', patch: { targetHint: '操场跑步' } }, reply_note: '', confidence: 0.9 };
+      }
+      return null;
+    }));
+    await onboard(page);
+    await seedUserPlan(page, [{
+      id: 'u-run', title: '操场跑步', emoji: '🏃', kind: 'activity', category: 'sport',
+      dayOfWeek: tm.dow, startMin: 17 * 60 + 55, durationMin: 60, weeks: [tm.weekNo],
+    }]);
+    // blocked 相直接注入快照（引擎级 blocked 已由 d-batch D4 用例覆盖）：上一件「出去玩」没排成
+    const slots = {
+      intent: 'create', title: '出去玩', certainty: 'exact', priorityHint: 85,
+      missing: [], unclear: [], raw: '明天晚上出去玩一小时',
+      dateFrom: tm.iso, dateTo: tm.iso, durationMin: 60,
+      when: { text: '明天晚上', kind: 'relative', relativeDays: 1 },
+      window: { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
+    };
+    await seedTopicSnapshot(page, {
+      phase: 'blocked', intent: 'create', slots, asked: [],
+      priorFailed: { title: '出去玩', slots },
+      blocking: { kind: 'no_placement', verdict: { kind: 'infeasible', questions: [], added: [], studyDeltaMin: 0, placedCount: 0, candidateCount: 1, placedAt: [], caveats: [], reasons: [] }, blockingBlocks: [] },
+      createdAt: Date.now(), turns: 1,
+    }, [{ role: 'lbao', text: '「出去玩」我排不进去：' }]);
+    await page.reload();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '把操场跑步替换掉');
+    ok(
+      await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
+      'K1 blocked 后 1 轮出 replace 草稿卡（priorFailed 议题续用）',
+    );
+    ok(
+      await page.getByText('取消：操场跑步', { exact: false }).first().isVisible().catch(() => false),
+      'K2 草稿卡含「取消：操场跑步」',
+    );
+    ok(
+      !(await page.getByText('投入多少', { exact: false }).first().isVisible().catch(() => false)),
+      'K3 不重复追问时长/时间（B① 根治）',
+    );
+    await page.close();
+  }
+
+  // ── 剧本 L（B② idx 消歧）：replace 两候选 →「明天的那个」1 轮命中出草稿卡 ──
+  {
+    const page = await browser.newPage();
+    const tm = tomorrowInfo();
+    await page.route('**/api/health', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, llm: true, model: 'mock' }) }));
+    await page.route('**/api/plan/understand', mockDialogLLM((body) => {
+      if (body.q.includes('操场跑步替换')) {
+        return { ok: true, act: 'new_intent', args: { intent: 'replace', patch: { title: '出去玩', durationMin: 60, targetHint: '操场跑步', when_text: '明天', relativeDays: 1 } }, reply_note: '', confidence: 0.9 };
+      }
+      if (body.q.includes('明天的那个')) {
+        return { ok: true, act: 'pick_candidate', args: { candidate_idx: 0 }, reply_note: '', confidence: 0.9 };
+      }
+      return null;
+    }));
+    await onboard(page);
+    const mkRun = (id, dow) => ({
+      id, title: '操场跑步', emoji: '🏃', kind: 'activity', category: 'sport',
+      dayOfWeek: dow, startMin: 17 * 60 + 55, durationMin: 60, weeks: [tm.weekNo],
+    });
+    await seedUserPlan(page, [mkRun('u-run-mon', tm.dow), mkRun('u-run-fri', tm.dow === 5 ? 4 : 5)]);
+    await page.reload();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '把操场跑步替换掉');
+    ok(
+      await page.getByText('替换哪个', { exact: false }).first().isVisible().catch(() => false),
+      'L1 两候选 → 挑块追问（候选带日期）',
+    );
+    await say(page, '明天的那个');
+    ok(
+      await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
+      'L2 「明天的那个」1 轮命中 → 草稿卡（无第二次替换哪个）',
+    );
+    ok(
+      !(await page.getByText('替换哪个', { exact: false }).nth(1).isVisible().catch(() => false)),
+      'L3 没有重复追问',
+    );
+    await page.close();
+  }
+
+  // ── 剧本 M（B③ 协商基于事实）：blocked 相下协商回复引用挡路块，不硬编码「降一档」 ──
+  {
+    const page = await browser.newPage();
+    const tm = tomorrowInfo();
+    const hint = `${tm.dowCN}(${tm.md}) 17:55–18:55`;
+    await page.route('**/api/health', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, llm: true, model: 'mock' }) }));
+    await page.route('**/api/plan/understand', mockDialogLLM((body) => {
+      if (body.q.includes('怎么办')) {
+        return { ok: true, act: 'negotiate_block', args: { option: 'swap_block' }, reply_note: '', confidence: 0.8 };
+      }
+      return null;
+    }));
+    await onboard(page);
+    const slots = {
+      intent: 'create', title: '出去玩', certainty: 'exact', priorityHint: 85,
+      missing: [], unclear: [], raw: '明天晚上出去玩一小时',
+      dateFrom: tm.iso, dateTo: tm.iso, durationMin: 60,
+      when: { text: '明天晚上', kind: 'relative', relativeDays: 1 },
+      window: { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
+    };
+    await seedTopicSnapshot(page, {
+      phase: 'blocked', intent: 'create', slots, asked: [],
+      priorFailed: { title: '出去玩', slots },
+      blocking: {
+        kind: 'no_placement',
+        verdict: { kind: 'infeasible', questions: [], added: [], studyDeltaMin: 0, placedCount: 0, candidateCount: 1, placedAt: [], caveats: [], reasons: [] },
+        blockingBlocks: [{ idx: 0, title: '操场跑步', hint, origin: 'plan', target: { blockId: 'w4-d1-user-u-run', title: '操场跑步', origin: 'plan', hint } }],
+      },
+      createdAt: Date.now(), turns: 1,
+    }, [{ role: 'lbao', text: '「出去玩」我排不进去：' }]);
+    await page.reload();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '那怎么办');
+    const body = await page.locator('section').innerText();
+    ok(body.includes('操场跑步'), 'M1 协商回复引用挡路块「操场跑步」（事实，非编造）');
+    ok(body.includes('17:55'), 'M2 引用具体时间 17:55');
+    ok(!body.includes('降一档目标量'), 'M3 不出现硬编码的「降一档目标量」');
+    await page.close();
+  }
+
+  // ── 剧本 N（模式按钮）：问答模式出提示不自动排；切换重发直达排程流；排程模式议题保留 ──
+  {
+    const page = await browser.newPage();
+    await page.route('**/api/plan/understand', (route) => route.abort()); // 全离线：测纯前端模式行为
+    await onboard(page); // onboard 已点排程模式 → 切回问答
+    await page.locator('[data-testid="mode-chat"]').click();
+    await page.waitForTimeout(300);
+    await say(page, SEED);
+    ok(
+      await page.locator('[data-testid="switch-to-sched"]').first().isVisible().catch(() => false),
+      'N1 问答模式排程句 → 出切换提示卡',
+    );
+    ok(
+      !(await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false)),
+      'N2 不自动排（无草稿卡）',
+    );
+    await page.locator('[data-testid="switch-to-sched"]').first().click();
+    await page.waitForTimeout(1500);
+    ok(await page.locator(BADGE).isVisible().catch(() => false), 'N3 切到排程模式并重发 → 进入排程流（追问态）');
+    await say(page, '图书馆几点开会'); // 无关插话：议题保留（保留式提醒，不掉 RAG）
+    ok(
+      await page.getByText('先把刚才的事定完', { exact: false }).first().isVisible().catch(() => false),
+      'N4 排程模式内无关句 → 议题保留（保留式提醒）',
+    );
+    ok(await page.locator(BADGE).isVisible().catch(() => false), 'N5 议题仍在（徽章未消失）');
+    await page.close();
+  }
 };
 
 run().catch((e) => { console.error(e); process.exit(1); });

@@ -1699,7 +1699,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             className="mb-3 flex items-center gap-2 rounded-xl border border-brand/25 bg-brand/5 px-3 py-2 text-xs leading-5 text-ink-soft"
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
-            排程中 —— 回答上面的问题就行；多个答案用分号隔开。
+            {/* D3：徽章按相位说话 —— collect/picking 等回答；draft 等确认；blocked 给方向。
+                草稿相位会话并未结束（可语音确认），徽章保留但换了说法，不再是「回答问题」口径。 */}
+            {topic?.phase === 'draft'
+              ? '草稿待确认 —— 点「就这么排」，或直接说「就这么排 / 先不排」。'
+              : topic?.phase === 'blocked'
+                ? '排程卡住了 —— 换个时间，或让我用别的安排顶掉挡路的块。'
+                : '排程中 —— 回答上面的问题就行；多个答案用分号隔开。'}
             <button onClick={exitSession} className="shrink-0 font-medium text-brand underline underline-offset-2">
               退出
             </button>
