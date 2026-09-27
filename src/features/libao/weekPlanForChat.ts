@@ -31,6 +31,7 @@
  * 「排得下吗」，不需要精确的步行分钟数。
  */
 import type { PersonaProfile, PlanIssue, Schedule, TimeBlock, WeekPlan } from '@/types';
+import type { PlanRequest } from '@/lib/planner/model';
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
 import { planWeekV2 } from '@/lib/planner/index';
@@ -674,4 +675,69 @@ export function planReschedule(
         return { title: b?.title ?? r.blockId, day: r.dayOfWeek, start: toHHmm(r.startMin), end: toHHmm(r.endMin) };
       }),
   };
+}
+
+/* ============================================================
+ * H2：模式问询窗口的干跑模型（ModeSetupDialog 消费）
+ * ============================================================
+ * construct 是同步纯函数 → 六模式「点选即预览」毫秒级；
+ * 干跑抛错返回 { error }，调用方降级，不白屏。
+ * 落在防腐层（而非 modeSetup.ts）：construct/lifeModeExtrasOf 属 lib/planner，
+ * libao 侧只有本文件这一个接缝（AGENTS §三红线 6）。
+ */
+import { construct } from '@/lib/planner/construct';
+import { lifeModeExtrasOf } from '@/lib/planner/lifeModePolicy';
+
+export interface ModePreviewStats {
+  studyHours: number;
+  blankHours: number;
+  sportCount: number;
+  extraMealCount: number;
+}
+
+export type ModePreviewResult =
+  | { mode: string; plan: WeekPlan; stats: ModePreviewStats }
+  | { mode: string; error: string };
+
+/** 模式干跑的基准请求：与 planWeekWithTasks 同一套 policy 来源（buildPhases 校历链） */
+export function modeSetupRequest(
+  schedule: Schedule,
+  profile: PersonaProfile | null,
+  weekNo: number,
+): PlanRequest | null {
+  const semester = buildPhasesFromCalendar(schedule, profile, calendarOf(schedule));
+  const phase = phaseOfWeek(semester.plan, weekNo);
+  if (!phase) return null;
+  return toPlanRequest({
+    schedule,
+    weekNo,
+    policy: phase.policy,
+    scenarios: profile?.scenarios ?? null,
+    tasks: [],
+  });
+}
+
+/** 六模式干跑：复制 req + 注入 lifeModeExtras → construct 同步出预览与三个人话统计 */
+export function modePreview(req: PlanRequest, modeId: string): ModePreviewResult {
+  try {
+    const extras = lifeModeExtrasOf(modeId);
+    const withExtras: PlanRequest = extras ? { ...req, lifeModeExtras: extras } : req;
+    const { plan } = construct(withExtras);
+    const minutesOf = (pred: (b: TimeBlock) => boolean) =>
+      plan.blocks.filter(pred).reduce((n, b) => n + (b.endMin - b.startMin), 0);
+    const round1 = (min: number) => Math.round((min / 60) * 10) / 10;
+    return {
+      mode: modeId,
+      plan,
+      stats: {
+        studyHours: round1(minutesOf((b) => b.kind === 'study')),
+        blankHours: round1(minutesOf((b) => b.kind === 'blank')),
+        // 模板 id 形如 sport-field / sport-gym（语义键见 construct.placeTemplate）
+        sportCount: plan.blocks.filter((b) => /sport/.test(b.id)).length,
+        extraMealCount: plan.blocks.filter((b) => /meal-(tea|night-snack)/.test(b.id)).length,
+      },
+    };
+  } catch (e) {
+    return { mode: modeId, error: e instanceof Error ? e.message : '这个模式排不出来，换一个试试' };
+  }
 }

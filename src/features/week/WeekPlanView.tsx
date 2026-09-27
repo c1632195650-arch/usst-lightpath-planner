@@ -98,6 +98,8 @@ interface Props {
    * 点了「猛攻模式」排得一样松 —— 现在它会真正改变阶段策略的强度。
    */
   lifeMode: string | null;
+  /** H2：打开模式问询窗口（App 持有对话框状态）；缺省不显示入口 */
+  onOpenModeSetup?: () => void;
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -390,7 +392,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1416,6 +1418,16 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             {editMode ? '✏️ 编辑中' : '✏️ 编辑'}
           </button>
           {!editMode && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
+          {onOpenModeSetup && (
+            <button
+              type="button"
+              data-testid="open-mode-setup"
+              onClick={onOpenModeSetup}
+              className="rounded-lg bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+            >
+              换个节奏
+            </button>
+          )}
         </div>
         <ul className="mt-2 space-y-0.5">
           {phase.reasons.slice(0, 3).map((r, i) => (

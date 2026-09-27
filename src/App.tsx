@@ -8,6 +8,7 @@ import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
+import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -43,6 +44,8 @@ export default function App() {
   const [weekMonday, setWeekMonday] = useState<string | null>(null);
   // 默认落在「周计划」：这是感受测试的主体（课表网格是既有功能，随时可切回）
   const [weekSubTab, setWeekSubTab] = useState<WeekSubTab>('plan');
+  // H2：模式问询窗口（导入课表完成 / 周计划「换个节奏」打开）
+  const [modeSetupOpen, setModeSetupOpen] = useState(false);
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
@@ -213,7 +216,7 @@ export default function App() {
 
       <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
         {mainTab === 'import' ? (
-          <ImportTester onApply={(s) => patchState({ schedule: s })} />
+          <ImportTester onApply={(s) => { patchState({ schedule: s }); setModeSetupOpen(true); }} />
         ) : mainTab === 'libao' ? (
           <LbaoChat
             profile={state.persona}
@@ -262,6 +265,7 @@ export default function App() {
                 // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
                 // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
                 lifeMode={normalizeLifeMode(state.lifeMode)}
+                onOpenModeSetup={() => setModeSetupOpen(true)}
               />
             ) : (
               <WeekView
@@ -292,6 +296,18 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* H2：模式问询窗口（确认 → patchState({ lifeMode })，buildPhases 链自动重排） */}
+      {modeSetupOpen && (
+        <ModeSetupDialog
+          schedule={schedule}
+          profile={state.persona}
+          weekNo={weekNo}
+          currentMode={state.lifeMode}
+          onConfirm={(id) => { patchState({ lifeMode: id }); setModeSetupOpen(false); }}
+          onClose={() => setModeSetupOpen(false)}
+        />
+      )}
 
       {!isLbaoTab && (
         <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">

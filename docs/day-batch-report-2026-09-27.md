@@ -24,3 +24,21 @@
 
 **反向验证**：RV1 删面板包裹 + RV2 阈值位移（批量 fail 2）；RV3 draggable 门删除（fail 1）→ 恢复 → 7/7
 
+
+## 批 B · ModeSetupDialog（H2 六模式问询） —— commit（H2:）
+
+**改动文件与关键行号**
+
+| 文件 | 改动 |
+|---|---|
+| `src/features/libao/weekPlanForChat.ts` | 尾部新增 `modeSetupRequest`（buildPhases 校历链→PlanRequest）/ `modePreview`（复制 req+lifeModeExtrasOf 注入→construct 同步干跑→stats{studyHours,blankHours,sportCount,extraMealCount}；抛错→{error}）；:33 增 PlanRequest 类型 import |
+| `src/features/libao/modeSetup.ts`（新） | re-export 干跑模型 + MODE_OPTIONS 模式卡元数据（守接缝红线：construct 只在防腐层 import） |
+| `src/features/libao/ModeSetupDialog.tsx`（新） | 六模式卡（aria-pressed+data-testid）→ 点选即干跑 → MiniWeekPreview compact（caption「预览 · 未落盘，以实际为准」）+ 三个人话数字 → 「就这么过/再看看」；L4：确认前零写入 |
+| `src/features/week/WeekPlanView.tsx` | 增 onOpenModeSetup prop + 工具条「换个节奏」按钮（data-testid="open-mode-setup"） |
+| `src/App.tsx` | modeSetupOpen state；ImportTester onApply 落盘后打开；确认 → patchState({ lifeMode: id })（buildPhases 链 deps 含 lifeMode → 自动重排） |
+| `scripts/modeSetup.test.ts`（新） | 8 用例 |
+
+**命令实据**：tsc 0 错；modeSetup 8/8；golden-compare 5/5；gate 5/5（engine 375 / ui 279；WeekPlanView 例外申报）
+
+**反向验证**：RV1 去 extras 注入 + RV2 删 try/catch → 批量 fail 4（sport/snack/faraway/error 四条红）→ 恢复 → 8/8
+
