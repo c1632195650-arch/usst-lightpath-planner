@@ -156,3 +156,70 @@ test('D3 源码: topic 生命周期（草稿/阻塞/议题续用）在位', () =
   assert.match(chat, /topicExpired\(\{ \.\.\.topic, turns: topic\.turns \+ 1 \}\)/, 'turns 超限自动作废');
 });
 
+/* ---------------- D4 · 引擎修复（weekPlanForChat / templates / construct） ---------------- */
+
+test('D4: goalToTasks 产出 budgetExempt + notAfterMin（窗口上界不再丢）', async () => {
+  const { goalToTasks } = await import('@/features/libao/weekPlanForChat');
+  type Schedule = import('@/types').Schedule;
+  type Course = import('@/types').Course;
+  const course = (id: string, day: number, sp: number, ep: number): Course => ({
+    id, name: id, credit: 2, category: '公共基础', campus: 'JG516', building: '第一教学楼',
+    slots: [{ dayOfWeek: day as Course['slots'][number]['dayOfWeek'], startPeriod: sp, endPeriod: ep, weeks: [3, 4] }],
+  });
+  const SCHEDULE: Schedule = {
+    semesterName: '2026-2027-1', semesterType: 'autumn', termStart: '2026-09-07',
+    totalWeeks: 20, source: 'demo', courses: [course('c1', 1, 1, 2)],
+  };
+  const slots = {
+    intent: 'create', title: '出去玩', certainty: 'exact' as const, priorityHint: 85,
+    missing: [], unclear: [], raw: '明天晚上出去玩一小时',
+    dateFrom: '2026-09-28', dateTo: '2026-09-28',
+    durationMin: 60,
+    window: { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
+  } as Parameters<typeof goalToTasks>[0];
+  // 反向：goalToTasks 撤掉 budgetExempt/notAfterMin → 本用例红
+  const tasks = goalToTasks(slots, SCHEDULE, '2026-09-27');
+  assert.ok(tasks.length > 0);
+  for (const t of tasks) {
+    assert.equal(t.budgetExempt, true, '用户点名块必须豁免活动预算');
+    assert.equal(t.notAfterMin, 23 * 60, '窗口 toMin 必须成为放置上界');
+  }
+});
+
+test('D4: 晚上窗内真排上 + 与既有块同日共存（引擎级，evening 豁免生效）', async () => {
+  const { goalToTasks, checkGoalFeasibility, planWeekWithTasks } = await import('@/features/libao/weekPlanForChat');
+  type Schedule = import('@/types').Schedule;
+  type Course = import('@/types').Course;
+  const course = (id: string, day: number, sp: number, ep: number): Course => ({
+    id, name: id, credit: 2, category: '公共基础', campus: 'JG516', building: '第一教学楼',
+    slots: [{ dayOfWeek: day as Course['slots'][number]['dayOfWeek'], startPeriod: sp, endPeriod: ep, weeks: [4] }],
+  });
+  const SCHEDULE: Schedule = {
+    semesterName: '2026-2027-1', semesterType: 'autumn', termStart: '2026-09-07',
+    totalWeeks: 20, source: 'demo', courses: [course('c1', 1, 1, 2)],
+  };
+  // 占满明天下午与晚间的既有块 —— 修预算前「出去玩」会被静默挤掉（placed=0）
+  const heavy = [
+    { id: 'u-run', title: '操场跑步', kind: 'activity' as const, dayOfWeek: 1, startMin: 17 * 60 + 55, durationMin: 60, weeks: [4] },
+    { id: 'u-occ1', title: '占位一', dayOfWeek: 1, startMin: 13 * 60, durationMin: 120, weeks: [4] },
+    { id: 'u-occ2', title: '占位二', dayOfWeek: 1, startMin: 19 * 60, durationMin: 120, weeks: [4] },
+  ];
+  const slots = {
+    intent: 'create', title: '出去玩', certainty: 'exact' as const, priorityHint: 85,
+    missing: [], unclear: [], raw: '明天晚上出去玩一小时',
+    dateFrom: '2026-09-28', dateTo: '2026-09-28', durationMin: 60,
+    window: { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
+  } as Parameters<typeof goalToTasks>[0];
+  const tasks = goalToTasks(slots, SCHEDULE, '2026-09-27');
+  const verdict = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, today: '2026-09-27', tasks: heavy });
+  assert.equal(verdict.placedCount, 1, `修完后应当真排上：${verdict.reasons.join('；')}`);
+  const plan = await planWeekWithTasks(SCHEDULE, null, 4, [...heavy, ...tasks]);
+  assert.ok(plan);
+  const goal = plan!.blocks.find((b) => b.title === '出去玩');
+  const run = plan!.blocks.find((b) => b.title === '操场跑步');
+  assert.ok(goal, '出去玩没落盘');
+  assert.ok(run, '操场跑步被挤掉了 —— 同日共存失败');
+  assert.ok(goal!.endMin <= 23 * 60, '超出晚上窗（notAfterMin 失效）');
+  assert.ok(goal!.dayOfWeek === run!.dayOfWeek, '没在同一天共存');
+});
+

@@ -67,6 +67,10 @@ export interface ActivityTemplate {
    * 不加这个限制时，引擎会按「最大空档优先」把四六级真题排到 07:00（还没起床）。
    */
   notBeforeMin?: number;
+  /** D4：时段窗上界（见 UserTask.notAfterMin）；经 customTemplate 从 UserTask 透传 */
+  notAfterMin?: number;
+  /** D4：用户点名块豁免活动预算（见 UserTask.budgetExempt）；经 customTemplate 透传 */
+  budgetExempt?: boolean;
 }
 
 /** "06:30-09:30" / "10:45-13:30,16:30-19:30" → 时段数组 */
@@ -356,6 +360,16 @@ export interface UserTask {
   fromEventId?: string;
   /** 最早可开始分钟（如 540 = 09:00）；不设 = 随时可排 */
   notBeforeMin?: number;
+  /** D4：最晚必须结束的分钟 —— 「晚上」这类时段窗的上界（notBeforeMin 只管下界，
+   *  窗口的 toMin 此前在 goalToTasks 里被丢掉，导致「晚上出去玩」被排到深夜之外）。 */
+  notAfterMin?: number;
+  /**
+   * D4：用户点名块豁免活动预算。「出去玩 1 小时」此前受
+   * activityBudget = min(120, usable×0.4) + essentialMin 与 custom 每日上限双重挤压，
+   * 用户点名要做的事被**静默跳过**（placed=0 →「排不进去」）。
+   * 豁免 = 不参与活动预算闸与每日上限闸；不改 kind、不入 study 统计。
+   */
+  budgetExempt?: boolean;
 }
 
 /** 由用户输入构造一个可排程的模块 */
@@ -375,6 +389,8 @@ export function customTemplate(task: UserTask): ActivityTemplate {
     verified: true,
     fromEventId: task.fromEventId,
     notBeforeMin: task.notBeforeMin,
+    notAfterMin: task.notAfterMin,
+    budgetExempt: task.budgetExempt,
   };
 }
 
