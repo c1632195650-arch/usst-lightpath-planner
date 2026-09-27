@@ -68,6 +68,8 @@ import { applyCourseOverrides } from '@/lib/planner/courseOverrides';
 import { localizedDaysFor, localizedPlan, overrideAffectedDays } from '@/lib/planner/localizedReplan';
 import { dropTargetMin } from './dragPreview';
 import { fillGap } from '@/lib/planner/ripple';
+// ── WP7-E6：满溢度条（MOSS 预置）──
+import { daySaturation, SaturationBar } from './SaturationBar';
 // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
 import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
 import { AchievementPanel } from '@/features/activity/GoalEditor';
@@ -160,7 +162,7 @@ function sameRolling(
 }
 
 function BlockCard({
-  block, date, locked, onToggleLock, onExclude,
+  block, date, locked, onToggleLock, onExclude, editable = true,
   assignmentMin, onSetAssignment, onClearAssignment,
   edited, onEditBlock, onRevertEdit,
   dragging, onDragStartCard, onDragEndCard,
@@ -195,6 +197,8 @@ function BlockCard({
   /** 🆕 新日程标注（2026-09-19）：刚添加的事在日程里高亮，点击后消失 */
   isNew?: boolean;
   onDismissNew?: () => void;
+  /** WP7-E5：false = 浏览态，拖拽与 hover 工具全关（纯看，防误拖） */
+  editable?: boolean;
 }) {
   /**
    * T6 的展开状态：点「📝 作业」后才显示时长输入框。
@@ -212,7 +216,7 @@ function BlockCard({
   const isEvent = Boolean(block.fromEventId);
   return (
     <div
-      draggable={block.kind !== 'course' && block.source !== 'course'}
+      draggable={editable && block.kind !== 'course' && block.source !== 'course'}
       onDragStart={(e) => {
         // dataTransfer 里带 id 是给**跨天**用的：目标列靠它知道拖过来的是哪一块
         e.dataTransfer.setData('text/plain', block.id);
@@ -265,6 +269,7 @@ function BlockCard({
           · 「做了 / 没做」执行标记**已下线**（用户确认不需要）——
             行为记录的 UI 入口随之移除，历史数据仍在本地，actualLoad 通道不破坏。
           · 「🗑 删除」沿用原「✕ 不做」的通道与 hover 浮现交互，只把文案改直白。 */}
+      {editable && (
       <div className="group mt-1.5 flex items-center gap-1.5">
         {/* 「定住」—— 把这块从「引擎可动的软块」变成「用户确认过的硬块」。
             ⚠️ 已锁定时**常显**（否则用户看不出这块被锁了）；未锁时 hover 才出现。 */}
@@ -332,6 +337,7 @@ function BlockCard({
           </button>
         )}
       </div>
+      )}
 
       {/* R2：块级编辑面板 —— 同日改；改动攒着，「重新排一遍」才生效（T3 语义） */}
       {editOpen && block.kind !== 'course' && block.source !== 'course' && (
@@ -450,6 +456,17 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     setUndoDepth(undoDepth());
     setRedoDepth(0);
   }, []);
+
+  /* ---------- WP7-E5：编辑模式开关（单一状态源） ----------
+   * false = 浏览态：七天一行只读、面板收起、拖拽与 hover 工具全关（防误拖）；
+   * true = 编辑态：还原四档自适应网格与工具面板。localStorage 持久化。 */
+  const [editMode, setEditMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
+  });
+  const setEditModePersisted = (v: boolean) => {
+    setEditMode(v);
+    try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
+  };
 
   /* ---------- Toast 操作反馈（2026-09-19） ---------- */
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -1385,6 +1402,21 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             周末{phase.policy.weekendWork ? '排' : '不排'}
           </span>
         </div>
+        {/* WP7-E5：编辑模式开关（浏览态附提示，L4：只看不动手） */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="edit-mode-toggle"
+            aria-pressed={editMode}
+            onClick={() => setEditModePersisted(!editMode)}
+            className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+              editMode ? 'bg-brand text-white' : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
+            }`}
+          >
+            {editMode ? '✏️ 编辑中' : '✏️ 编辑'}
+          </button>
+          {!editMode && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
+        </div>
         <ul className="mt-2 space-y-0.5">
           {phase.reasons.slice(0, 3).map((r, i) => (
             <li key={i} className="text-[11.5px] leading-relaxed text-ink-faint">· {r}</li>
@@ -1543,6 +1575,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         )}
       </div>
 
+      {/* WP7-E5：面板区只在编辑态渲染（浏览态零渲染，防误操作） */}
+      {editMode && (
+      <>
       <AddTaskPanel onAdd={handleAddTask} weekNo={weekNo} />
 
       {/* S4：我常去的食堂 —— 引擎不猜（T2），但给用户一个显式设定的地方 */}
@@ -1589,6 +1624,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       <AchievementPanel key={activityVersion} weekNo={weekNo} />
 
       <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
+      </>
+      )}
 
       {/* 天气（2026-09-19 改版）：单独的天气栏已移除 ——
           天气的唯一落点在下面每一天列的标题下方（有数据的日子才显示）。 */}
@@ -1604,8 +1641,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       )}
 
-      {/* 七天时间轴 */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应） */}
+      <div className={editMode
+        ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+        : 'overflow-x-auto'}>
+        <div className={editMode ? 'contents' : 'grid grid-cols-7 min-w-[1120px] gap-3'}>
         {DAY_LABELS.map((name, idx) => {
           const day = idx + 1;
           const baseBlocks = (shownPlan ?? plan).blocks
@@ -1668,9 +1708,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             >
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-[13px] font-semibold text-ink">{name}</span>
-                {study > 0 && (
-                  <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>
-                )}
+                <span className="inline-flex items-center gap-2">
+                  {study > 0 && <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>}
+                  <SaturationBar sat={daySaturation(baseBlocks, 7 * 60, 23 * 60)} />
+                </span>
               </div>
 
               {/* 天气 —— 就在星期名称下面（2026-09-19 改版）。
@@ -1754,6 +1795,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                     return (
                       <BlockCard
                         key={b.id}
+                        editable={editMode}
                         block={b}
                         date={dateOfDay(day)}
                         locked={isLockedThisWeek(planState, weekNo, b)}
@@ -1777,6 +1819,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* 拖拽删除投放区 —— 只在拖动时浮现（侧边固定，不随页面滚动）。
