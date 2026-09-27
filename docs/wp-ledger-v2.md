@@ -181,6 +181,18 @@
 - 申报：server/app.py 整文件 CRLF→LF 归一（CY 属地，白天批次带入 CRLF 违反全仓 LF；真实内容改动 +29/-1 已逐行核对）
 - 细节：docs/day-batch-report-2026-09-27.md 批 C 节
 
+## §V 组 · 全量交互复刻（2026-09-27，goal 包 V0-V3）
+
+- 基线演进：开工 1aa3156（engine 381 / ui 280）→ 收官 044e08d（engine 406 / ui 280）；golden v1 零重拍（每批 compare 5/5）；门禁锚 7190ca67 未变；既有断言零改动
+- 批 V0（commit e8986dc）：重看引导按钮（replay-onboarding）/ 结果页首落点=导入（无课表）/ 总览 checklist 卡（纯模型 checklist.ts + 全完成自隐藏 + 梨宝 seedQuestion 预填）
+  - RV1 checklist done 翻转 + RV2 删重看引导按钮 → fail 4 → 恢复 6/6（tests/v0.test.ts）
+- 批 V1（commit c8b61cc）：AchievementPanel 常驻（editMode 门之外）/ SaturationBar detail hover 浮层（dayBreakdown 纯函数）/ urgencyLevel 三档（≤3红≤7橙）/ 换节奏提权第一顺位 / 删除留空白→blankTaskFor 留白块实体（kind:blank 固定任务，daySaturation 不计）
+  - RV1 kind 改 activity + RV2 阈值位移 + RV3 挪回包裹内 → fail 3 → 恢复 7/7（tests/v1.test.ts）
+- 批 V2（commit c548f8f）：matchCandidate 候选匹配 + clarifyPicking 挑块接续（cancel/reschedule 多命中→按名匹配→草稿卡）/ hold 意图（别排从 cancel 让位，台账申报）+ holdSlotFrom/holdToUnavailableSlot + 确认落 slots + usst:replan 广播重排 / 我的卡文案核对通过（不改）
+  - RV1 模糊匹配删 + RV2 hold 条目删（fail 2）/ RV3 缺天猜整天（fail 1）→ 恢复 6/6（tests/v2.test.ts）
+- 批 V3（commit 044e08d）：scripts/e2e-journey.mjs（playwright 手动资产 ≥20 断言）+ tests/v3.test.ts（21 断言旅程连线锁）；纯逻辑锁已在 v0/v1/v2 入 ui 门禁
+- 细节：docs/v-batch-report-2026-09-27.md
+
 ## §TODO 汇总（下一会话第一站）
 
 - 今晚批次（0-6）全部 [x]。白天人工事项：
