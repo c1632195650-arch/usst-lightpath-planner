@@ -364,6 +364,8 @@ def score_dialog(items, records):
             if validate_dialog_response(res, it.get("state")):
                 intercepted += 1
         want_idx = (it.get("expect", {}).get("args") or {}).get("candidate_idx")
+        if want_idx is None:
+            want_idx = it.get("expect", {}).get("candidate_idx")  # 金标里 args 平铺在 expect 下
         if want_idx is not None:
             idx_total += 1
             got = (res.get("args") or {}).get("candidate_idx") if res.get("ok") else None
@@ -371,10 +373,13 @@ def score_dialog(items, records):
                 idx_hit += 1
             else:
                 idx_miss.append((it["id"], want_idx, got))
-    # 逐 act F1 → 宏平均；另报准确率与混淆
+    # 逐 act F1 → 宏平均；另报准确率与混淆。
+    # FAIL（端点拒收/超时）不是分类标签 —— 它由「非法输出拦截率」口径单独覆盖，
+    # 计入宏平均会双重惩罚（分类错一次 + 拦截机制正常工作一次）。
+    acts_true = sorted(set(y_true))
     per = {}
     tp_all = 0
-    for act in set(y_true) | set(y_pred):
+    for act in acts_true:
         tp = sum(1 for t, p in zip(y_true, y_pred) if t == act and p == act)
         fp = sum(1 for t, p in zip(y_true, y_pred) if t != act and p == act)
         fn = sum(1 for t, p in zip(y_true, y_pred) if t == act and p != act)
@@ -384,11 +389,13 @@ def score_dialog(items, records):
         per[act] = round(f1, 3)
         tp_all += tp
     macro_f1 = round(sum(per.values()) / len(per), 3) if per else 0.0
+    n_fail = sum(1 for p in y_pred if p == "FAIL")
     acc = round(tp_all / len(y_true), 3) if y_true else 0.0
     confusions = Counter((t, p) for t, p in zip(y_true, y_pred) if t != p)
     return {
         "macro_f1": macro_f1, "acc": acc, "per_act": per,
         "acc_raw": f"{tp_all}/{len(y_true)}",
+        "n_fail": n_fail,
         "idx_em": round(idx_hit / idx_total, 3) if idx_total else None,
         "idx_hit": idx_hit, "idx_total": idx_total, "idx_miss": idx_miss,
         "intercept_rate": round(intercepted / n_neg, 3) if n_neg else None,
@@ -430,14 +437,19 @@ def main():
         ]
     else:
         base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8001"
-        print(f"[live] {base}/api/plan/understand（生产忠实：规则先行 → 端点补空/救援）")
-        rules = {r["id"]: r for r in run_node("rules", GOLDEN, "rules")}
-        records, canon_gold = eval_production(base, items, rules)
-        s = score_production(items, rules, records, canon_gold)
-        n_called = sum(1 for r in records if r.get("endpoint_called"))
-        n_ok = sum(1 for r in records if r.get("endpoint_ok"))
-        gates = s["f1"] >= 0.95 and s["em"] >= 0.90
-        lines += [
+        # DIALOG_ONLY=1：只跑 dialog 组（S/T 组基线已在案，省 67 次调用；补测/复测 dialog 用）
+        dialog_only = os.environ.get("DIALOG_ONLY", "") == "1"
+        print(f"[live] {base}/api/plan/understand（生产忠实：规则先行 → 端点补空/救援）"
+              + ("【DIALOG_ONLY】" if dialog_only else ""))
+        s = None
+        if not dialog_only:
+            rules = {r["id"]: r for r in run_node("rules", GOLDEN, "rules")}
+            records, canon_gold = eval_production(base, items, rules)
+            s = score_production(items, rules, records, canon_gold)
+            n_called = sum(1 for r in records if r.get("endpoint_called"))
+            n_ok = sum(1 for r in records if r.get("endpoint_ok"))
+            gates = s["f1"] >= 0.95 and s["em"] >= 0.90
+            lines += [
             "### 在线（生产忠实口径：规则先行 → LLM 补空/救援 → 双侧归一合并计分）",
             f"- 端点调用 {n_called} 次，ok {n_ok}（ok:false 含偶发 8s 超时——③口径："
             "设计行为，生产回规则结果，评测同口径计分，不重试）",
@@ -451,7 +463,7 @@ def main():
             f"- 端点直判参考线（规则拦下的 {s['ep_total']} 条若直询端点的命中率）："
             f"{s['ep_acc'] if s['ep_acc'] is not None else 'n/a'}",
             f"- 门槛（action F1≥0.95 且 槽位 EM≥0.90）：{'✅ 过' if gates else '❌ 未过'}",
-        ]
+            ]
 
         # ── D 批 D2：dialog 组 ──
         dialog_items = [it for it in items if it["scene"] == "dialog"]

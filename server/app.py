@@ -221,8 +221,11 @@ RELEVANCE_TTL = int(os.environ.get("LIBAO_RELEVANCE_TTL", "300"))
 _relevance_cache = {}
 
 _RELEVANCE_SYSTEM = (
-    "你是校园资讯检索的相关性审核员。判断给出的资料是否真的能回答用户的问题。"
-    "只看语义相关性：字面有重叠但话题无关 = 不相关。只输出 JSON，不要输出别的。"
+    "你是校园资讯检索的相关性审核员。判断检索到的资料能不能作为回答用户问题的**依据**。"
+    "判断单位是「同一件事」，不是「同一个词」：资料的主要话题必须正是问题所问的那件事。"
+    "问『几点开门』→ 只有讲该场馆开放/使用安排的资料才相关；"
+    "问『能不能外租/招兼职/转卖』→ 场馆介绍、活动新闻都不相关。"
+    "主题沾边但讲的是另一件事 = 不相关。只输出 JSON，不要输出别的。"
 )
 
 
@@ -235,7 +238,7 @@ def relevance_gate(q, sources):
     hit = _relevance_cache.get(key)
     if hit and now - hit[0] < RELEVANCE_TTL:
         return hit[1]
-    top = [{"title": s["title"], "snippet": s["snippet"][:120]} for s in (sources or [])[:3]]
+    top = [{"title": s["title"], "snippet": s["snippet"][:400]} for s in (sources or [])[:4]]
     try:
         import requests
         r = requests.post(
@@ -248,8 +251,9 @@ def relevance_gate(q, sources):
                     {"role": "user", "content": json.dumps({
                         "问题": q,
                         "检索到的资料": top,
-                        "任务": "这些资料能否真的回答这个问题？能 → relevant=true；"
-                              "只是字面相似、话题无关 → relevant=false。",
+                        "任务": "这些资料与问题是否同一主题？是 → relevant=true；"
+                              "只是字面相似、话题完全无关（如问器材答宿舍规定）→ relevant=false。"
+                              "不要以「snippet 是否包含完整答案」为标准。",
                         "输出格式": '{"relevant": true/false, "reason": "不超过40字"}',
                     }, ensure_ascii=False)},
                 ],

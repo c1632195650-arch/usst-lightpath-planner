@@ -179,3 +179,74 @@ a01–a20（answer 定位）、b01–b10（边界反例）逐条复核全部通�
 - 端点直判参考线（规则拦下的 17 条若直询端点的命中率）：1.0
 - 门槛（action F1≥0.95 且 槽位 EM≥0.90）：❌ 未过
 
+
+## 评测运行 · 2026-09-28 00:26（生产忠实口径 v3）
+
+### 在线（生产忠实口径：规则先行 → LLM 补空/救援 → 双侧归一合并计分）
+- 端点调用 67 次，ok 41（ok:false 含偶发 8s 超时——③口径：设计行为，生产回规则结果，评测同口径计分，不重试）
+- action P/R/F1 = 1.0 / 0.767 / 0.868（TP 23 · FP 0 · FN 7 · TN 10）
+- FN: ['i02', 'i15', 'i21', 'i23', 'i25', 'i29', 'i30']｜FP: []
+- 槽位 EM（TP 条目）= 0.953（未命中: [('i08', 'when_text'), ('i16', 'when_text')]）
+- answer 槽位命中（双侧归一）= 0.923（24/26）｜未命中: [('a05', 'target'), ('a17', 'effort')]
+- 端点直判参考线（规则拦下的 17 条若直询端点的命中率）：1.0
+- 门槛（action F1≥0.95 且 槽位 EM≥0.90）：❌ 未过
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.0（逐 act: {'FAIL': 0.0, 'chit_chat': 0.0, 'resume_topic': 0.0, 'pick_candidate': 0.0, 'discard_topic': 0.0, 'new_intent': 0.0, 'confirm_draft': 0.0, 'ask_slot': 0.0}）｜准确率 = 0.0（0/40）
+- 混淆 Top: [(('ask_slot', 'FAIL'), 9), (('pick_candidate', 'FAIL'), 8), (('new_intent', 'FAIL'), 7), (('chit_chat', 'FAIL'), 5), (('confirm_draft', 'FAIL'), 4), (('discard_topic', 'FAIL'), 4), (('resume_topic', 'FAIL'), 3)]
+- idx 消歧 EM = None（0/0）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: [('d01', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d02', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d03', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d04', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d05', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d06', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d07', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d08', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d09', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d10', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d11', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d12', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d13', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d14', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d15', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d16', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d17', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d18', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d19', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d20', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d21', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d22', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d23', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d24', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d25', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d26', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d27', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d28', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d29', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d30', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d31', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d32', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d33', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d34', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d35', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d36', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d37', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d38', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d39', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>'), ('d40', 'URLError: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>')]
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：❌ 未过
+
+
+## 评测运行 · 2026-09-28 00:30（生产忠实口径 v3）
+
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.754（逐 act: {'pick_candidate': 0.889, 'negotiate_block': 0.0, 'chit_chat': 0.909, 'discard_topic': 1.0, 'ask_slot': 0.714, 'resume_topic': 0.8, 'new_intent': 0.923, 'confirm_draft': 0.8}）｜准确率 = 0.85（34/40）
+- 混淆 Top: [(('ask_slot', 'pick_candidate'), 2), (('new_intent', 'negotiate_block'), 1), (('resume_topic', 'confirm_draft'), 1), (('ask_slot', 'confirm_draft'), 1), (('ask_slot', 'chit_chat'), 1)]
+- idx 消歧 EM = None（0/0）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: 无
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：❌ 未过
+
+
+## 评测运行 · 2026-09-28 00:32（生产忠实口径 v3）
+
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.69（逐 act: {'negotiate_block': 0.0, 'discard_topic': 1.0, 'chit_chat': 1.0, 'pick_candidate': 0.941, 'new_intent': 0.833, 'resume_topic': 0.8, 'ask_slot': 0.778, 'FAIL': 0.0, 'confirm_draft': 0.857}）｜准确率 = 0.85（34/40）
+- 混淆 Top: [(('confirm_draft', 'ask_slot'), 1), (('new_intent', 'negotiate_block'), 1), (('ask_slot', 'pick_candidate'), 1), (('resume_topic', 'negotiate_block'), 1), (('new_intent', 'ask_slot'), 1), (('ask_slot', 'FAIL'), 1)]
+- idx 消歧 EM = 1.0（8/8）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: [('d39', 'dialog_act_rejected')]
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：❌ 未过
+
+
+## 评测运行 · 2026-09-28 00:34（生产忠实口径 v3）
+
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.905（逐 act: {'ask_slot': 0.842, 'chit_chat': 1.0, 'confirm_draft': 0.857, 'discard_topic': 1.0, 'new_intent': 0.833, 'pick_candidate': 1.0, 'resume_topic': 0.8}）｜准确率 = 0.875（35/40）
+- 混淆 Top: [(('confirm_draft', 'ask_slot'), 1), (('new_intent', 'negotiate_block'), 1), (('resume_topic', 'negotiate_block'), 1), (('new_intent', 'ask_slot'), 1), (('ask_slot', 'FAIL'), 1)]
+- idx 消歧 EM = 1.0（8/8）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: [('d39', 'dialog_act_rejected')]
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
+
+
+## 评测运行 · 2026-09-28 00:40（生产忠实口径 v3）
+
+### 在线（生产忠实口径：规则先行 → LLM 补空/救援 → 双侧归一合并计分）
+- 端点调用 67 次，ok 42（ok:false 含偶发 8s 超时——③口径：设计行为，生产回规则结果，评测同口径计分，不重试）
+- action P/R/F1 = 1.0 / 0.767 / 0.868（TP 23 · FP 0 · FN 7 · TN 10）
+- FN: ['i02', 'i15', 'i21', 'i23', 'i25', 'i29', 'i30']｜FP: []
+- 槽位 EM（TP 条目）= 0.953（未命中: [('i08', 'when_text'), ('i16', 'when_text')]）
+- answer 槽位命中（双侧归一）= 0.923（24/26）｜未命中: [('a05', 'target'), ('a17', 'effort')]
+- 端点直判参考线（规则拦下的 17 条若直询端点的命中率）：1.0
+- 门槛（action F1≥0.95 且 槽位 EM≥0.90）：❌ 未过
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.955（逐 act: {'ask_slot': 0.889, 'chit_chat': 1.0, 'confirm_draft': 0.857, 'discard_topic': 1.0, 'new_intent': 1.0, 'pick_candidate': 0.941, 'resume_topic': 1.0}）｜准确率 = 0.95（38/40）
+- 混淆 Top: [(('confirm_draft', 'ask_slot'), 1), (('ask_slot', 'pick_candidate'), 1)]
+- idx 消歧 EM = 1.0（8/8）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: 无
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
+

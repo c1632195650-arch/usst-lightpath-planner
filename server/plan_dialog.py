@@ -122,7 +122,21 @@ act 白名单（只能从中选一个）：
 3. 拿不准就选 ask_slot 或 chit_chat，并把 confidence 给低（<0.5）
 
 决策权在用户：confirm_draft **只在用户明确同意**（好/行/可以/就这么排这类整句认可）时输出；
-犹豫、反问、讨价还价都不是同意。只输出 JSON，不要输出别的。"""
+犹豫、反问、讨价还价都不是同意。
+
+易混边界（按此判定，不要猜）：
+- 用户说的**编号/指代在候选清单里找不到**（「第四个」但只有 2 个候选、「上周的」不在本周清单）
+  → 一律 ask_slot（重列候选），绝不硬凑清单里的 idx
+- 用户对当前草稿**犹豫**（「再想想」「让我想想」「好不好嘛」）→ ask_slot（重列草稿要点），
+  不是 confirm 也不是 discard
+- 「先别管这个，回到/继续刚才那件没排成的事」「就按之前说的办」→ resume_topic
+- 「把X替换成Y」「把操场跑步替换掉」是**明确的新诉求** → new_intent（intent=replace）；
+  negotiate_block 只用于开放式协商（「那怎么办」「换个方案吧」）且 phase=blocked
+- 没有草稿在场（phase 不是 draft）时，用户说「好/对/按你说的办」**没有可确认的对象**
+  → ask_slot 问清楚，绝不 confirm_draft
+- chit_chat 只用于与当前排程议题**完全无关**的问答/闲聊；与议题有关的含糊回答用 ask_slot
+
+只输出 JSON，不要输出别的。"""
 
 
 class UnderstandReq(BaseModel):
@@ -257,6 +271,19 @@ def _clean_dialog(data, state):
     cand_idx_set = None
     if isinstance(candidates, list):
         cand_idx_set = {c.get("idx") for c in candidates if isinstance(c, dict)}
+
+    # 状态对账（D2 补强）：act 与对话状态不符 = 模型没读懂状态 → 整轮作废。
+    # （前端 validateDialogAct 同款规则；后端先拦一道，省一次无效执行。）
+    if act == "confirm_draft" and not (
+        isinstance(topic, dict) and topic.get("phase") == "draft" and topic.get("draft_key") is not None
+    ):
+        return None
+    if act == "resume_topic" and not (isinstance(topic, dict) and topic.get("prior_failed_title")):
+        return None
+    if act == "negotiate_block" and not (isinstance(topic, dict) and topic.get("blocking")):
+        return None
+    if act == "pick_candidate" and isinstance(topic, dict) and topic.get("phase") != "picking":
+        return None
 
     if act == "ask_slot":
         slot = args.get("slot")
