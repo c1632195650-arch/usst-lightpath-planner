@@ -163,6 +163,7 @@ python server/app.py                          # 后端 → http://127.0.0.1:8000
 | `docs/teammate-onboarding.md` | 环境/克隆/每日动作/冲突处理 | 人类队友 |
 | ~~`docs/PRD.md`~~ / ~~`docs/roadmap.md`~~ / ~~`docs/product-vision.md`~~ / ~~`docs/project-intro.md`~~ | **已归档**，定位口径作废 | 仅查历史 |
 | `docs/features.md` / `docs/engine-plan.md` / `docs/prompts.md` | 模块契约 / 引擎计划 / 提示词库 | 写具体模块前 |
+| `docs/week-view-design.md` | 周视图设计规范（视觉重心 / L0-L1-L2 分层 / 动效与令牌约束，可验收） | 改周视图呈现层前必读（E 批起生效） |
 
 ---
 
