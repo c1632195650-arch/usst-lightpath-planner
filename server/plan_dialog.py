@@ -118,6 +118,9 @@ D7 协商方案：blocked 状态的 blocking.options 列出**引擎干跑过、�
 状态读法：
 - topic.phase：collect=等用户补信息；picking=候选清单在等用户挑；draft=草稿在等确认；blocked=排不进去（blocking.blocks 列出挡路的既有块）
 - candidates / blocking.blocks 里的 **idx 与 title 是唯一可信引用**：用户说「第一个/周三那个」就对到清单上
+- **相对日期指代必须换算**：候选/阻塞块的 hint 带「周X(M.D)」日期，用户的「今天/明天/后天/周几」
+  先按「今天」（payload 里已附星期）换算成具体 M.D，再到 hint 里对号 —— 对上了就是 pick_candidate，
+  不许因为「清单里没出现『明天』两个字」就说找不到
 - prior_failed_title 存在 = 之前有一件没排成的事，用户说「还是刚才那个」→ resume_topic
 
 防编造三约束（违反任何一条都会被系统拦截、整轮作废）：
@@ -397,8 +400,16 @@ def plan_understand(req: UnderstandReq):
                     state = {"topic": None, "missStreak": state.get("missStreak", 0)}
             except (TypeError, ValueError):
                 state = {"topic": None, "missStreak": 0}
+            today = req.today or ""
+            _WD = "一二三四五六日"
+            try:
+                from datetime import date as _date
+                _d = _date.fromisoformat(today)
+                today = f"{today}（星期{_WD[_d.weekday()]}）"
+            except ValueError:
+                pass
             user = json.dumps({
-                "今天": req.today,
+                "今天": today,
                 "当前对话状态": state,
                 "最近对话": hist,
                 "用户的话": req.q,

@@ -479,7 +479,16 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   useEffect(() => {
     const onReplan = () => setReplanToken((v) => v + 1);
     window.addEventListener('usst:replan', onReplan);
-    return () => window.removeEventListener('usst:replan', onReplan);
+    // 跨页撤销深度同步（2026-09-28 白天终验发现）：梨宝确认落盘等「本组件之外」的
+    // 改动会压 undo 栈，但本组件深度状态初始 0、不跨页感知 —— ↩ 按钮恒禁用而
+    // Ctrl+Z 可用。挂载时与重排广播时都读一次真实深度。
+    setUndoDepth(undoDepth());
+    const onReplanDepth = () => setUndoDepth(undoDepth());
+    window.addEventListener('usst:replan', onReplanDepth);
+    return () => {
+      window.removeEventListener('usst:replan', onReplan);
+      window.removeEventListener('usst:replan', onReplanDepth);
+    };
   }, []);
 
   /* ---------- Toast 操作反馈（2026-09-19） ---------- */

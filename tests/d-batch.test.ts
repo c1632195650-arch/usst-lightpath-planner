@@ -274,3 +274,13 @@ test('D7: proposeReplanOptions —— 每个方案过引擎干跑，只出真排
     assert.deepEqual(proposeReplanOptions({ slots, verdict: okVerdict, schedule: SCHEDULE, profile: null, today: '2026-09-27' }), []);
   }
 });
+
+/* ---------------- 白天终验修复（2026-09-28） ---------------- */
+
+test('终验修复: WeekPlanView 挂载/重排时同步跨页 undo 深度（↩ 按钮不再恒禁用）', () => {
+  const wv = src('/src/features/week/WeekPlanView.tsx');
+  // 反向：删掉挂载同步行 → 本用例红。背景：梨宝确认落盘压栈后，周计划页
+  // undoDepthState 初始 0 不跨页感知，按钮恒禁用而 Ctrl+Z 可用。
+  assert.match(wv, /setUndoDepth\(undoDepth\(\)\);\n\s+const onReplanDepth = \(\) => setUndoDepth\(undoDepth\(\)\);/,
+    '挂载 + 重排广播双路同步在位');
+});
