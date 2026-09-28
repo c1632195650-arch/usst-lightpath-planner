@@ -366,3 +366,24 @@
 - ⚠️ 环境备注：`gate_overnight.mjs` 在 MOSS 沙箱内 `spawnSync cmd.exe EBUSY`（node 派生 cmd.exe 被沙箱阻断，bash/PowerShell 两路复现）——**脚本未改**（md5 锚 `7190ca67` 不动），五项按脚本逻辑逐条等价复现如上；ZCode/本机终端不受影响，可正常一键跑。
 - 📎 ZCode commit 内「异常上报：E 批工作单无出处」已澄清：工作单在 **`C:\Users\CY\Desktop\ZCode-知识融合与周视图交互升级通宵包-2026-09-28.md`**（桌面，不在仓库文件系统内），E0 产物（4cb7dc1/9a93ac4/8ee8957）即按其 §4 落地，E1–E5 维持待 CY 逐项授权。
 - 偏差申报：zcode 将两项修复 + 修复② + 头注 + 评测数据合入**单个 commit**（原计划分 commit）——内容逐项可溯（本节 + commit message），不重写历史。
+
+## §F E 批执行（2026-09-28 白天，CY 逐项授权后；工作单《ZCode-知识融合与周视图交互升级通宵包》，桌面）
+
+- 状态：[x] E0–E6 全部落地（E0 由并行会话完成于 `4cb7dc1`/`9a93ac4`/`8ee8957`；F0 基线重拍+授权落盘 `f20a427`）
+
+| 批 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| E1 | `cd0be00` | 知识库→引擎：`lib/planner/knowledge.ts`（新叶子）+ buildPhases 钳制层 + construct 自习档位 | tsc 0 / knowledge-wiring 8/8 / engine 431 |
+| E2 | `356728b` | 空间库→引擎：`lib/planner/placesPolicy.ts`（新叶子）+ fillStudy 步行排序 | tsc 0 / places-policy 9/9 / engine 440 |
+| E3 | `eef62f6` | 画像→块级偏好：`lib/planner/profilePrefs.ts`（新叶子）+ fillStudy 时段亲和度 | tsc 0 / profile-prefs 9/9 / engine 449 |
+| E4 | `fd01b7e` | 周视图视觉重心：`features/week/weekViewModel.ts`（新叶子）+ L0 减字 + 时间轴撑满 | tsc 0 / week-view-model 7/7 / engine 456 / ui 319 |
+| E5 | `56ee2c9` | 渐进式披露：`components/ui/DetailDrawer.tsx`（原生 dialog，零依赖）+ blockDetail | 同上 + 9/9 |
+| E6 | `9cc568b` | E2E 剧本 O/P/Q + goWeek 硬门控 + 抽屉 testid 消歧 | **E2E 离线 77 过 / 0 挂** |
+
+- **新增三个灰度开关，全部缺省关闭**（关 = 与既往**逐位一致**，各批均以 engine 全绿 + golden 未动佐证）：`KNOWLEDGE_WIRED`（E1）、`SPATIAL_WIRED`（E2）、`PROFILE_PREFS_WIRED`（E3）。三者独立，互不影响 `DIALOG_ENABLED`。
+- **反向验证总账（12 个变异体，全部「删实现→恰 N 红→还原 sha256 一致→回绿」）**：E1 ×3（kb 补丁 / 久坐过滤 / construct 三元）｜E2 ×4（校区过滤 / 估算预算 / 超预算挪后 / 开关闸）｜E3 ×4（HEA 分支 / 亲和度门槛 / 指纹轴值 / 偏好重排分支）｜E4 ×3（估算判定 / 地点简写 / issue 排序）。
+- **零断言漂移（关键纪律）**：`tests/wp7.test.ts:69` 锁定浏览/编辑态**类名字符串** —— E4 的视觉重心因此改用**内联 style** 实现，锁定串一字未动。唯一一处断言修正：E5 零依赖闸门首版用「正文 includes」判定，被抽屉注释里的「无需引 Radix/Vaul」误伤 → 改为**只查 import 语句**（更准且更严），已申报。
+- **依赖闸门（CY 拍板）**：附录 A 候选**全部关闭**，E4/E5 零新依赖（`package.json` 未动，E5 测例含 package.json 级闸门）；原生 `<dialog>` + `showModal()` 提供焦点陷阱 / Esc / inert。
+- **未接线项如实登记**（防「以为接了」）：`knowledge.ts::KNOWLEDGE_PARTIALS`（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限需活动块生成策略）｜`placesPolicy.ts::SPATIAL_PARTIALS`（三餐食堂选取；1100 路网未入库 → 保持未知不吸附）｜`profilePrefs.ts::PROFILE_PARTIALS`（夜猫子无辩护依据不臆造；三餐步行预算待三餐接线消费；画像变更「受影响天」集合待接 `localizedReplan`）。
+- 环境备注：`gate_overnight.mjs` 在本沙箱 `spawnSync cmd.exe EBUSY`（脚本未改、md5 锚未动）——五项按脚本逻辑逐条等价复现：tsc 0 / ui 319 / engine 458 / 禁区仅授权文件 / 风格 8/8。
+- 待 CY 决定：三个开关的**开启时机**（开启会改变计划输出，需各自 golden 另拍基线 + 人工过目块卡片视觉）。
