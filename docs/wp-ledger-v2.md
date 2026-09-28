@@ -347,3 +347,22 @@
 **终验新发现（如实记录，未改代码）**：
 1. 🔴 跨页撤销按钮禁用（既有缺陷，Ray 名下 `WeekPlanView.tsx`）：`undoDepthState` 初始 0 且不在挂载时同步 `undoDepth()`——梨宝确认落盘压栈的快照，周计划页顶栏 ↩ 按钮显示禁用；Ctrl+Z 通路正常（handleUndo 直读模块栈，⑥-6 即经此通过）。修法一行（挂载 effect 里 setUndoDepth(undoDepth())），因属禁区留白天人工。已记 BLOCKERS。
 2. 🟡 E2E 剧本 A–N 是**离线规则口径**：vite 指向活后端时 A-F/I/J 有 LLM 干扰实测漂移（D3/F1 各挂 1，切离线 vite 后 60/0 复现）——scripts/e2e-sched-session.mjs 头注「后端可选」应升级为「**必须离线或 route.abort understand**（专用 mock 剧本除外）」。属脚本协议备注，非代码缺陷。
+
+## §ACCEPT 终验两项处置 · zcode 交付 + MOSS 独立复核（2026-09-28 上午，commit `9780832`）
+
+- 状态：[x] 完成（zcode 修复+提交 `9780832`；MOSS 对 HEAD 独立复核全绿后本节落盘）
+- `9780832` 实际内容（5 文件，+77/-4）：修复①跨页撤销（`WeekPlanView.tsx` 挂载+重排双路 `setUndoDepth(undoDepth())` + `tests/d-batch.test.ts` 源码锁用例）｜修复②dialog 相对日期消解（`server/plan_dialog.py` payload「今天」附星期 + prompt 换算规则，**zcode 在终验后追加发现**）｜E2E 头注收紧「必须离线」（`scripts/e2e-sched-session.mjs`）｜评测报告补 09:28 复跑数据（`docs/eval-libao-understand-2026-09-27.md`）
+- **MOSS 独立复核实据（HEAD=9780832，干净树）**：
+  | 项 | 结果 |
+  |---|---|
+  | tsc --noEmit | ✅ 0 错（TSC-OK） |
+  | test:ui | ✅ 319/319（基线 ≥219） |
+  | test:engine | ✅ 423/423（基线 422 + 源码锁新用例 1） |
+  | 修复① RV | ✅ 删挂载同步行 → d-batch **恰 1 红**（15 用例 fail 1）→ 还原 sha256 `57eb4e22…8223` 逐字节一致 → 回绿 15/15 |
+  | 修复② 单点探针（隔离 8003 活 LLM 实例，自起自清） | ✅ 「明天的那个」→ `pick_candidate idx=1 conf 0.95`（话术自带「明天是9.29周二」换算依据）；对照「今天的那个」→ `idx=0 conf 0.9` |
+  | E2E A–N（隔离离线 vite 5177，自起自清） | ✅ 60 过 / 0 挂（HEAD 复跑） |
+  | 风格漂移 | ✅ 8/8（check_style_drift.py） |
+  | 禁区 | ✅ 仅 `WeekPlanView.tsx`（依 CY 2026-09-27 21:48 授权行使，zcode 已在 commit message 申报） |
+- ⚠️ 环境备注：`gate_overnight.mjs` 在 MOSS 沙箱内 `spawnSync cmd.exe EBUSY`（node 派生 cmd.exe 被沙箱阻断，bash/PowerShell 两路复现）——**脚本未改**（md5 锚 `7190ca67` 不动），五项按脚本逻辑逐条等价复现如上；ZCode/本机终端不受影响，可正常一键跑。
+- 📎 ZCode commit 内「异常上报：E 批工作单无出处」已澄清：工作单在 **`C:\Users\CY\Desktop\ZCode-知识融合与周视图交互升级通宵包-2026-09-28.md`**（桌面，不在仓库文件系统内），E0 产物（4cb7dc1/9a93ac4/8ee8957）即按其 §4 落地，E1–E5 维持待 CY 逐项授权。
+- 偏差申报：zcode 将两项修复 + 修复② + 头注 + 评测数据合入**单个 commit**（原计划分 commit）——内容逐项可溯（本节 + commit message），不重写历史。
