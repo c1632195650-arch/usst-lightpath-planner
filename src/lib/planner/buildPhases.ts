@@ -89,6 +89,59 @@ function clampInt(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(v)));
 }
 
+function clampRange(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * 轴 → 倾向强度的**连续映射**（P1，2026-09-27）
+ * ============================================================
+ * 旧版是**二元跳变**：`轴 ≥ 70` 跳一档、`轴 ≤ 35` 跳反向一档，
+ * 中间 35–70 完全无响应 —— 实测轴 36 与 69 的输出逐字节相同。
+ * 结果是「画像只在极端作答上起作用」，中段用户做了 35 题却看不到任何变化。
+ *
+ * 新版把中间那段"悬崖"改成斜坡，但**以旧阈值为饱和点**：
+ *   · `轴 ≤ 35` → 与旧版**逐点一致**（原本已生效的人，体验不变）
+ *   · `轴 ≥ 70` → 与旧版**逐点一致**（同上，绝不被削弱）
+ *   · `轴 = 50` → 中性（不变）
+ * 于是"原来有反应的人"不受影响，"原来没反应的人"第一次获得响应。
+ *
+ * 为什么中性点取 50 而不是 35/70 的中点 —— 中性作答就该给出中性结果，
+ * 否则「全 50 的人」会莫名吃到一个偏移。
+ *
+ * ⚠️ 两侧**操作不同**的轴（如 PLAN：高端 +30、低端封顶 45）必须分段处理，
+ *    不能硬套 `±a*side` 的齐次式 —— 详情见 `applyPersona` 里 PLAN 那段注释。
+ */
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+/** 高分侧强度：50 → 0，70 → 1（≥70 恒为 1） */
+function hiSide(v: number): number {
+  return clamp01((v - 50) / 20);
+}
+
+/** 低分侧强度：50 → 0，35 → 1（≤35 恒为 1） */
+function loSide(v: number): number {
+  return clamp01((50 - v) / 15);
+}
+
+/* ── P3（2026-09-27）：quality / confidence 逐轴降级 ──────────
+ * 质量低 → 整体收缩 50%；某轴置信度低 → 该轴额外收缩。
+ * 默认（quality='ok' 且无 confidence 告警）→ 不变，P1 测试不受影响。
+ */
+type Confidence = 'high' | 'mid' | 'low';
+const CONF_WEIGHT: Record<Confidence, number> = { high: 1.0, mid: 1.0, low: 0.5 };
+
+function axisShrink(
+  k: string,
+  quality: string | undefined,
+  confidence: Partial<Record<string, unknown>> | undefined,
+): number {
+  if (quality === 'low') return 0.5;
+  const conf = confidence?.[k];
+  if (conf === 'low') return 0.5;
+  return 1.0;
+}
+
 /**
  * 依据画像微调基准策略。返回改后的 policy 与**逐条理由**。
  * 每条规则都刻意写得能读出来「哪一项画像 → 哪个参数变化」。
@@ -107,35 +160,61 @@ function applyPersona(kind: PhaseKind, base: PhasePolicy, persona: PersonaProfil
 
   const { axes, scenarios } = persona;
 
-  // 成就驱动 → 每天目标时长
-  if (axes.ACH >= 70) {
-    policy.dailyStudyMin = Math.round(policy.dailyStudyMin * 1.2);
-    reasons.push(`成就驱动偏高（${axes.ACH}），每天目标时长上调两成`);
-  } else if (axes.ACH <= 35) {
-    policy.dailyStudyMin = Math.round(policy.dailyStudyMin * 0.8);
-    reasons.push(`成就驱动偏低（${axes.ACH}），目标时长下调两成，先保住节奏`);
+  // P3（§10.7.6 / 设计书）：逐轴 quality + confidence 降级
+  // 默认（quality='ok' 且 confidence 无告警）→ 不变，P1 测试不受影响
+  const ax = (k: string): number => {
+    const raw = (axes as Record<string, number>)[k] ?? 50;
+    const s = axisShrink(k, persona.quality, persona.confidence);
+    return s === 1.0 ? raw : 50 + (raw - 50) * s;
+  };
+
+  // 成就驱动 → 每天目标时长（幅度 ±20%，与旧版上限一致）
+  const achBefore = policy.dailyStudyMin;
+  policy.dailyStudyMin = clampInt(
+    achBefore * (1 + 0.20 * hiSide(ax('ACH')) - 0.20 * loSide(ax('ACH'))),
+    60,
+    240,
+  );
+  {
+    const pct = Math.round((policy.dailyStudyMin / achBefore - 1) * 100);
+    if (pct > 0) reasons.push(`成就驱动偏高（${axes.ACH}），每天目标时长上调 ${pct}%`);
+    else if (pct < 0) reasons.push(`成就驱动偏低（${axes.ACH}），目标时长下调 ${-pct}%，先保住节奏`);
   }
 
-  // 计划性 → 单块长度（能坚持长块 vs 需要短块推进）
-  if (axes.PLAN >= 70) {
-    policy.maxBlockMin = policy.maxBlockMin + 30;
-    reasons.push(`计划性高（${axes.PLAN}），单块可以放长到 ${policy.maxBlockMin} 分钟`);
-  } else if (axes.PLAN <= 35) {
-    policy.maxBlockMin = Math.min(policy.maxBlockMin, 45);
+  // 计划性 → 单块长度。
+  // ⚠️ 两侧是**不同操作**：高端是「+30」，低端是「封顶到 45」。
+  //    写成 `Math.min(base + 30*hi, base - 45*lo)` 会让 Math.min 把高端
+  //    无条件压回 base（实测 v=70 时输出 90 而非 120）—— 必须分段。
+  const planBefore = policy.maxBlockMin;
+  if (ax('PLAN') < 50) {
+    const loTarget = Math.min(planBefore, 45);
+    policy.maxBlockMin = clampInt(planBefore + (loTarget - planBefore) * loSide(ax('PLAN')), 30, 150);
+  } else {
+    policy.maxBlockMin = clampInt(planBefore + 30 * hiSide(ax('PLAN')), 30, 150);
+  }
+  if (policy.maxBlockMin < planBefore) {
     reasons.push(`计划性偏低（${axes.PLAN}），单块压到 ${policy.maxBlockMin} 分钟以内，靠短块推进`);
+  } else if (policy.maxBlockMin > planBefore) {
+    reasons.push(`计划性高（${axes.PLAN}），单块可以放长到 ${policy.maxBlockMin} 分钟`);
   }
 
   // 健康自律 / 韧性 → 留白（越不需要留白的人越要强制留）
-  if (axes.HEA <= 35) {
-    policy.blankRatio = Math.min(0.6, policy.blankRatio + 0.10);
-    reasons.push(`健康自律偏低（${axes.HEA}），留白提到 ${Math.round(policy.blankRatio * 100)}%，别把自己排满`);
-  } else if (axes.HEA >= 70) {
-    policy.blankRatio = Math.max(0.1, policy.blankRatio - 0.05);
+  const heaLo = loSide(ax('HEA'));
+  const heaHi = hiSide(ax('HEA'));
+  const resLo = loSide(ax('RES'));
+  const blankBefore = policy.blankRatio;
+  policy.blankRatio = clampRange(
+    blankBefore + 0.10 * heaLo - 0.05 * heaHi + 0.05 * resLo,
+    0.10,
+    0.60,
+  );
+  if (policy.blankRatio > blankBefore) {
+    const drivers: string[] = [];
+    if (heaLo > 0) drivers.push(`健康自律偏低（${axes.HEA}）`);
+    if (resLo > 0) drivers.push(`韧性偏低（${axes.RES}）`);
+    reasons.push(`${drivers.join('、')}，留白提到 ${Math.round(policy.blankRatio * 100)}%，别把自己排满`);
+  } else if (policy.blankRatio < blankBefore) {
     reasons.push(`健康自律高（${axes.HEA}），留白降到 ${Math.round(policy.blankRatio * 100)}%，你可以承受更密的安排`);
-  }
-  if (axes.RES <= 35) {
-    policy.blankRatio = Math.min(0.6, policy.blankRatio + 0.05);
-    reasons.push(`韧性偏低（${axes.RES}），多留一点缓冲，避免连续受挫`);
   }
 
   // 自习偏好 → 地点池（多值：引擎会按天轮换，不再永远是同一个）

@@ -1,46 +1,89 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 import { useEffect, useState } from 'react';
 import type { AnswerEntry, AppState, Schedule } from '@/types';
 import { MOCK_SCHEDULE } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
-import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
+import { currentWeekNo, mondayOf, todayISO } from '@/lib/date';
+import { hashOf, parseRoute, TAB_LABEL, type MainTab, type Route } from '@/lib/route';
 import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
+import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
+import { initialView } from '@/features/welcome/basicInfo';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
-import { WeekView } from '@/features/week/WeekView';
-import { WeekPlanView } from '@/features/week/WeekPlanView';
+import { GoalsPage } from '@/features/activity/GoalsPage';
+import { addGoal, loadGoals, saveGoals, type Goal } from '@/features/activity/goalStore';
+import { InterestAskDialog, INTEREST_ASK_DISMISSED_KEY } from '@/features/activity/InterestAskDialog';
+import { interestAskHit } from '@/features/activity/goalTemplates';
+import { WeekPlanPage } from '@/features/week/WeekPlanPage';
+import { RoutineSetup } from '@/features/week/RoutineSetup';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
+import { fetchMe, type AuthStatus } from '@/lib/auth';
+import { AccountMenu } from '@/features/auth/AccountMenu';
+import { LoginPage } from '@/features/auth/LoginPage';
+import { PersonaLab } from '@/lab/PersonaLab';
 
-type View = 'welcome' | 'persona' | 'result' | 'main';
-type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
-/** 周视图子模式：课表网格 vs 排程计划时间轴 */
-type WeekSubTab = 'timetable' | 'plan';
+/**
+ * onboarding 的六个阶段：
+ * 欢迎 → **个人信息（WP1 新增）** → 问卷 → **作息（Q1b 新增）** → 画像结果 → 主界面。
+ *
+ * · `basicinfo` 放在问卷之前：年级决定出卷范围（`buildPersonaSequence(grade)`，
+ *   WP2 题库分层），所以必须先有基础信息；
+ * · `routine` 放在问卷之后、生成画像之前：作息是问卷规格书 §4-L1 的第 1 条（硬边界），
+ *   但它**不进画像**（§6.1 禁止语义污染）—— 所以它是一个独立阶段，不是一道题。
+ */
+type View = 'welcome' | 'basicinfo' | 'persona' | 'routine' | 'result' | 'main';
 
 /** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
-const SHOW_IMPORT = import.meta.env.DEV;
+const SHOW_IMPORT = true;
 
-/** Navigation copy stays close to the shell so development-only entries cannot drift from their labels. */
-const TAB_LABEL: Record<MainTab, string> = {
-  calendar: '总览',
-  libao: '梨宝',
-  profile: '我的画像',
-  import: '课表',
-};
-
-function isoOf(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+/**
+ * P2-1（任务收口计划书 R3）：路由的纯函数层已抽到 `@/lib/route`
+ * （`parseRoute` / `hashOf` / `Route` / `MainTab` / `TAB_LABEL`），抽出的目的是**可单测**
+ * —— 本仓无 jsdom，只有把「读 hash」从「解析 hash」里剥出来，路由才测得了。
+ *
+ * 本组件自此只当**环境适配层**：读 `location.hash` 与 DEV 标志注入纯函数，
+ * 再把 `hashchange` 回流成 state。**路由规则改在 `@/lib/route` 改，别在这儿加判断。**
+ * （`tests/route.test.ts` 静态守着这一条：本文件里出现 `function parseRoute` 即红灯。）
+ */
+const readRoute = (): Route => parseRoute(window.location.hash, { showImport: SHOW_IMPORT });
 
 export default function App() {
   const { state, setState } = useAppState();
-  const [view, setView] = useState<View>('welcome');
-  const [mainTab, setMainTab] = useState<MainTab>('calendar');
-  const [weekMonday, setWeekMonday] = useState<string | null>(null);
-  // 默认落在「周计划」：这是感受测试的主体（课表网格是既有功能，随时可切回）
-  const [weekSubTab, setWeekSubTab] = useState<WeekSubTab>('plan');
+  // F1（§4.1「刷新停在当前页」）：已 onboard 的老用户刷新直接进主界面，
+  // 当前页由 hash 路由决定；首次用户仍从欢迎页开始（onboarding 不进路由）。
+  // 旧实况是刷新永远落欢迎页 —— 与「刷新停在当前页」冲突，按规格书修。
+  // 判定抽到 `features/welcome/basicInfo.ts` 的 `initialView()`（纯函数，可单测），
+  // 本组件只做组合根该做的事（读 state → 注入）。
+  const [view, setView] = useState<View>(() => initialView(state.onboarded));
+  const [route, setRoute] = useState<Route>(readRoute);
+
+  /**
+   * 账号门（持久化与账号系统实施规格书 §五）：
+   * checking → 探测中；logged-out → 登录页；logged-in → 主应用；
+   * offline（serve.py 未启动）→ 跳过登录照常运行（localStorage 模式，AC-4）。
+   */
+  const [auth, setAuth] = useState<{ status: AuthStatus | 'checking'; username: string | null }>({
+    status: 'checking',
+    username: null,
+  });
+  useEffect(() => {
+    void fetchMe().then(setAuth);
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setRoute(readRoute());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  /** 导航 = 写 hash（同值赋值不产生历史记录也不触发事件，状态天然一致） */
+  const navigate = (tab: MainTab, weekMonday: string | null = null) => {
+    window.location.hash = hashOf(tab, weekMonday).slice(1);
+  };
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
@@ -63,36 +106,6 @@ export default function App() {
       });
   }, [state.schedule, setState]);
 
-  /** 平移 delta 周，并限定在 [第1周, 第 totalWeeks 周] 内（边界内停下，不循环）。
-   *  鼠标 ‹ › 按钮与键盘左右键共用，保证两者行为一致。 */
-  const shiftWeekBy = (d: number) => {
-    setWeekMonday((m) => {
-      if (!m) return m;
-      const next = shiftWeekMonday(m, d);
-      const n = currentWeekNo(schedule.termStart, next);
-      if (n < 1 || n > schedule.totalWeeks) return m; // 已在首/末周，不越界
-      return next;
-    });
-  };
-
-  // 窗口级键盘：← / → 切换上一周 / 下一周（仅当正在查看周视图时）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      // 只在周视图可见时响应（mainTab=calendar 且已进入某一周）
-      if (mainTab !== 'calendar' || weekMonday === null) return;
-      // 排除输入框 / 文本域 / 可编辑区聚焦（聊天输入、文件选择等不被劫持）
-      const el = document.activeElement as HTMLElement | null;
-      const tag = el?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
-      e.preventDefault(); // 阻止课程表横向滚动误触
-      shiftWeekBy(e.key === 'ArrowRight' ? 1 : -1);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainTab, weekMonday, schedule.termStart, schedule.totalWeeks]);
-
   const setAnswer = (id: string, value: AnswerEntry) => {
     setState((prev) => {
       const next = { ...prev, answers: { ...(prev.answers ?? {}), [id]: value } };
@@ -109,11 +122,28 @@ export default function App() {
       return next;
     });
     setView('result');
+    // 批次 5：画像完成 → 问卷命中比赛/长期目标兴趣 → 弹兴趣追问（可跳过，跳过不再弹）
+    if (interestAskHit(state.answers ?? {}) && !readRaw(INTEREST_ASK_DISMISSED_KEY)) {
+      setInterestAsk(true);
+    }
   };
 
+  /* ── 批次 5：兴趣追问弹窗（画像完成后一次性；模板量化一期） ── */
+  const [interestAsk, setInterestAsk] = useState(false);
+  const handleInterestConfirm = (g: Goal) => {
+    saveGoals(addGoal(loadGoals(), g));
+    setInterestAsk(false);
+    // N2：兴趣弹窗确认 → 落到目标页（页面与使用逻辑规格书 §七）
+    navigate('goals');
+  };
+  const handleInterestSkip = () => {
+    try { writeRaw(INTEREST_ASK_DISMISSED_KEY, '1'); } catch { /* 存不了就算了 */ }
+    setInterestAsk(false);
+  };
+
+  /** 今天页 → 周计划页（定位到某一周） */
   const openWeek = (iso: string) => {
-    setWeekMonday(mondayOf(iso));
-    setMainTab('calendar');
+    navigate('week', mondayOf(iso));
   };
 
   const toggleDay = (iso: string) => {
@@ -127,7 +157,7 @@ export default function App() {
   };
 
   const selectWholeWeek = () => {
-    const monday = weekMonday ?? mondayOf(todayISO());
+    const monday = mondayOf(todayISO());
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(d.getDate() + i);
@@ -144,11 +174,61 @@ export default function App() {
     });
   };
 
+  /** onboarding 完成后的落点 = `#/today`（§2.1：欢迎页/问卷/结果不进路由，落 today） */
+  const enterMain = () => {
+    setView('main');
+    navigate('today');
+  };
+
+  /**
+   * 🧪 临时诊断界面：画像 → 排程 的影响沙盒（**仅 DEV**，且只在 hash 精确等于
+   * `#persona-lab` 时启用）。存在的唯一理由是「让画像改了什么肉眼可见」，
+   * 验收完请连同 `src/lab/PersonaLab.tsx` 一起删除 —— 本处是全仓唯一的挂载点。
+   *
+   * 为什么绕开路由（`lib/route.ts` / `MainTab`）：它是 dev 工具，不该进产品的
+   * 穷尽映射表，也不该出现在任何导航里。放在这里 = 一个可整块摘除的开关。
+   */
+  if (import.meta.env.DEV && window.location.hash === '#persona-lab') {
+    return <PersonaLab />;
+  }
+
+  if (auth.status === 'checking') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-faint">
+        正在检查登录状态…
+      </div>
+    );
+  }
+  if (auth.status === 'logged-out') {
+    return (
+      <LoginPage
+        onLoggedIn={(u) => setAuth({ status: 'logged-in', username: u })}
+      />
+    );
+  }
+
   if (view === 'welcome') {
     return (
       <Welcome
-        onStart={() => setView('persona')}
-        onSkip={() => { setView('main'); setMainTab('calendar'); }}
+        onStart={() => setView('basicinfo')}
+        onSkip={enterMain}
+      />
+    );
+  }
+
+  /**
+   * WP1：基础信息前置（客观事实：称呼/年级/学院/专业/校区/宿舍）。
+   * **不含作息** —— 作息唯一入口是 `features/week/routineStore.ts`
+   * （起床 + 入睡两条，喂引擎 dayStart/dayEnd），走下面的 `routine` 阶段，
+   * 避免「同一件事两个真源、且 dayStart 无来源」。详见 BasicInfoStep.tsx 内注。
+   *
+   * 年级在这里收集，是因为它决定问卷出卷范围（WP2 题库分层）。
+   */
+  if (view === 'basicinfo') {
+    return (
+      <BasicInfoStep
+        onComplete={() => setView('persona')}
+        onBack={() => setView('welcome')}
       />
     );
   }
@@ -158,26 +238,47 @@ export default function App() {
       <PersonaFlow
         answers={state.answers ?? {}}
         onAnswer={setAnswer}
-        onComplete={handleComplete}
+        onComplete={() => setView('routine')}
         onExit={() => setView('welcome')}
+      />
+    );
+  }
+
+  /**
+   * Q1b：作息采集阶段（问卷规格书 §4-L1 #1）。
+   * 由**组合根**编排而不是塞进 `PersonaFlow` —— 详见 `features/week/RoutineSetup.tsx` 头注。
+   * 不生成任何画像数据，只是让 `routineStore` 有机会被填一次；跳过则引擎走缺省窗口。
+   */
+  if (view === 'routine') {
+    return (
+      <RoutineSetup
+        onDone={handleComplete}
+        onBack={() => setView('persona')}
       />
     );
   }
 
   if (view === 'result' && state.persona) {
     return (
-      <PersonaResult
-        profile={state.persona}
-        onEnter={() => { setView('main'); setMainTab('calendar'); }}
-        onRetake={() => setView('persona')}
-      />
+      <>
+        <PersonaResult
+          profile={state.persona}
+          onEnter={enterMain}
+          onRetake={() => setView('persona')}
+        />
+        {interestAsk && (
+          <InterestAskDialog onConfirm={handleInterestConfirm} onSkip={handleInterestSkip} />
+        )}
+      </>
     );
   }
 
   // 主界面
-  const weekNo = weekMonday ? currentWeekNo(schedule.termStart, weekMonday) : currentWeekNo(schedule.termStart);
   /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
-  const isLbaoTab = mainTab === 'libao';
+  const isLbaoTab = route.tab === 'libao';
+  const navTabs: MainTab[] = SHOW_IMPORT
+    ? ['today', 'week', 'goals', 'profile', 'libao', 'import']
+    : ['today', 'week', 'goals', 'profile', 'libao'];
 
   return (
     <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
@@ -191,36 +292,62 @@ export default function App() {
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
             <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
-            {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
+            {navTabs.map((t) => (
               <button
                 key={t}
-                onClick={() => { setMainTab(t); if (t === 'profile') setWeekMonday(null); }}
-                className={`nav-item whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
+                onClick={() => navigate(t)}
+                aria-current={route.tab === t ? 'page' : undefined}
+                className={`nav-item whitespace-nowrap ${route.tab === t ? 'nav-item-active' : ''}`}
               >
                 {TAB_LABEL[t]}
               </button>
             ))}
             </div>
           </nav>
+          {auth.status === 'logged-in' && auth.username && (
+            <AccountMenu
+              username={auth.username}
+              onLoggedOut={() => setAuth({ status: 'logged-out', username: null })}
+            />
+          )}
         </div>
       </header>
 
       <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
-        {mainTab === 'import' ? (
+        {route.tab === 'import' ? (
           <ImportTester onApply={(s) => patchState({ schedule: s })} />
-        ) : mainTab === 'libao' ? (
+        ) : route.tab === 'libao' ? (
           <LbaoChat
             profile={state.persona}
             schedule={schedule}
             onGoProfile={() => setView('persona')}
           />
-        ) : mainTab === 'profile' ? (
+        ) : route.tab === 'profile' ? (
           state.persona ? (
-            <PersonaResult
-              profile={state.persona}
-              onEnter={() => setMainTab('calendar')}
-              onRetake={() => setView('persona')}
-            />
+            <div className="space-y-3">
+              <PersonaResult
+                profile={state.persona}
+                onEnter={() => navigate('today')}
+                onRetake={() => setView('persona')}
+              />
+              {/*
+                引导重看入口（WP1 落地时补，设计取自 beta-v2 的 V0-1）：
+                已 onboard 的用户 `initialView` 直接进 main，**新加的「个人信息」这一步
+                会被 onboarded 永久藏起来** —— 没有这个入口，新流程对老用户不可达，
+                验收时也会误判成「改了没效果」。
+                点它 = 把 onboarded 置回 false 并回到欢迎页，完整重走
+                欢迎 → 个人信息 → 问卷 → 作息 → 结果。
+              */}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
+                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                >
+                  重看引导
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="content-shell panel px-6 py-16 text-center sm:px-10">
               <p className="section-label">PROFILE</p>
@@ -229,59 +356,33 @@ export default function App() {
               <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
             </div>
           )
-        ) : weekMonday ? (
-          <div className="space-y-3">
-            {/* 课表 / 周计划 切换 */}
-            <div className="flex items-center gap-1 rounded-xl border border-ink/10 bg-white p-1 w-fit">
-              <button
-                onClick={() => setWeekSubTab('timetable')}
-                className={`nav-item whitespace-nowrap ${weekSubTab === 'timetable' ? 'nav-item-active' : ''}`}
-              >
-                课表
-              </button>
-              <button
-                onClick={() => setWeekSubTab('plan')}
-                className={`nav-item whitespace-nowrap ${weekSubTab === 'plan' ? 'nav-item-active' : ''}`}
-              >
-                周计划
-              </button>
-            </div>
-            {weekSubTab === 'plan' ? (
-              <WeekPlanView
-                schedule={schedule}
-                weekNo={weekNo}
-                persona={state.persona}
-                planState={state.planState}
-                onPlanStateChange={(ps) => patchState({ planState: ps })}
-                // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
-                lifeMode={state.lifeMode}
-                // 「📍 回到今天」：weekMonday 置空 = 回到本周（App 的默认口径）
-                onGoToToday={() => setWeekMonday(null)}
-              />
-            ) : (
-              <WeekView
-                weekMonday={weekMonday}
-                weekNo={weekNo}
-                schedule={schedule}
-                selectedDays={state.selectedDays}
-                onToggleDay={toggleDay}
-                onSelectWholeWeek={selectWholeWeek}
-                onClearDays={() => patchState({ selectedDays: [] })}
-                lifeMode={state.lifeMode}
-                onSelectMode={(id) => patchState({ lifeMode: id })}
-                persona={state.persona}
-                onBack={() => setWeekMonday(null)}
-                onShiftWeek={shiftWeekBy}
-              />
-            )}
-          </div>
+        ) : route.tab === 'goals' ? (
+          <GoalsPage schedule={schedule} />
+        ) : route.tab === 'week' ? (
+          // weekMonday 的所有权在周计划页（§2.2）；路由只镜像 `#/week/<ISO>` 供深链/前进后退
+          <WeekPlanPage
+            schedule={schedule}
+            weekMonday={route.weekMonday}
+            onWeekMondayChange={(m) => navigate('week', m)}
+            persona={state.persona}
+            planState={state.planState}
+            onPlanStateChange={(ps) => patchState({ planState: ps })}
+            lifeMode={state.lifeMode}
+            selectedDays={state.selectedDays}
+            onToggleDay={toggleDay}
+            onSelectWholeWeek={selectWholeWeek}
+            onClearDays={() => patchState({ selectedDays: [] })}
+            onSelectMode={(id) => patchState({ lifeMode: id })}
+          />
         ) : (
           <OverviewPage
             schedule={schedule}
-            weekNo={weekNo}
+            weekNo={currentWeekNo(schedule.termStart)}
             todayIso={todayISO()}
             persona={state.persona}
-            selectedDate={state.selectedDays[state.selectedDays.length - 1]}
+            planState={state.planState}
+            lifeMode={state.lifeMode}
+            goals={loadGoals()}
             onOpenWeek={openWeek}
             onStartPersona={() => setView('persona')}
           />
@@ -293,6 +394,15 @@ export default function App() {
           UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
         </footer>
       )}
+
+      {interestAsk && (
+        <InterestAskDialog onConfirm={handleInterestConfirm} onSkip={handleInterestSkip} />
+      )}
     </div>
   );
+}
+
+/** 上一版实现里的 isoOf 保留给 selectWholeWeek（原实现原样搬入） */
+function isoOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
