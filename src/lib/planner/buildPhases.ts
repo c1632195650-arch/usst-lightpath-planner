@@ -24,6 +24,8 @@ import { applyCorrectionsToPolicy, composeEffectivePrefs, summarizeCorrections }
 import type { CorrectionRule } from './corrections.ts';
 // 阶段 D：生活模式（平衡/摸鱼/猛攻…）要真正影响强度，而不只是换配色
 import { applyLifeMode } from './lifeModePolicy.ts';
+// E 批 E1（2026-09-28）：知识库钳制层。开关缺省关闭 = 零行为变化（既有调用方无感）。
+import { knowledgeWired, policyPatchFromKnowledge } from './knowledge.ts';
 
 /** 校历里与本模块相关的最小信息（从 constants/term.ts 的 TermCalendar 取） */
 export interface PhaseCalendar {
@@ -296,8 +298,16 @@ export function buildPhases(
     // 叠加顺序：画像基线 → 生活模式 → 用户校正。
     // 每个环节的取舍见各自模块头部说明（后两者都会在 reasons 里留下痕迹）。
     const lm = applyLifeMode(personaPolicy, lifeMode);
-    const policy = applyCorrectionsToPolicy(lm.policy, eff);
-    const rs = [...reasons];
+    /**
+     * E1：知识库钳制（人群底线）—— 位置刻意在 **画像/生活模式之后、用户校正之前**：
+     * 知识赢过引擎/画像的自动调整，但**永远输给用户明确说过的话**（corrections 最后生效）。
+     * 开关关闭时 `kb.patch` 为空对象 → `{...lm.policy}` 逐字段等于 lm.policy，行为零变化。
+     */
+    const kb = knowledgeWired()
+      ? policyPatchFromKnowledge(kind, lm.policy)
+      : { patch: {} as Partial<PhasePolicy>, reasons: [] as string[] };
+    const policy = applyCorrectionsToPolicy({ ...lm.policy, ...kb.patch }, eff);
+    const rs = [...reasons, ...kb.reasons];
     // 生效了就必须**说出来**。否则用户切了模式 / 提了要求却看不到任何痕迹，
     // 会以为功能坏了 —— 这是本项目一直坚持的「可解释」纪律。
     if (lm.note) rs.push(lm.note);

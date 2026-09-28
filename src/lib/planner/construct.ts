@@ -37,6 +37,10 @@ import {
   reasonForCommit, reasonForCommitDeps, reasonForCommitPart,
   reasonForStudy, reasonForTemplate, reasonForUserTask, summaryStudyIssue,
 } from './explain.ts';
+// E 批 E1（2026-09-28）：知识库接线的唯一消费点。开关缺省关闭 = 本行不改变任何既有行为
+// （golden 逐位一致）；开启后策略现场工厂的自习档位改用方法库档位 + 久坐安全档。
+// 归属申报：CY 授权（工作单 §11），本文件属 Ray 目录，commit message 高亮说明。
+import { knowledgeWired, sedentarySafeDurations, studyBlockDurations } from './knowledge.ts';
 
 /* ============================================================
  * 一、常量（与旧引擎逐字一致）
@@ -953,7 +957,11 @@ function studyCandidates(
       emoji: '📚',
       category: 'study' as const,
       kind: 'study' as const,
-      durations: [45, 60, 90],
+      // E1：开关关闭 = 逐位回到既往的拍脑袋档位；开启 = 方法库档位（25/50）
+      // 再过一遍久坐安全档（>60 分钟的档位剔除，健康库「久坐打断」条目）。
+      durations: knowledgeWired()
+        ? sedentarySafeDurations(studyBlockDurations())
+        : [45, 60, 90],
       place: p,
       campus: (place ? campusLabel(place) : 'any') as ActivityTemplate['campus'],
       windows: [],
