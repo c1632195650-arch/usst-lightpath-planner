@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { TimeBlock } from '@/types';
 import {
-  blockChip, hhmm, l0Length, placeLabel, summarizeIssues, timeLabel, transferChip,
+  blockChip, blockDetail, hhmm, l0Length, placeLabel, summarizeIssues, timeLabel, transferChip,
 } from '@/features/week/weekViewModel';
 
 const src = (rel: string): string =>
@@ -115,13 +115,60 @@ test('E4 issue: 顶部取最严重一条 + 计数，明细按 严重→警告→
   assert.equal(summarizeIssues([]).headline, null);
 });
 
-/* ---------------- ⑤ 源码锁 ---------------- */
+/* ---------------- ⑥ E5：L2 详情装配 + 零依赖闸门 ---------------- */
+
+test('E5 详情: 必给「时间/地点/来源」，其余按有无内容产出（不出现占位噪音）', () => {
+  const bare = blockDetail(block());
+  assert.deepEqual(bare.rows.map((r) => r.label), ['时间', '地点', '来源'],
+    '没有内情就是最小三行（地点给**全名**：L0 显示的是简写，详情要说清是哪个馆）');
+  assert.equal(bare.rows.find((r) => r.label === '地点')?.value, '图书馆（图文信息中心）');
+  assert.match(bare.title, /📚/);
+
+  const rich = blockDetail(block({
+    reason: '早上专注更好', locked: true, fromEventId: 'ev-9',
+    transfer: { fromPlace: '一食堂', toPlace: '图书馆（图文信息中心）', minutes: 9, slackMin: 20, tight: false, reliable: false, source: 'campus-estimate' },
+  }));
+  const labels = rich.rows.map((r) => r.label);
+  for (const k of ['时间', '地点', '通勤', '为什么排在这', '来源', '锁定', '关联事件']) {
+    assert.ok(labels.includes(k), `应有「${k}」行`);
+  }
+  assert.match(rich.rows.find((r) => r.label === '通勤')!.value, /≈/, '详情里的估算也要带 ≈');
+  assert.ok(!rich.rows.some((r) => r.value === '' || r.value === '—'), '不产出空行');
+});
+
+test('E5 零依赖闸门: 详情抽屉用原生 dialog，未引入任何组件库', () => {
+  const d = src('/src/components/ui/DetailDrawer.tsx');
+  assert.match(d, /<dialog/, '用原生 dialog');
+  assert.match(d, /showModal\(\)/, 'showModal 自带焦点陷阱/Esc/inert');
+  assert.match(d, /motion-reduce:transition-none/, '遵循 prefers-reduced-motion');
+  // ⚠️ 只查 **import 语句**，不查正文 —— 注释里写「无需引 Radix/Vaul」是解释，
+  //    不是依赖（首版用正文 includes 判定，被自己的注释打红，2026-09-28 修正为 import 级判定）。
+  const imports = d.match(/^\s*import[^\n]*/gm) ?? [];
+  const importText = imports.join('\n').toLowerCase();
+  for (const dep of ['radix', 'vaul', 'base-ui', '@headlessui', 'framer-motion', 'formkit']) {
+    assert.ok(!importText.includes(dep), `import 不得引入 ${dep}（依赖闸门：附录 A 全关）`);
+  }
+  assert.ok(imports.every((l) => /from '(react|@\/)[^']*'/.test(l)),
+    '只允许 react 与仓内模块（零新依赖）');
+  const pkg = src('/package.json');
+  const deps = JSON.parse(pkg) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
+  const all = Object.keys({ ...deps.dependencies, ...deps.devDependencies }).join(',');
+  for (const dep of ['radix', 'vaul', 'base-ui', '@headlessui', 'framer-motion', '@formkit']) {
+    assert.ok(!all.includes(dep), `package.json 不得新增 ${dep}`);
+  }
+  assert.match(src('/src/features/week/WeekPlanView.tsx'), /data-testid=\{`block-detail-\$\{block\.id\}`\}/, '详情入口 testid 在位');
+});
+
+/* ---------------- ⑤ 源码锁（接线形状） ---------------- */
 
 test('E4 源码锁: BlockCard 走渲染模型，散文式转场行已下线；时间轴有视觉重心与量测锚', () => {
   const wv = src('/src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /import \{ blockChip \} from '@\/features\/week\/weekViewModel'/, '模型已接线');
+  assert.match(wv, /import \{ blockChip, blockDetail \} from '@\/features\/week\/weekViewModel'/, '模型已接线');
   assert.match(wv, /const chip = blockChip\(block\)/, '卡片用 chip');
   assert.ok(!wv.includes('🚶 {t.fromPlace}'), '旧的散文式转场行必须下线');
   assert.match(wv, /data-testid="week-timeline"/, '时间轴量测锚在位');
   assert.match(wv, /style=\{\{ minHeight: 'calc\(100vh - 280px\)' \}\}/, '浏览态时间轴撑满主体高度（视觉重心，内联 style 不碰既有类名断言）');
+  assert.match(wv, /\{!editable && chip\.hasDetail && onOpenDetail && \(/, '详情入口三条件闸');
+  assert.match(wv, /<DetailDrawer/, '抽屉已接线');
+  assert.match(wv, /blockDetail\(detailBlock\)/, '详情数据来自纯函数装配');
 });

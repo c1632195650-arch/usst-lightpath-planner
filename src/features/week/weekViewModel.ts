@@ -142,6 +142,34 @@ export function l0Length(block: TimeBlock): number {
 }
 
 /* ============================================================
+ * 三·五、L2 详情（点开才看：来源 / 为什么排在这 / 完整转场 / 锁定与事件）
+ * ========================================================== */
+
+export interface DetailRow { label: string; value: string }
+
+export interface BlockDetail {
+  title: string;
+  rows: DetailRow[];
+}
+
+/**
+ * 装配 L2 详情行。**只组装数据**，渲染交给 `components/ui/DetailDrawer`（原生 dialog）。
+ * 没有内容的行不产出（不出现「—」这种占位噪音）。
+ */
+export function blockDetail(block: TimeBlock): BlockDetail {
+  const c = blockChip(block);
+  const rows: DetailRow[] = [];
+  rows.push({ label: '时间', value: `${c.time}（${Math.round(block.endMin - block.startMin)} 分钟）` });
+  if (c.placeFull) rows.push({ label: '地点', value: c.placeFull });
+  if (c.transfer) rows.push({ label: '通勤', value: c.transfer.detail });
+  if (block.reason) rows.push({ label: '为什么排在这', value: block.reason });
+  rows.push({ label: '来源', value: c.sourceLabel });
+  if (block.locked) rows.push({ label: '锁定', value: '已定住 · 重排时不会挪动' });
+  if (block.fromEventId) rows.push({ label: '关联事件', value: `校历事件 ${block.fromEventId}` });
+  return { title: `${c.emoji} ${c.title}`, rows };
+}
+
+/* ============================================================
  * 四、issue 聚合（明细收走，顶部只留一句话）
  * ========================================================== */
 

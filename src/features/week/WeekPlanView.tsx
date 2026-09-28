@@ -87,7 +87,8 @@ import type { TaskDraft } from '@/features/feedback/planIntent';
 import type { CorrectionRule } from '@/lib/planner/corrections';
 // E 批 E4（2026-09-28）：块卡片的**渲染模型**（L0 减字 / 通勤徽章 / 来源与内情分层）。
 // 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
-import { blockChip } from '@/features/week/weekViewModel';
+import { blockChip, blockDetail } from '@/features/week/weekViewModel';
+import { DetailDrawer } from '@/components/ui/DetailDrawer';
 
 interface Props {
   schedule: Schedule;
@@ -173,7 +174,7 @@ function BlockCard({
   assignmentMin, onSetAssignment, onClearAssignment,
   edited, onEditBlock, onRevertEdit,
   dragging, onDragStartCard, onDragEndCard,
-  isNew, onDismissNew,
+  isNew, onDismissNew, onOpenDetail,
 }: {
   block: TimeBlock;
   /** 这个块所属的 ISO 日期 —— 供无障碍标注（行为记录已下线，2026-09-19） */
@@ -206,6 +207,8 @@ function BlockCard({
   onDismissNew?: () => void;
   /** WP7-E5：false = 浏览态，拖拽与 hover 工具全关（纯看，防误拖） */
   editable?: boolean;
+  /** E5：打开 L2 详情抽屉（只有真有内情的块才给入口，见 `chip.hasDetail`） */
+  onOpenDetail?: (block: TimeBlock) => void;
 }) {
   /**
    * T6 的展开状态：点「📝 作业」后才显示时长输入框。
@@ -276,7 +279,9 @@ function BlockCard({
         </div>
       )}
       {/* reason 在浏览态不占版面（L1：悬浮可见 + ⓘ 提示「还有内情」）；编辑态保持原文，
-          因为改这块时「为什么排在这」正是判断依据。 */}
+          因为改这块时「为什么排在这」正是判断依据。
+          E5：浏览态再给一个**显式「详情」入口** —— 渐进式披露的第二层（来源/完整转场/锁定/事件）。
+          刻意不做「整卡可点」：卡片已有拖拽与「🆕 消失」两种点击语义，再叠加会互相打架。 */}
       {block.reason && (editable ? (
         <div className="mt-1 text-[11px] leading-snug text-ink-faint">💡 {block.reason}</div>
       ) : (
@@ -288,6 +293,16 @@ function BlockCard({
           ⓘ
         </span>
       ))}
+      {!editable && chip.hasDetail && onOpenDetail && (
+        <button
+          type="button"
+          data-testid={`block-detail-${block.id}`}
+          onClick={(e) => { e.stopPropagation(); onOpenDetail(block); }}
+          className="ml-1 mt-1 inline-block rounded border border-paper-sunken px-1.5 py-0.5 text-[10px] text-ink-soft hover:bg-paper-sunken"
+        >
+          详情
+        </button>
+      )}
 
       {/* 操作按钮区（2026-09-19 改版）：
           · 「做了 / 没做」执行标记**已下线**（用户确认不需要）——
@@ -490,8 +505,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const [editMode, setEditMode] = useState<boolean>(() => {
     try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
   });
-  const setEditModePersisted = (v: boolean) => {
-    setEditMode(v);
+  const setEditModePersisted = (v: boolean) => {    setEditMode(v);
     try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
   };
 
@@ -513,6 +527,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
   /* ---------- Toast 操作反馈（2026-09-19） ---------- */
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  /** E5：L2 详情抽屉当前展示的块；null = 关闭（唯一真源，dialog 的 Esc 也只回报到这里） */
+  const [detailBlock, setDetailBlock] = useState<TimeBlock | null>(null);
   const toastSeq = useRef(0);
   const notify = useCallback((kind: ToastKind, message: string, action?: ToastItem['action']) => {
     toastSeq.current += 1;
@@ -1884,6 +1900,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                         onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
                         isNew={!!newTaskId}
                         onDismissNew={newTaskId ? () => setRecentTaskIds((prev) => prev.filter((tid) => tid !== newTaskId)) : undefined}
+                        onOpenDetail={setDetailBlock}
                       />
                     );
                   })}
@@ -2024,6 +2041,15 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
       {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+
+      {/* E5（2026-09-28）：L2 详情抽屉 —— 点块上的「详情」才展开
+          （来源 / 为什么排在这 / 完整转场 / 锁定与事件）。零依赖：原生 dialog。 */}
+      <DetailDrawer
+        open={detailBlock !== null}
+        title={detailBlock ? blockDetail(detailBlock).title : ''}
+        rows={detailBlock ? blockDetail(detailBlock).rows : []}
+        onClose={() => setDetailBlock(null)}
+      />
     </div>
   );
 }
