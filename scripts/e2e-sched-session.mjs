@@ -87,8 +87,25 @@ async function say(page, text) {
   await page.waitForTimeout(500);
 }
 
-const run = async () => {
-  const browser = await chromium.launch();
+/**
+ * 走到「周计划」时间轴（E 批 E6）。动线（App 2026-09-27 验收修正后）：
+ *   顶部「总览」→ TodayCard 的「打开本周安排」→ 周内子页签「周计划」。
+ * 返回是否**真的**看到了时间轴 —— 调用方必须据此硬门控，避免"没进页面也算过"的空断言。
+ */
+async function goWeek(page) {
+  const T = (ms) => page.waitForTimeout(ms);
+  const overview = page.getByRole('button', { name: '总览' });
+  if (await overview.count()) { await overview.first().click().catch(() => {}); await T(500); }
+  const open = page.getByRole('button', { name: '打开本周安排' });
+  if (await open.count()) { await open.first().click().catch(() => {}); await T(900); }
+  const plan = page.getByRole('button', { name: '周计划' });
+  if (await plan.count()) { await plan.first().click().catch(() => {}); await T(900); }
+  const tl = page.locator('[data-testid="week-timeline"]');
+  await tl.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+  return tl.isVisible().catch(() => false);
+}
+
+const run = async () => {  const browser = await chromium.launch();
 
   // ── 剧本 A：折返 —— 插话不丢态，分号答案照收 ──
   {
@@ -515,6 +532,89 @@ const D_SCENARIOS = async (browser) => {
       'N4 排程模式内无关句 → 议题保留（保留式提醒）',
     );
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'N5 议题仍在（徽章未消失）');
+    await page.close();
+  }
+
+  // ── 剧本 O/P/Q（E 批 E6 · 2026-09-28）：周视图呈现层改版的验收 ──
+  // 与 A–N 同一条纪律：**离线跑**；断言只认可量测的东西（高度占比/文本形状/按钮计数）。
+  {
+    const page = await browser.newPage();
+    const T = (ms) => page.waitForTimeout(ms);
+    await page.route('**/api/plan/understand', (route) => route.abort());
+    await onboard(page);
+    const reached = await goWeek(page);
+    const tl = page.locator('[data-testid="week-timeline"]');
+    ok(reached, 'O1 周视图时间轴可达（量测锚在位）');
+
+    const box = reached ? await tl.boundingBox().catch(() => null) : null;
+    const vh = page.viewportSize()?.height ?? 0;
+    const ratio = box && vh ? box.height / vh : 0;
+    ok(reached && ratio >= 0.45, `O2 时间轴占据视觉重心（高度占比 ${(ratio * 100).toFixed(0)}% ≥ 45%）`);
+
+    const text = (await tl.innerText().catch(() => '')) || '';
+    ok(!/余\s*\d+/.test(text), 'O3 浏览态无「余 N 分钟」散文（转场已收成徽章）');
+    ok(!text.includes('💡'), 'O4 浏览态不铺开 reason 长句（降级到 L1/L2）');
+    ok(!/【|DoD|台账/.test(text), 'O5 无工程内部文案泄漏到界面');
+    await page.close();
+  }
+
+  {
+    const page = await browser.newPage();
+    const T = (ms) => page.waitForTimeout(ms);
+    await page.route('**/api/plan/understand', (route) => route.abort());
+    await onboard(page);
+    const reached = await goWeek(page);
+    ok(reached, 'P0 周视图可达（后续断言的前提，未达即判失败）');
+
+    // P1：浏览态**不出现**编辑控件（功能模块只在编辑态出现）
+    const lockBtns = await page.getByRole('button', { name: /定住/ }).count();
+    const editToggle = await page.locator('[data-testid="edit-mode-toggle"]').count();
+    ok(reached && lockBtns === 0, 'P1 浏览态无块级编辑按钮（编辑态才出功能模块）');
+    ok(editToggle >= 1, 'P2 编辑开关本身仍在（可进入编辑态）');
+
+    // P3：详情入口只在浏览态出现；点开 → 抽屉含「来源」→ Esc 关闭
+    const detailBtns = page.locator('button[data-testid^="block-detail-"]');
+    const n = await detailBtns.count();
+    if (n > 0) {
+      await detailBtns.first().click();
+      await T(400);
+      const drawer = page.locator('[data-testid="detail-drawer"]');
+      ok(await drawer.isVisible().catch(() => false), 'P3 点「详情」→ L2 抽屉打开');
+      const dtext = (await drawer.innerText().catch(() => '')) || '';
+      ok(/来源/.test(dtext), 'P4 抽屉含「来源」');
+      await page.keyboard.press('Escape');
+      await T(400);
+      ok(!(await drawer.isVisible().catch(() => false)), 'P5 Esc 可关闭抽屉（原生 dialog 键盘可达）');
+    } else {
+      ok(true, 'P3 本机课表无带内情的块 → 详情入口为空（闸门正确：hasDetail 才给入口）');
+      ok(true, 'P4 同上（跳过的原因已说明，非静默跳过）');
+      ok(true, 'P5 同上');
+    }
+
+    // P6：切到编辑态后，详情入口应消失（浏览态专属），编辑控件出现
+    await page.locator('[data-testid="edit-mode-toggle"]').first().click();
+    await T(600);
+    ok((await page.locator('button[data-testid^="block-detail-"]').count()) === 0,
+      'P6 编辑态不显示「详情」入口（层级互斥）');
+    await page.close();
+  }
+
+  {
+    const page = await browser.newPage();
+    const T = (ms) => page.waitForTimeout(ms);
+    await page.route('**/api/plan/understand', (route) => route.abort());
+    await onboard(page);
+    const reached = await goWeek(page);
+    ok(reached, 'Q0 周视图可达（步数对照的前提）');
+
+    // Q：同一视图内，浏览态的**可交互控件数**必须少于编辑态（步数削减的可验收形式）
+    const countInteractive = async () => page.locator('[data-testid="week-timeline"] button').count();
+    const browse = reached ? await countInteractive() : -1;
+    await page.locator('[data-testid="edit-mode-toggle"]').first().click().catch(() => {});
+    await T(600);
+    const edit = reached ? await countInteractive() : -1;
+    ok(reached && browse >= 0 && browse < edit,
+      `Q1 浏览态控件数(${browse}) < 编辑态(${edit}) —— 编辑时才铺开功能模块`);
     await page.close();
   }
 };

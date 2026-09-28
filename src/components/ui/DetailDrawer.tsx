@@ -35,7 +35,7 @@ export function DetailDrawer({
   return (
     <dialog
       ref={ref}
-      data-testid="block-detail-drawer"
+      data-testid="detail-drawer"
       // 原生关闭（Esc / 点 backdrop 的 close 事件）统一回报给上层，状态只有一处真源
       onClose={onClose}
       className="ml-auto mr-0 h-full max-h-full w-full max-w-md rounded-l-2xl border-l border-paper-sunken bg-paper-card p-0 text-ink shadow-xl backdrop:bg-ink/30 motion-reduce:transition-none"
