@@ -41,6 +41,8 @@ import {
 // （golden 逐位一致）；开启后策略现场工厂的自习档位改用方法库档位 + 久坐安全档。
 // 归属申报：CY 授权（工作单 §11），本文件属 Ray 目录，commit message 高亮说明。
 import { knowledgeWired, sedentarySafeDurations, studyBlockDurations } from './knowledge.ts';
+// E 批 E2（2026-09-28）：空间库选取策略（按「从上一块走过去的分钟」排序候选）。
+import { orderByWalkFrom, spatialWired } from './placesPolicy.ts';
 
 /* ============================================================
  * 一、常量（与旧引擎逐字一致）
@@ -203,6 +205,17 @@ function travelNeed(transfer: TransferProvider, from?: string, to?: string): num
   if (!from || !to || from === to) return 0;
   const info = transfer(from, to);
   return info ? Math.ceil(Math.max(0, info.minutes)) : 0;
+}
+
+/**
+ * 取转场**信息本体**（要 `reliable` 判断是不是估算值）——`travelNeed` 只回分钟数，不够用。
+ * 拿不到返回 null（同地点/无数据/认不出校区），调用方按「未知」处理，**不当成 0**。
+ */
+function travelInfoOf(
+  transfer: TransferProvider, from?: string, to?: string,
+): { minutes: number; reliable?: boolean } | null {
+  if (!from || !to || from === to) return null;
+  return transfer(from, to);
 }
 
 /** 当天课程主要发生在哪个校区 → 决定去哪边的食堂 */
@@ -1023,9 +1036,24 @@ function fillStudy(args: {
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);
       // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）
-      const tpl = cands.find((t) => openAt(t, gap.startMin, gap.startMin + MIN_CHUNK))
+      const opened = cands.filter((t) => openAt(t, gap.startMin, gap.startMin + MIN_CHUNK));
+      // ⚠️ 关闭态必须与既往**逐位一致**：先「此刻开门的第一档」，再退「末尾仍开门的」，最后兜底 cands[0]。
+      let tpl: ActivityTemplate | undefined = opened[0]
         ?? cands.find((t) => openAt(t, gap.endMin - MIN_CHUNK, gap.endMin))
         ?? cands[0];
+      /**
+       * E2：开关开启且知道「上一块在哪」时，在**同一优先档内**改按「走过去几分钟」排序
+       * （估算项留余量），而不是盲取偏好池第一个。关闭态不进入此分支 → 行为零变化。
+       */
+      if (spatialWired() && prev?.place) {
+        const pool = opened.length ? opened : cands;
+        tpl = orderByWalkFrom(pool, prev.place, (t) => {
+          const info = travelInfoOf(transfer, prev.place, t.place);
+          return info
+            ? { minutes: Math.ceil(Math.max(0, info.minutes)), estimate: info.reliable === false }
+            : null;
+        })[0] ?? tpl;
+      }
       if (!tpl) continue;
       const need = travelNeed(transfer, prev?.place, tpl.place);
       const s = prev ? Math.max(gap.startMin, prev.endMin + need + SOFT_BUFFER_MIN) : gap.startMin;
