@@ -85,6 +85,9 @@ import { loadRules, saveRules, upsertRule } from '@/features/feedback/store';
 import { detectScope, scopeReason } from '@/features/feedback/parseCorrection';
 import type { TaskDraft } from '@/features/feedback/planIntent';
 import type { CorrectionRule } from '@/lib/planner/corrections';
+// E 批 E4（2026-09-28）：块卡片的**渲染模型**（L0 减字 / 通勤徽章 / 来源与内情分层）。
+// 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
+import { blockChip } from '@/features/week/weekViewModel';
 
 interface Props {
   schedule: Schedule;
@@ -214,7 +217,8 @@ function BlockCard({
   /** R2：块级编辑面板的展开状态（同 T6，纯 UI 状态） */
   const [editOpen, setEditOpen] = useState(false);
   const style = KIND_STYLE[block.kind] ?? KIND_STYLE.blank;
-  const t = block.transfer;
+  /** E4：该块在**浏览态**的 L0 呈现（时刻/地点/通勤徽章/来源；reason 走 L1 提示） */
+  const chip = blockChip(block);
   // 校历事件展开出来的准备块（光电杯材料、四六级真题…）单独标出来 ——
   // 否则用户只看到「又一个活动块」，意识不到它和那个截止日有关
   const isEvent = Boolean(block.fromEventId);
@@ -254,20 +258,36 @@ function BlockCard({
       )}
       {/* 地点 —— 标题里已经说了就不再重复（T5）。
           例：「第一食堂 🍚 / @第一食堂」纯属噪音；重复信息会淹没真正要看的时刻。 */}
-      {block.place && !block.title.includes(block.place) && (
-        <div className="mt-0.5 text-[11px] text-ink-soft">
-          @{block.place}{block.room ? ` ${block.room}` : ''}
+      {chip.place && (
+        <div title={chip.placeFull ?? undefined} className="mt-0.5 text-[11px] text-ink-soft">
+          @{chip.place}
         </div>
       )}
-      {t && (
-        <div className={`mt-1 rounded px-1.5 py-0.5 text-[11px] ${t.tight ? 'bg-white/70 text-red-700' : 'text-ink-soft'}`}>
-          🚶 {t.fromPlace} → {t.toPlace}：{t.minutes} 分钟
-          （余 {t.slackMin}{t.tight ? ' · 紧' : ''}）
+      {/* E4（2026-09-28）：转场从「三行散文」改成**一个徽章** —— 日常只需要「走过去大概多久」。
+          完整信息（起点→终点/余量/是否估算）进 `title`（L1），点开卡片看 L2 详情。
+          估算值带 `≈` 前缀，不把估算说成实测（诚实纪律）。 */}
+      {chip.transfer && (
+        <div
+          title={chip.transfer.detail}
+          className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] ${chip.transfer.tight ? 'bg-white/70 text-red-700' : 'text-ink-soft'}`}
+        >
+          {chip.transfer.label}
+          {chip.transfer.tight && <span className="ml-1">· 紧</span>}
         </div>
       )}
-      {block.reason && (
+      {/* reason 在浏览态不占版面（L1：悬浮可见 + ⓘ 提示「还有内情」）；编辑态保持原文，
+          因为改这块时「为什么排在这」正是判断依据。 */}
+      {block.reason && (editable ? (
         <div className="mt-1 text-[11px] leading-snug text-ink-faint">💡 {block.reason}</div>
-      )}
+      ) : (
+        <span
+          title={block.reason}
+          aria-label="为什么排在这"
+          className="mt-1 inline-block align-middle text-[11px] text-ink-faint"
+        >
+          ⓘ
+        </span>
+      ))}
 
       {/* 操作按钮区（2026-09-19 改版）：
           · 「做了 / 没做」执行标记**已下线**（用户确认不需要）——
@@ -1675,11 +1695,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       )}
 
-      {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应） */}
+      {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
+          E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
+          让「时间轴是主角、其他都是注脚」（docs/week-view-design.md §2.1）。
+          `data-testid` 供 E6 剧本 O 量测高度占比。 */}
       <div className={editMode
         ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         : 'overflow-x-auto'}>
-        <div className={editMode ? 'contents' : 'grid grid-cols-7 min-w-[1120px] gap-3'}>
+        {/* E4：视觉重心用**内联 style** 而不是 className —— `tests/wp7.test.ts` 锁定的是
+            浏览/编辑态**类名字符串**（`'contents' : 'grid grid-cols-7 …'`），
+            动它就得改既有断言；内联 style 达到同样效果且零断言漂移。
+            `display: contents` 下 minHeight 无效，故编辑态无副作用。 */}
+        <div
+          data-testid="week-timeline"
+          style={{ minHeight: 'calc(100vh - 280px)' }}
+          className={editMode ? 'contents' : 'grid grid-cols-7 min-w-[1120px] gap-3'}
+        >
         {DAY_LABELS.map((name, idx) => {
           const day = idx + 1;
           const baseBlocks = (shownPlan ?? plan).blocks
