@@ -43,6 +43,8 @@ import {
 import { knowledgeWired, sedentarySafeDurations, studyBlockDurations } from './knowledge.ts';
 // E 批 E2（2026-09-28）：空间库选取策略（按「从上一块走过去的分钟」排序候选）。
 import { orderByWalkFrom, spatialWired } from './placesPolicy.ts';
+// E 批 E3（2026-09-28）：画像的**块级**偏好（时段亲和度）——开关缺省关闭 = 零行为变化。
+import { blockPrefs, gapAffinity, prefsWired, type BlockPrefs } from './profilePrefs.ts';
 
 /* ============================================================
  * 一、常量（与旧引擎逐字一致）
@@ -216,6 +218,15 @@ function travelInfoOf(
 ): { minutes: number; reliable?: boolean } | null {
   if (!from || !to || from === to) return null;
   return transfer(from, to);
+}
+
+/**
+ * E3：从请求里算画像的**块级**偏好。开关关闭、或没画像/没场景 → null
+ * （引擎保持「大空档优先」的既有口径，行为零变化）。
+ */
+function blockPrefsOf(req: PlanRequest): BlockPrefs | null {
+  if (!prefsWired()) return null;
+  return blockPrefs(req.persona ?? null, req.scenarios ?? null);
 }
 
 /** 当天课程主要发生在哪个校区 → 决定去哪边的食堂 */
@@ -571,6 +582,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
       dayStartMin: softFloorMin, dayEndMin,
+      prefs: blockPrefsOf(req),
     });
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
@@ -1005,8 +1017,10 @@ function fillStudy(args: {
   transfer: TransferProvider;
   dayStartMin: number;
   dayEndMin: number;
+  /** E3：画像块级偏好；null = 无偏好（保持「大空档优先」） */
+  prefs: BlockPrefs | null;
 }): TimeBlock[] {
-  const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin } = args;
+  const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin, prefs } = args;
   let placed = placedIn;
 
   const isWeekend = day === 6 || day === 7;
@@ -1030,6 +1044,14 @@ function fillStudy(args: {
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
+    /**
+     * E3：开关开启且有画像偏好时，先按**时段亲和度**（画像说"你上午更稳"）再按大小排序；
+     * 关闭 / 无偏好 → 不进入该分支，保持「大空档优先」的既有口径（逐位一致）。
+     */
+    if (prefs && prefs.deepWorkWindows.length > 0) {
+      gaps.sort((x, y) => gapAffinity(prefs, y) - gapAffinity(prefs, x)
+        || (y.endMin - y.startMin) - (x.endMin - x.startMin));
+    }
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
     const cands = rotated();
 
