@@ -1241,7 +1241,33 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         return;
       }
       // collect / blocked / picking → 把该槽位挂进追问清单（落 topic{collect}）
-      const slots: IntentSlots = { ...t.slots, missing: [...new Set([...t.slots.missing, slot])] };
+      // 强化计划 D（2026-10-02）：**先并答案，再决定问不问** —— LLM 裁决
+      // ask_slot(when) 时，用户这句话里的槽位（本地规则解析 + LLM patch）必须
+      // 先并进现有槽位；目标槽位已经补上就不再重复问（真机实录：答了
+      // 「下周一开始；一共10小时」仍被反问 when = 答非所问）。
+      const local = parseIntentSlots(ctx.q, ctx.today);
+      const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
+      const llmPatch = mapUnderstandPatch(args.patch);
+      const merged0 = mergeLlmPrimary(withLocal, llmPatch, ctx.today);
+      const merged: IntentSlots = { ...merged0, intent: t.intent };
+      merged.missing = missingSlots(merged);
+      if (!merged.missing.includes(slot)) {
+        // 这句话已经把目标槽位补上了（或本来就不缺）
+        if (merged.missing.length === 0) {
+          await runGoalSlots(merged, ctx.today);
+          return;
+        }
+        const pairs = topQuestionPairs(merged);
+        setTopic(collectTopic(merged, pairs.map((p) => p.slot)));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '记下了 —— 还差一点：',
+          planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+        }]);
+        setLoading(false);
+        return;
+      }
+      const slots: IntentSlots = { ...merged, missing: [...new Set([...merged.missing, slot])] };
       const asked = [...new Set([...t.asked, slot])];
       setTopic(collectTopic(slots, asked));
       setMessages((current) => [...current, {
