@@ -150,7 +150,9 @@ test('D3 源码: topic 生命周期（草稿/阻塞/议题续用）在位', () =
   assert.match(chat, /const markDraft = useCallback/, '草稿→topic{draft}');
   assert.match(chat, /const markBlocked = useCallback/, '阻塞→topic{blocked}');
   assert.match(chat, /priorFailed: \{ title: slots\.title, slots \}/, 'B① 议题续用记录');
-  assert.match(chat, /kind: 'replace', slots, candidates: targets/, 'B② replace 多候选改道 picking');
+  // G 批申报：updatePicking 适配器删除后，replace 多候选改道 picking 的落点
+  // 是直写 setTopic(pickingTopic('replace', ...)) —— 锁的意图（改道 picking）不变
+  assert.match(chat, /pickingTopic\('replace', slots, targets\)/, 'B② replace 多候选改道 picking');
   assert.match(chat, /t\?\.priorFailed\n\s+&& merged\.durationMin == null/, 'replace 隐含用刚才失败的事');
   assert.match(chat, /await ragReply\(ctx\.q\)/, 'chit_chat 走 RAG 且议题保留');
   assert.match(chat, /topicExpired\(\{ \.\.\.topic, turns: topic\.turns \+ 1 \}\)/, 'turns 超限自动作废');
