@@ -256,8 +256,9 @@ const ASK_OPINION = /(要不要|该不该|是不是应该|需不需要|是否要
  */
 const QUESTIONISH_RE = /(什么时候|何时|几号|几点|哪|多少|几个|什么|怎么|如何|怎样|咋|吗)/;
 
-/** 频率约定词（批 1.1）：「隔天去一次健身房」这类习惯陈述的判据之一 */
-const FREQ_RE = /(每天|每日|天天|隔天|每两天|每周|每星期|每礼拜)/;
+/** 频率约定词（批 1.1）：「隔天去一次健身房」这类习惯陈述的判据之一；
+ *  批 1.5 起兼作 mergeLlmPrimary 的 perWeek 证据词（「每周3次」也是频率证据） */
+const FREQ_RE = /(每天|每日|天天|隔天|每两天|每周|每星期|每礼拜|每[一二三四五六七八九十\d]+\s*次)/;
 
 /**
  * 与 `LbaoChat.tsx::isRecommendIntent` **逐字一致**的既有口径。
@@ -1624,7 +1625,16 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
   }
   if (!patch.when && patch.dateFrom) out.dateFrom = patch.dateFrom;
   if (!patch.when && patch.dateTo) out.dateTo = patch.dateTo;
-  if (patch.perWeekCount != null) out.perWeekCount = patch.perWeekCount;
+  if (patch.perWeekCount != null) {
+    // 批 1.5 幻觉防护：LLM 会从「养成晨跑的习惯」脑补出每天一次（探针实录：
+    // 21 天 × 每天 = 21 块，静默压缩「一学期」意图）。只在**规则层已有**或
+    // **原话真有频率词**时采纳；拒了要如实标注，不静默。
+    if (rule.perWeekCount != null || FREQ_RE.test(rule.raw || '')) {
+      out.perWeekCount = patch.perWeekCount;
+    } else if (!out.unclear.includes('没听到明确的频率，「每周几次」我先不按猜的算 —— 想固定节奏的话补一句（比如「每周三次」）。')) {
+      out.unclear.push('没听到明确的频率，「每周几次」我先不按猜的算 —— 想固定节奏的话补一句（比如「每周三次」）。');
+    }
+  }
   if (patch.durationMin != null) out.durationMin = patch.durationMin;
   if (patch.totalHours != null) out.totalHours = patch.totalHours;
   if (patch.place) out.place = patch.place;

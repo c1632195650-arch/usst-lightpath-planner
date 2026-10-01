@@ -345,17 +345,32 @@ export async function planUnderstand(body: {
   /** scene=dialog：对话管理器状态（topic 白名单序列化 + missStreak） */
   state?: PlanDialogState;
 }): Promise<PlanUnderstandResult> {
-  try {
-    const res = await fetch(`${API_BASE}/api/plan/understand`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(9000),
-    });
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
-    return (await res.json()) as PlanUnderstandResult;
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : 'network' };
+  // 批 1.5：intent 场景**单次重试** —— 服务端 8s LLM 超时在慢网络下成片出现
+  // （2026-10-02 评测实录 25/67 次 ok:false），整句掉回规则层后，规则接不住的
+  // 动作句会被漏判。对话是异步的，多等一轮 9s 优于整句丢失；answer/dialog
+  // 各有兜底链，维持单次。只对「超时类 ok:false」与网络异常重试——no_key 这类
+  // 重试也不会好的直接返回。
+  const maxAttempts = body.scene === 'intent' ? 2 : 1;
+  let lastResult: PlanUnderstandResult = { ok: false, reason: 'unknown' };
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const isLast = attempt === maxAttempts - 1;
+    try {
+      const res = await fetch(`${API_BASE}/api/plan/understand`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+      const j = (await res.json()) as PlanUnderstandResult;
+      const timeoutLike = typeof j.reason === 'string' && /timeout|timed?\s*out|超时/i.test(j.reason);
+      if (j.ok || isLast || !timeoutLike) return j;
+      lastResult = j;
+    } catch (e) {
+      lastResult = { ok: false, reason: e instanceof Error ? e.message : 'network' };
+      if (isLast) return lastResult;
+    }
   }
+  return lastResult;
 }import { periodStartMin } from '@/constants/time';
 
