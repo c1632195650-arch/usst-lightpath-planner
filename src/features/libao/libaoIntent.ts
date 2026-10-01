@@ -133,6 +133,9 @@ export interface IntentSlots {
   priorityHint: number;
   /** 「把高数复习挪到周四」→ 高数复习 */
   targetHint?: string;
+  /** 单日重排的目标天（批 3，5A-②）：「重排周四」→ [4]。与 targetHint 互斥路由：
+   *  有块名 = 单块挪动；只有天 = 整日重排（执行层分流） */
+  replanDays?: number[];
   /** 自报缺口 —— 追问清单直接由它生成 */
   missing: SlotKey[];
   /** 有歧义但**不阻塞**的点，随草稿一起说明 */
@@ -281,7 +284,7 @@ const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
   // 不是「取消某块」；cancel 的「别排」让位给 hold（台账申报）。
   { intent: 'hold', re: /(别排|不要排|留出来|空出来|这段时间有空|没空)/ },
   { intent: 'cancel', re: /(取消|删掉|不去了|不参加了|退掉|不要了)/ },
-  { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到)/ },
+  { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到|重排|重新排)/ },
   { intent: 'replace', re: /(替换|顶掉|改成|换成|取代)/ },
   { intent: 'query', re: /(忙不忙|排得开|来不来得及|有没有空|有空吗|装得下|排得下)/ },
   // WP11：重要日。**放最后** —— 「取消备赛」「把备赛挪到周五」得先被既有意图接住
@@ -422,6 +425,10 @@ export function looksLikeAction(q: string): boolean {
   // 动作（留白），但动词不在 ACTION_VERBS、名词不在 GOAL_NOUNS → 整句漏成 RAG。
   // 触发词与 INTENT_PATTERNS 的 hold 条目同源（别排/不要排/留出来/空出来/这段时间有空/没空）。
   if (/(别排|不要排|留出来|空出来|这段时间有空|没空)/.test(s)) return true;
+
+  // 批 3：显式重排诉求 —— 「重排周四」没有目标名词（对象是「那天」本身），
+  // 词表扫不出，必须显式放行。
+  if (/(重新?排|重排)/.test(s)) return true;
 
   const hasGoal = GOAL_NOUNS.some((n) => s.includes(n));
   const hasVerb = ACTION_VERBS.some((v) => s.includes(v));
@@ -791,6 +798,36 @@ export function extractTarget(q: string): string | undefined {
   const m2 = /(?:取消|删掉|退掉)\s*([\u4e00-\u9fffA-Za-z0-9]{2,16})/.exec(s);
   if (m2) return m2[1];
   return undefined;
+}
+
+/**
+ * 抽单日重排的目标天（批 3，5A-②）：「重排周四」「重新排一下这周五」「把周三
+ * 重新排一版」。动词在前/在后两种语序都认；没点名天 = undefined（走老路径问对象）。
+ */
+export function extractReplanDays(q: string): number[] | undefined {
+  const s = q || '';
+  const days: number[] = [];
+  // 动词在前：「重排(一下)周四」「只重排这周五」「重新排周三和周四」——
+  // 动词后取一个短窗口（截断在标点），窗口内全局收集星期词（捕获组 + 重复
+  // 只留最后一次，不能直接用带 + 的单正则）。
+  const leadVerb = /(?:重新?排|重排)(?:一?下|一版|一遍)?/.exec(s);
+  if (leadVerb) {
+    const restStart = leadVerb.index + leadVerb[0].length;
+    const window = s.slice(restStart, restStart + 12).split(/[，。！？,.!?；;、]/)[0];
+    for (const m of window.matchAll(/(?:这|本|下)?周([一二三四五六日天])/g)) {
+      const d = WD_NUM[m[1]];
+      if (d && !days.includes(d)) days.push(d);
+    }
+  }
+  // 动词在后：「把周四重新排一版」「把周五重排一下」
+  if (days.length === 0) {
+    const tail = /(?:把|将)?\s*(?:这|本|下)?周([一二三四五六日天])[^，。！？？]{0,4}(?:重新?排|重排)/.exec(s);
+    if (tail) {
+      const d = WD_NUM[tail[1]];
+      if (d) days.push(d);
+    }
+  }
+  return days.length > 0 ? days : undefined;
 }
 
 /** 抽是否「必做」+ 可让步度。有明确截止或强调词 → 更不该被挤掉。 */
@@ -1503,6 +1540,10 @@ export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTe
 
   const target = extractTarget(raw);
   if (target) s.targetHint = target;
+
+  // 批 3：单日重排的目标天（与 targetHint 分属两条路由，互不覆盖）
+  const replanDays = extractReplanDays(raw);
+  if (replanDays) s.replanDays = replanDays;
 
   const pri = extractPriority(raw);
   if (pri.essential) s.essential = true;
