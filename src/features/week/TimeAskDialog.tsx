@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { toHHmm } from '@/constants/time';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { DAY_LABELS } from './weekViewUtils';
 
 export interface TimeAskRequest {
   title: string;
@@ -29,7 +30,6 @@ export interface TimeAskRequest {
   scopeKnown?: 'once' | 'long';
 }
 
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 /** 时长候选（分钟）—— 不给自由输入：乱填的时长只会制造碎片 */
 const DURATIONS = [30, 45, 60, 90, 120, 150, 180];
 

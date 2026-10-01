@@ -358,6 +358,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/auth/logout":
             self._auth_logout()
             return
+        if path == "/api/auth/delete":
+            self._auth_delete()
+            return
         if path == "/api/import_pdf":
             self._import_pdf()
             return
@@ -421,6 +424,32 @@ class Handler(BaseHTTPRequestHandler):
                 con.commit()
             clear = f"{SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0"
             self._send(200, {"ok": True}, extra_headers=[("Set-Cookie", clear)])
+        finally:
+            con.close()
+
+    def _auth_delete(self):
+        """注销账号：校验密码后删除用户行，并清 Cookie。
+        kv / sessions 两表都是 `REFERENCES users(id) ON DELETE CASCADE`，
+        且 `db()` 已开 `PRAGMA foreign_keys=ON`，故删 users 行即连带清空该账号全部数据。
+        **不可恢复** —— 本系统无密码找回（规格书 §1.3：忘记密码 = 删账号重来）。
+        课表（course_records / files）是全局共享资产，不随账号删。
+        """
+        body = self._read_json() or {}
+        password = str(body.get("password", ""))
+        con = db()
+        try:
+            user = self._user_or_401(con)
+            if not user:
+                return
+            row = con.execute("SELECT pw_hash FROM users WHERE id=?", (user["id"],)).fetchone()
+            if row is None or not _verify_password(password, row["pw_hash"]):
+                self._send(403, {"ok": False, "error": "密码不对，账号未注销"})
+                return
+            con.execute("DELETE FROM users WHERE id=?", (user["id"],))
+            con.commit()
+            clear = f"{SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0"
+            self._send(200, {"ok": True, "username": user["username"]},
+                       extra_headers=[("Set-Cookie", clear)])
         finally:
             con.close()
 

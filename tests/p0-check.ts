@@ -26,7 +26,7 @@ import {
   urgency, urgencyBoostForWeek, weekNoOfDate, type DeadlineLike,
 } from '@/lib/planner/objective';
 import {
-  DEFAULT_WEIGHTS, churnCost, churnMinutes, emptyRollingState,
+  DEFAULT_WEIGHTS, FREE_CHURN_FACTOR, churnCost, churnMinutes, emptyRollingState,
   lockFactorOf, resolveLockLevel, type Commit,
 } from '@/lib/planner/model';
 import { buildWeekPlan, campusFallbackTransfer, campusOfName } from '@/lib/planner/schedule';
@@ -212,10 +212,12 @@ check('显式 lockLevels 覆盖默认推断', () => {
   assert.equal(resolveLockLevel(mkBlock({ id: 'k', source: 'template' }), { k: 'hard' }), 'hard');
 });
 
-check('lockFactorOf: hard=100 / soft=1 / free=0', () => {
+// free ×0.08：规格书 §5.5 裁决修订（2026-09-19，CY）——原值让 churn 代价恒为 0，
+// 「最小扰动」只剩度量、没有驱动力（dev 合并对齐，T1.1）。
+check('lockFactorOf: hard=100 / soft=1 / free=0.08', () => {
   assert.equal(lockFactorOf('hard'), 100);
   assert.equal(lockFactorOf('soft'), 1);
-  assert.equal(lockFactorOf('free'), 0);
+  assert.equal(lockFactorOf('free'), FREE_CHURN_FACTOR);
 });
 
 check('同一份计划 churn = 0', () => {
@@ -224,10 +226,14 @@ check('同一份计划 churn = 0', () => {
   assert.equal(churnCost(plan, plan, {}, DEFAULT_WEIGHTS), 0);
 });
 
-check('移动 free 块不计 churn 代价；移动 hard 块代价极大（≈禁止）', () => {
+check('移动 free 块有轻量 churn 代价（§5.5 ×0.08）；移动 hard 块代价极大（≈禁止）', () => {
   const a = mkPlan([mkBlock({ id: 'f', source: 'template', startMin: 600, endMin: 660 })]);
   const b = mkPlan([mkBlock({ id: 'f', source: 'template', startMin: 700, endMin: 760 })]);
-  assert.equal(churnCost(a, b, {}, DEFAULT_WEIGHTS), 0, 'free 块移动不该有代价');
+  assert.equal(
+    churnCost(a, b, {}, DEFAULT_WEIGHTS),
+    DEFAULT_WEIGHTS.churn * FREE_CHURN_FACTOR * 60,
+    `free 块移动代价应为 diffMin × w.churn × 0.08（60 分钟 → 3.84）`,
+  );
   assert.equal(churnMinutes(a, b), 60, 'churnMin 应记为 60');
 
   const c = mkPlan([mkBlock({ id: 'h', source: 'course', startMin: 600, endMin: 660 })]);

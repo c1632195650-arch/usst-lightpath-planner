@@ -5,6 +5,7 @@ import { lbaoChat, lbaoHealth, type RagSource } from '@/lib/api';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
 import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
+import { getUserId } from '@/lib/identity';
 
 interface Msg {
   role: 'user' | 'lbao';
@@ -50,21 +51,11 @@ function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** 设备级标识：持久化复用 —— 后端的「长期画像」靠它跨会话累积。
- *  ⚠️ 换设备或清缓存 = 变成另一个人，这是无登录体系下的已知限制。 */
-function deviceUserId(): string {
-  const KEY = 'usst.libao.user_id';
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved) return saved;
-    const id = `u-${newId()}`;
-    localStorage.setItem(KEY, id);
-    return id;
-  } catch {
-    // 隐私模式等场景 localStorage 不可写 → 退回后端默认，功能降级但不报错
-    return 'anon';
-  }
-}
+/**
+ * 设备级标识（user_id）已收敛到 `@/lib/identity` 的 `getUserId()` —— 单一来源。
+ * 2026-09-27 合流：原本地内联实现在此删除（同一 key 两处定义 → 行为看谁最后写）。
+ * 注意：identity 版同样经 persistence 双写，`usst.libao.user_id` 仍会上云。
+ */
 
 /** 会话级标识：存 sessionStorage，关掉标签页即失效 —— 对应后端「最近原话」的窗口。
  *  与 user_id **刻意分开**：合成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。 */
@@ -95,7 +86,7 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
   // 身份在首次渲染时确定一次，之后整个会话稳定不变（惰性初始化，避免每次渲染重读 storage）
   const [identity] = useState(() => ({
-    userId: deviceUserId(),
+    userId: getUserId(),
     sessionId: currentSessionId(),
   }));
 
@@ -133,7 +124,8 @@ export function LbaoChat({ profile, schedule, onGoProfile }: {
 
     /** 排程意图：走**真引擎**（与「周计划」页同源），只把结果要点化后回话。
      *  这里刻意不再调用 `lbaoRecommend` —— 那份是硬编码时间的模板（08:00/11:45/19:00），
-     *  排出来会和周计划页对不上；用户连着看两处就会发现，这就是「双轨」的破绽。 */
+     *  排出来会和周计划页对不上；用户连着看两处就会发现，这就是「双轨」的破绽。
+     *  （该函数已于 2026-09-30 随 `lib/lbao.ts` 一并删除。） */
     if (isRecommendIntent(q)) {
       // 既无画像也无课表 → 没有可排的输入。说清楚缺什么，不假装能排。
       if (!profile && schedule.courses.length === 0) {

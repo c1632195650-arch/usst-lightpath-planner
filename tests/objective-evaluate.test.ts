@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_WEIGHTS, type Commit } from '@/lib/planner/model.ts';
+import { DEFAULT_WEIGHTS, FREE_CHURN_FACTOR, type Commit } from '@/lib/planner/model.ts';
 import {
   commitOverdue, dayCampusOf, evaluate, evaluateDelta, transferPenalty,
 } from '@/lib/planner/objective.ts';
@@ -154,12 +154,13 @@ test('dayCampusOf：当天主校区由**课程块**决定', () => {
  * 3. 锁与 churn
  * ========================================================== */
 
-test('锁：hard 块的位移按 ×100 计入 churn；free 块位移不计', () => {
+test('锁：hard 块的位移按 ×100 计入 churn；free 块位移按 ×0.08 轻量计入（§5.5 修订）', () => {
   const prev = plan([blk({ id: 'k1', kind: 'study', dayOfWeek: 1, startMin: 600, endMin: 660 })]);
   const next = plan([blk({ id: 'k1', kind: 'study', dayOfWeek: 1, startMin: 660, endMin: 720 })]);
   const free = evaluate(next, ctx({ previousPlan: prev }));
   const hard = evaluate(next, ctx({ previousPlan: prev, lockLevels: { k1: 'hard' } }));
-  assert.equal(free.churn, 0);
+  // free ×0.08：规格书 §5.5 裁决修订（2026-09-19，CY）——原 ×0 让「最小扰动」没有驱动力
+  assert.equal(free.churn, DEFAULT_WEIGHTS.churn * FREE_CHURN_FACTOR * 60);
   assert.equal(hard.churn, DEFAULT_WEIGHTS.churn * 100 * 60);
   assert.ok(hard.total > free.total);
   assert.equal(evaluateDelta(next, next, ctx()), 0);

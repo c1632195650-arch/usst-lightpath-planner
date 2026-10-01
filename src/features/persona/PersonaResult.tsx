@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
+import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
 import { Radar } from '@/components/Radar';
+import { makeEpithet, pickBlurb } from './personaCopy';
 
 interface Props {
   profile: PersonaProfile;
@@ -11,9 +14,67 @@ interface Props {
 const CONF_LABEL = { high: '较稳定', mid: '待校准', low: '参考' } as const;
 const CONF_COLOR = { high: 'text-ok', mid: 'text-warn', low: 'text-ink-faint' } as const;
 
+/**
+ * 基础信息卡（M1）：称呼/年级/学院/专业，字段级随时可改，不必重做 35 题。
+ * 这是「客观事实」的唯一用户编辑入口 —— AI 在对话里只能提议（走建议卡确认），
+ * 永远不直接改写这里（core §4 L4）。
+ */
+function BasicInfoCard() {
+  const [info, setInfo] = useState<BasicInfo>(() => loadBasicInfo());
+
+  const update = (key: keyof BasicInfo, value: string) => {
+    // 年级自 WP1 起是 1-4 数字：接受「大二」式标签或数字输入，解析不了就不写（不猜）
+    if (key === 'grade') {
+      const g = value.trim() ? gradeFromLabel(value) : undefined;
+      if (value.trim() && !g) return;
+      const next: BasicInfo = { ...info };
+      if (g) next.grade = g;
+      else delete next.grade;
+      setInfo(next);
+      saveBasicInfo(next);
+      return;
+    }
+    const next = { ...info, [key]: value.trim() ? value.trim() : undefined };
+    // 清空 = 删掉这个字段，而不是留一个空字符串
+    if (!value.trim()) delete next[key];
+    setInfo(next);
+    saveBasicInfo(next);
+  };
+
+  return (
+    <section className="panel mt-6 overflow-hidden">
+      <div className="flex flex-col justify-between gap-3 border-b border-ink/10 px-5 py-5 sm:flex-row sm:items-end sm:px-7 sm:py-6">
+        <div>
+          <p className="section-label">BASIC FACTS</p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">你的基础信息</h2>
+        </div>
+        <p className="max-w-lg text-sm leading-6 text-ink-soft">
+          随时可改，不用重做测评。梨宝对话里听到你的年级、学院、专业时，会先问你确认才更新这里。
+        </p>
+      </div>
+      <div className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:px-7 lg:grid-cols-4">
+        {BASIC_INFO_FIELDS.map(({ key, label, placeholder }) => (
+          <label key={key} className="block">
+            <span className="text-xs text-ink-faint">{label}</span>
+            <input
+              value={key === 'grade' ? (info.grade !== undefined ? GRADE_LABELS[info.grade] : '') : info[key] ?? ''}
+              onChange={(e) => update(key, e.target.value)}
+              placeholder={placeholder}
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
+            />
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** 将 35 题的输出收束为可用于排程的个人信号，而不是一张“人格报告”。 */
 export function PersonaResult({ profile, onEnter, onRetake }: Props) {
   const { primary, secondary } = profile.archetype;
+  // E3：一句话 blurb（按周轮换）+ 趣味称呼。挂载时算一次，重渲染不换台词。
+  const [blurb] = useState(() => pickBlurb(profile));
+  const [epithet] = useState(() => makeEpithet(profile, loadBasicInfo()));
   /** 场景题保留原始语义，让学生知道这些答案会影响哪些推荐。 */
   const scenarioEntries = Object.entries(SCENARIO_META).map(([key, meta]) => ({
     key,
@@ -29,6 +90,8 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">YOUR PLANNING PROFILE</p>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">你的节奏，已经有了轮廓。</h1>
+              <p className="mt-3 text-base font-medium text-brand-light">「{epithet}」</p>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75">{blurb}</p>
               {primary ? (
                 <>
                   <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -116,6 +179,8 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
             </dl>
           </section>
         </div>
+
+        <BasicInfoCard />
 
         <section className="panel mt-6 overflow-hidden">
           <div className="flex flex-col justify-between gap-3 border-b border-ink/10 px-5 py-5 sm:flex-row sm:items-end sm:px-7 sm:py-6">

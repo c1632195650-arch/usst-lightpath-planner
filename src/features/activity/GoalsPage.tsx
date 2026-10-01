@@ -20,6 +20,7 @@ import { GoalQuickInput } from './GoalQuickInput';
 import { MilestoneTimeline } from './MilestoneTimeline';
 import { WeeklyReviewCard } from './WeeklyReviewCard';
 import { resolveSkeleton } from './resolveSkeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const FOCUS_OPTIONS = [20, 30, 40, 60, 90];
 const TIME_OPTIONS: Array<{ id: GoalPrefs['timeOfDay']; label: string }> = [
@@ -81,6 +82,17 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
           onSkip={() => patchGoal(g.id, { reviewMissed: [...(g.reviewMissed ?? []), weekNo] })}
         />
       ))}
+
+      {/* ── 空状态：一个目标都没有时的引导 ────────── */}
+      {goals.length === 0 && (
+        <div className="panel px-4 py-2 sm:px-5">
+          <EmptyState
+            icon="🎯"
+            title="还没有目标"
+            description="在上面输入一句话就能开始 —— 比如「考研初试」「学编程」「跑步 1km 跑进 3 分钟」。建完之后，分解出的任务会进周程。"
+          />
+        </div>
+      )}
 
       {/* ── 按类别分组的目标卡片 ──────────────────── */}
       {CATEGORIES.map((cat) => {

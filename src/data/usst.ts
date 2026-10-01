@@ -1,18 +1,19 @@
-import type { CalEvent, Course, LifeMode, Schedule } from '@/types';
+import type { Course, Schedule } from '@/types';
 
 /* ============================================================
- * 上理工 · 生活模式
- * ========================================================== */
-
-/** color 取自光谱色板（constants/chartColors.ts 的 SPECTRUM），改色请两边同步。 */
-export const LIFE_MODES: LifeMode[] = [
-  { id: 'balance', name: '平衡模式', emoji: '⚖️', color: '#2B4C9B', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，劳逸结合。' },
-  { id: 'slack', name: '摸鱼模式', emoji: '🐟', color: '#147A8B', tagline: '今天不想努力', desc: '降低任务密度，多安排休息与娱乐，见缝插针放松，拒绝内卷。' },
-  { id: 'grind', name: '猛攻模式', emoji: '🚀', color: '#C24B3A', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，适合考试周或赶 ddl。' },
-  { id: 'food', name: '吃饭模式', emoji: '🍜', color: '#B9762A', tagline: '好好吃饭是大事', desc: '每天规划探店 / 食堂路线，兼顾营养与新鲜感。' },
-  { id: 'health', name: '健康模式', emoji: '🏃', color: '#1E7A4F', tagline: '早睡早起多运动', desc: '规律作息 + 每日运动打卡，给身体充能。' },
-  { id: 'social', name: '社交模式', emoji: '🎉', color: '#6B4BA3', tagline: '把日子过热闹', desc: '空余时间留给活动、约饭、搭子，拓展朋友圈。' },
-];
+ * 上理工 · 生活模式（已移除，2026-09-30）
+ * ============================================================
+ * 这里原有一份 `LIFE_MODES`（平衡 / 摸鱼 / 猛攻 / 吃饭 / 健康 / 社交）。
+ * 移除原因（实测定论）：六个模式最终只等价于**一个乘数** ——
+ *   · 引擎侧只有 `dailyStudyMin`（乘数）与 `blankRatio`（增量，且只在容量吃紧时才有效）
+ *     两个标量被写过，结构维度（排什么类别 / 块多长 / 什么时段 / 选哪些模板）一个都够不着；
+ *   · 六个按钮只产出**四种**计划（吃饭≡平衡、健康≡社交，逐块相同）；
+ *   · 梨宝侧那套"真有结构差异"的实现（`lib/lbao.ts::lbaoRecommend`）早已无人调用，随同清理。
+ * 引擎**不消费**任何"模式"概念：`PlanRequest` / `PhasePolicy` / `construct` / `solver`
+ * 全都不含它。`AppState.lifeMode` 字段保留，仅用于兼容已落盘的旧数据（见 `scripts/storage.test.ts`）。
+ * 若日后要恢复"本周节奏"这类功能，先建**结构通道**（类别配额 / 时段锚点 / 模板偏置），
+ * 再上 UI —— 顺序不能反，否则又是一次"按钮承诺了引擎不做的事"。
+ */
 
 /* ============================================================
  * 上理工 · 校历（2026–2027 学年第一学期，模拟）
@@ -21,20 +22,6 @@ export const LIFE_MODES: LifeMode[] = [
 export const MOCK_SEMESTER_NAME = '2026–2027 学年 · 第一学期';
 export const MOCK_TERM_START = '2026-08-31'; // 第一周周一
 export const MOCK_TOTAL_WEEKS = 18;
-
-export const CAL_EVENTS: CalEvent[] = [
-  { date: '2026-08-31', label: '开学 · 第一周', type: 'term' },
-  { date: '2026-09-07', label: '选课周开始', type: 'term' },
-  { date: '2026-09-11', label: '四六级报名开启', type: 'exam' },
-  { date: '2026-09-25', label: '中秋节', type: 'holiday' },
-  { date: '2026-09-28', label: '光电杯报名截止', type: 'activity' },
-  { date: '2026-10-01', label: '国庆假期（10.1–10.7）', type: 'holiday' },
-  { date: '2026-10-25', label: '建校 120 周年校庆日', type: 'anniversary' },
-  { date: '2026-11-09', label: '期中考试周', type: 'exam' },
-  { date: '2026-11-21', label: '四六级口试', type: 'exam' },
-  { date: '2026-12-12', label: '四六级笔试', type: 'exam' },
-  { date: '2027-01-11', label: '期末考试周', type: 'exam' },
-];
 
 /* ============================================================
  * 上理工 · 时间节点 / 倒计时（即将到来的重要节点）

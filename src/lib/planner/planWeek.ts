@@ -28,7 +28,7 @@
  * 只有「真正要 fetch」的那一层才需要动态取。
  *
  * 对外接口（`planWeek(req, opts)` 签名与降级行为）**保持兼容**：
- *   · 给了 `transferFactory` → 走收敛循环，工厂每轮拿当轮布局；
+ *   · 给了 `transferFactory` → P1 固定两遍（问一次 + 重算一次，不进收敛循环）；
  *   · `req.transfer` 已给      → 单遍（调用方已有真实 provider，没有再取一次的道理）；
  *   · 都没有                   → 动态 import `transfer.ts` 拿真实后端；失败则单遍降级。
  */
@@ -106,16 +106,23 @@ export async function planWeek(
   }
 
   // ── 1. 决定「怎么问路」 ────────────────────────────────────
-  // ⚠️ 顺序至关重要：**显式注入的 `fetchRoutes` 优先于 `req.transfer`**。
-  //    `req.transfer` 往往是语料 / 调用方带的一个**兜底 provider**（比如
-  //    golden 语料就给了一个纯估算的），它不代表「我已经有实测值了」。
-  //    早先这里是 `if (req.transfer) return`，导致「注入了 fetchRoutes 却拿不到
-  //    实测值」—— 收敛循环根本没跑（这个 bug 是被 `p2-live-transfer.ts` 抓到的）。
-  const fetchRoutes = opts.fetchRoutes ?? (await defaultFetchRoutes());
+  // ⚠️ 顺序至关重要，三级优先一次说死：
+  //    ① **显式注入的 `opts.fetchRoutes` 优先于 `req.transfer`** ——
+  //       `req.transfer` 往往是语料 / 调用方带的一个**兜底 provider**（比如
+  //       golden 语料就给了一个纯估算的），它不代表「我已经有实测值了」；
+  //       调用方显式注入 fetchRoutes 就是要走收敛取实测（「注入了 fetchRoutes
+  //       却拿不到实测值」这个 bug 曾被 `p2-live-transfer.ts` 抓到）。
+  //    ② **`req.transfer` 已给且未注入 fetchRoutes → 单遍** ——
+  //       调用方已有 provider，没有再取一次的道理（本文件头部写明的契约，
+  //       也是 tests/planweek.test.ts「注入 req.transfer → 单遍」断言的依据）。
+  //    ③ 都没有 → 动态 import `transfer.ts` 问真实后端；拿不到再单遍降级。
+  //    早先这里的代码把 ② 整个删掉了（只剩 ①③），导致带着 provider 的调用方
+  //    仍被走一遍收敛、结果被兜底估算改写 —— planweek.test.ts 两条红灯的根因。
+  const fetchRoutes = opts.fetchRoutes ?? (req.transfer ? null : await defaultFetchRoutes());
 
   if (!fetchRoutes) {
-    // 没有任何问路能力 → 用请求里带的 provider（可能就是兜底估算）单遍收工。
-    // 这是 Node 单测与「后端没起」时的正常路径，不是异常。
+    // 没有任何问路能力 → 用请求里已有的 provider（可能就是兜底估算）单遍收工。
+    // 这是 Node 单测、语料兜底与「后端没起」时的正常路径，不是异常。
     return solveWeek(req);
   }
 

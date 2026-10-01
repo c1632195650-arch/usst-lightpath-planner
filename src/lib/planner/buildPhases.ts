@@ -22,8 +22,6 @@ import type {
 // 依赖方向 `buildPhases → corrections` 是 lib 内部同层引用，不引入反向依赖。
 import { applyCorrectionsToPolicy, composeEffectivePrefs, summarizeCorrections } from './corrections.ts';
 import type { CorrectionRule } from './corrections.ts';
-// 阶段 D：生活模式（平衡/摸鱼/猛攻…）要真正影响强度，而不只是换配色
-import { applyLifeMode } from './lifeModePolicy.ts';
 
 /** 校历里与本模块相关的最小信息（从 constants/term.ts 的 TermCalendar 取） */
 export interface PhaseCalendar {
@@ -263,15 +261,12 @@ export interface BuildPhasesResult {
  * @param calendar 校历（可选）：给了就用官方的理论教学/考试周边界
  * @param corrections 用户的偏好校正（阶段 C，可选）：在其上叠加用户自己提的要求。
  *        **缺省 = 旧行为**（不带校正），故既有调用方零改动。
- * @param lifeMode 生活模式 id（阶段 D，可选）：平衡/摸鱼/猛攻… 会影响强度。
- *        缺省 = 不调整（旧行为）。
  */
 export function buildPhases(
   schedule: Schedule,
   persona: PersonaProfile | null = null,
   calendar?: PhaseCalendar,
   corrections?: readonly CorrectionRule[] | null,
-  lifeMode?: string | null,
 ): BuildPhasesResult {
   const totalWeeks = Math.max(1, schedule.totalWeeks);
   const notes: string[] = [];
@@ -372,14 +367,13 @@ export function buildPhases(
 
   const phases: Phase[] = segs.map(({ kind, from, to }) => {
     const { policy: personaPolicy, reasons } = applyPersona(kind, BASE_POLICY[kind], persona);
-    // 叠加顺序：画像基线 → 生活模式 → 用户校正。
-    // 每个环节的取舍见各自模块头部说明（后两者都会在 reasons 里留下痕迹）。
-    const lm = applyLifeMode(personaPolicy, lifeMode);
-    const policy = applyCorrectionsToPolicy(lm.policy, eff);
+    // 叠加顺序：画像基线 → 用户校正。
+    // 生活模式（原阶段 D）已于 2026-09-30 移除：六个模式最终只等价于一个乘数，
+    // 结构维度一个都够不着，留着只会让 UI 承诺引擎做不到的事。
+    const policy = applyCorrectionsToPolicy(personaPolicy, eff);
     const rs = [...reasons];
-    // 生效了就必须**说出来**。否则用户切了模式 / 提了要求却看不到任何痕迹，
+    // 生效了就必须**说出来**。否则用户提了要求却看不到任何痕迹，
     // 会以为功能坏了 —— 这是本项目一直坚持的「可解释」纪律。
-    if (lm.note) rs.push(lm.note);
     if (correctionReason) rs.push(correctionReason);
     if (kind === 'exam') rs.unshift(`第 ${from}-${to} 周是考试周，课已结束，重点是复习节奏与睡眠`);
     return {
@@ -409,14 +403,13 @@ export function buildPhasesFromCalendar(
   persona: PersonaProfile | null,
   calendar?: { phases?: Array<{ kind: string; fromWeek: number; toWeek: number }> },
   corrections?: readonly CorrectionRule[] | null,
-  lifeMode?: string | null,
 ): BuildPhasesResult {
   const theory = calendar?.phases?.find((p) => p.kind === 'theory');
   const exam = calendar?.phases?.find((p) => p.kind === 'exam');
   return buildPhases(schedule, persona, {
     theoryFromWeek: theory?.fromWeek,
     examFromWeek: exam?.fromWeek,
-  }, corrections, lifeMode);
+  }, corrections);
 }
 
 /** 查某周落在哪个阶段（周计划生成时用） */

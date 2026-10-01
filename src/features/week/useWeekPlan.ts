@@ -75,7 +75,6 @@ export interface UseWeekPlanInput {
   layer: UserPlanLayer;
   goals: readonly Goal[];
   rules: readonly CorrectionRule[];
-  lifeMode: string | null;
   /** 「从此刻开始排」（T2.3）；总览恒 false —— 总览要完整一天 */
   fromNowOn?: boolean;
   /** 手动重排令牌（总览不用） */
@@ -101,7 +100,7 @@ export interface UseWeekPlanResult {
 export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
   const {
     schedule, weekNo, persona, planState, onPlanStateChange,
-    layer, goals, rules, lifeMode, fromNowOn = false, replanToken = 0,
+    layer, goals, rules, fromNowOn = false, replanToken = 0,
   } = input;
 
   const [plan, setPlan] = useState<WeekPlan | null>(null);
@@ -143,10 +142,10 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
   const onPlanStateChangeRef = useRef(onPlanStateChange);
   onPlanStateChangeRef.current = onPlanStateChange;
 
-  /** 阶段策略：rules / lifeMode 一变 → semester → phase 连锁重算 → effect 重跑 */
+  /** 阶段策略：rules 一变 → semester → phase 连锁重算 → effect 重跑 */
   const semester = useMemo(
-    () => buildPhasesFromCalendar(schedule, persona, TERM_CALENDAR['2026-2027-1'], [...rules], lifeMode),
-    [schedule, persona, rules, lifeMode],
+    () => buildPhasesFromCalendar(schedule, persona, TERM_CALENDAR['2026-2027-1'], [...rules]),
+    [schedule, persona, rules],
   );
   const phase = phaseOfWeek(semester.plan, weekNo);
 

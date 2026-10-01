@@ -59,6 +59,11 @@ export function reasonForMeal(a: MealReasonArgs): string {
     + (a.tail > 0 && a.nextPlace ? `；吃完走到${a.nextPlace}约 ${a.tail} 分钟` : '');
 }
 
+/** 饭后消食·散步（2026-09-28）：紧跟三餐块的恢复性活动 */
+export function reasonForDigest(): string {
+  return '饭后留一段消食散步 —— 吃完就坐下学习或跑步都不舒服';
+}
+
 /** 兜底理由（软块确实没理由时用，保证 QL-2 不为假） */
 export function reasonFallback(block: TimeBlock): string {
   const where = block.place ? `（${block.place}）` : '';

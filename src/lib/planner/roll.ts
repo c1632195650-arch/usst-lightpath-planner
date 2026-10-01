@@ -29,6 +29,12 @@
  * 设计纪律：纯函数 —— 不读时钟、不 fetch、不用随机。
  */
 import type { RollingState } from '@/types';
+/**
+ * 只取常量 `DAY_LABELS`（星期中文名），用于 note 文案。
+ * 本模块「不读时钟」的纯函数纪律不受影响：`lib/date.ts` 里的读时钟函数一个都没调，
+ * 导入的只是字面量数组。去重前这里是本地 `DAY_LABEL` 副本（全仓 8 份之一）。
+ */
+import { DAY_LABELS } from '@/lib/date';
 
 /** 负荷口径的来源（诊断与 note 用，便于解释「这次为什么松了」） */
 export type LoadSource = 'actual' | 'planned' | 'none';
@@ -205,8 +211,7 @@ export function rollingNotes(
   const heavy = decisions.filter((d) => d.high);
   if (heavy.length === 0) return [];
 
-  const DAY_LABEL = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-  const names = heavy.map((d) => DAY_LABEL[d.dayOfWeek - 1]).join('、');
+  const names = heavy.map((d) => DAY_LABELS[d.dayOfWeek - 1]).join('、');
   const basis = source === 'actual'
     ? '按你实际上做了多久算的'
     : '按上周计划排的量算的（还没有执行记录）';

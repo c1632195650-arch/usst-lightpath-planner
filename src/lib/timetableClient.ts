@@ -1,12 +1,10 @@
 /**
- * 课表解析服务客户端 —— 对接 timetable_parser/server.py（默认 http://127.0.0.1:8765）
+ * 课表解析服务客户端 —— 对接仓库根 serve.py（一体化服务，默认 http://127.0.0.1:8000）
  *
- * 默认走 **同源代理** `/timetable`（在 vite.config.ts 里转发到 8765）：
- * dev 与 preview 都配了，浏览器看到的是同源请求，天然没有 CORS 和 OPTIONS 预检问题，
- * Python 端不用加任何跨域头。
+ * 默认走 **同源代理** `/timetable`（在 vite.config.ts 里转发到 8000，serve.py 进程内解析）：
+ * dev 与 preview 都配了，浏览器看到的是同源请求，天然没有 CORS 和 OPTIONS 预检问题。
  *
- * 想直连就把 VITE_TIMETABLE_BASE 设成 http://127.0.0.1:8765 —— 但那样是真跨域，
- * 必须先给 server.py 加 Access-Control-Allow-Origin 和 do_OPTIONS，否则浏览器会拦。
+ * 想直连就把 VITE_TIMETABLE_BASE 设成 http://127.0.0.1:8000。
  *
  * 注意：这里允许 fetch（它不在 src/lib/planner/** 下，不违反排程引擎的纯函数约束）。
  */
@@ -33,7 +31,7 @@ export async function fetchCourseRecords(): Promise<CourseRecord[]> {
   try {
     res = await fetch(`${BASE}/courses`);
   } catch {
-    throw new Error('连不上课表解析服务（127.0.0.1:8765）。请先启动：python server.py 8765');
+    throw new Error('连不上课表解析服务。请先在仓库根运行：python serve.py');
   }
   if (!res.ok) throw new Error(`课表服务 /courses 返回 HTTP ${res.status}`);
   const data: unknown = await res.json();
@@ -55,7 +53,7 @@ export async function importPdf(file: Blob): Promise<ImportResult> {
       body,
     });
   } catch {
-    throw new Error('连不上课表解析服务（127.0.0.1:8765）。请先启动：python server.py 8765');
+    throw new Error('连不上课表解析服务。请先在仓库根运行：python serve.py');
   }
   if (!res.ok) throw new Error(`课表服务 /api/import_pdf 返回 HTTP ${res.status}`);
   return (await res.json()) as ImportResult;

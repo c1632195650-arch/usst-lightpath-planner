@@ -58,6 +58,8 @@ export interface BuildWeekPlanInput {
   dayEnd?: string;
   /** 是否排三餐（默认 true） */
   withMeals?: boolean;
+  /** 用户住处（2026-09-20）：宿舍类模板（午休/宿舍自习）地点跟随；未设置 = 地点留空 */
+  homeBase?: { name: string; campus: string } | null;
 
   /* —— P2 新增（全部可选：不传 = 旧行为，老调用点零改动）—— */
   /**
@@ -97,6 +99,7 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     scenarios: input.scenarios ?? null,
     tasks: input.tasks ?? [],
     transfer: input.transfer,
+    homeBase: input.homeBase ?? null,
     dayStart: input.dayStart,
     dayEnd: input.dayEnd,
     withMeals: input.withMeals,

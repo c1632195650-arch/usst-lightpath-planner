@@ -63,3 +63,11 @@ _wx_raw4/
 data/libao_memory.db
 docs/_coverage_stat.json
 data/*.bak-*
+
+# ---- 持久化与账号系统（2026-09-27 规格书）：数据库与上传件不进仓库 ----
+data/lightpath.db
+data/lightpath.db-wal
+data/lightpath.db-shm
+data/uploads/
+.venv/
+public/dev-persona.json

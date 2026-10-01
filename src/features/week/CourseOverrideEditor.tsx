@@ -21,8 +21,7 @@ import {
   addOverride, makeLayerId, removeOverride,
   type CourseOverride,
 } from './userPlanStore';
-
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+import { DAY_LABELS } from './weekViewUtils';
 
 export function CourseOverrideEditor({
   schedule, weekNo, overrides, onChange,

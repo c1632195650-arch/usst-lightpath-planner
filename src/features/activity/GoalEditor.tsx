@@ -12,7 +12,10 @@ import {
   DEFAULT_EMOJI, GOAL_KIND_LABEL, GOAL_PACE_LABEL, loadGoals, makeGoalId, removeGoal, saveGoals,
   withPace, type Goal, type GoalKind, type GoalPace,
 } from './goalStore';
+import { EXPERIENCE_HOURS } from './goalDecompose';
 import { loadActivityLog, type ActivityEntry } from './activityStore';
+import { goalTasksOf } from './goalDecompose';
+import { loadGoalPrefs } from './goalPrefs';
 import { humanHours, summarizeRange, totalForGoal } from './aggregate';
 
 const KINDS: GoalKind[] = ['contest', 'interest', 'study', 'habit'];
@@ -42,6 +45,10 @@ export function GoalEditor({
   const [kind, setKind] = useState<GoalKind>('contest');
   const [target, setTarget] = useState('');
   const [dueAt, setDueAt] = useState('');
+  const [totalHours, setTotalHours] = useState('');
+  /** G4：联网估算进行中 */
+  const [estimating, setEstimating] = useState(false);
+  const [estNote, setEstNote] = useState<string | null>(null);
   /** 待选节奏的目标（提交后弹三选一；用户拍板：先弹窗询问，之后可改） */
   const [paceAsk, setPaceAsk] = useState<Goal | null>(null);
 
@@ -52,7 +59,33 @@ export function GoalEditor({
     setTitle('');
     setTarget('');
     setDueAt('');
+    setTotalHours('');
     setOpen(false);
+  };
+
+  /**
+   * G4：联网估算助手 —— 后端搜教程总时长 × 消化系数给建议值；
+   * **建议值必须经用户确认**（填入输入框，用户可改）才算数 —— 不猜纪律。
+   * 网络失败静默降级到类型级经验值（EXPERIENCE_HOURS）。
+   */
+  const estimateOnline = async () => {
+    if (!title.trim() || estimating) return;
+    setEstimating(true);
+    setEstNote(null);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/goal-estimate?keyword=${encodeURIComponent(title.trim())}`);
+      const data = await res.json();
+      const suggested = data.ok ? Math.round(data.suggestedHours) : EXPERIENCE_HOURS[kind];
+      setTotalHours(String(suggested));
+      setEstNote(data.ok
+        ? `联网估算：约 ${suggested} 小时（含练习与消化）—— 可修改`
+        : '联网估算暂不可用，已填入同类型经验值 —— 可修改');
+    } catch {
+      setTotalHours(String(EXPERIENCE_HOURS[kind]));
+      setEstNote('联网估算暂不可用，已填入同类型经验值 —— 可修改');
+    } finally {
+      setEstimating(false);
+    }
   };
 
   const submit = () => {
@@ -64,6 +97,7 @@ export function GoalEditor({
       kind,
       source: 'manual',
       ...(Number(target) > 0 ? { targetMinutes: Number(target) * 60 } : {}),
+      ...(Number(totalHours) > 0 ? { totalHours: Number(totalHours) } : {}),
       ...(dueAt ? { dueAt } : {}),
     };
     // 有截止日期 → 问节奏（sprint/steady/both）；没有 → 不猜，直接存（不排程）
@@ -231,11 +265,24 @@ export function GoalEditor({
   );
 }
 
-export function AchievementPanel({ weekNo }: { weekNo: number }) {
+export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termStart: string }) {
   const [goals, setGoals] = useState<Goal[]>(() => loadGoals());
   const [entries] = useState(() => loadActivityLog());
   /** 「学期至今」= 第 1 周到本周 —— 它就是用户问「这学期花了多少」的那个区间 */
   const range = useMemo(() => summarizeRange(entries, 1, weekNo, goals), [entries, weekNo, goals]);
+
+  // G2：本周预算 vs 实际投入 —— 预算来自分解算法（同一纯函数，口径与排程一致）
+  const budgetByGoal = useMemo(() => {
+    const prefs = loadGoalPrefs();
+    const courseMinByDay: Record<number, number> = {};
+    const { tasks } = goalTasksOf(goals, weekNo, termStart, prefs, courseMinByDay);
+    const map = new Map<string, number>();
+    for (const t of tasks) {
+      const gid = t.id.replace(/^goal-/, '').replace(/-w\d+(-d\d+)?$/, '');
+      map.set(gid, (map.get(gid) ?? 0) + (t.durationMin ?? 0));
+    }
+    return map;
+  }, [goals, weekNo, termStart]);
 
   return (
     <div className="panel px-4 py-3.5 sm:px-5">
@@ -269,6 +316,12 @@ export function AchievementPanel({ weekNo }: { weekNo: number }) {
                     className="h-full rounded-full bg-teal-500"
                     style={{ width: `${Math.min(100, Math.round((g.minutes / g.targetMinutes) * 100))}%` }}
                   />
+                </div>
+              )}
+              {/* G2：本周分解预算 vs 实际投入 —— 与排程同一口径 */}
+              {budgetByGoal.has(g.goalId) && (
+                <div className="mt-0.5 text-[10px] text-ink-faint">
+                  本周预算 {budgetByGoal.get(g.goalId)} 分钟（重排后生效）
                 </div>
               )}
             </li>

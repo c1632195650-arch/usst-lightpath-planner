@@ -178,6 +178,10 @@ export function buildGoldenInput(g: GoldenInput): BuildWeekPlanInput {
     scenarios: g.scenarios,
     tasks: g.tasks ?? [],
     transfer: transferProviderOf(g),
+    // 住处（2026-09-20）：宿舍类模板（午休/宿舍自习）的 place 改为跟随用户住处，
+    // golden 基线统一按「已设置住处 = 第二学生公寓」拍摄 —— 输出与历史快照一致，
+    // golden 继续守护引擎行为；「未设置住处 → 地点留空」的行为由 goalDecompose 单测覆盖。
+    homeBase: { name: '第二学生公寓', campus: '北校' },
   };
 }
 

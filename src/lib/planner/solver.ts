@@ -18,7 +18,7 @@ import {
   type Commit, type Diagnostics, type PlanRequest, type PlanResult, type RollingState,
   type SolverConfig, type Weights,
 } from './model.ts';
-import { attachTransfers, construct, DAY_NAME, type ConstructCtx } from './construct.ts';
+import { attachTransfers, construct, mergeAdjacentStudy, DAY_NAME, type ConstructCtx } from './construct.ts';
 import type { TransferProvider } from './campusLookup.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 import { evaluate } from './objective.ts';
@@ -453,8 +453,21 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     acceptedCount = incrementalRes.improve.accepted.length;
   }
 
+  /**
+   * ④.6 同地点相邻自习合并（2026-09-28）—— construct 末尾合并过一次，
+   * 但 improve（以及锁恢复后的布局）可能搬出**新的**相邻同点对；
+   * 在这里再跑一遍，保证用户看到的最终计划里没有「搬两次东西去同一个地方」。
+   * 硬锁的块不参与（合并会吞 id，锁就找不到了）。合并改变块数 → 转场要重挂。
+   */
+  const hardLockedIds = new Set(
+    Object.entries(req.lockLevels ?? {}).filter(([, lv]) => lv === 'hard').map(([id]) => id),
+  );
+  const beforeMergeCount = plan.blocks.length;
+  plan = { ...plan, blocks: mergeAdjacentStudy(plan.blocks, hardLockedIds) };
+  const mergedCount = beforeMergeCount - plan.blocks.length;
+
   // ④.5 重挂转场 —— improve 会移动块，而 `attachTransfers` 只在 construct 里跑过一次
-  if (config.solver === 'lns' || lockRes.restored.length > 0) {
+  if (config.solver === 'lns' || lockRes.restored.length > 0 || mergedCount > 0) {
     plan = reattachTransfers(plan, n.req.transfer ?? campusFallbackTransfer);
   }
 

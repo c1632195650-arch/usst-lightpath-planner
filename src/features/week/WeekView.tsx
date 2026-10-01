@@ -1,11 +1,7 @@
-import { useMemo, useState } from 'react';
-import type { Course, CourseTimeSlot, PersonaProfile, Schedule, WeekPlan } from '@/types';
-import { LIFE_MODES } from '@/data/usst';
+import { useMemo } from 'react';
+import type { CourseTimeSlot, Schedule } from '@/types';
 import { weekDates, shortCN } from '@/lib/date';
 import { PERIOD_START, PERIOD_END } from '@/constants/time';
-import { planWeekForChat, summarizeWeekPlan } from '@/features/libao/weekPlanForChat';
-import { weekPlanToLbaoPlan } from '@/features/libao/weekPlanAdapter';
-import { LbaoPlanView } from '@/features/libao/LbaoPlanView';
 import { categoryColor } from '@/constants/chartColors';
 
 interface Props {
@@ -16,9 +12,6 @@ interface Props {
   onToggleDay: (iso: string) => void;
   onSelectWholeWeek: () => void;
   onClearDays: () => void;
-  lifeMode: string | null;
-  onSelectMode: (id: string) => void;
-  persona: PersonaProfile | null;
   onBack: () => void;
   onShiftWeek: (delta: number) => void;
 }
@@ -28,22 +21,7 @@ const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', 
 const PERIODS = Array.from({ length: PERIOD_START.length - 1 }, (_, i) => i + 1);
 
 export function WeekView(props: Props) {
-  const { weekMonday, weekNo, schedule, selectedDays, persona, onBack, onShiftWeek } = props;
-  /**
-   * 梨宝建议的结果 —— **改成 v2 引擎的产物**（P2-T2.5 并轨）。
-   *
-   * 原先这里是 `LbaoPlan`（`lib/lbao.ts::lbaoRecommend` 的硬编码模板产物：
-   * 08:00 早饭 / 11:45 午饭 / 19:00 自习，固定时间、不排转场、不读校历、
-   * 不认用户锁定的块）。同一个 App 里「周计划」页已经是真引擎，
-   * 这里还是模板 —— 用户连着看两处会发现对不上，这就是双轨的破绽。
-   *
-   * 现在两边都走 `planWeek()`（见 `features/libao/weekPlanForChat.ts`），
-   * 差别只在**呈现形态**：对话/建议给要点，周计划页给完整时间轴。
-   */
-  const [lbaoPlan, setLbaoPlan] = useState<WeekPlan | null>(null);
-  const [lbaoTips, setLbaoTips] = useState<string[]>([]);
-  const [lbaoBusy, setLbaoBusy] = useState(false);
-  const [lbaoError, setLbaoError] = useState<string | null>(null);
+  const { weekMonday, weekNo, schedule, selectedDays, onBack, onShiftWeek } = props;
 
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
   const selectedSet = useMemo(() => new Set(selectedDays), [selectedDays]);
@@ -61,38 +39,6 @@ export function WeekView(props: Props) {
   const isCovered = (dow: number, p: number) =>
     schedule.courses.some((c) => c.slots.some((s) =>
       s.dayOfWeek === dow && s.startPeriod < p && s.endPeriod >= p && activeThisWeek(s, weekNo)));
-
-  /**
-   * 生成梨宝建议。走 `planWeekForChat`（= 公共 `planWeek()` 编排），
-   * 与「周计划」页**同一个引擎、同一份输出**，只是这里展示要点、那边展示时间轴。
-   *
-   * 三件事以前没有、现在必须有：
-   *   ① 异步 —— `planWeek` 要问后端路网，是 Promise（旧 `lbaoRecommend` 是同步的）；
-   *   ② 进行中状态 —— 否则用户点完按钮到出结果之间页面毫无反应，会重复点；
-   *   ③ 失败提示 —— 排不出来（周次超范围）要说清原因，而不是静默什么都不发生。
-   */
-  const runLbao = async () => {
-    if (!persona || lbaoBusy) return;
-    setLbaoBusy(true);
-    setLbaoError(null);
-    try {
-      const plan = await planWeekForChat(schedule, persona, weekNo);
-      if (!plan) {
-        setLbaoError('这个周次不在学期范围内，排不出计划');
-        setLbaoPlan(null);
-        setLbaoTips([]);
-        return;
-      }
-      setLbaoPlan(plan);
-      setLbaoTips(summarizeWeekPlan(plan));
-    } catch (e) {
-      // 引擎本身不抛错（内部有多层降级），能走到这里说明是意料外的失败。
-      // 如实报出来比吞掉好 —— 用户至少知道「不是没反应，是出问题了」。
-      setLbaoError(e instanceof Error ? e.message : '生成失败，请稍后重试');
-    } finally {
-      setLbaoBusy(false);
-    }
-  };
 
   const weekRange = `${shortCN(days[0])} – ${shortCN(days[6])}`;
 
@@ -152,7 +98,7 @@ export function WeekView(props: Props) {
         {/* 7 天 × 13 节的课表天然需要宽度，窄屏仍保留横向滚动；
             min-w 压到 540px 后，常见手机一屏能看到 5 天左右，拖动幅度明显变小。 */}
         <div className="overflow-x-auto border-t border-ink/10 px-4 py-4 sm:px-5">
-          <table className="min-w-[540px] w-full border-separate border-spacing-0">
+          <table className="min-w-[540px] w-full table-fixed border-separate border-spacing-0">
             <thead>
               <tr>
                 <th className="w-14 border-b border-ink/10 pb-3 text-left text-[11px] font-medium text-ink-faint">时间</th>
@@ -180,7 +126,7 @@ export function WeekView(props: Props) {
                             className="h-full rounded-lg px-2 py-2 text-white shadow-sm"
                             style={{ background: categoryColor(start.category) }}
                           >
-                            <div className="text-[11px] font-semibold leading-tight">{start.name}</div>
+                            <div className="break-words text-[11px] font-semibold leading-tight">{start.name}</div>
                             <div className="mt-1 text-[9.5px] leading-tight opacity-85">
                               {start.building}{start.room ? ` ${start.room}` : ''}
                             </div>
@@ -196,81 +142,6 @@ export function WeekView(props: Props) {
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section className="panel p-4 sm:p-5">
-        <div className="mb-5">
-          <p className="section-label">PACE</p>
-          <h3 className="mt-3 text-lg font-semibold tracking-tight text-ink">选择这一周的节奏</h3>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {LIFE_MODES.map((m) => {
-            const active = props.lifeMode === m.id;
-            return (
-              <button
-                key={m.id}
-                onClick={() => props.onSelectMode(m.id)}
-                className={`flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out ${
-                  active ? 'border-brand bg-brand-light text-brand' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'
-                }`}
-              >
-                <span className="h-2 w-2 rounded-full" style={{ background: m.color }} aria-hidden="true" />
-                {m.name}
-              </button>
-            );
-          })}
-        </div>
-        {props.lifeMode && (
-          <div className="mt-5 border-t border-ink/10 pt-4">
-            <p className="text-sm font-semibold text-ink">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.tagline}</p>
-            <p className="mt-1 text-sm leading-6 text-ink-soft">{LIFE_MODES.find((m) => m.id === props.lifeMode)?.desc}</p>
-          </div>
-        )}
-      </section>
-
-      <section className="pb-10">
-        <div className="panel overflow-hidden">
-          <div className="hero-surface-flat flex items-center gap-4 px-5 py-5 text-white">
-            <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-lg">梨</div>
-            <div className="flex-1">
-              <div className="text-sm font-semibold">梨宝建议</div>
-              <div className="mt-1 text-xs text-white/55">结合课表与画像，生成可执行的一周安排</div>
-            </div>
-            <button
-              onClick={runLbao}
-              disabled={!persona || lbaoBusy}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45"
-            >
-              {lbaoBusy ? '正在排…' : '生成建议'}
-            </button>
-          </div>
-
-          {!persona && (
-            <p className="px-5 py-5 text-sm leading-6 text-ink-faint">完成画像后，梨宝才能给出更贴近你习惯的建议。</p>
-          )}
-
-          {lbaoError && (
-            <p className="px-5 py-5 text-sm leading-6 text-amber-800">{lbaoError}</p>
-          )}
-
-          {lbaoPlan && (
-            <div className="px-5 py-5">
-              {/* 「这一周的要点」—— 与周计划页同源，只是压成了几句话。
-                  刻意只陈述事实（哪天满 / 哪里紧 / 哪天空），不替用户拍板，
-                  这是产品既定的智能边界（`summarizeWeekPlan` 的注释里写着理由）。 */}
-              <ul className="space-y-1.5">
-                {lbaoTips.map((t, i) => (
-                  <li key={i} className="text-sm leading-6 text-ink-soft">· {t}</li>
-                ))}
-              </ul>
-              <div className="mt-4 border-t border-ink/10 pt-3">
-                {/* 适配层把引擎产物翻成展示形状 —— 见 `weekPlanAdapter.ts`。
-                    展示组件的入参没变，换掉的只是**数据来源**。 */}
-                <LbaoPlanView plan={weekPlanToLbaoPlan(lbaoPlan, props.lifeMode, schedule.termStart)} />
-              </div>
-            </div>
-          )}
         </div>
       </section>
     </div>

@@ -34,7 +34,7 @@ import {
   buildWeekNotes, issueCourseConflict, issueCourseNoPlace, issueMealSkipped,
   issueTransferLate, issueTransferMissingPlace, issueTransferTight,
   reasonForCommit, reasonForCommitDeps, reasonForCommitPart,
-  reasonForStudy, reasonForTemplate, reasonForUserTask, summaryStudyIssue,
+  reasonForDigest, reasonForStudy, reasonForTemplate, reasonForUserTask, summaryStudyIssue,
 } from './explain.ts';
 
 /* ============================================================
@@ -59,6 +59,24 @@ const EVENING_FROM = toMinutes('18:00');
 const ACTIVITY_CAP_MIN = 120;
 /** 引擎自己排的软块，从上个块走过来之后再多留 5 分钟 —— 不把自己逼到「0 余量」 */
 const SOFT_BUFFER_MIN = 5;
+/**
+ * 生活合理性常量（2026-09-28，RAY 拍板）：
+ *   · 图书馆类自习要「搬家式」带书过去，起步成本高 → 最少学 60 分钟；
+ *   · 宿舍/空教室等「就地」自习点成本低 → 最少 30 分钟；
+ *   · 饭后至少 2 小时才能运动；
+ *   · 运动后留 40 分钟恢复带（洗澡/洗衣），引擎自排的软块不进；
+ *   · 三餐块后面紧跟 25 分钟「饭后消食·散步」，把饭后的第一段时间占住。
+ */
+const LIBRARY_STUDY_MIN = 60;
+const ON_SITE_STUDY_MIN = 30;
+const MEAL_TO_SPORT_GAP_MIN = 120;
+const RECOVERY_AFTER_SPORT_MIN = 40;
+const DIGEST_WALK_MIN = 25;
+
+/** 自习点的最小可行时长：图书馆类要搬书过去，学太短不划算 */
+function minStudyDurationAt(place: string | undefined): number {
+  return place && place.includes('图书馆') ? LIBRARY_STUDY_MIN : ON_SITE_STUDY_MIN;
+}
 /**
  * 每类活动模块每天最多几个（运动 1 个、生活类 1 个、社交类 1 个…）
  *
@@ -260,6 +278,9 @@ export interface ConstructResult {
 export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructResult {
   const { schedule, weekNo, policy } = req;
   const templates = ctx.templates ?? DEFAULT_TEMPLATES;
+  // 住处（2026-09-20）：宿舍类模板（place === '第二学生公寓'，它是 POI 表的数据源，
+  // 不能在模板层改写）在**块级展开时**替换为用户的 homeBase；
+  // 未设置则保持原地点（不猜用户住哪，宁可维持已验证 POI）。
   const tasks = ctx.tasks ?? req.tasks ?? [];
   const scenarios: ScenarioFields | null = req.scenarios ?? null;
   const transfer: TransferProvider = req.transfer ?? campusFallbackTransfer;
@@ -416,6 +437,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     let placed: TimeBlock[] = [...courseBlocks, ...userBlocks, ...commitFixedBlocks];
 
     /* --- 6.3 三餐（按地点就近 + 营业时段 + 走路时间） --- */
+    let digestMin = 0;
     if (withMeals) {
       const firstStart = daySlots.length ? daySlots[0].startMin : null;
       for (const meal of MEAL_SLOTS) {
@@ -429,6 +451,21 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         });
         if (res.block) {
           placed = [...placed, res.block];
+          if (res.digest) {
+            placed = [...placed, {
+              // §6.4 语义键：{mealId}-digest（跟吃饭块同一逻辑身份族）
+              id: mkId(day, 'activity', `${meal.id}-digest`),
+              kind: 'activity',
+              dayOfWeek: day,
+              startMin: res.digest.startMin,
+              endMin: res.digest.endMin,
+              title: '饭后消食',
+              emoji: '🚶',
+              reason: reasonForDigest(),
+              source: 'template',
+            } satisfies TimeBlock];
+            digestMin += res.digest.endMin - res.digest.startMin;
+          }
           if (res.unverified) unverifiedMeals++;
         } else if (res.skippedReason) {
           issues.push(issueMealSkipped(dayName, res.skippedReason));
@@ -476,6 +513,12 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const perCat: Record<string, number> = {};
     let activityMin = 0;
     /**
+     * 运动后恢复带（2026-09-28）：跑完步要洗澡/洗衣/喘口气，
+     * 引擎自排的软块（活动/自习）在这段时间不落位。课程与用户钉死的块不受限
+     * —— 课表是既成事实，引擎只负责不主动制造这种紧贴。
+     */
+    let recoveryUntil = 0;
+    /**
      * 阶段 D：社交度高的用户，一天可以安排两件社交（默认 1 件）。
      *
      * 用 `req.persona` 而不是新加一个 ctx 字段 —— `PlanRequest` 本就有 persona，
@@ -492,11 +535,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       if (activityMin + Math.min(...tpl.durations) > activityBudget) continue;
       const block = placeTemplate({
         tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
+        homeBaseName: req.homeBase?.name,
+        recoveryUntil,
       });
       if (block) {
         placed = [...placed, block];
         perCat[cat] = (perCat[cat] ?? 0) + 1;
         activityMin += block.endMin - block.startMin;
+        if (tpl.category === 'sport') {
+          recoveryUntil = Math.max(recoveryUntil, block.endMin + RECOVERY_AFTER_SPORT_MIN);
+        }
       }
     }
 
@@ -504,7 +552,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin));
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
-      dayStartMin: softFloorMin, dayEndMin,
+      dayStartMin: softFloorMin, dayEndMin, recoveryUntil,
     });
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
@@ -513,8 +561,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const dayBlocks = sortBlocks(placed);
     attachTransfers(dayBlocks, transfer, dayName, issues);
 
-    // ⚠️ 提交项也算「已占用」——否则留白会被高估（只有带 commits 时才有区别）
-    const filled = activityMin
+    // ⚠️ 提交项与消食散步也算「已占用」——否则留白会被高估（只有带 commits 时才有区别）
+    const filled = activityMin + digestMin
       + studyBlocks.reduce((n, b) => n + (b.endMin - b.startMin), 0)
       + commitBlocks.reduce((n, b) => n + (b.endMin - b.startMin), 0);
     blankMin += Math.max(0, freeTotal - filled);
@@ -548,9 +596,18 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
    *     混进 issues 会让用户以为自己排错了。
    */
   const excluded = new Set(req.excludedBlockIds ?? []);
-  const finalBlocks = excluded.size === 0
+  const afterExclusion = excluded.size === 0
     ? allBlocks
     : allBlocks.filter((b) => b.kind === 'course' || !excluded.has(b.id));
+
+  // 6.10 同地点相邻自习合并（2026-09-28）。硬锁的块不参与 —— 合并会吞 id，
+  //      id 消失 = `applyLockedPlacements` 找不到目标 = 锁静默失效。
+  const lockedIds = new Set(
+    Object.entries(req.lockLevels ?? {})
+      .filter(([, lv]) => lv === 'hard')
+      .map(([id]) => id),
+  );
+  const finalBlocks = mergeAdjacentStudy(afterExclusion, lockedIds);
 
   return {
     plan: {
@@ -583,6 +640,8 @@ function commitPlaceName(c: Commit): string | undefined {
 
 interface MealPick {
   block: TimeBlock | null;
+  /** 饭后消食·散步（紧跟吃饭块；放不下就不排 —— 消食不能反过来挤掉正事） */
+  digest?: { startMin: number; endMin: number };
   skippedReason?: string;
   /** 选中的食堂数据是否**未核实**（如南校食堂营业时段是推算值）→ 供 notes 如实标注 */
   unverified?: boolean;
@@ -647,6 +706,13 @@ function placeMeal(args: {
     return { block: null, skippedReason: `课排得太满，${meal.label}没找到合适的时间段，记得自己补一顿` };
   }
 
+  // 饭后消食·散步（2026-09-28）：紧跟吃饭块。贴着下一件事放不下就不排。
+  const dStart = start + dur;
+  const dEnd = dStart + DIGEST_WALK_MIN;
+  const digest = dEnd <= dayEndMin && !placed.some((b) => overlaps(b, { startMin: dStart, endMin: dEnd }))
+    ? { startMin: dStart, endMin: dEnd }
+    : undefined;
+
   return {
     block: {
       // §6.4 语义键：{mealId}（breakfast / lunch / dinner）
@@ -665,6 +731,7 @@ function placeMeal(args: {
         : `${meal.label}按平常的饭点（${meal.nominal} 前后）留出的时间，去哪吃你自己定`,
       source: 'template',
     },
+    digest,
   };
 }
 
@@ -715,6 +782,10 @@ function placeTemplate(args: {
   transfer: TransferProvider;
   dayStartMin: number;
   dayEndMin: number;
+  /** 用户住处名（2026-09-20）：宿舍类模板的地点替换用；空 = 保持默认 */
+  homeBaseName?: string;
+  /** 运动后恢复带的上界（2026-09-28）：软块不得早于这个时刻开始 */
+  recoveryUntil: number;
 }): TimeBlock | null {
   const { tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin, dayEndMin } = args;
 
@@ -739,6 +810,15 @@ function placeTemplate(args: {
       const prev = lastBlockBefore(placed, floor);
       const need = travelNeed(transfer, prev?.place, tpl.place);
       const s = prev ? Math.max(floor, prev.endMin + need + SOFT_BUFFER_MIN) : floor;
+      if (s < args.recoveryUntil) continue; // 运动后恢复带：软块不进
+      if (tpl.category === 'sport') {
+        // 饭后冷却（2026-09-28）：运动起点必须离最近一餐结束 ≥ 2 小时。
+        // 只看「运动之前」的餐 —— 运动之后再吃饭不在此列。
+        const lastMealEnd = placed
+          .filter((b) => b.kind === 'meal' && b.endMin <= s)
+          .reduce((m, b) => Math.max(m, b.endMin), -1);
+        if (lastMealEnd >= 0 && s - lastMealEnd < MEAL_TO_SPORT_GAP_MIN) continue;
+      }
       if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
       const tail = travelNeed(transfer, tpl.place, nextBlockOnOrAfter(placed, ceiling)?.place);
       const dur = pickDuration(tpl.durations, ceiling - s - tail - (tail ? SOFT_BUFFER_MIN : 0));
@@ -751,7 +831,10 @@ function placeTemplate(args: {
         startMin: s,
         endMin: s + dur,
         title: tpl.name,
-        place: tpl.place,
+        // 住处替换（2026-09-20，G3 前置）：宿舍类模板（午休/宿舍自习）的地点
+        // 跟随用户 homeBase（args.homeBaseName）；未设置则保持「第二学生公寓」
+        // —— 它是 POI 表的数据源，模板层不能改写（campusOfPlace 依赖）。
+        place: tpl.place === '第二学生公寓' && args.homeBaseName ? args.homeBaseName : tpl.place,
         emoji: tpl.emoji,
         reason: reasonForTemplate(tpl),
         // 用户自定义的模块要能一眼分辨出来（后续「确认 → 行为记录」靠这个）
@@ -819,6 +902,8 @@ function fillStudy(args: {
   transfer: TransferProvider;
   dayStartMin: number;
   dayEndMin: number;
+  /** 运动后恢复带的上界（2026-09-28）：自习块不得早于这个时刻开始 */
+  recoveryUntil: number;
 }): TimeBlock[] {
   const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin } = args;
   let placed = placedIn;
@@ -841,6 +926,12 @@ function fillStudy(args: {
   const rotated = () => [...rotateFrom(preferred, day + blocks.length), ...fallback];
 
   // 每次都重新算空档：放完一块后布局变了，下一块的走路时间也要跟着重算
+  //
+  // 选块规则（2026-09-28，RAY 拍板「自习不宜过短」）：
+  //   · 每个自习点有自己的最小可行时长（`minStudyDurationAt`：图书馆 60 / 其它 30）
+  //     —— 装不下最小时长的空档宁可留白，不再切出 20 分钟的「图书馆自习」；
+  //   · 候选按轮换顺序过一遍，第一个「开门 + 装得下最小时长」的胜出
+  //     （旧逻辑是第一个开门的就上，时长只看空档大小）。
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
@@ -849,25 +940,27 @@ function fillStudy(args: {
 
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);
-      // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）
-      const tpl = cands.find((t) => openAt(t, gap.startMin, gap.startMin + MIN_CHUNK))
-        ?? cands.find((t) => openAt(t, gap.endMin - MIN_CHUNK, gap.endMin))
-        ?? cands[0];
-      if (!tpl) continue;
-      const need = travelNeed(transfer, prev?.place, tpl.place);
-      const s = prev ? Math.max(gap.startMin, prev.endMin + need + SOFT_BUFFER_MIN) : gap.startMin;
-      if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
       // 空档末尾还要留出「走到下一件事」的时间 + 一点缓冲，
       // 否则会吃掉下一块（尤其下一顿）的走路时间，排出「余 2 分·紧」这种没必要的紧张
       const nextAfter = nextBlockOnOrAfter(placed, gap.endMin);
-      const tail = nextAfter
-        ? travelNeed(transfer, tpl.place, nextAfter.place) + SOFT_BUFFER_MIN
-        : 0;
-      const room = Math.min(policy.maxBlockMin, gap.endMin - tail - s, remaining);
-      const dur = Math.floor(room / 5) * 5;
-      if (dur < MIN_CHUNK) continue;
-      best = { start: s, dur, tpl };
-      break;
+      for (const tpl of cands) {
+        // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）
+        if (!openAt(tpl, gap.startMin, gap.startMin + MIN_CHUNK)
+          && !openAt(tpl, gap.endMin - MIN_CHUNK, gap.endMin)) continue;
+        const need = travelNeed(transfer, prev?.place, tpl.place);
+        let s = prev ? Math.max(gap.startMin, prev.endMin + need + SOFT_BUFFER_MIN) : gap.startMin;
+        s = Math.max(s, args.recoveryUntil); // 运动后恢复带：自习不紧贴运动
+        if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
+        const tail = nextAfter
+          ? travelNeed(transfer, tpl.place, nextAfter.place) + SOFT_BUFFER_MIN
+          : 0;
+        const room = Math.min(policy.maxBlockMin, gap.endMin - tail - s, remaining);
+        const dur = Math.floor(room / 5) * 5;
+        if (dur < minStudyDurationAt(tpl.place)) continue;
+        best = { start: s, dur, tpl };
+        break;
+      }
+      if (best) break;
     }
     if (!best) break;
 
@@ -887,7 +980,50 @@ function fillStudy(args: {
     placed = [...placed, blocks[blocks.length - 1]];
     remaining -= best.dur;
   }
-  return blocks;
+
+  /**
+   * 同地点相邻合并（2026-09-28）：见文末 `mergeAdjacentStudy`。
+   * 这里对整周已完成的计划做一遍（改进阶段还可能再搬块，solver 末尾会再跑一次）。
+   */
+  return mergeAdjacentStudy(blocks);
+}
+
+/**
+ * 同地点相邻自习合并（2026-09-28，RAY 拍板「自习块结束又切到另一个图书馆自习」）：
+ * 两块自习在同一天、同一地点、首尾相接（含 5 分钟软缓冲的缝）→ 并成一块。
+ *
+ * 在用户眼里这是「坐在原地没挪窝的同一次自习」，不是两次 ——
+ * 引擎按节奏上限横切竖切，用户看到的只是「搬两次东西去同一个地方」。
+ *
+ * ⚠️ 合并会**吞掉一个 id**（保留较早那块的）。因此 `lockedIds` 里的块
+ *    **绝不参与合并** —— id 消失会让 `applyLockedPlacements` 找不到目标，锁失效。
+ * ⚠️ 合并后的会话**可以超过 `maxBlockMin`**：那是「单次放置」的节奏上限，
+ *    连续同点会话是一个人坐在原地，不是引擎硬塞。
+ *
+ * ⚠️ 入参顺序无关：内部先按「天 + 开始时间」排序再合并（放置序是空档从大到小）。
+ */
+export function mergeAdjacentStudy(all: TimeBlock[], lockedIds?: Set<string>): TimeBlock[] {
+  const sorted = [...all].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin);
+  const out: TimeBlock[] = [];
+  for (const b of sorted) {
+    const last = out[out.length - 1];
+    const lockFree = !(lockedIds?.has(b.id) || (last != null && lockedIds?.has(last.id)));
+    if (
+      lockFree
+      && !b.locked && !(last?.locked ?? false)
+      && last != null
+      && last.dayOfWeek === b.dayOfWeek
+      && last.kind === 'study' && b.kind === 'study'
+      && last.place === b.place
+      && b.startMin >= last.endMin
+      && b.startMin - last.endMin <= SOFT_BUFFER_MIN
+    ) {
+      last.endMin = b.endMin;
+    } else {
+      out.push(b);
+    }
+  }
+  return out;
 }
 
 /* ============================================================

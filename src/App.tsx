@@ -10,6 +10,7 @@ import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
+import { loadBasicInfo } from '@/lib/identity';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -18,7 +19,7 @@ import { addGoal, loadGoals, saveGoals, type Goal } from '@/features/activity/go
 import { InterestAskDialog, INTEREST_ASK_DISMISSED_KEY } from '@/features/activity/InterestAskDialog';
 import { interestAskHit } from '@/features/activity/goalTemplates';
 import { WeekPlanPage } from '@/features/week/WeekPlanPage';
-import { RoutineSetup } from '@/features/week/RoutineSetup';
+import { OnboardingSetup } from '@/features/week/OnboardingSetup';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 import { fetchMe, type AuthStatus } from '@/lib/auth';
@@ -27,15 +28,18 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { PersonaLab } from '@/lab/PersonaLab';
 
 /**
- * onboarding 的六个阶段：
- * 欢迎 → **个人信息（WP1 新增）** → 问卷 → **作息（Q1b 新增）** → 画像结果 → 主界面。
+ * onboarding 的四个阶段：
+ * 欢迎 → **个人信息（含住处 / 作息）** → 问卷 → 画像结果 → 主界面。
  *
  * · `basicinfo` 放在问卷之前：年级决定出卷范围（`buildPersonaSequence(grade)`，
  *   WP2 题库分层），所以必须先有基础信息；
- * · `routine` 放在问卷之后、生成画像之前：作息是问卷规格书 §4-L1 的第 1 条（硬边界），
- *   但它**不进画像**（§6.1 禁止语义污染）—— 所以它是一个独立阶段，不是一道题。
+ * · 「住处 + 作息」原本是问卷之后的一个独立阶段（旧 `RoutineSetup`）。2026-09-28
+ *   按拍板**合并成一步**：它们跟「你是谁」一样都是硬边界事实，没理由让用户分两次填 ——
+ *   于是收进 `basicinfo` 同一张卡（`<BasicInfoStep>{children}</BasicInfoStep>`，
+ *   子块由 week 域提供，避免 welcome → week 跨域 import）。
+ * · 住处/作息都**不进画像**（问卷规格书 §6.1 禁语义污染），只是各存一份独立 store。
  */
-type View = 'welcome' | 'basicinfo' | 'persona' | 'routine' | 'result' | 'main';
+type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
 
 /** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
 const SHOW_IMPORT = true;
@@ -51,14 +55,29 @@ const SHOW_IMPORT = true;
  */
 const readRoute = (): Route => parseRoute(window.location.hash, { showImport: SHOW_IMPORT });
 
+/**
+ * 是否提交过基础信息 —— 必填四项（称呼/年级/学院/校区）齐全才算数。
+ * `loadBasicInfo()` 已做逐字段白名单校验，坏数据读出来就是空对象，天然判否。
+ */
+function hasBasicInfo(): boolean {
+  const info = loadBasicInfo();
+  return Boolean(info.nickname && info.grade && info.college && info.campus);
+}
+
 export default function App() {
   const { state, setState } = useAppState();
   // F1（§4.1「刷新停在当前页」）：已 onboard 的老用户刷新直接进主界面，
   // 当前页由 hash 路由决定；首次用户仍从欢迎页开始（onboarding 不进路由）。
   // 旧实况是刷新永远落欢迎页 —— 与「刷新停在当前页」冲突，按规格书修。
   // 判定抽到 `features/welcome/basicInfo.ts` 的 `initialView()`（纯函数，可单测），
-  // 本组件只做组合根该做的事（读 state → 注入）。
-  const [view, setView] = useState<View>(() => initialView(state.onboarded));
+  // 本组件只做组合根该做的事（读 state + 读基础信息 → 注入两个布尔）。
+  //
+  // 2026-10-01：闸门从「只看 onboarded」改成「onboarded + 是否填过基础信息」。
+  // 起因：注册 / 并入新账号后 `onboarded=true`，但基础信息那一步在旧数据里
+  // 根本不存在（它是后加的），于是落点被直接判成 main —— 基础信息界面再也见不到。
+  const [view, setView] = useState<View>(() =>
+    initialView({ onboarded: state.onboarded, hasBasicInfo: hasBasicInfo() }),
+  );
   const [route, setRoute] = useState<Route>(readRoute);
 
   /**
@@ -217,19 +236,22 @@ export default function App() {
   }
 
   /**
-   * WP1：基础信息前置（客观事实：称呼/年级/学院/专业/校区/宿舍）。
-   * **不含作息** —— 作息唯一入口是 `features/week/routineStore.ts`
-   * （起床 + 入睡两条，喂引擎 dayStart/dayEnd），走下面的 `routine` 阶段，
-   * 避免「同一件事两个真源、且 dayStart 无来源」。详见 BasicInfoStep.tsx 内注。
+   * WP1：基础信息前置（客观事实：称呼/年级/学院/专业/校区 + **住处 + 作息**）。
+   * 「住处 + 作息」由 `OnboardingSetup`（week 域）提供，经 children 注入同一张卡 ——
+   * 本组件是**组合根**，本来就在 import `features/week/**`，这么接不会新增跨域依赖。
    *
    * 年级在这里收集，是因为它决定问卷出卷范围（WP2 题库分层）。
    */
   if (view === 'basicinfo') {
     return (
       <BasicInfoStep
-        onComplete={() => setView('persona')}
+        // 老账号只是「补齐基础信息」（画像已在）→ 存完直接回主界面，不让人重答一遍问卷；
+        // 全新用户 → 接着走画像。
+        onComplete={() => (state.onboarded ? enterMain() : setView('persona'))}
         onBack={() => setView('welcome')}
-      />
+      >
+        <OnboardingSetup />
+      </BasicInfoStep>
     );
   }
 
@@ -238,22 +260,9 @@ export default function App() {
       <PersonaFlow
         answers={state.answers ?? {}}
         onAnswer={setAnswer}
-        onComplete={() => setView('routine')}
+        // 问卷答完即出画像并落 onboarded（「住处/作息」已在前一步 basicinfo 采过）
+        onComplete={handleComplete}
         onExit={() => setView('welcome')}
-      />
-    );
-  }
-
-  /**
-   * Q1b：作息采集阶段（问卷规格书 §4-L1 #1）。
-   * 由**组合根**编排而不是塞进 `PersonaFlow` —— 详见 `features/week/RoutineSetup.tsx` 头注。
-   * 不生成任何画像数据，只是让 `routineStore` 有机会被填一次；跳过则引擎走缺省窗口。
-   */
-  if (view === 'routine') {
-    return (
-      <RoutineSetup
-        onDone={handleComplete}
-        onBack={() => setView('persona')}
       />
     );
   }
@@ -336,7 +345,7 @@ export default function App() {
                 会被 onboarded 永久藏起来** —— 没有这个入口，新流程对老用户不可达，
                 验收时也会误判成「改了没效果」。
                 点它 = 把 onboarded 置回 false 并回到欢迎页，完整重走
-                欢迎 → 个人信息 → 问卷 → 作息 → 结果。
+                欢迎 → 个人信息（含住处/作息） → 问卷 → 结果。
               */}
               <div className="flex justify-end">
                 <button
@@ -367,12 +376,10 @@ export default function App() {
             persona={state.persona}
             planState={state.planState}
             onPlanStateChange={(ps) => patchState({ planState: ps })}
-            lifeMode={state.lifeMode}
             selectedDays={state.selectedDays}
             onToggleDay={toggleDay}
             onSelectWholeWeek={selectWholeWeek}
             onClearDays={() => patchState({ selectedDays: [] })}
-            onSelectMode={(id) => patchState({ lifeMode: id })}
           />
         ) : (
           <OverviewPage
@@ -381,7 +388,6 @@ export default function App() {
             todayIso={todayISO()}
             persona={state.persona}
             planState={state.planState}
-            lifeMode={state.lifeMode}
             goals={loadGoals()}
             onOpenWeek={openWeek}
             onStartPersona={() => setView('persona')}

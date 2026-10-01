@@ -42,7 +42,7 @@ export function Welcome({ onStart, onSkip }: Props) {
             <dl className="mt-8 divide-y divide-ink/10 border-y border-ink/10">
               <div className="flex items-baseline justify-between gap-4 py-4">
                 <dt className="text-sm text-ink-soft">测评内容</dt>
-                <dd className="text-sm font-semibold text-ink">35 个日常选择</dd>
+                <dd className="text-sm font-semibold text-ink">按你年级定制的日常选择</dd>
               </div>
               <div className="flex items-baseline justify-between gap-4 py-4">
                 <dt className="text-sm text-ink-soft">结果用途</dt>

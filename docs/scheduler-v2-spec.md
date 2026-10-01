@@ -3,11 +3,11 @@
 > **文档定位**：本文件是「排程引擎 v2」的**唯一实现依据**。面向后续迭代与 AI Agent，要求「照着做就能落地」。
 > **上游输入**：`排程引擎-考虑因素汇总.md`（现状盘点）+ 本文件（目标设计与实施规格）。
 > **基线**：现有引擎 `src/lib/planner/*`。**当前核对基线 `1d695b94`（dev，2026-09-20 实测）**；初版基线 `cb3f39e`(dev)，核对日期 2026-09-15。
-> **状态**：Draft v1.8 —— **P0 / P1 / P2 三期均已落地并合入 `dev`**（实况见 §12.5.3 / §14 / §15）。
+> **状态**：Draft v1.9 —— **P0 / P1 / P2 三期均已落地并合入 `dev`**（实况见 §12.5.3 / §14 / §15）；**§16 现实性规则已生效（2026-09-28）**。
 > **当前远端基线（2026-09-20 21:35 实测）**：`dev` = **`1d695b94`**（较 9/17 的 `fb967dab` 前进 45 个提交）；`main` = **`3531e5ca`**（已发布「引擎 beta」，PR #26）。
 > **开放 PR 5 个**：**#19 → #21 → #23 是三层栈**（必须按序合入）、#31、#33。仓库**无 CI workflow** → 门禁全手工，§7.5 纪律必须人肉执行。
 > **干净检出实测（`1d695b94`）**：tsc `exit=0` · `tests/**` **299 / 301**（2 条失败系本机复用 `node_modules` 缺 `fast-check`，**非仓库缺陷**）· `scripts/**` **207 / 207** · golden **5 / 5** · 🔴 **`tests/p0-check.ts` **25 / 26**（红灯，见 §15.6 待办）。
-> **本次新增**：**§15「引擎访问点与接入裁决」**（2026-09-21，为「自研引擎接入 + 问卷改版 + 前端重构」三件事给出唯一插入点与 5 条裁定）。
+> **本次新增**：**§16「现实性规则」**（2026-09-28，RAY 批准：自习时长下限 / 同点合并 / 消食块与运动冷却 / 恢复带 / 长目标注水法；golden 重拍且「一变就停」降级）。
 >
 > **旧状态行（v1.7，已过期，仅留档）**：Draft v1.7 —— **P0 已推送**（`feat/planner-v2-p0` @ `31ddeb6` = **PR #2** head，base=`dev`，待合）。**CY 两条支线均已推远端**：**PR #3** `feat/events-and-diversity` @ `1691420d`（**base 已是 `dev`**；含 D-5 语义键 id / 校历事件注入 / 自习地点池轮换）；**PR #4** `feat/libao-wiring`（梨宝接线，新增 `features/libao/weekPlanForChat.ts`）——**远端 head 已由 `a6038e5` 前进到 `eb79b6a`**（2026-09-15 `git ls-remote` 复核）。三个 PR 的 base 现均为 `dev`（远端 `dev` = `1ddf03a`，**仍未含 P0**），而 `dev` 尚未吃到 P0 → ⚠️ **PR #2 与 PR #3 都把 `docs/scheduler-v2-spec.md` 记为「新增」，第二个合入者会撞 add/add 冲突**（处置见 §12.5.3）。**P1 的合入前置仍只剩「B review + 合入」一步**（见 §12.5.3）。B 侧求解器链（A2~A5 + §13.7 修复 + 旧测试修复）**已推远端**（`feat/planner-v2-p1` @ `0aef2f4`，见 §13.9）；**CY 的 P1 三请求已吸收**：① 见 §4.5.3、② 见 §4.5.2、③ 见 §7.5。**PR #2 的红灯已修并已推**（`feat/planner-v2-p0` @ `95532c1`）。
 > **与 `docs/engine-plan.md` 的关系**：4 处分歧已全部裁决（§12.3）；CY 的最终裁决与契约边界见 **§12.5**。
@@ -1123,6 +1123,7 @@ node --import ./tests/register.mjs --test "scripts/**/*.test.ts"
 | v1.6 | 2026-09-15 | **吸收 CY 的 P1 三请求 + 补验证纪律**：① **§4.5 重写**为 4.5.1/4.5.2/4.5.3 —— 新增 **`planWeek.ts`「两遍法唯一编排点」（请求 ②）**，并写明它**必须支持注入 provider 桩**（`planner/transfer.ts` 依赖 `lib/api.ts`，Node 里加载不了，不注入就进不了 `tests/`）；**`schedule.ts` 稳定入口（请求 ①）** 改为**实况表**（ref：`buildWeekPlan`= `schedule.ts:295`、`campusOfName` = `schedule.ts:85`；而 `buildPhasesFromCalendar` / `phaseOfWeek` 实为 **`buildPhases.ts:255/269`**，消费方分别是 `scripts/scheduler.test.ts:13-15` 与 `scripts/buildPhases.test.ts:8-10`）；② **新增 §7.5「干净检出必须通过」（请求 ③，定为硬纪律）**，含 6 条可执行条款；③ §12.5.3 订正 **PR #4 远端 head `a6038e5` → `eb79b6a`**（`git ls-remote` 复核），并新增「远端实况快照」段（含三条未跟踪分支的说明）；④ 头部状态行同步 v1.6；⑤ §13.9 补 B 侧**提交/推送状态**（9 提交 / 19 文件 +2984−24、四道门禁实跑结果）；⑥ **新发现并记录 PR #2 的红灯**：`31ddeb6` 的 `scripts/scheduler.test.ts:309` 断言 `campusOfName('第三教学楼')==='JG516'`，与 P0 后的 `null` 语义冲突（该函数自 P0 起未改动 → 断言必失败），修复在 `5a75357`，处置见 §12.5.3 / §13.9 |
 | v1.7 | 2026-09-15 | **P1 求解器重构落地并全绿**（新增 §13.10「落地实况」）：① 新增 `construct.ts`（T1.1，旧 7 步搬迁 + **语义键 id**）、`explain.ts`（T1.5）、`solver.ts` + `index.ts`（T1.4）、`planWeek.ts`（§4.5.2 两遍法）、`campusLookup.ts`（断环用）；② `schedule.ts` 改**门面**（对外形状一字未改，`buildWeekPlan` 转调 `construct`）；③ `model.ts` 加 `PlanRequest.tasks?` / `PlanResult.variants?` / `PlanVariant` / §6.4 的 `blockId()` 与 `isSemanticBlockId()`；④ `tests/` 新增 4 个文件 30 条（construct / solver / explain / planweek），**golden 快照已拍**（5 场景）；⑤ 门禁：typecheck 绿、`tests/**` **67-67**、`scripts/**` 48-48、`p0-check` 26-26、`golden-compare` **5/5**（⓪+AC-1+2+3）；⑥ **两处偏差已记账**：golden 快照提前拍摄（依据 `git diff 31ddeb6 HEAD -- src/lib/planner/schedule.ts` 为空）、T1.0 契约层未应用（补丁 `_devtools/t1.0-contract-patch.md`，等 CY 合入）；⑦ 记入**变异测试**证明验收有牙齿（`SOFT_BUFFER_MIN` 5→6 → ⓪/AC-2 精确报 776→775）；⑧ §13.6 改为逐项兑现表 |
 | v1.8 | 2026-09-21 | **P2 之后的实况对齐 + 新增 §15**（本轮为「自研引擎 / 问卷改版 / 前端重构」三件事定锚）：① **§5.5 回灌**：母本此前仍写 `free ×0`，而仓库副本已是 `×0.08` → 副本比母本新、违反 §7.5 条 6；本次把 CY 的 2026-09-19 裁决（`FREE_CHURN_FACTOR = 0.08`）连同理由与回归护栏**回灌母本**，两侧恢复逐字节一致；② 同一处**登记红灯**：副本声称「`p0-check.ts` 已同步更新」与实况不符（dev 实测 **25/26**，`:232` 仍断言 `churnCost === 0`）→ 记为 §15.6 待办；③ 头部状态行由 v1.7 刷新为 **v1.8**（基线 `1d695b94`、P0/P1/P2 全落地、开放 PR 5 个、无 CI、门禁实测值），旧行降级为「留档」；④ **新增 §15「引擎访问点与接入裁决」**：唯一插入点 `solver.ts::solveWeek` + 5 条裁定（id 禁含时间 / `PlanRequest`·`PlanResult` 契约不变 / `blank` 吸收为一等公民 / `CostBreakdown` 加 `source` / 三级锁保持非布尔）+「契约不变」声明与验收清单 |
+| v1.9 | 2026-09-28 | **新增 §16「现实性规则」**（RAY 批准）：① R1 自习最短时长分级（图书馆 60 / 其它 30，替换 `MIN_CHUNK=20`）；② R1' 同地点相邻自习自动合并 `mergeAdjacentStudy`（锁感知，构造末尾 + improve 后各跑一次）；③ R2 三餐后 25 分钟消食块 + 运动距上一餐 ≥120 分钟；④ R3 运动后 40 分钟恢复带（软块回避、硬约束不受限）；⑤ R4 长目标周预算改加权注水法 `waterFillAlloc`（替换先到先得）；⑥ **golden 全量重拍**（5 场景，`--force`）+「golden 一变就停」降级为常规流程（RAY 裁决：契约锁死 / 纯函数 / 语义键 id 三条不变）；⑦ `scripts/lock.test.ts` 重写为契约级断言；⑧ 门禁实跑：tsc 0 · tests 378/378 · scripts 164/164 · p0 26/26 · golden 5/5 |
 
 ### 12.2 待与 CY 确认清单（✅ 已全部裁决，2026-09-15）
 
@@ -1833,5 +1834,35 @@ P2 收敛需要「每轮增量问路」，而 `transferFactory` 的语义是「�
 
 ---
 
-*本规格书是设计依据。**P0 / P1 / P2 三期均已落地并合入 `dev`**（基线 `1d695b94`，2026-09-20 实测）；`main` = `3531e5ca`（引擎 beta）。契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**；P1 落地实况见 **§13.10**；P2 实施记录见 **§14**；**引擎接入点与 5 条裁定见 §15（2026-09-21）**。配套独立文档：《问卷规格书-面向排程引擎-2026-09-21.md》《前端架构规格书-2026-09-21.md》《页面与使用逻辑规格书-2026-09-21.md》。*
+## 16. 现实性规则（2026-09-28，RAY 批准）
+
+> 背景：RAY 使用中发现 4 处「技术上可行、生活上不合理」的排程结果，批准修改引擎。
+> 同时裁决：**golden「一变就停」降级为常规流程**（golden 变化 = 在 PR 里写明原因 + 重拍，
+> 不再视为事故）；但 **契约锁死（types.ts）、纯函数纪律、语义键 id 不含时间** 三条不变
+> （语义键 id 是锁机制的地基，动不得）。
+
+### 16.1 四条规则与实现位置
+
+| # | 规则 | 参数 | 实现位置 | 测试 |
+|---|---|---|---|---|
+| R1 | 图书馆自习**最短 60 分钟**、其它地点自习最短 30 分钟（旧 `MIN_CHUNK=20` 会排出 20 分钟图书馆自习） | `LIBRARY_STUDY_MIN=60` / `ON_SITE_STUDY_MIN=30`，`minStudyDurationAt(place)` | `construct.ts::fillStudy`（候选过短直接 `continue`） | `tests/dailyRealism.test.ts` |
+| R1' | 同地点相邻自习块**自动合并**（≤5 分钟间隙），避免「自习 1 小时结束换到同楼另一间」 | `mergeAdjacentStudy(blocks, lockedIds?)`（导出函数，锁感知：跳过 locked / `b.locked` / 紧邻锁块的块） | `construct.ts`（构造末尾）+ `solver.ts` §4.6（improve 后再跑一次，`mergedCount>0` 时重挂转场） | 同上 + `scripts/lock.test.ts` |
+| R2 | 三餐后**消食散步块**（25 分钟，activity，紧跟餐次）；**运动块与上一餐结束间隔 ≥120 分钟** | `DIGEST_WALK_MIN=25` / `MEAL_TO_SPORT_GAP_MIN=120`；id = `w{week}-activity-{meal.id}-digest` | `construct.ts::placeMeal`（产出 `MealPick.digest`）+ `placeTemplate`（sport 分支检查 `lastMealEnd`） | 同上 |
+| R3 | 运动后**恢复带 40 分钟**：软块（自习等）不得排入，硬约束（课程/锁块）不受限 | `RECOVERY_AFTER_SPORT_MIN=40`；`recoveryUntil` 时间戳沿日循环传递给 `placeTemplate` / `fillStudy` | `construct.ts` 日循环 | 同上 |
+| R4 | 长目标周预算改**加权注水法**（weighted max-min fairness，参考 Linux CFS/WFQ），替换旧的先到先得吃满上限 | `waterFillAlloc(demands, weights, capacity)`；权重 `WEIGHT_BY_PRIORITY={1:0.7,…,5:1.3}`；需求 `weeklyDemandMin(goal,…)`；学习/活动两桶分别注水，超桶给公平性 warning | `features/activity/goalDecompose.ts::goalTasksOf`（`decomposeGoal/V2` 新增 `budgetOverrideMin?`） | `tests/dailyRealism.test.ts`（waterFillAlloc 单测 + 公平分配用例） |
+
+### 16.2 连锁裁决
+
+- **golden 全量重拍**（2026-09-28，`--force`，5 场景）：R1/R1' 改变块数量与时长分布，属预期漂移。
+  此后 golden 变化按「PR 写明原因 + 重拍」处理，不再冻结开发。
+- **`scripts/scheduler.test.ts`** 两处「块长上限」断言（原 ≤45 / ≤90 分钟）放宽为 ≤240 分钟，
+  以兼容消食块与合并后的长自习块（自习合理上限仍由 policy 侧控制）。
+- **`scripts/lock.test.ts`** 重写为**契约级**断言：锁的验收不再锚定具体块/具体时刻，
+  只验「锁能还原 / 冲突如实报告 / 排不出必提示 / 转场随位置重算 / 幂等 / 确定性」六条契约，
+  夹具只调 `policy.dailyStudyMin=300` 保证前提成立。旧版锚定具体块 id 的写法随 golden 一起失效。
+- 引擎纯函数纪律未破：以上全部是构造期规则，无 fetch / 时钟 / 随机。
+
+---
+
+*本规格书是设计依据。**P0 / P1 / P2 三期均已落地并合入 `dev`**（基线 `1d695b94`，2026-09-20 实测）；`main` = `3531e5ca`（引擎 beta）。契约裁决见 **§12.5**（已生效，非建议）；对外入口与验证纪律见 **§4.5 / §7.5**；P1 落地实况见 **§13.10**；P2 实施记录见 **§14**；**引擎接入点与 5 条裁定见 §15（2026-09-21）**；**现实性规则见 §16（2026-09-28）**。配套独立文档：《问卷规格书-面向排程引擎-2026-09-21.md》《前端架构规格书-2026-09-21.md》《页面与使用逻辑规格书-2026-09-21.md》。*
 

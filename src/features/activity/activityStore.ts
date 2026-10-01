@@ -1,3 +1,4 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 /**
  * 活动登记 · 存储（R4.2 / R5）
  * ============================================================
@@ -100,7 +101,7 @@ function normalize(raw: unknown): ActivityEntry[] {
 
 export function loadActivityLog(): ActivityEntry[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw(KEY);
     return raw ? normalize(JSON.parse(raw)) : [];
   } catch {
     return [];
@@ -109,7 +110,7 @@ export function loadActivityLog(): ActivityEntry[] {
 
 export function saveActivityLog(list: readonly ActivityEntry[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    writeRaw(KEY, JSON.stringify(list));
   } catch (e) {
     console.warn('[activity] 写入失败：', e);
   }

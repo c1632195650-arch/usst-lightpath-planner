@@ -12,15 +12,20 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    open: true,
-    // 课表解析服务（timetable_parser/server.py，默认跑在 127.0.0.1:8765）。
-    // 走代理后浏览器看到的是同源 /timetable/*，天然绕开 CORS 与 OPTIONS 预检，
-    // 不用给 Python 端加任何跨域头。想直连就设 VITE_TIMETABLE_BASE。
+    // 不自动弹系统默认浏览器（RAY 2026-09-26：每次启动都蹦 Edge 窗口很扰人，测试时手动开 localhost:5173 即可）。
+    open: false,
+    // 课表解析 + 数据库 + 账号都由仓库根 serve.py 提供（默认 127.0.0.1:8000）。
+    // dev 模式走代理后浏览器看到的是同源 /timetable/*、/api/*，天然绕开 CORS。
+    // 旧版独立课表服务(8765)已退役：timetable_parser 包已归拢进 server/，由 serve.py 进程内加载。
     proxy: {
       '/timetable': {
-        target: 'http://127.0.0.1:8765',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (p: string) => p.replace(/^\/timetable/, ''),
+      },
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       },
     },
   },
@@ -28,9 +33,13 @@ export default defineConfig({
     port: 4173,
     proxy: {
       '/timetable': {
-        target: 'http://127.0.0.1:8765',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (p: string) => p.replace(/^\/timetable/, ''),
+      },
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       },
     },
   },

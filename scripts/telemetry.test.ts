@@ -74,16 +74,22 @@ test('normalize 只保留白名单字段 —— 调用方多传的键不会落�
 
 /* ---------------- 2. 零上报 ---------------- */
 
-test('track 全程不发任何网络请求（fetch 桩证明）', () => {
+test('track 除本机 kv 同步外不发任何请求（fetch 桩证明）', () => {
   stubStorage();
-  let called = 0;
+  const urls: string[] = [];
   const origFetch = (globalThis as { fetch?: unknown }).fetch;
-  (globalThis as { fetch?: unknown }).fetch = () => { called += 1; return Promise.resolve(); };
+  (globalThis as { fetch?: unknown }).fetch = (input: unknown) => {
+    urls.push(typeof input === 'string' ? input : String((input as RequestInfo).url ?? ''));
+    return Promise.resolve();
+  };
   try {
     track('search', { n: 3 });
     track('poi_view', { id: 'canteen1' });
     track('degrade', { id: 'rag-offline' });
-    assert.equal(called, 0, '埋点绝不能有上报请求');
+    // 2026-09-27 起遥测数据经 persistence 双写镜像到本机 serve.py（/api/db/*），
+    // 这是**本机数据同步**不是上报。除此之外的任何目的地（= 外报）都算违规。
+    const outside = urls.filter((u) => !u.startsWith('/api/db/'));
+    assert.deepEqual(outside, [], '埋点绝不能有本机数据同步之外的网络请求');
   } finally {
     (globalThis as { fetch?: unknown }).fetch = origFetch;
   }
