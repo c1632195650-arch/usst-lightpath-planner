@@ -25,6 +25,8 @@ import type { CorrectionRule } from './corrections.ts';
 // 三线融合裁决①（2026-10-01）：恢复 beta-v2 WP5 的生活模式引擎通道 ——
 // golden 语料不带 lifeMode，默认路径零改动（opt-in）。
 import { applyLifeMode } from './lifeModePolicy.ts';
+// E 批 E1（2026-09-28）：知识库钳制层。开关缺省关闭 = 零行为变化（既有调用方无感）。
+import { knowledgeWired, policyPatchFromKnowledge } from './knowledge.ts';
 
 /** 校历里与本模块相关的最小信息（从 constants/term.ts 的 TermCalendar 取） */
 export interface PhaseCalendar {
@@ -375,8 +377,16 @@ export function buildPhases(
     // Ray 线 2026-09-30 移除的是「只等价一个乘数」的旧 UI 双轨；此处保留的是
     // WP5 参数化版本（lifeModeExtras 结构通道见 lifeModePolicy.ts / construct.ts）。
     const lm = applyLifeMode(personaPolicy, lifeMode);
-    const policy = applyCorrectionsToPolicy(lm.policy, eff);
-    const rs = [...reasons];
+    /**
+     * E1：知识库钳制（人群底线）—— 位置刻意在 **画像/生活模式之后、用户校正之前**：
+     * 知识赢过引擎/画像的自动调整，但**永远输给用户明确说过的话**（corrections 最后生效）。
+     * 开关关闭时 `kb.patch` 为空对象 → `{...lm.policy}` 逐字段等于 lm.policy，行为零变化。
+     */
+    const kb = knowledgeWired()
+      ? policyPatchFromKnowledge(kind, lm.policy)
+      : { patch: {} as Partial<PhasePolicy>, reasons: [] as string[] };
+    const policy = applyCorrectionsToPolicy({ ...lm.policy, ...kb.patch }, eff);
+    const rs = [...reasons, ...kb.reasons];
     // 生效了就必须**说出来**。否则用户切了模式 / 提了要求却看不到任何痕迹，
     // 会以为功能坏了 —— 这是本项目一直坚持的「可解释」纪律。
     if (lm.note) rs.push(lm.note);

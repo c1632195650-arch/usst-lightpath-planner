@@ -1,0 +1,100 @@
+{"id":"i01","scene":"intent","q":"我明天有一个学生会面试","expect":{"action":true,"intent":"create","slots":{"title":"学生会面试","when_text":"明天"}}}
+{"id":"i02","scene":"intent","q":"我周五下午要在学生会面试","expect":{"action":true,"intent":"create","slots":{"title":"学生会面试","when_text":"周五下午"}}}
+{"id":"i03","scene":"intent","q":"明天下午三点我要去体检","expect":{"action":true,"intent":"create","slots":{"title":"体检","when_text":"明天下午三点"}}}
+{"id":"i04","scene":"intent","q":"我后天有一场答辩","expect":{"action":true,"intent":"create","slots":{"title":"答辩","when_text":"后天"}}}
+{"id":"i05","scene":"intent","q":"学校下周有宣讲会，我想去听","expect":{"action":true,"intent":"create","slots":{"title":"宣讲会","when_text":"下周"}}}
+{"id":"i06","scene":"intent","q":"周六上午我要练车","expect":{"action":true,"intent":"create","slots":{"title":"练车","when_text":"周六上午"}}}
+{"id":"i07","scene":"intent","q":"今晚我要赶一个作业","expect":{"action":true,"intent":"create","slots":{"title":"作业","when_text":"今晚"}}}
+{"id":"i08","scene":"intent","q":"我下周三有答辩，想提前准备一下","expect":{"action":true,"intent":"create","slots":{"title":"答辩","when_text":"下周三"}}}
+{"id":"i09","scene":"intent","q":"十一月我要考教资","expect":{"action":true,"intent":"add_deadline","slots":{"title":"教资","when_text":"十一月"}}}
+{"id":"i10","scene":"intent","q":"我要考驾照，科目一12月1号考","expect":{"action":true,"intent":"add_deadline","slots":{"title":"科目一","when_text":"12月1号"}}}
+{"id":"i11","scene":"intent","q":"帮我安排这周的复习计划","expect":{"action":true,"intent":"create","slots":{"title":"复习"}}}
+{"id":"i12","scene":"intent","q":"我打算十月中旬开始备赛建模比赛","expect":{"action":true,"intent":"create","slots":{"title":"建模比赛","when_text":"十月中旬"}}}
+{"id":"i13","scene":"intent","q":"下周我要准备英语六级","expect":{"action":true,"intent":"create","slots":{"title":"英语六级","when_text":"下周"}}}
+{"id":"i14","scene":"intent","q":"我想每天晚上背半小时单词","expect":{"action":true,"intent":"create","slots":{"title":"背单词","perWeekCount":7,"durationMin":30,"window_text":"晚上"}}}
+{"id":"i15","scene":"intent","q":"明天下午两点到四点在图书馆自习","expect":{"action":true,"intent":"create","slots":{"title":"自习","when_text":"明天下午两点到四点","place":"图书馆"}}}
+{"id":"i16","scene":"intent","q":"这周六我要去体检","expect":{"action":true,"intent":"create","slots":{"title":"体检","when_text":"这周六"}}}
+{"id":"i17","scene":"intent","q":"我报了12月的六级，帮我规划复习","expect":{"action":true,"intent":"create","slots":{"title":"六级复习","month":12}}}
+{"id":"i18","scene":"intent","q":"把高数复习挪到周四下午","expect":{"action":true,"intent":"reschedule","slots":{"targetHint":"高数复习","when_text":"周四下午"}}}
+{"id":"i19","scene":"intent","q":"取消周四的社团活动","expect":{"action":true,"intent":"cancel","slots":{"targetHint":"社团活动"}}}
+{"id":"i20","scene":"intent","q":"周三下午别排东西","expect":{"action":true,"intent":"hold","slots":{"when_text":"周三下午"}}}
+{"id":"i21","scene":"intent","q":"我这周忙不忙","expect":{"action":true,"intent":"query","slots":{}}}
+{"id":"i22","scene":"intent","q":"把周三的社团改成备赛","expect":{"action":true,"intent":"replace","slots":{"targetHint":"社团"}}}
+{"id":"i23","scene":"intent","q":"周五晚上班级聚餐","expect":{"action":true,"intent":"create","slots":{"title":"聚餐","when_text":"周五晚上"}}}
+{"id":"i24","scene":"intent","q":"我要准备期末考试，一共30小时","expect":{"action":true,"intent":"create","slots":{"title":"期末考试","totalHours":30}}}
+{"id":"i25","scene":"intent","q":"期末周之前把实验报告写完","expect":{"action":true,"intent":"create","slots":{"title":"实验报告","when_text":"期末周之前"}}}
+{"id":"i26","scene":"intent","q":"我打算每天背50个单词","expect":{"action":true,"intent":"create","slots":{"title":"背单词","perWeekCount":7}}}
+{"id":"i27","scene":"intent","q":"这周末我要参加志愿者活动","expect":{"action":true,"intent":"create","slots":{"title":"志愿者活动","when_text":"这周末"}}}
+{"id":"i28","scene":"intent","q":"帮我把明天的自习挪到晚上","expect":{"action":true,"intent":"reschedule","slots":{"targetHint":"自习"}}}
+{"id":"i29","scene":"intent","q":"下周一起我每天要晨跑","expect":{"action":true,"intent":"create","slots":{"title":"晨跑","perWeekCount":7,"when_text":"下周一"}}}
+{"id":"i30","scene":"intent","q":"隔天去一次健身房，每次一小时","expect":{"action":true,"intent":"create","slots":{"title":"健身房","perWeekCount":4,"durationMin":60}}}
+{"id":"a01","scene":"answer","q":"十月中旬开始；一共20小时","asked":["when","effort"],"expect":{"answers":{"when":"十月中旬开始","effort":"一共20小时"}}}
+{"id":"a02","scene":"answer","q":"周五下午吧","asked":["when"],"expect":{"answers":{"when":"周五下午"}}}
+{"id":"a03","scene":"answer","q":"每周3次每次1小时","asked":["effort"],"expect":{"answers":{"effort":"每周3次每次1小时"}}}
+{"id":"a04","scene":"answer","q":"就叫高数复习","asked":["title"],"expect":{"answers":{"title":"高数复习"}}}
+{"id":"a05","scene":"answer","q":"高数复习那一块","asked":["target"],"expect":{"answers":{"target":"高数复习"}}}
+{"id":"a06","scene":"answer","q":"1. 下周三 2. 每次2小时","asked":["when","effort"],"expect":{"answers":{"when":"下周三","effort":"每次2小时"}}}
+{"id":"a07","scene":"answer","q":"十月八号；一共十五小时","asked":["when","effort"],"expect":{"answers":{"when":"十月八号","effort":"一共十五小时"}}}
+{"id":"a08","scene":"answer","q":"每天两小时","asked":["effort"],"expect":{"answers":{"effort":"每天两小时"}}}
+{"id":"a09","scene":"answer","q":"还没定，到时候再说","asked":["when"],"expect":{"answers":{"when":"还没定，到时候再说"}}}
+{"id":"a10","scene":"answer","q":"下学期开学吧；每周四次、每次90分钟","asked":["when","effort"],"expect":{"answers":{"when":"下学期开学","effort":"每周四次、每次90分钟"}}}
+{"id":"a11","scene":"answer","q":"数学建模备赛","asked":["title"],"expect":{"answers":{"title":"数学建模备赛"}}}
+{"id":"a12","scene":"answer","q":"一共就10个小时吧","asked":["effort"],"expect":{"answers":{"effort":"一共就10个小时"}}}
+{"id":"a13","scene":"answer","q":"周四下午；一次一小时","asked":["when","effort"],"expect":{"answers":{"when":"周四下午","effort":"一次一小时"}}}
+{"id":"a14","scene":"answer","q":"高数","asked":["target"],"expect":{"answers":{"target":"高数"}}}
+{"id":"a15","scene":"answer","q":"明天上午","asked":["when"],"expect":{"answers":{"when":"明天上午"}}}
+{"id":"a16","scene":"answer","q":"每次半小时就够了","asked":["effort"],"expect":{"answers":{"effort":"每次半小时"}}}
+{"id":"a17","scene":"answer","q":"时间是这周五，投入一共6小时","asked":["when","effort"],"expect":{"answers":{"when":"这周五","effort":"一共6小时"}}}
+{"id":"a18","scene":"answer","q":"备赛计划","asked":["title"],"expect":{"answers":{"title":"备赛计划"}}}
+{"id":"a19","scene":"answer","q":"下周开始；说不好每周几次","asked":["when","effort"],"expect":{"answers":{"when":"下周开始"}}}
+{"id":"a20","scene":"answer","q":"大概二十个学时吧","asked":["effort"],"expect":{"answers":{"effort":"二十个学时"}}}
+{"id":"b01","scene":"intent","q":"四六级什么时候报名","expect":{"action":false}}
+{"id":"b02","scene":"intent","q":"图书馆几点开门","expect":{"action":false}}
+{"id":"b03","scene":"intent","q":"今天校园里有什么讲座","expect":{"action":false}}
+{"id":"b04","scene":"intent","q":"怎么复习高数","expect":{"action":false}}
+{"id":"b05","scene":"intent","q":"我要不要报名四六级","expect":{"action":false}}
+{"id":"b06","scene":"intent","q":"学校有什么社团","expect":{"action":false}}
+{"id":"b07","scene":"intent","q":"明天有雨，记得带伞","expect":{"action":false}}
+{"id":"b08","scene":"intent","q":"食堂二楼有什么好吃的","expect":{"action":false}}
+{"id":"b09","scene":"intent","q":"奖学金怎么申请","expect":{"action":false}}
+{"id":"b10","scene":"intent","q":"你觉得我该选哪个方向","expect":{"action":false}}
+{"id":"d01","scene":"dialog","q":"图书馆几点开门","state":{"topic":null,"missStreak":0},"expect":{"act":"chit_chat"}}
+{"id":"d02","scene":"dialog","q":"今天食堂有什么好吃的","state":{"topic":null,"missStreak":0},"expect":{"act":"chit_chat"}}
+{"id":"d03","scene":"dialog","q":"学校最近有什么社团活动","state":{"topic":{"phase":"blocked","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"prior_failed_title":"出去玩","blocking":{"kind":"no_placement","blocks":[{"idx":0,"title":"操场跑步","hint":"周一(9.28) 17:55–18:55"}]}},"missStreak":0},"expect":{"act":"chit_chat"}}
+{"id":"d04","scene":"dialog","q":"四六级什么时候报名","state":{"topic":null,"missStreak":0},"expect":{"act":"chit_chat"}}
+{"id":"d05","scene":"dialog","q":"你好呀","state":{"topic":null,"missStreak":0},"expect":{"act":"chit_chat"}}
+{"id":"d06","scene":"dialog","q":"好","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"confirm_draft"}}
+{"id":"d07","scene":"dialog","q":"可以，就这么排","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"confirm_draft"}}
+{"id":"d08","scene":"dialog","q":"行","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"confirm_draft"}}
+{"id":"d09","scene":"dialog","q":"嗯","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"confirm_draft"}}
+{"id":"d10","scene":"dialog","q":"先不排","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"discard_topic"}}
+{"id":"d11","scene":"dialog","q":"算了，不弄了","state":{"topic":{"phase":"collect","intent":"create","slots":{"title":"数学建模备赛","when_text":"十月中旬"},"asked":["effort"]},"missStreak":0},"expect":{"act":"discard_topic"}}
+{"id":"d12","scene":"dialog","q":"不用了","state":{"topic":{"phase":"blocked","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"prior_failed_title":"出去玩","blocking":{"kind":"no_placement","blocks":[{"idx":0,"title":"操场跑步","hint":"周一(9.28) 17:55–18:55"}]}},"missStreak":0},"expect":{"act":"discard_topic"}}
+{"id":"d13","scene":"dialog","q":"算了，别问了","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"discard_topic"}}
+{"id":"d14","scene":"dialog","q":"我要报名数学建模，九月中旬比赛，帮我规划备赛","state":{"topic":null,"missStreak":0},"expect":{"act":"new_intent","intent":"create"}}
+{"id":"d15","scene":"dialog","q":"那把操场跑步替换成出去玩一小时吧","state":{"topic":{"phase":"blocked","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"prior_failed_title":"出去玩","blocking":{"kind":"no_placement","blocks":[{"idx":0,"title":"操场跑步","hint":"周一(9.28) 17:55–18:55"}]}},"missStreak":0},"expect":{"act":"new_intent","intent":"replace"}}
+{"id":"d16","scene":"dialog","q":"等等，先帮我把周五的班会排上","state":{"topic":{"phase":"collect","intent":"create","slots":{"title":"数学建模备赛","when_text":"十月中旬"},"asked":["effort"]},"missStreak":0},"expect":{"act":"new_intent","intent":"create"}}
+{"id":"d17","scene":"dialog","q":"周三下午别排东西","state":{"topic":null,"missStreak":0},"expect":{"act":"new_intent","intent":"hold"}}
+{"id":"d18","scene":"dialog","q":"取消明天的自习","state":{"topic":null,"missStreak":0},"expect":{"act":"new_intent","intent":"cancel"}}
+{"id":"d19","scene":"dialog","q":"把高数复习挪到周四","state":{"topic":null,"missStreak":0},"expect":{"act":"new_intent","intent":"reschedule"}}
+{"id":"d20","scene":"dialog","q":"随便吧，到时候看","state":{"topic":{"phase":"collect","intent":"create","slots":{"title":"数学建模备赛","when_text":"十月中旬"},"asked":["effort"]},"missStreak":0},"expect":{"act":"ask_slot","slot":"effort"}}
+{"id":"d21","scene":"dialog","q":"哪个时间都行，你看着办","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"}}
+{"id":"d22","scene":"dialog","q":"还没想好","state":{"topic":{"phase":"collect","intent":"create","slots":{"title":"四六级真题","perWeekCount":3},"asked":["when"]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"}}
+{"id":"d23","scene":"dialog","q":"还是把刚才那件没排成的事排上吧","state":{"topic":{"phase":"blocked","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"prior_failed_title":"出去玩","blocking":{"kind":"no_placement","blocks":[{"idx":0,"title":"操场跑步","hint":"周一(9.28) 17:55–18:55"}]}},"missStreak":0},"expect":{"act":"resume_topic"}}
+{"id":"d24","scene":"dialog","q":"就按之前说的办","state":{"topic":{"phase":"blocked","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"prior_failed_title":"出去玩","blocking":{"kind":"no_placement","blocks":[{"idx":0,"title":"操场跑步","hint":"周一(9.28) 17:55–18:55"}]}},"missStreak":0},"expect":{"act":"resume_topic"}}
+{"id":"d25","scene":"dialog","q":"先别管这个，回到刚才那个","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"数学建模备赛","when_text":"十月中旬"},"asked":[],"draft_key":5,"prior_failed_title":"出去玩"},"missStreak":0},"expect":{"act":"resume_topic"}}
+{"id":"d26","scene":"dialog","q":"第一个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":0}}
+{"id":"d27","scene":"dialog","q":"第2个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":1}}
+{"id":"d28","scene":"dialog","q":"周三的那个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":0}}
+{"id":"d29","scene":"dialog","q":"周五下午那块","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":1}}
+{"id":"d30","scene":"dialog","q":"就周三那块","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":0}}
+{"id":"d31","scene":"dialog","q":"那就去掉周五的","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":1}}
+{"id":"d32","scene":"dialog","q":"取消周三 17:55 那次","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":0}}
+{"id":"d33","scene":"dialog","q":"第二个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"},{"idx":2,"title":"英语早读","hint":"周二(9.29) 07:30–08:00"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":1}}
+{"id":"d34","scene":"dialog","q":"第四个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
+{"id":"d35","scene":"dialog","q":"排第九个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
+{"id":"d36","scene":"dialog","q":"把运动会替换掉","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"new_intent","intent":"replace"},"negative":true}
+{"id":"d37","scene":"dialog","q":"上周三的操场跑步也取消","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"操场跑步","targetHint":"操场跑步"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"操场跑步","hint":"周三(9.30) 17:55–18:55"},{"idx":1,"title":"操场跑步","hint":"周五(10.2) 17:55–18:55"}]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
+{"id":"d38","scene":"dialog","q":"第一个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"自习","targetHint":"自习"},"asked":[],"pick_kind":"cancel","candidates":[]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
+{"id":"d39","scene":"dialog","q":"对，就按你说的排","state":{"topic":null,"missStreak":0},"expect":{"act":"ask_slot","slot":"title"},"negative":true}
+{"id":"d40","scene":"dialog","q":"嗯…让我再想想","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}

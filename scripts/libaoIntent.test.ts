@@ -16,6 +16,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyClarifyAnswer,
+  applyClarifyAnswers,
+  applyClarifyFragments,
   describeSlots,
   detectIntent,
   GOAL_NOUNS,
@@ -28,12 +30,19 @@ import {
   extractWhen,
   extractWindow,
   looksLikeAction,
+  mergeLlmPrimary,
   mergeSlots,
   missingSlots,
   parseGoalIntent,
   parseIntentSlots,
   resolveWhen,
+  spanDurationMin,
+  splitAnswers,
+  stripAnswerNumbering,
+  topQuestionPairs,
+  questionsForSlots,
   topQuestions,
+  type SlotKey,
 } from '@/features/libao/libaoIntent';
 
 /** 用户原话（本功能的需求来源，逐字保留） */
@@ -525,4 +534,271 @@ test('W5 验收回归：改期/取消语族过 looksLikeAction，parseGoalIntent
   assert.equal(c.action, true);
   assert.equal(c.slots.intent, 'cancel');
   assert.equal(c.slots.title, '复习');
+});
+
+/* ============================================================
+ * 十、S 批 S1：分号批量应答协议（splitAnswers / applyClarifyAnswers）
+ * 诉求（CY 原话）：一次可多问几个问题，用户用分号分隔回答。
+ * RV 锚点：删编号剥离 → 编号用例红；删位置对应改回整句解析 → 乱序用例红。
+ * ========================================================== */
+
+/** 双问种子：缺 when + effort（topQuestionPairs 顺序 = ['when','effort']） */
+const DOUBLE_SEED = parseIntentSlots('我要报名数学建模，帮我规划备赛', TODAY);
+const DOUBLE_ASKED: SlotKey[] = ['when', 'effort'];
+
+test('S1 切分：无分隔符 → 单段原样（单段回答走旧协议也成立）', () => {
+  assert.deepEqual(splitAnswers('一共20小时'), ['一共20小时']);
+  assert.deepEqual(splitAnswers('  每周3次、每次2小时  '), ['每周3次、每次2小时']);
+});
+
+test('S1 切分：中文分号 / 英文分号 / 换行 都是分隔符', () => {
+  assert.deepEqual(splitAnswers('周五下午；每天两小时'), ['周五下午', '每天两小时']);
+  assert.deepEqual(splitAnswers('周五下午;每天两小时'), ['周五下午', '每天两小时']);
+  assert.deepEqual(splitAnswers('周五下午\n每天两小时'), ['周五下午', '每天两小时']);
+});
+
+test('S1 切分：编号前缀剥离（用户照编号答是我们的渲染引出来的）', () => {
+  assert.equal(stripAnswerNumbering('1. 周五下午'), '周五下午');
+  assert.equal(stripAnswerNumbering('1、每天两小时'), '每天两小时');
+  assert.equal(stripAnswerNumbering('2．十月中旬开始'), '十月中旬开始');
+  assert.equal(stripAnswerNumbering('（1）周五下午'), '周五下午');
+  assert.equal(stripAnswerNumbering('(2) 每天两小时'), '每天两小时');
+  assert.equal(stripAnswerNumbering('①周五下午'), '周五下午');
+  assert.equal(stripAnswerNumbering('1️⃣周五下午'), '周五下午');
+  assert.equal(stripAnswerNumbering('第一问：十月中旬'), '十月中旬');
+  // RV 锚点：删 stripAnswerNumbering 后本条红
+  assert.deepEqual(splitAnswers('1. 周五下午；2. 每天两小时'), ['周五下午', '每天两小时']);
+});
+
+test('S1 切分：「1.5小时」的小数点不是编号 —— 剥错会把数字吃掉', () => {
+  assert.equal(stripAnswerNumbering('1.5小时'), '1.5小时');
+  assert.deepEqual(splitAnswers('1.5小时'), ['1.5小时']);
+});
+
+test('S1 切分：空段丢弃；全空白 → 空数组', () => {
+  assert.deepEqual(splitAnswers('周五下午；；每天两小时'), ['周五下午', '每天两小时']);
+  assert.deepEqual(splitAnswers('；；'), []);
+  assert.deepEqual(splitAnswers('   '), []);
+  assert.deepEqual(splitAnswers(''), []);
+});
+
+test('S1 批量应答：分号一句答完两问，双槽齐清（CY 诉求的验收形状）', () => {
+  assert.ok(DOUBLE_SEED.missing.includes('when') && DOUBLE_SEED.missing.includes('effort'));
+  const r = applyClarifyAnswers('十月中旬开始；一共20小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, true);
+  assert.ok(r.failed.length === 0, `failed=${JSON.stringify(r.failed)}`);
+  assert.deepEqual(r.slots.missing, []);
+  assert.equal(r.slots.totalHours, 20);
+  assert.ok(r.slots.when, 'when 没被第 1 段补上');
+});
+
+test('S1 批量应答：「周五下午；每天两小时」—— when 认星期、effort 认节奏', () => {
+  const r = applyClarifyAnswers('周五下午；每天两小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, true);
+  assert.deepEqual(r.slots.missing, []);
+  assert.equal(r.slots.when?.weekday, 5, '第 1 段「周五下午」没被收进 when');
+  assert.equal(r.slots.perWeekCount, 7);
+  assert.equal(r.slots.durationMin, 120);
+});
+
+test('T批 位置对应升级 —— 顺序颠倒的两段各归各位（跨槽收编；申报：S1 旧断言「不跨段」已翻转）', () => {
+  // 旧语义（S1）：对不上位就整段丢弃 → contributed=false。
+  // T批换向（CY 真机翻车 2026-09-27 晚）：问 when/effort、用户颠倒着答 ——
+  // 两段都有效，各归各位才是对的；丢信息会连累 missStreak 作废会话。
+  // 仍守的不变量：解析不出的段绝不硬造（见「答非所问不硬吃」用例）。
+  const r = applyClarifyAnswers('一共20小时；十月中旬开始', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, true, '两段都答上了（只是顺序颠倒）');
+  assert.deepEqual(r.slots.missing, []);
+  assert.equal(r.slots.totalHours, 20);
+  assert.equal(r.slots.when?.month, 10);
+});
+
+test('S1 批量应答：段多于问 —— 多说的话按全句兜底再收一次，不白说', () => {
+  const r = applyClarifyAnswers('一共20小时；十月中旬开始', DOUBLE_SEED, ['effort'], TODAY);
+  assert.equal(r.contributed, true);
+  assert.equal(r.slots.totalHours, 20, '第 1 问（effort）没被答上');
+  assert.ok(r.slots.when, '多出来的第 2 段被全句兜底收进 when');
+});
+
+test('S1 批量应答：段少于问 —— 没答到的槽进 failed，只重问这些', () => {
+  const r = applyClarifyAnswers('十月中旬开始', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, true);
+  assert.deepEqual(r.failed, ['effort']);
+  assert.ok(r.slots.missing.includes('effort'));
+  assert.ok(!r.slots.missing.includes('when'), '已答上的 when 不许再问一遍');
+});
+
+test('S1 批量应答：编号 + 分号的完整形态（端到端照抄追问渲染的格式）', () => {
+  const r = applyClarifyAnswers('1. 十月中旬开始 2. 一共20小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, true);
+  assert.deepEqual(r.slots.missing, []);
+});
+
+test('T批 跨槽收编 —— 「周四下午」答「投入」问：时间被收进 when，只重问 effort（申报：S1 旧断言「不硬塞」已翻转）', () => {
+  // 旧语义（S1）：时间表达塞不进 effort → 整段丢弃。
+  // T批换向：这正是 CY 真机翻车场景 —— 有效信息必须收进它属于的槽位，
+  // effort 仍记 failed 只重问它；真正的答非所问（「图书馆几点开门」）另有用例守。
+  const r = applyClarifyAnswers('周四下午', DOUBLE_SEED, ['effort'], TODAY);
+  assert.equal(r.contributed, true, '时间信息被收进 when，不再当无关消息');
+  assert.equal(r.slots.when?.weekday, 4);
+  assert.deepEqual(r.failed, ['effort']);
+  assert.ok(r.slots.missing.includes('effort'));
+});
+
+test('S1 批量应答：答非所问不硬吃（contributed=false，failed=全部问过的）', () => {
+  const r = applyClarifyAnswers('图书馆几点开门', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.equal(r.contributed, false);
+  assert.deepEqual(r.failed.sort(), ['effort', 'when']);
+});
+
+test('S1 批量应答：asked 为空（v1 兼容 / 未接线出口）→ 退回旧协议且结果一致', () => {
+  const oldWay = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  const newWay = applyClarifyAnswers('每周 3 次、每次 2 小时', CLARIFY_SEED, [], TODAY);
+  assert.equal(newWay.contributed, oldWay.contributed);
+  assert.equal(newWay.slots.durationMin, oldWay.slots.durationMin);
+  assert.equal(newWay.slots.perWeekCount, oldWay.slots.perWeekCount);
+  assert.deepEqual(newWay.slots.missing, oldWay.slots.missing);
+});
+
+test('S1 批量应答：单段 + asked 对位 = 旧协议的超集（老能力一条不丢）', () => {
+  // CLARIFY_SEED 缺 effort，单段节奏回答两种协议都该收
+  const oldWay = applyClarifyAnswer('每周 3 次、每次 2 小时', CLARIFY_SEED, TODAY);
+  const newWay = applyClarifyAnswers('每周 3 次、每次 2 小时', CLARIFY_SEED, ['effort'], TODAY);
+  assert.equal(newWay.contributed, true);
+  assert.equal(newWay.slots.durationMin, oldWay.slots.durationMin);
+  assert.equal(newWay.slots.perWeekCount, oldWay.slots.perWeekCount);
+  assert.deepEqual(newWay.slots.missing, []);
+});
+
+test('S1 批量应答：已听懂的槽位不许被回答改写（merge 纪律在段级同样生效）', () => {
+  const r = applyClarifyAnswers('一共20小时；帮我排英语六级', DOUBLE_SEED, ['effort'], TODAY);
+  assert.equal(r.slots.title, DOUBLE_SEED.title, 'title 被多出来的段改写了');
+  assert.equal(r.slots.totalHours, 20);
+});
+
+test('S1 批量应答：确定性 —— 同输入同输出', () => {
+  const a = applyClarifyAnswers('周五下午；每天两小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  const b = applyClarifyAnswers('周五下午；每天两小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
+  assert.deepEqual(a, b);
+});
+
+test('S1 追问清单：topQuestionPairs 的 slot 与 question 一一对应，且与 topQuestions 同序同文', () => {
+  const pairs = topQuestionPairs(DOUBLE_SEED, 2);
+  assert.deepEqual(pairs.map((p) => p.slot), ['when', 'effort'], '顺序即优先级：when 先于 effort');
+  assert.deepEqual(pairs.map((p) => p.question), topQuestions(DOUBLE_SEED, 2), '带槽位版的话术必须与旧版逐字一致');
+});
+
+test('S1 追问清单：questionsForSlots 只按指定槽位出话术（failed 重问专用，不走截断排序）', () => {
+  const pairs = questionsForSlots(DOUBLE_SEED, ['effort', 'when']);
+  assert.deepEqual(pairs.map((p) => p.slot), ['effort', 'when'], '调用方给的顺序必须保留（对位重问依赖它）');
+  assert.ok(pairs[0].question.length > 0);
+});
+
+test('S1 端到端：追问两问 → 用户分号一句答完 → missing 清空可进干跑', () => {
+  // 完整链路：种子句 → topQuestionPairs 记 asked → 分号回答 → missing 清零
+  const seed = parseIntentSlots('帮我安排10月2号的数学建模比赛备赛计划', TODAY);
+  const asked = topQuestionPairs(seed).map((p) => p.slot);
+  const r = applyClarifyAnswers('每次 2 小时；上午吧', seed, asked, TODAY);
+  assert.equal(r.contributed, true);
+  assert.deepEqual(r.slots.missing, [], '按位应答后还有缺口 = 白追问一轮');
+});
+
+/* ============================================================
+ * T 批 · 理解层换向（LLM 先看 + asked 是提示不是过滤器）
+ * CY 真机翻车 2026-09-27 晚：问「占多久」，用户答「周二晚上；正好是操场
+ * 跑步的时间」→ 有效信息被整段丢弃 → missStreak 连累会话作废 → 掉 RAG。
+ * ========================================================== */
+
+test('T批 跨槽收编：问投入、答了时间 → when 被 refine 收进，effort 记 failed，不再当无关消息', () => {
+  const seed = parseIntentSlots('这周我有一个面试', TODAY); // title=面试, when=这周, missing=[effort]
+  const r = applyClarifyAnswers('周二晚上；正好是操场跑步的时间', seed, ['effort'], TODAY);
+  assert.equal(r.contributed, true, '用户答了有效信息，绝不能记成「完全无关」');
+  assert.equal(r.slots.when?.weekday, 2, '「周二晚上」应替换掉粗粒度的「这周」');
+  assert.deepEqual(r.failed, ['effort'], '只重问真正没答上的投入');
+});
+
+test('T批 时段=时长：「周二晚上；6点到7点」一句补齐 when+duration，missing 清空', () => {
+  const seed = parseIntentSlots('这周我有一个面试', TODAY);
+  const r = applyClarifyAnswers('周二晚上；6点到7点', seed, ['effort'], TODAY);
+  assert.equal(r.contributed, true);
+  assert.equal(r.slots.durationMin, 60, '「6点到7点」是对「占多久」的回答 = 1 小时');
+  assert.deepEqual(r.slots.missing, [], '两条信息都收进后应直接进干跑，不再追问');
+});
+
+test('T批 spanDurationMin：阿拉伯/中文/半点全覆盖，非法区间拒绝', () => {
+  assert.equal(spanDurationMin('6点到7点'), 60);
+  assert.equal(spanDurationMin('六点半到八点'), 90);
+  assert.equal(spanDurationMin('晚上9点到11点'), 120);
+  assert.equal(spanDurationMin('7点到7点'), undefined, '零时长无意义');
+  assert.equal(spanDurationMin('周五下午'), undefined);
+});
+
+test('T批 when 权威替换：直接回答 when 追问时，改口无条件生效', () => {
+  const seed = parseIntentSlots('我要报名数学建模，下周三开始备赛', TODAY);
+  const r = applyClarifyAnswers('改到十月中旬吧', seed, ['when'], TODAY);
+  assert.equal(r.contributed, true);
+  assert.equal(r.slots.when?.month, 10, '用户改了主意，旧值「下周三」必须让位');
+});
+
+test('T批 碎片跨槽：LLM 归位出的 asked 之外槽位也要收（applyClarifyFragments）', () => {
+  const seed = parseIntentSlots('我要报名数学建模，帮我规划备赛', TODAY); // missing=[when, effort]
+  const r = applyClarifyFragments({ effort: '一共20小时', when: '周五下午' }, seed, ['effort'], TODAY);
+  assert.equal(r.contributed, true);
+  assert.equal(r.slots.totalHours, 20);
+  assert.equal(r.slots.when?.weekday, 5, '碎片里的 when 不该因为「没被问到」被丢掉');
+  assert.deepEqual(r.failed, []);
+});
+
+test('T批 llmJudge 主理解：无关键词陈述句被 LLM 判 action → LLM 槽位为主 + 规则换算日期', async () => {
+  const outcome = await parseGoalIntent('周二晚上；6点到7点', {
+    today: TODAY,
+    llmJudge: async () => ({
+      action: true,
+      intent: 'create',
+      patch: { title: '面试', when: { text: '周二晚上', kind: 'relative', relativeWeeks: 0, weekday: 2 } },
+      confidence: 0.9,
+    }),
+  });
+  assert.equal(outcome.action, true);
+  assert.equal(outcome.source, 'llm+rule');
+  assert.equal(outcome.slots.title, '面试', 'LLM 主理解：patch.title 覆盖规则的空值');
+  assert.equal(outcome.slots.dateFrom, '2026-09-08', '日期换算仍在规则层（resolveWhen），LLM 不许编 ISO 日期');
+});
+
+test('T批 llmJudge 高置信否决 → action=false（关键词闸误判被纠偏）', async () => {
+  const outcome = await parseGoalIntent('帮我安排这周', {
+    today: TODAY,
+    llmJudge: async () => ({ action: false, patch: {}, confidence: 0.9 }),
+  });
+  assert.equal(outcome.action, false);
+  assert.equal(outcome.source, 'llm+rule');
+});
+
+test('T批 llmJudge 低置信否决 → 落回规则链路（不信 LLM 的含糊判断）', async () => {
+  const outcome = await parseGoalIntent('帮我安排这周', {
+    today: TODAY,
+    llmJudge: async () => ({ action: false, patch: {}, confidence: 0.3 }),
+  });
+  assert.equal(outcome.action, true, '关键词闸命中 + LLM 没把握 → 规则说了算');
+  assert.equal(outcome.source, 'rule');
+});
+
+test('T批 llmJudge 挂掉 → 规则链路兜底（离线可用性不变，老能力零丢失）', async () => {
+  const outcome = await parseGoalIntent('帮我安排这周', {
+    today: TODAY,
+    llmJudge: async () => null,
+  });
+  assert.equal(outcome.action, true);
+  assert.equal(outcome.source, 'rule');
+});
+
+test('T批 mergeLlmPrimary：LLM title 覆盖规则 title（方向与 mergeSlots 相反）', () => {
+  const rule = parseIntentSlots('我明天有一个面试', TODAY);
+  const merged = mergeLlmPrimary(rule, {
+    title: '学生会面试',
+    when: { text: '明天', kind: 'relative', relativeDays: 1 },
+  }, TODAY);
+  assert.equal(merged.title, '学生会面试', 'LLM 主理解：更完整的 title 覆盖词表抽取');
+  assert.equal(merged.when?.relativeDays, 1);
+  assert.equal(merged.dateFrom, '2026-09-06', '明天 = TODAY+1，换算在规则层');
 });

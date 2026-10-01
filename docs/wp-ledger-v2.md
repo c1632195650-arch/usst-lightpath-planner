@@ -251,3 +251,156 @@
 - golden：**v4 免拍（实证）**——mealAutoPlace 走 opt-in，golden 语料不带该开关 → construct 默认路径（place 空）零改动；compare 5/5 PASS。
 - 门禁：tsc 0 / engine **368**/368（363+5）/ ui **271**/271（267+5 wp6 -1 迁移）/ 禁区（planner+week 人工操作）/ 风格 8/8。
 - 遗留：图片识别课表（N2-1）；真机手感验收（三餐 place 显示、自由格卡渲染）。
+
+## §S 梨宝追问链路整改（无人值守批次 2026-09-27，工作单：MOSS《梨宝追问链路整改包（S 批）》）
+
+- 状态：[x] 完成（S1–S4 四批全落；**金标已 CY 复核定稿 2026-09-27 晚**，见评测报告 🔒 段）
+- 诉求→落点：①完整追问=保留式追问(missStreak 双闸)；②单独排程模式=collect 状态机(退出词/打断/作废全有声)；③语义级意图=/api/plan/understand LLM 端点+llmExtractor 通电(规则字段永不覆盖)；④分号批量回答=splitAnswers+applyClarifyAnswers 位置对应协议；⑤先过 LLM 再追问=应答规则先行+LLM 定位救援(结构化始终在规则层)；⑥多轮测试=E2E 10 剧本 42 断言+在线/离线双通道金标评测
+- 改动文件（全 CY 名下）：
+  - `src/features/libao/libaoIntent.ts` — splitAnswers/stripAnswerNumbering/applyClarifyAnswers/applyClarifyFragments/topQuestionPairs/questionsForSlots（applyClarifyAnswer 保留为单段路径，新协议是其超集）
+  - `src/features/libao/schedSession.ts`（新）— 退出词表(归一后整句相等)/nextMissStreak/作废线=2/回执话术
+  - `src/features/libao/LbaoChat.tsx` — clarify 态 {slots,asked}、schedMode/missStreak、updateClarify/updatePicking 唯一写入口、send 优先级(退出>挑块>应答>打断>保留)、徽章+placeholder、快照 v2、llmExtractor/rescueClarifyAnswer 接线、send 门补 add_deadline 无 title 放行（S4 E2E 抓到的 V 批同族缺口）
+  - `src/lib/api.ts` — planUnderstand 客户端（9s AbortSignal，失败恒 ok:false 不弹错）
+  - `server/plan_dialog.py`（新）+ `server/app.py`（include_router 注册；**动前申报**：既有 WIP=PORT env 1 行+CRLF 行尾，已单独 commit 1a12c53 隔离）
+  - `evals/golden/plan_understand.jsonl`（新，60 条=30 intent+20 answer+10 boundary，**zcode 起草稿**）；`scripts/eval_plan_understand.py`（在线/离线双通道）、`scripts/eval_understand_offline.mjs`（规则对照 harness）；`scripts/schedSession.test.ts`（新 9 用例）；`scripts/libaoIntent.test.ts`（+20 用例）
+  - `scripts/e2e-sched-session.mjs`（新，10 剧本 42 断言，与 e2e-journey 同级手动验收资产）；`docs/libao-clarify-spec.md`（新，设计定稿）；`docs/eval-libao-understand-2026-09-27.md`（新，评测原始数据）
+- 反向验证锚点（删实现必红）：splitAnswers 编号剥离→编号用例红；applyClarifyAnswers 位置对应→乱序用例红；nextMissStreak 算回应清零→折返剧本红/删无关+1→永不过期红；isExitCommand 词表→退出剧本红；plan_dialog 8s 超时→离线评测对照红。E2E 剧本 I2 是 P4 的直接守卫（collect 态非动作句不掉 RAG）。
+- 评测（docs/eval-libao-understand-2026-09-27.md）：离线规则对照 action F1 0.868；在线（deepseek-chat）action P/R/F1=1.0/1.0/**1.0**、intent 槽位 EM=**0.923**（逐槽，门槛≥0.90 ✅；逐条口径 0.862）、answer 槽位命中 0.926（25/27）。评测中修复：answer scene prompt 未规定输出 JSON 形状 → 0/27，补「输出格式」后 25/27。
+- E2E：A 折返(8) B 两轮无关才作废(4) C 退出(3) D 挑块接续(4) E hold(2) F 重要日(2) G LLM 离线降级(2) H 草稿落盘(2) I collect 态不过 looksLikeAction(2) J 跨刷新快照恢复含 v2 字段(4) = **42/0**（测试作用域 vite，跑完即清，端口已核释放）
+- 门禁：tsc 0 / engine 408/0 / ui 309/0（280+20+9）/ 禁区零改动 / 风格 8/8（gate_overnight 全过，S2 时点实测；S3/S4 后复跑见各 commit）
+- 遗留：①~~金标 60 条待 CY 复核定稿~~ → **已定稿（2026-09-27 19:50）**：CY 复核 8 处修正（1 处语义错误 i10 title 驾照→科目一、2 处 title 精确化、4 个 create 补 title、i15 补 when/i14 补 window），其余 52 条通过；定稿金标重跑在线门槛三轮全过（action F1 1.0/0.983、逐槽 EM 0.966/0.931），详见评测报告 🔒 段；②intent 逐条 EM 残留缺口与 a09「还没定」归位不稳，已记评测报告已知缺口 1–3（含改法候选）；③无人在场，真实后端 8001 的联网真机手感（含 LLM 在线的对话流畅度）待白天复验；④本批运行过程出现多次工具回显不可信（路径/内容错乱），所有结论均已用原子命令交叉核验，建议白天抽查本台账逐项（CY 复核轮已原子命令复验金标 60 行 JSONL 合法、8 处修改落盘、评测数字与报告一致）。
+
+### §S·R CY 复核落地（2026-09-27 深夜，复核结论三条）
+
+- ①a09 归位不稳 → **未改金标**：评测改双侧同归一（金标片段与预测片段都过规则层 canon——生产落库的本来就是归一值，「还没定→时间待定」自然互含）+ 规则先行（VAGUE_WHEN 直接命中，不依赖 LLM）。answer 0.962（25/26），a09 稳定命中。
+- ②i30 隔天口径 → 金标 4 次/周维持；评测改生产忠实：规则已抽槽位随请求传端点、合并只补空（mergeSlots 语义）；EM(TP)=0.93 ≥0.90。
+- ③8s 超时 → 设计行为不改码：ok:false → 生产回规则结果，评测同口径计分不重试；本轮 43/43 ok。
+- harness 扩 rules/canon 两模式 + 评测脚本 v3 重写（临时文件交接 + shell=False，修 canon JSON 进 argv 被 Windows shell 搅碎的 ENOENT/NoneType 崩溃）。
+- **新量化缺口（记 BLOCKERS 待拍板）**：生产链路 action F1=0.868——looksLikeAction 闸拦 7 条无关键词句（i02/i15/i21/i23/i25/i29/i30，含诉求④原句 i02），端点直判参考线 1.0（17 条规则拦下项全对，含 10 边界句）。缺口在「规则拒绝后不咨询 LLM」的接线，不在端点能力。
+- 门禁：py_compile / node --check 过；改动仅 scripts/eval_* 与 docs，门禁五项复跑见下批 commit。
+
+### §T 理解层换向（2026-09-27 20:50，MOSS 直改；CY 拍板「不可能找完所有关键词，排程问题让 LLM 先看」）
+
+- 触发：CY 真机截图翻车——「这周我有一个面试」问投入，用户答「周二晚上；正好是操场跑步的时间」→ 对位解析失败被当无关消息 → missStreak=2 会话作废 → 「周二晚上；6点到7点」掉 RAG。zcode §S·R 的 BLOCKER（规则拒绝句是否送端点复判）由本批**落地实现**。
+- 换向（commit 934a9b1）：`parseGoalIntent` 改 **llmJudge 先行**——所有消息（含关键词闸判 false 的句子）先过 `/api/plan/understand`；action=true → `mergeLlmPrimary`（LLM 槽位为主，日期换算仍走 resolveWhen）；高置信否决才交 RAG；端点挂/低置信落回规则闸（离线可用性不变）。应答侧 asked 降为「位置提示」：跨槽收编（问投入答时间收 when，whenScore 只升不降）+ when 权威替换 + 「6点到7点」时段=时长（spanDurationMin 仅回答语境）。
+- 门禁：tsc 0 / ui 319/0（+10 用例；**申报 2 条 S1 断言翻转**：位置对应→跨槽收编）/ engine 408/0；RV×2 复现红（删跨槽收编恰 2 红、删时段兜底恰 1 红，还原 sha256 3bbd8bf3… 一致）。
+- 截图场景探针实证（8002 隔离实例）：①asked=effort 答时间 → 端点归位 `{when:"周二晚上"}`；②作废续答 + history → `action:true, title:面试, durationMin:60`——不再掉 RAG。
+- 口径申报：zcode 3d4ee9a 的 v3 harness 生产口径 = S 批模型（规则先行），T 批后生产为 LLM 先看，v3 的 7 条 FN 在生产中由 LLM 接住（其「端点直判参考线 1.0」+ 本批探针双实证）；**harness v4 对齐 LLM-first 口径待下批**（避免并发改它刚落地的 harness）。本节入库连同上方 §S·R（zcode 已提交 3d4ee9a 的配套台账，内容核对一致后一并落盘，特此申报）；BLOCKERS.md 两条未提交 WIP 原样保留未动。
+- 待办：①CY 真机复测截图场景（8001 后端**需重启**才会加载 T 批 prompt——现跑的是旧代码）；②harness v4；③beta-v2 推送（934a9b1 + S 批 + 7674334 均未推远端）。
+
+### §D 对话管理器化（2026-09-27 夜～28 凌晨，MOSS《对话管理器化通宵重构包（D 批·全量）》，zcode 执行）
+
+- 授权对账：基线 `0b35275` ✓；gate md5 `7190ca67` 未动 ✓；tracked 仅 BLOCKERS.md 未提交 ✓；门禁复跑 tsc 0 / engine 408 / ui 319 全绿 ✓。
+- **权限变更行使（申报）**：CY 21:48 授权本次可改 `lib/planner/construct.ts / templates.ts`（Ray 名下）——D4 引擎修复按工作单 §6 执行；门禁以 `GATE_ALLOW_FORBIDDEN=src/lib/planner/construct.ts,src/lib/planner/templates.ts` 显式放行（门禁脚本本身未改，md5 未动，输出留痕）；commit de9a4d4 高亮申报。
+- D0（3ea5059）：双模式按钮——`mode` 状态入快照、问答模式排程意图出「切到排程模式并继续」提示卡不静默改道（原句 forceMode 重发）；切回问答=显式退出（EXIT_ACK）。
+- D1（e0b4877）：`dialogManager.ts` 新建（纯逻辑）——DialogTopic 四相构造器、序列化白名单（slots 9+1 键/候选≤5/≤4KB/target 不外发）、`validateDialogAct` 防编造、快照 v3（写 `usst.libao.chat.v3`，读失败回读 v2 合成，v1 链保留，sanitizeTopic 脏数据当没有）。**与工作单偏差（申报）**：ClarifyState/PickingState 保留为派生形状类型、updateClarify/updatePicking 保留为写入口适配器（内部统一落 topic）——状态容器已单一化，12 处规则链路写入点零漂移，v2.test 源码字面量断言原样存活；新写入点（markDraft/markBlocked/ACT_EXECUTORS）直接走 topic。
+- D2（8bfc028）：`scene='dialog'`（置于 answer 之前防 no_asked 守卫）+ `_SYSTEM_DIALOG` + `_clean_dialog` 白名单与 state 对账 + per-scene max_tokens(dialog 400)；金标 60→100（+40 dialog：act 25/idx 8/防编造负例 7，只增不改，起草自验通过）。
+- D3（d7df363）：send() 优先级链（①isExitCommand 确定性 → ②sched+在线 tryDialogAct 每轮恰 1 次，`DIALOG_ENABLED` 总回退开关 → ③规则链路原样兜底 → ④chat 模式 D0 提示卡）；ACT_EXECUTORS×8（confirm 双闸=confidence≥0.8+整句确认词表；new_intent 续答不打断/打断有声回执/replace 隐含用 priorFailed；chit_chat 走 ragReply 共用段且议题保留）；topic 生命周期 markDraft/markBlocked 接线；runReplace 多候选改道 picking（B②）；findCancelTargets 候选带日期 hint；GoalVerdict 预置 blockingBlocks 字段。
+- D4（de9a4d4）：templates/construct——UserTask/ActivityTemplate 增 `budgetExempt`（豁免活动预算闸+每日上限闸+**eveningAllowed 自律**：normal 周相 18:00 后不开新块，用户点名「晚上」否则恒被拦，DoD 前提）与 `notAfterMin`（放置上界）；essentialMin 累计含 budgetExempt；goalToTasks 产出 budgetExempt+notAfterMin（window.toMin 不再丢）；checkGoalFeasibility placed 改按 id 认领+blockingBlocks（基线 activity/study×星期×窗，≤5 条）；describeVerdict 去硬编码（有事实列事实，无投入量不说「降一档」）。**DoD 引擎级验证**：探针「明天晚上出去玩一小时」21:05-22:35 真排上、与操场跑步同日共存、窗内结束；固化为 d-batch 引擎用例 2 条（RV：撤 budgetExempt/notAfterMin 即红）。
+- D5（a20f4d6 + f567a7e）：相关性门——relevance_gate（问题+top4 标题/400 字摘要→廉价 LLM 判 relevant）接 api_chat 3.8 步，irrelevant→route 降级 'llm'，响应增 `relevance` 观测字段，300s TTL 缓存，LLM 不可用保持现状不加伪门。判据两轮迭代（回答性→主题级→「同一件事/能否作依据」+证据 400 字）；**评测正例修正（申报）**：原 p1「图书馆几点开门」经 /api/search 核实库内无开放时间文章，门拦下是对的（诚实口径优先），换为检索可证正例 p1-p3。
+- D6（e7d7292 + f567a7e）：E2E 剧本 K/L/M/N（LLM 边界 route.mock 定死——dialog 罐头/intent 拔线，与 G 同手法；引擎级 blocked 由 D4 用例覆盖、K/M 的 blocked 相由 v3 快照注入）：K 议题续用 1 轮出 replace 草稿不重问✓、L「明天的那个」1 轮命中✓、M 协商引用挡路事实✓、N 模式三段✓；**E2E A-N 60/0**。**断言漂移申报**：A6（出草稿徽章不消失→徽章按相位说话，草稿相位可语音确认会话未结束）、J1/J2（快照 v2 键→v3 键与字段）；findCancelTargets 顺带修既有双通道重复候选缺陷（固定用户任务在 layer.tasks 与引擎 plan 各出一候选，按 `-user-{taskId}` 去重）。
+- 在线评测（8001 隔离实例，报告 docs/eval-libao-understand-2026-09-27.md）：**dialog 组门槛全过**——act 宏 F1 0.955（acc 0.95，38/40）/idx EM 1.0（8/8）/非法输出拦截率 100%（7/7）✅✅；D5 相关性门负例 5/5 拦下+正例 3/3 不受影响 ✅。**S/T 组本晚 F1 0.868 未过（申报）**：端点 ok 42/67，DeepSeek 超时率高所致——直接复验 FN 条目（i02 553ms/i03 1056ms）端点均正确应答，属环境方差非 D 批回归（D 批未触碰 intent/answer 链路代码），白天空闲时复跑即可。
+- 门禁（D6 收尾）：tsc 0 / engine 421/0（408+13 新增）/ ui 319/0 / 禁区零改动（D4 两文件经显式申报放行）/ 风格 8/8。
+- 遗留：①dialog 金标 40 条待 CY/MOSS 终验复核（工作单 §10.4）；②S/T 组空闲时复跑取干净门槛数据；③8002 真机重放三截图原句+离线降级待白天（§10.5）；④updateClarify/updatePicking 适配器偏差（见 D1）若 CY 拍板「彻底删除」，改动面=12 处调用点机械替换，无行为差异；⑤D7 replan 协商循环按余力批处理（见下节）。
+
+### §D7 replan 协商循环（2026-09-28 凌晨，余力批照做，commit 9639399）
+
+- blocked 时 negotiate_block 执行器调用 `proposeReplanOptions`（防腐层新纯函数）生成 ≤3 条编号方案：①与挡路块互换（replace 语义，干跑基线经 `excludeBlockIds` 挖掉该块——construct 排除机制复用）②顺延一周 ③降单次时长；**每个方案必须过一次引擎干跑**，排得上的才呈现——「禁止 LLM 编排好了」由两层保证（方案由引擎产出；选中后仍走 runGoalSlots→草稿卡→确认，L4 不变）。
+- LLM 只做引用：blocking.options 序列化只发 id+label（slots 不进 LLM 上下文）；用户回编号 → dialog act=new_intent + replan_id（照抄 id，_clean_dialog 白名单透传）→ 执行器取干跑过的槽位直走草稿通路。
+- 测试：D7 引擎级用例（blocked 夹具三块占满晚间→方案逐条干跑自洽；RV：删干跑过滤即红）engine 421→422；E2E A-N 60/0 回归；门禁五项全过。M 剧本回归时 negotiate 回复升级为「事实+可行方案」口径，M1-M3 断言不受影响。
+
+### §D·终验自查（2026-09-28 凌晨，对应工作单 §10）
+
+- §10.3 RV 抽查 3 条：①dialogManager 防编造 idx 校验拆除→D1 红；②proposeReplanOptions 干跑过滤拆除→D7 红；③confirm_draft 词表闸拆除→D3 红；逐一还原后 sha256 与 HEAD 一致（dialogManager/weekPlanForChat/LbaoChat），`git status` src/ 零残留。
+- §10.5 真机重放（8002 隔离后端 + VITE_API_BASE 指向 8002 的 5173 实例，活 LLM）：7/0 全过——「明天晚上出去玩一小时」「把操场跑步替换掉」dialog 场景确实被调用且未掉 RAG；问答模式提示卡→切换重发直达排程流；route.abort 全断后规则兜底出草稿并确认落盘。首跑 2 挂为旧 vite 实例未死（仍指 8000）所致环境问题，非代码缺陷。
+- §10.2 最终门禁见下（tsc/engine 422/ui 319/禁区/风格）。
+
+### §E 知识融合与周视图交互升级（2026-09-28 夜，MOSS《E 批·全量》工作单，zcode 执行）
+
+- 状态：**E0 完成；E1–E5 阻塞（缺 CY 逐项授权，未擅动）；E6 收口完成**（E2E 新剧本 O/P/Q 与附录 B 步数实测依赖 E4/E5，一并顺延）。
+- 授权对账：开工基线 `4044330` ✓；gate md5 `7190ca671e5c6e5b6d409aac4e10cd92` 未动 ✓；开工时 tracked 零未提交改动 ✓；**执行中途 HEAD 前移至 `dc4bbdf`（§D·终验自查，纯文档 commit，并行会话所加，与本批零文件交集），对账后继续**。
+- **E0 基线实测（本批地板线，只增不减）**：
+  - 门禁五门：tsc 0 错 / engine **422** fail 0 / ui **319** fail 0 / 禁区零改动 / 风格 8 项 — 全 PASS；
+  - playwright smoke（`e2e/smoke.spec.ts`）：3 用例 = 2 过 / 1 挂（「视觉基线：入口页」红——基线快照 PNG 的 IDAT 数据流截断（zlib inflate unexpected end of file），git blob `cb6a88e8` 与工作区逐字节一致 = 入库前（9/20 抓基线时）已损坏，非本批造成，申报见 BLOCKERS）；
+  - E2E A–N（`scripts/e2e-sched-session.mjs`）：隔离 vite 实例（5176，测试作用域起停、端口已核释放）实测 **60 过 / 0 挂**，与 D7 收尾口径一致；
+  - 排查备注：共享 5173 常驻 vite（PID 20176，非本批所起，未杀）上同脚本出 B3/B4/D3/F1 假失败——served 文件含 D7 标记确认服务本树，判定为实例陈旧状态所致（与 §D·终验自查 §10.5「旧 vite 实例未死」同类环境问题），已在 BLOCKERS 留痕。
+- **E0 落地物**：
+  - `docs/week-view-design.md`（新）——设计规范定稿：三原则（视觉重心唯一 / L0-L1-L2 分层 / 动效节制）、令牌表（复用 tailwind 现有色，不新造）、三处"字太多"可量化处置、E5 抽屉与动作条条款、诚实原则（`≈` 估算标注 / L3 口径）、E4/E5 DoD 引用门槛；
+  - `AGENTS.md` §七 文档地图 +1 行索引（AGENTS.md 为 CY 名下协作文档，工作单 E0 明确要求，特此申报）；
+  - `BLOCKERS.md` +5 条：E1–E5 授权申报（主阻塞）、依赖闸门决议（附录 A 候选待拍板，本批零新依赖成立）、smoke 快照既有损坏、`effective_to` schema roadmap 登记（P1 第二步，不动库）、5173 假失败环境备注。
+- **E1–E5 阻塞详情**：五批全部触及 RAY 属地——E1 `lib/planner/knowledge.ts`（新）+ `buildPhases.ts`/`construct.ts` 接入；E2 `placesPolicy.ts`（新）+ `construct.ts`；E3 `profilePrefs.ts`（新）；E4 `features/week/weekViewModel.ts`（新）+ `WeekPlanView.tsx`（1989 行）；E5 `components/ui/` 新组件 + `WeekPlanView.tsx`。工作单 §11 要求动工前获 CY 逐项授权；本轮 /goal 未携带逐项授权，AGENTS.md §8.1（无人值守协议，优先级最高）规定禁区文件一律申报不擅动。全仓检索确认无既有 E 批授权记录（D 批先例：CY 显式逐项授权后才动 construct/templates）。**F 批建议执行顺序：E1→E2→E3（引擎线，各自独立 commit+申报+golden 对比）→E4→E5（呈现线，`WEEK_VIEW_V3=false` 回退开关）→E6 全量收口**。
+- 本批改动文件清单（与 commit 逐一对得上）：`docs/week-view-design.md`（新）/ `AGENTS.md`（+1 行）/ `BLOCKERS.md`（+5 条）/ `docs/wp-ledger-v2.md`（本节）。零代码改动、零依赖改动、零禁区改动。
+- 门禁（E6 收尾复跑）：五门全 PASS（数字同 E0 基线，本批纯文档无增量用例）。
+
+### §D·白天终验独立复核（2026-09-28 白天，模拟 MOSS §10 七条逐项独立执行）
+
+| §10 条目 | 结果 | 证据 |
+|---|---|---|
+| 1 基线对账 | ✅ | D 批 13 commit 链在 HEAD 可回放；gate md5 `7190ca67` 未动；golden 60→100 纯追加（0 行删改）且 100 行 JSONL 全合法（dialog 40/负例 7）；工作树 tracked 零未提交；D 批之后另有 E0 三个纯文档 commit（AGENTS.md/BLOCKERS/两个 docs，无代码面） |
+| 2 全量门禁复跑 | ✅ | tsc 0 / engine 422/0 / ui 319/0 / 禁区 / 风格 8 项——五门全 PASS |
+| 3 RV 抽查 | ✅ | 3 条新组合全红后还原：A 拆 DIALOG_ENABLED→D3 红；B 删 blockingBlocks 扫描→D7 红；C 候选 lite 泄漏 target→D1 红（首版 RV-C 注入点选错未红，已换要点重做——如实记录）；还原后 sha256 与 HEAD 一致、`git status` src/ 零残留 |
+| 4 dialog 金标在线复评 | ✅ | 8001 活 LLM：act 宏 F1 **0.972**（acc 0.975，39/40）/idx EM **1.0**/拦截率 **100%**/零拒收——门槛全过且优于夜班 0.955（LLM 方差正向） |
+| 5 真机重放（8002 活 LLM） | ✅ | 7/0：截图原句 dialog 场景确实被调用且未掉 RAG、模式切换、离线降级规则兜底+确认落盘 |
+| 6 「出去玩 1 小时」全链 | ✅ 6/0 | 草稿卡（真实引擎落点「排到：…」）→ 确认落盘回执 → userPlan 层含任务 → 周计划 **Ctrl+Z 撤销后任务撤下**（localStorage 双向验证） |
+| 7 台账/BLOCKERS 完整性 | ✅ | §D/§D7/终验自查在位；13 个 hash 全部 `git cat-file` 存在；BLOCKERS D 批 4 条在位 |
+
+**终验新发现（如实记录，未改代码）**：
+1. 🔴 跨页撤销按钮禁用（既有缺陷，Ray 名下 `WeekPlanView.tsx`）：`undoDepthState` 初始 0 且不在挂载时同步 `undoDepth()`——梨宝确认落盘压栈的快照，周计划页顶栏 ↩ 按钮显示禁用；Ctrl+Z 通路正常（handleUndo 直读模块栈，⑥-6 即经此通过）。修法一行（挂载 effect 里 setUndoDepth(undoDepth())），因属禁区留白天人工。已记 BLOCKERS。
+2. 🟡 E2E 剧本 A–N 是**离线规则口径**：vite 指向活后端时 A-F/I/J 有 LLM 干扰实测漂移（D3/F1 各挂 1，切离线 vite 后 60/0 复现）——scripts/e2e-sched-session.mjs 头注「后端可选」应升级为「**必须离线或 route.abort understand**（专用 mock 剧本除外）」。属脚本协议备注，非代码缺陷。
+
+## §ACCEPT 终验两项处置 · zcode 交付 + MOSS 独立复核（2026-09-28 上午，commit `9780832`）
+
+- 状态：[x] 完成（zcode 修复+提交 `9780832`；MOSS 对 HEAD 独立复核全绿后本节落盘）
+- `9780832` 实际内容（5 文件，+77/-4）：修复①跨页撤销（`WeekPlanView.tsx` 挂载+重排双路 `setUndoDepth(undoDepth())` + `tests/d-batch.test.ts` 源码锁用例）｜修复②dialog 相对日期消解（`server/plan_dialog.py` payload「今天」附星期 + prompt 换算规则，**zcode 在终验后追加发现**）｜E2E 头注收紧「必须离线」（`scripts/e2e-sched-session.mjs`）｜评测报告补 09:28 复跑数据（`docs/eval-libao-understand-2026-09-27.md`）
+- **MOSS 独立复核实据（HEAD=9780832，干净树）**：
+  | 项 | 结果 |
+  |---|---|
+  | tsc --noEmit | ✅ 0 错（TSC-OK） |
+  | test:ui | ✅ 319/319（基线 ≥219） |
+  | test:engine | ✅ 423/423（基线 422 + 源码锁新用例 1） |
+  | 修复① RV | ✅ 删挂载同步行 → d-batch **恰 1 红**（15 用例 fail 1）→ 还原 sha256 `57eb4e22…8223` 逐字节一致 → 回绿 15/15 |
+  | 修复② 单点探针（隔离 8003 活 LLM 实例，自起自清） | ✅ 「明天的那个」→ `pick_candidate idx=1 conf 0.95`（话术自带「明天是9.29周二」换算依据）；对照「今天的那个」→ `idx=0 conf 0.9` |
+  | E2E A–N（隔离离线 vite 5177，自起自清） | ✅ 60 过 / 0 挂（HEAD 复跑） |
+  | 风格漂移 | ✅ 8/8（check_style_drift.py） |
+  | 禁区 | ✅ 仅 `WeekPlanView.tsx`（依 CY 2026-09-27 21:48 授权行使，zcode 已在 commit message 申报） |
+- ⚠️ 环境备注：`gate_overnight.mjs` 在 MOSS 沙箱内 `spawnSync cmd.exe EBUSY`（node 派生 cmd.exe 被沙箱阻断，bash/PowerShell 两路复现）——**脚本未改**（md5 锚 `7190ca67` 不动），五项按脚本逻辑逐条等价复现如上；ZCode/本机终端不受影响，可正常一键跑。
+- 📎 ZCode commit 内「异常上报：E 批工作单无出处」已澄清：工作单在 **`C:\Users\CY\Desktop\ZCode-知识融合与周视图交互升级通宵包-2026-09-28.md`**（桌面，不在仓库文件系统内），E0 产物（4cb7dc1/9a93ac4/8ee8957）即按其 §4 落地，E1–E5 维持待 CY 逐项授权。
+- 偏差申报：zcode 将两项修复 + 修复② + 头注 + 评测数据合入**单个 commit**（原计划分 commit）——内容逐项可溯（本节 + commit message），不重写历史。
+
+## §F E 批执行（2026-09-28 白天，CY 逐项授权后；工作单《ZCode-知识融合与周视图交互升级通宵包》，桌面）
+
+- 状态：[x] E0–E6 全部落地（E0 由并行会话完成于 `4cb7dc1`/`9a93ac4`/`8ee8957`；F0 基线重拍+授权落盘 `f20a427`）
+
+| 批 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| E1 | `cd0be00` | 知识库→引擎：`lib/planner/knowledge.ts`（新叶子）+ buildPhases 钳制层 + construct 自习档位 | tsc 0 / knowledge-wiring 8/8 / engine 431 |
+| E2 | `356728b` | 空间库→引擎：`lib/planner/placesPolicy.ts`（新叶子）+ fillStudy 步行排序 | tsc 0 / places-policy 9/9 / engine 440 |
+| E3 | `eef62f6` | 画像→块级偏好：`lib/planner/profilePrefs.ts`（新叶子）+ fillStudy 时段亲和度 | tsc 0 / profile-prefs 9/9 / engine 449 |
+| E4 | `fd01b7e` | 周视图视觉重心：`features/week/weekViewModel.ts`（新叶子）+ L0 减字 + 时间轴撑满 | tsc 0 / week-view-model 7/7 / engine 456 / ui 319 |
+| E5 | `56ee2c9` | 渐进式披露：`components/ui/DetailDrawer.tsx`（原生 dialog，零依赖）+ blockDetail | 同上 + 9/9 |
+| E6 | `9cc568b` | E2E 剧本 O/P/Q + goWeek 硬门控 + 抽屉 testid 消歧 | **E2E 离线 77 过 / 0 挂** |
+
+- **新增三个灰度开关，全部缺省关闭**（关 = 与既往**逐位一致**，各批均以 engine 全绿 + golden 未动佐证）：`KNOWLEDGE_WIRED`（E1）、`SPATIAL_WIRED`（E2）、`PROFILE_PREFS_WIRED`（E3）。三者独立，互不影响 `DIALOG_ENABLED`。
+- **反向验证总账（12 个变异体，全部「删实现→恰 N 红→还原 sha256 一致→回绿」）**：E1 ×3（kb 补丁 / 久坐过滤 / construct 三元）｜E2 ×4（校区过滤 / 估算预算 / 超预算挪后 / 开关闸）｜E3 ×4（HEA 分支 / 亲和度门槛 / 指纹轴值 / 偏好重排分支）｜E4 ×3（估算判定 / 地点简写 / issue 排序）。
+- **零断言漂移（关键纪律）**：`tests/wp7.test.ts:69` 锁定浏览/编辑态**类名字符串** —— E4 的视觉重心因此改用**内联 style** 实现，锁定串一字未动。唯一一处断言修正：E5 零依赖闸门首版用「正文 includes」判定，被抽屉注释里的「无需引 Radix/Vaul」误伤 → 改为**只查 import 语句**（更准且更严），已申报。
+- **依赖闸门（CY 拍板）**：附录 A 候选**全部关闭**，E4/E5 零新依赖（`package.json` 未动，E5 测例含 package.json 级闸门）；原生 `<dialog>` + `showModal()` 提供焦点陷阱 / Esc / inert。
+- **未接线项如实登记**（防「以为接了」）：`knowledge.ts::KNOWLEDGE_PARTIALS`（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限需活动块生成策略）｜`placesPolicy.ts::SPATIAL_PARTIALS`（三餐食堂选取；1100 路网未入库 → 保持未知不吸附）｜`profilePrefs.ts::PROFILE_PARTIALS`（夜猫子无辩护依据不臆造；三餐步行预算待三餐接线消费；画像变更「受影响天」集合待接 `localizedReplan`）。
+- 环境备注：`gate_overnight.mjs` 在本沙箱 `spawnSync cmd.exe EBUSY`（脚本未改、md5 锚未动）——五项按脚本逻辑逐条等价复现：tsc 0 / ui 319 / engine 458 / 禁区仅授权文件 / 风格 8/8。
+- 待 CY 决定：三个开关的**开启时机**（开启会改变计划输出，需各自 golden 另拍基线 + 人工过目块卡片视觉）。
+
+## §G G 批 · 重构至完成（2026-10-01 白天，CY 会话内拍板「重构至完成」+ 三开关「三个全开」）
+
+- 状态：[x] G1/G2/G3 全部落地。G1=`a11545b`（派生类型层清理）｜G2=`f707ed2`（三开关缺省开）｜G3=本文档批（BLOCKERS/README/progress-status/AGENTS）。
+
+| 项 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| G1 | `a11545b` | D 批偏差结项：删 LbaoChat 的 ClarifyState/PickingState/updateClarify/updatePicking，约 21 写点直写 setTopic(collectTopic/pickingTopic)，missStreak 清零语义逐点保留；形状类型复用 dialogManager 的 V2ClarifyShape/V2PickingShape；只读投影 clarify/clarifyPicking/schedMode 保留 | tsc 0 / v2+d-batch 23/0 / ui 319/0 / RV：删落点行→d-batch 恰 1 红→还原 sha256 一致（34607eba） |
+| G2 | `f707ed2` | KNOWLEDGE_WIRED/SPATIAL_WIRED/PROFILE_PREFS_WIRED 缺省 false→true（env 显式 '0'/'false' 逃生门）；三个 wiring 测试翻转（关=显式 '0'，新增「未设=缺省开」断言，用例数不减） | tsc 0 / wiring 26/26 / engine 458/458 / ui 319/319 |
+| G3 | 本 commit | BLOCKERS 五条（三结项+两新增）/ tests/README 重拍记录 ② / progress-status 与 AGENTS.md 快照重写 | 见下「验收」 |
+
+- **断言漂移申报（G1 共 1 处）**：d-batch.test.ts B② 源码锁 `/kind: 'replace', slots, candidates: targets/` → `/pickingTopic\('replace', slots, targets\)/`——锁的意图（replace 多候选改道 picking）不变，调用形态随适配器删除而更新。
+- **golden 零漂移（G2 实测，未重拍）**：五语料全关 vs 全开 `normalizePlan` 逐字节一致（diff=0）。原因：① 语料 studyPlaces 全走模块库固定档位模板，现场工厂档位替换分支未触发；② crosscampus 的步行排序首选与原序一致；③ 语料不带 persona → 块级偏好为空。详见 tests/README「重拍记录 ②」。
+- **周视图视觉验收（G2 后）**：隔离 vite 5178（VITE_API_BASE 指死端口）真实渲染，4 张截图（浏览态视口/整页/详情抽屉/梨宝页）逐张判定 **4/4 pass**——块卡片 L0 无工程文案泄漏、七列均匀、抽屉层级清晰（时间/地点/为什么排在这/来源）、梨宝预览卡与降级提示正常。⚠️ visual-judge 子代理供应商不可用（provider-not-found），按验收协议降级为本体逐张判定，截图留痕 `_g-shots/`（`_*` gitignore，不入仓）。
+- **E2E（G1+G2 后）**：隔离 vite 5178 离线跑 `scripts/e2e-sched-session.mjs` **77 过 / 0 挂**（含 E 批新增 O/P/Q），跑完实例已清、端口核释放。
+- **DIALOG_ENABLED 零影响**：三个 planner 开关文件与 LbaoChat 无 import 关系（复核维持 E 批结论）。
+- 未做（转人工/BLOCKERS）：四处 PARTIALS 契约扩展（需双方确认）、beta-v2→dev 合并（unrelated histories，BLOCKERS 新增条）、push 远程。

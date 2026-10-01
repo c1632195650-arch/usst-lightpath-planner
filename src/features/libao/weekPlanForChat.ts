@@ -258,6 +258,10 @@ export function goalToTasks(
       priority: slots.priorityHint,
       ...(slots.essential ? { essential: true } : {}),
       notBeforeMin: slots.window?.fromMin ?? GOAL_EARLIEST_MIN,
+      // D4：窗口上界不再丢 —— 「晚上」= 23:00 前结束，引擎放置受 notAfterMin 约束
+      ...(slots.window ? { notAfterMin: slots.window.toMin } : {}),
+      // D4：用户点名块豁免活动预算与每日上限 —— 「出去玩 1 小时」不再被静默挤掉
+      budgetExempt: true,
       note: noteForGoal(slots),
     });
   }
@@ -301,6 +305,20 @@ export interface GoalVerdict {
   caveats: string[];
   /** 结论的一句话理由，供梨宝回话直接引用 */
   reasons: string[];
+  /**
+   * D4：排不进去时**挡路的既有块**（引擎干跑扫出，≤5 条，hint 含 `周X(M.D) HH:MM–HH:MM`）。
+   * 有了它，describeVerdict 列事实而不是硬编码「①②③」，协商话术才有依据（B③）。
+   */
+  blockingBlocks?: BlockingBlockInfo[];
+  /** D4：用户真的给了投入量吗 —— 没给就不该出现「降一档目标量」这类话术 */
+  canReduceScope?: boolean;
+}
+
+/** 挡路块的最小描述（PickOption 的素材；blockId 供「顶掉这块」的 replace 语义用） */
+export interface BlockingBlockInfo {
+  title: string;
+  hint: string;
+  blockId?: string;
 }
 
 /** 问题归并键：`code` 优先。中文 `message` 会变（含动态数字），拿它当键会让 diff 失真。 */
@@ -345,9 +363,14 @@ export function checkGoalFeasibility(args: {
   weekNo?: number;
   /** 本周已经在用的任务（校历事件 / 天气 / 用户自己加的）—— 必须在场，否则基线失真 */
   tasks?: UserTask[];
+  /**
+   * D7：干跑基线里要**挖掉**的引擎块（「与挡路块互换」方案的 dry-run 语义：
+   * 换掉它 = 它先让位）。课程块引擎侧自带保护，挖不掉也无需挖。
+   */
+  excludeBlockIds?: string[];
   today: string;
 }): GoalVerdict {
-  const { slots, schedule, profile, today } = args;
+  const { slots, schedule, profile, today, excludeBlockIds } = args;
   const existing = args.tasks ?? [];
   const caveats: string[] = [];
 
@@ -415,29 +438,55 @@ export function checkGoalFeasibility(args: {
     byWeek.set(w as number, list);
   }
 
-  const titles = new Set(candidates.map((t) => t.title));
+  // D4：placed 改按 id 认领（候选 id 内嵌在引擎块 id 的语义键里）——
+  // 此前按 title 认领，同名块会误认领「别的块替它落了地」。
   const placed: Array<{ week: number; block: TimeBlock }> = [];
   const addedAcc = new Map<string, GoalAddedIssue>();
+  const blockingAcc: BlockingBlockInfo[] = [];
   let studyDeltaMin = 0;
 
   for (const [w, wkTasks] of [...byWeek.entries()].sort((a, b) => a[0] - b[0])) {
     const wkPhase = phaseOfWeek(semester.plan, w);
     if (!wkPhase) continue; // 该周不在学期内 —— goalToTasks 理论上已滤掉
-    const mkInput = (tasks: UserTask[]) => ({
-      schedule,
-      weekNo: w,
-      policy: wkPhase.policy,
-      scenarios: profile?.scenarios ?? null,
-      tasks,
-    });
+    const mkInput = (tasks: UserTask[]) => {
+      const req = toPlanRequest({
+        schedule,
+        weekNo: w,
+        policy: wkPhase.policy,
+        scenarios: profile?.scenarios ?? null,
+        tasks,
+      });
+      // D7：swap 方案的干跑基线要把被换掉的块挖掉（construct 的排除机制）
+      return excludeBlockIds?.length ? { ...req, excludedBlockIds: excludeBlockIds } : req;
+    };
 
-    const before = planWeekV2(toPlanRequest(mkInput(existing))).plan;
-    const after = planWeekV2(toPlanRequest(mkInput([...existing, ...wkTasks]))).plan;
+    const before = planWeekV2(mkInput(existing)).plan;
+    const after = planWeekV2(mkInput([...existing, ...wkTasks])).plan;
 
+    // D4：placed 改按 id 认领（候选 id 内嵌在引擎块 id 的语义键里，`w{w}-d{d}-{kind}-custom-{taskId}`）
+    // —— 此前按 title 认领，同名块会误认领「别的块替它落了地」。
     for (const b of after.blocks) {
-      if (titles.has(b.title)) placed.push({ week: w, block: b });
+      if (b.id && candidates.some((t) => b.id.includes(t.id))) placed.push({ week: w, block: b });
     }
     studyDeltaMin += after.stats.studyMin - before.stats.studyMin;
+
+    // D4（B③）：扫本周基线里的既有块 —— 与候选的星期×时段窗重叠的 activity/study 块
+    // 就是「挡路的」。LLM 协商话术只许引用这些事实，不许硬编码「①②③」。
+    for (const b of before.blocks) {
+      if (b.kind !== 'activity' && b.kind !== 'study') continue;
+      const hit = wkTasks.some((t) =>
+        (t.dayOfWeek == null || t.dayOfWeek === b.dayOfWeek)
+        && (t.notBeforeMin ?? 0) < b.endMin && b.startMin < (t.notAfterMin ?? 24 * 60));
+      if (!hit) continue;
+      const monday = addDays(schedule.termStart, (w - 1) * 7);
+      const md = addDays(monday, b.dayOfWeek - 1).slice(5).replace('-', '.');
+      const info: BlockingBlockInfo = {
+        title: b.title,
+        hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}(${md}) ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
+        blockId: b.id,
+      };
+      if (!blockingAcc.some((x) => x.hint === info.hint && x.title === info.title)) blockingAcc.push(info);
+    }
 
     const beforeCount = countIssues(before);
     for (const [code, v] of countIssues(after)) {
@@ -449,6 +498,7 @@ export function checkGoalFeasibility(args: {
     }
   }
   const added = [...addedAcc.values()];
+  const blockingBlocks = blockingAcc.slice(0, 5);
 
   // ── 关四：真的落进去了吗 ───────────────────────────────────
   // 按 title 认领 —— 固定块（给了 dayOfWeek+startMin）与浮动块分别由 construct 的两条
@@ -463,6 +513,8 @@ export function checkGoalFeasibility(args: {
   const reasons: string[] = [];
   const hasError = added.some((a) => a.level === 'error');
   const hasWarn = added.some((a) => a.level === 'warn');
+  // D4：用户是否真的给了投入量 —— 没给就别说「降一档目标量」（对「出去玩」说这话很荒谬）
+  const canReduceScope = slots.durationMin != null || slots.totalHours != null || slots.perWeekCount != null;
 
   if (placed.length === 0) {
     return {
@@ -472,13 +524,15 @@ export function checkGoalFeasibility(args: {
       added,
       studyDeltaMin,
       caveats,
+      blockingBlocks,
+      canReduceScope,
       reasons: ['这一周腾不出放它的地方 —— 一块都没落下去。'],
     };
   }
 
   if (hasError) {
     reasons.push('排进去会撞上硬冲突（重叠或转场来不及）—— 得换个时间或换个安排。');
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   // ── 关四之二：要的量，窗口装得下吗 ─────────────────────────
@@ -493,27 +547,28 @@ export function checkGoalFeasibility(args: {
       `这个窗口最多放得下约 ${hours(gotMin)} 小时，离你说的 ${hours(wantMin)} 小时还差 ${hours(wantMin - gotMin)} 小时。`,
     );
     reasons.push('按现在的窗口和单次时长，目标量放不下 —— 得拉长窗口、加长单次，或降一档目标。');
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   if (placed.length < candidates.length) {
     // 部分落不下 —— **如实说，不掩盖**（掩盖会让用户以为全排上了）
     reasons.push(`${candidates.length} 块里有 ${candidates.length - placed.length} 块没找到位置。`);
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   if (studyDeltaMin < -60) {
     reasons.push(`会挤掉约 ${Math.abs(studyDeltaMin)} 分钟自习。`);
-    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   if (hasWarn) {
     for (const a of added.filter((x) => x.level === 'warn').slice(0, 2)) reasons.push(a.sample);
-    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
   }
 
   reasons.push('排得下，没有新增冲突。');
-  return { ...base, kind: 'ok', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, reasons };
+  // ok/tight 不带 blockingBlocks —— 排都排上了，「挡路事实」只在真排不下时才有意义
+  return { ...base, kind: 'ok', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
 }
 
 /**
@@ -527,6 +582,9 @@ export function describeVerdict(v: GoalVerdict): string[] {
   for (const c of v.caveats) out.push(`· ${c}`);
   for (const p of v.placedAt) out.push(`· 排到：${p}`);
   for (const r of v.reasons) out.push(`· ${r}`);
+  // D4（B③）：有挡路事实就**列事实** ——「周一(9.28) 17:55–18:55 已有操场跑步」。
+  // 协商话术基于引擎扫出的事实，不再让用户猜「到底什么挡路」。
+  for (const b of v.blockingBlocks ?? []) out.push(`· ${b.hint} 已有「${b.title}」`);
 
   if (v.kind === 'needs_clarification') {
     for (const q of v.questions) out.push(`· ${q}`);
@@ -535,9 +593,88 @@ export function describeVerdict(v: GoalVerdict): string[] {
     out.push('· 可以：① 换个时间段；② 缩短或拆分；③ 顶掉现有的一块。你说哪个，我来改。');
   }
   if (v.kind === 'infeasible') {
-    out.push('· 可以：① 挪到下一周；② 降一档目标量；③ 先告诉我你愿意让出哪一块。');
+    // D4：去硬编码 —— 有挡路事实时给「顶掉其中一块」的方向；
+    // 用户根本没给投入量时，不说「降一档目标量」（对「出去玩」说这话很荒谬）。
+    if (v.blockingBlocks?.length) {
+      out.push('· 可以：① 用新安排顶掉其中一块（说「把X替换掉」就行）；② 换个日子或下一周；③ 换个时间段。你说哪个，我来改。');
+    } else if (v.canReduceScope) {
+      out.push('· 可以：① 挪到下一周；② 降一档目标量；③ 先告诉我你愿意让出哪一块。');
+    } else {
+      out.push('· 可以：① 挪到下一周；② 换个时间段；③ 先告诉我你愿意让出哪一块。');
+    }
   }
   return out;
+}
+
+/* ============================================================
+ * D7：replan 协商方案（每个方案都过一次引擎干跑，可行的才呈现）
+ * ============================================================
+ * blocked 时的三个方向（工作单 §9）：① 与挡路块互换（replace 语义，干跑时把它
+ * 从基线挖掉）② 顺延一周 ③ 降单次时长。**每个方案必须过引擎干跑**——
+ * 排得上的才作为编号选项呈现；LLM 只负责转述与引用（replan_id），禁止编「排好了」。
+ * 只提议不落盘：用户选中后仍走 runGoalSlots → 草稿卡 → 确认（L4 边界不变）。
+ */
+export interface ReplanOption {
+  /** 稳定 id（swap:<blockId> / move_next_week / reduce_duration），LLM 引用凭据 */
+  id: string;
+  /** 编号选项的人类可读文案 */
+  label: string;
+  /** 选中后直接走 runGoalSlots 的调整槽位 */
+  slots: IntentSlots;
+}
+
+export function proposeReplanOptions(args: {
+  slots: IntentSlots;
+  verdict: GoalVerdict;
+  schedule: Schedule | null;
+  profile: PersonaProfile | null;
+  /** D7：协商基线的既有任务（与干跑同源，否则挡路事实对不上） */
+  tasks?: UserTask[];
+  today: string;
+}): ReplanOption[] {
+  const { slots, verdict, schedule, profile, today, tasks } = args;
+  if (!schedule?.termStart) return [];
+  // RV 锚点：ok/tight 的 verdict 没有协商的必要
+  if (verdict.kind === 'ok' || verdict.kind === 'tight' || verdict.kind === 'needs_clarification') return [];
+
+  const feasible = (s: IntentSlots, excludeBlockIds?: string[]): boolean => {
+    const v = checkGoalFeasibility({
+      slots: { ...s, missing: [] }, schedule, profile, today,
+      ...(tasks?.length ? { tasks } : {}),
+      ...(excludeBlockIds?.length ? { excludeBlockIds } : {}),
+    });
+    return v.kind === 'ok' || v.kind === 'tight';
+  };
+
+  const options: ReplanOption[] = [];
+
+  // ① 与挡路块互换：干跑把该块从基线挖掉 —— 「换掉它」的语义在引擎层面成立
+  for (const b of (verdict.blockingBlocks ?? []).slice(0, 2)) {
+    if (!b.blockId) continue;
+    const s: IntentSlots = { ...slots, intent: 'replace', targetHint: b.title, missing: [] };
+    if (feasible(s, [b.blockId])) {
+      options.push({ id: `swap:${b.blockId}`, label: `用「${slots.title}」换掉 ${b.hint} 的「${b.title}」`, slots: s });
+    }
+  }
+
+  // ② 顺延一周
+  if (slots.dateFrom) {
+    const s: IntentSlots = {
+      ...slots,
+      dateFrom: addDays(slots.dateFrom, 7),
+      ...(slots.dateTo ? { dateTo: addDays(slots.dateTo, 7) } : {}),
+      missing: [],
+    };
+    if (feasible(s)) options.push({ id: 'move_next_week', label: `挪到下一周（${s.dateFrom} 起）`, slots: s });
+  }
+
+  // ③ 降单次时长（≥30 分钟下限）
+  if (slots.durationMin != null && slots.durationMin > 30) {
+    const s: IntentSlots = { ...slots, durationMin: Math.max(30, Math.floor(slots.durationMin / 2)), missing: [] };
+    if (feasible(s)) options.push({ id: 'reduce_duration', label: `单次降到 ${s.durationMin} 分钟`, slots: s });
+  }
+
+  return options.slice(0, 3);
 }
 
 /* ============================================================
@@ -576,30 +713,47 @@ export function findCancelTargets(
   query: string,
   userTasks: readonly UserTask[],
   planBlocks: readonly TimeBlock[],
+  /**
+   * D3（B②）：给了学期锚点就把 hint 升级成「周X(M.D) HH:MM–HH:MM」。
+   * 候选带日期，LLM/规则才有依据消歧「明天的那个」这类指代 ——
+   * 此前 hint 只有「周X HH:MM」，「明天」结构上不可命中，只能反复追问。
+   */
+  weekInfo?: { termStart: string; weekNo: number },
 ): CancelTarget[] {
   const needle = normTitle(query);
   if (!needle) return [];
+  const md = (dow: number): string | null => {
+    if (!weekInfo) return null;
+    const monday = addDays(weekInfo.termStart, (weekInfo.weekNo - 1) * 7);
+    return addDays(monday, dow - 1).slice(5).replace('-', '.');
+  };
   const out: CancelTarget[] = [];
   for (const t of userTasks) {
     const title = normTitle(t.title);
     if (title.includes(needle) || needle.includes(title)) {
+      const d = t.dayOfWeek ? md(t.dayOfWeek) : null;
       out.push({
         taskId: t.id,
         title: t.title,
         origin: 'user',
-        hint: `${t.dayOfWeek ? `周${WEEKDAY_CN[t.dayOfWeek - 1]}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
+        // D3：WEEKDAY_CN 自带「周」前缀（且不再走 dayOfWeek-1 的错位下标）
+        hint: `${t.dayOfWeek ? `${WEEKDAY_CN[t.dayOfWeek % 7]}${d ? `(${d})` : ''}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
       });
     }
   }
   for (const b of planBlocks) {
     if (b.kind !== 'activity' && b.kind !== 'study') continue; // 课程不在此通道
+    // D3：同一任务会同时出现在 layer.tasks 与引擎 plan（用户任务渲染成块）——
+    // 不去重的话，取消/替换任何固定用户任务都会得到「两个候选」，被迫挑块。
+    if (b.id.includes('-user-') && out.some((c) => c.taskId && b.id.endsWith(`-user-${c.taskId}`))) continue;
     const title = normTitle(b.title);
     if (title.includes(needle) || needle.includes(title)) {
+      const d = md(b.dayOfWeek);
       out.push({
         blockId: b.id,
         title: b.title,
         origin: 'plan',
-        hint: `周${WEEKDAY_CN[b.dayOfWeek - 1]} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
+        hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}${d ? `(${d})` : ''} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
       });
     }
   }

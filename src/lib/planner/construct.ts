@@ -39,6 +39,14 @@ import {
   reasonForCommit, reasonForCommitDeps, reasonForCommitPart,
   reasonForDigest, reasonForStudy, reasonForTemplate, reasonForUserTask, summaryStudyIssue,
 } from './explain.ts';
+// E 批 E1（2026-09-28）：知识库接线的唯一消费点。开关缺省关闭 = 本行不改变任何既有行为
+// （golden 逐位一致）；开启后策略现场工厂的自习档位改用方法库档位 + 久坐安全档。
+// 归属申报：CY 授权（工作单 §11），本文件属 Ray 目录，commit message 高亮说明。
+import { knowledgeWired, sedentarySafeDurations, studyBlockDurations } from './knowledge.ts';
+// E 批 E2（2026-09-28）：空间库选取策略（按「从上一块走过去的分钟」排序候选）。
+import { orderByWalkFrom, spatialWired } from './placesPolicy.ts';
+// E 批 E3（2026-09-28）：画像的**块级**偏好（时段亲和度）——开关缺省关闭 = 零行为变化。
+import { blockPrefs, gapAffinity, prefsWired, type BlockPrefs } from './profilePrefs.ts';
 
 /* ============================================================
  * 一、常量（与旧引擎逐字一致）
@@ -219,6 +227,26 @@ function travelNeed(transfer: TransferProvider, from?: string, to?: string): num
   if (!from || !to || from === to) return 0;
   const info = transfer(from, to);
   return info ? Math.ceil(Math.max(0, info.minutes)) : 0;
+}
+
+/**
+ * 取转场**信息本体**（要 `reliable` 判断是不是估算值）——`travelNeed` 只回分钟数，不够用。
+ * 拿不到返回 null（同地点/无数据/认不出校区），调用方按「未知」处理，**不当成 0**。
+ */
+function travelInfoOf(
+  transfer: TransferProvider, from?: string, to?: string,
+): { minutes: number; reliable?: boolean } | null {
+  if (!from || !to || from === to) return null;
+  return transfer(from, to);
+}
+
+/**
+ * E3：从请求里算画像的**块级**偏好。开关关闭、或没画像/没场景 → null
+ * （引擎保持「大空档优先」的既有口径，行为零变化）。
+ */
+function blockPrefsOf(req: PlanRequest): BlockPrefs | null {
+  if (!prefsWired()) return null;
+  return blockPrefs(req.persona ?? null, req.scenarios ?? null);
 }
 
 /** 当天课程主要发生在哪个校区 → 决定去哪边的食堂 */
@@ -528,8 +556,10 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     // 事件准备块（有截止日期）是硬需求：单独留出预算，不与日常活动抢额度。
     // 「光电杯明天截止」比「今天少自习一小时」严重得多 —— 少了这一项，
     // 日程一满，备考/交材料的块会被日常活动预算静默挤掉，用户完全看不出来。
+    // D4：用户点名块（budgetExempt，如「出去玩 1 小时」）同样计入 —— 用户点名的事
+    // 优先级等同硬需求，不该被 min(120, usable×0.4) 的日常预算静默挤掉。
     const essentialMin = floatingTasks
-      .filter((t) => t.essential && taskActive(t) && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .filter((t) => (t.essential || t.budgetExempt) && taskActive(t) && (t.dayOfWeek == null || t.dayOfWeek === day))
       .reduce((n, t) => n + (t.durationMin ?? 60), 0);
     const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4)) + essentialMin;
 
@@ -570,10 +600,12 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     for (const tpl of candidates) {
       const cat = tpl.category as ActivityCategory;
       const cap = cat === 'social' ? socialCap : (CATEGORY_PER_DAY[cat] ?? 1);
-      if ((perCat[cat] ?? 0) >= cap) continue;
+      // D4：用户点名块（budgetExempt）不受每日类目上限与活动预算闸约束 ——
+      // 「用户点名要做的事」不该因为「今天已经有别的块」被静默跳过（placed=0 的根因）。
+      if (!tpl.budgetExempt && (perCat[cat] ?? 0) >= cap) continue;
       // WP5 运动模式：周配额 —— 本周已排满 sportSessions 次就不再排（每天 1 次天然隔天）
       if (cat === 'sport' && sportQuota != null && sportPlaced >= sportQuota) continue;
-      if (activityMin + Math.min(...tpl.durations) > activityBudget) continue;
+      if (!tpl.budgetExempt && activityMin + Math.min(...tpl.durations) > activityBudget) continue;
       const block = placeTemplate({
         tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
         homeBaseName: req.homeBase?.name,
@@ -601,6 +633,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
       dayStartMin: softFloorMin, dayEndMin, recoveryUntil,
+      prefs: blockPrefsOf(req),
     });
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
@@ -964,8 +997,9 @@ function placeTemplate(args: {
       // ⚠️ 第三项是 P1 合并时补回的：`notBeforeMin`（见 templates.ts）。
       //    没有它，引擎按「最大空档优先」选位，没课的清晨会成为首选 ——
       //    于是「四六级真题」被排到 07:00（还没起床）。（PR #3 的能力，P1 抽取时漏了）
+      //    D4 补对偶上界 `notAfterMin`：时段窗的 toMin（「晚上」= 23:00 前）不再被丢掉。
       const floor = Math.max(gap.startMin, z.startMin, tpl.notBeforeMin ?? 0);
-      const ceiling = Math.min(gap.endMin, z.endMin);
+      const ceiling = Math.min(gap.endMin, z.endMin, tpl.notAfterMin ?? Number.POSITIVE_INFINITY);
       // 两头都要留走路时间：从上个块走过来 + 待会儿还要走到下一个块
       const prev = lastBlockBefore(placed, floor);
       const need = travelNeed(transfer, prev?.place, tpl.place);
@@ -979,7 +1013,10 @@ function placeTemplate(args: {
           .reduce((m, b) => Math.max(m, b.endMin), -1);
         if (lastMealEnd >= 0 && s - lastMealEnd < MEAL_TO_SPORT_GAP_MIN) continue;
       }
-      if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
+      // D4：eveningAllowed=false 是引擎的**自我约束**（默认不占用户的夜晚）；
+      // 用户点名块（budgetExempt）明确说了「我要晚上」→ 这条约束让位于用户（否则
+      // 「明天晚上出去玩」在 normal 周相下永远排不上 —— notBefore=18:00 恒被拦）。
+      if (!policy.eveningAllowed && s >= EVENING_FROM && !tpl.budgetExempt) continue;
       const tail = travelNeed(transfer, tpl.place, nextBlockOnOrAfter(placed, ceiling)?.place);
       const dur = pickDuration(tpl.durations, ceiling - s - tail - (tail ? SOFT_BUFFER_MIN : 0));
       if (dur == null) continue;
@@ -1031,7 +1068,11 @@ function studyCandidates(
       emoji: '📚',
       category: 'study' as const,
       kind: 'study' as const,
-      durations: [45, 60, 90],
+      // E1：开关关闭 = 逐位回到既往的拍脑袋档位；开启 = 方法库档位（25/50）
+      // 再过一遍久坐安全档（>60 分钟的档位剔除，健康库「久坐打断」条目）。
+      durations: knowledgeWired()
+        ? sedentarySafeDurations(studyBlockDurations())
+        : [45, 60, 90],
       place: p,
       campus: (place ? campusLabel(place) : 'any') as ActivityTemplate['campus'],
       windows: [],
@@ -1064,8 +1105,10 @@ function fillStudy(args: {
   dayEndMin: number;
   /** 运动后恢复带的上界（2026-09-28）：自习块不得早于这个时刻开始 */
   recoveryUntil: number;
+  /** E3：画像块级偏好；null = 无偏好（保持「大空档优先」） */
+  prefs: BlockPrefs | null;
 }): TimeBlock[] {
-  const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin } = args;
+  const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin, recoveryUntil, prefs } = args;
   let placed = placedIn;
 
   const isWeekend = day === 6 || day === 7;
@@ -1095,15 +1138,34 @@ function fillStudy(args: {
   while (remaining >= MIN_CHUNK) {
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
       .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
+    /**
+     * E3：开关开启且有画像偏好时，先按**时段亲和度**（画像说"你上午更稳"）再按大小排序；
+     * 关闭 / 无偏好 → 不进入该分支，保持「大空档优先」的既有口径（逐位一致）。
+     */
+    if (prefs && prefs.deepWorkWindows.length > 0) {
+      gaps.sort((x, y) => gapAffinity(prefs, y) - gapAffinity(prefs, x)
+        || (y.endMin - y.startMin) - (x.endMin - x.startMin));
+    }
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
     const cands = rotated();
 
     for (const gap of gaps) {
       const prev = lastBlockBefore(placed, gap.startMin);
+      // E2：开关开启且知道「上一块在哪」时，候选迭代顺序改按「从上一块走过去的分钟」排
+      // （估算项留余量）；进门闸（openAt）与质量闸（minStudyDurationAt）仍由下方循环体
+      // 统一把关。关闭态不进入此分支 → 迭代顺序与既往逐位一致。
+      const ordered = (spatialWired() && prev?.place)
+        ? orderByWalkFrom(cands, prev.place, (t) => {
+            const info = travelInfoOf(transfer, prev.place, t.place);
+            return info
+              ? { minutes: Math.ceil(Math.max(0, info.minutes)), estimate: info.reliable === false }
+              : null;
+          })
+        : cands;
       // 空档末尾还要留出「走到下一件事」的时间 + 一点缓冲，
       // 否则会吃掉下一块（尤其下一顿）的走路时间，排出「余 2 分·紧」这种没必要的紧张
       const nextAfter = nextBlockOnOrAfter(placed, gap.endMin);
-      for (const tpl of cands) {
+      for (const tpl of ordered) {
         // 优先挑「此刻开着门」的自习点（图书馆 8:00-23:00，老馆 6:00-23:00…）
         if (!openAt(tpl, gap.startMin, gap.startMin + MIN_CHUNK)
           && !openAt(tpl, gap.endMin - MIN_CHUNK, gap.endMin)) continue;

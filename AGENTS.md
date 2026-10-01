@@ -16,7 +16,7 @@
 
 ---
 
-## 〇、当前进度快照 · 动手前必读（2026-09-15）
+## 〇、当前进度快照 · 动手前必读（2026-10-01）
 
 ### 项目是「一条主线 + 一个角色」，不是双线
 
@@ -27,6 +27,7 @@
 | **红线** | 智能边界 | 梨宝**可以递地图、陪走一段、指方向，但绝不替用户拍板**（L4 不做） | 见 `docs/project-core.md` §4 |
 
 > ⚠️ **旧口径已废**：不再把项目描述成"排程工具 + 配角助手"的双线结构；「反内卷 / 留白率」**已从核心卖点降为排程引擎的一个可调软参数**（`blankDeficit`），不得再出现在对外材料的主叙事里。
+> ⚠️ **旧 PR 口径已废**：PR #2–#5 早已合入；下表「收敛中 / 待 PR」字样已按 2026-10-01 现实改写。
 
 > **2026-09-15 起的分工**：梨宝线由 **CY 单独推进**，B 专注**排程引擎与排程内容**（见 §二）。
 
@@ -36,18 +37,21 @@
 
 | 已实现 | 位置 | 状态 |
 |---|---|---|
-| 前端三 Tab 壳（月历 / 梨宝 / 画像） | `src/App.tsx` | ✅ 跑通 |
-| 欢迎页 → 画像问卷 → 画像结果 → 主界面流程 | `src/features/welcome/`、`features/persona/` | ✅ 跑通 |
-| 画像规则映射（8–10 题，非 MBTI） | `src/lib/persona.ts` `buildProfile()` | ✅ 跑通 |
-| 月历 + 截止事项看板 | `src/features/calendar/` | ✅ 跑通 |
-| 周排程视图 + 生活模式 | `src/features/week/WeekView.tsx` | ✅ 跑通 |
-| 规则推荐引擎 `lbaoRecommend()`（硬编码时间模板，非真引擎） | `src/lib/lbao.ts` + `features/libao/LbaoPlanView.tsx`（渲染） | ⚠️ **收敛中**：真引擎入口是 `buildWeekPlan`。周计划页接入在 **PR #3**，梨宝对话侧并轨在 **PR #4**。`features/week/WeekView.tsx:53` 仍调 `lbaoRecommend`，待清理 |
-| 梨宝对话（意图分流：排程走真引擎 / 问答走后端 RAG） | `src/features/libao/LbaoChat.tsx` + `weekPlanForChat.ts` | ✅ 跑通（PR #4） |
-| 后端 API：`/api/health` `/api/search` `/api/chat` | `server/app.py` | ✅ 跑通 |
+| 前端三 Tab 壳（总览 / 梨宝 / 画像 / 课表） | `src/App.tsx` | ✅ 跑通 |
+| 欢迎页 → 画像问卷（含基础信息前置 + 年级分层）→ 画像结果 → 主界面流程 | `src/features/welcome/`、`features/persona/` | ✅ 跑通 |
+| 画像规则映射（非 MBTI） | `src/lib/persona.ts` `buildProfile()` | ✅ 跑通 |
+| 月历 + 截止事项看板 + 重要日体系（WP11） | `src/features/calendar/` | ✅ 跑通 |
+| 周计划视图（块卡片 L0/L2 抽屉渐进披露 + 编辑模式 + 拖拽合规） | `src/features/week/` | ✅ 跑通（E4/E5，设计规范 `docs/week-view-design.md`） |
+| **排程真引擎** `buildWeekPlan`（两遍法 + 增量滚动 / 锁定 / 涟漪 / 转场 buffer） | `src/lib/planner/` | ✅ 跑通。**旧规则模板 `lbaoRecommend()` 已于 2026-09-19 整体删除**，周计划页与梨宝对话都走真引擎 |
+| 梨宝对话（双模式 + 追问状态机 + 对话管理器 ActExecutor） | `src/features/libao/LbaoChat.tsx` + `dialogManager.ts` + `weekPlanForChat.ts`（唯一接缝，红线 6） | ✅ 跑通（S/T/D 批；`DIALOG_ENABLED=false` 一行可回退规则链路） |
+| 语义理解端点 `/api/plan/understand`（intent/answer/dialog 三场景） | `server/plan_dialog.py` | ✅ 跑通（金标 100 条双通道评测过门槛） |
+| 引擎知识接线（方法库/健康库/空间库/画像块级偏好，三开关） | `src/lib/planner/knowledge.ts` / `placesPolicy.ts` / `profilePrefs.ts` | ✅ **G 批（2026-10-01）起缺省全开**（env `'0'` 逃生门）；golden 实测零漂移 |
+| 后端 API：`/api/health` `/api/search` `/api/chat` `/api/route` `/api/weather` `/api/poi` `/api/nearby` + understand | `server/app.py` | ✅ 跑通 |
 | 检索：jieba → FTS5 BM25(0.4) + bge-small-zh-v1.5 向量(0.6) × 时效因子 | `scripts/rag.py` | ✅ 就绪 |
 | 问答：脱敏网关 → RAG → DeepSeek 合成（梨宝人格），无 Key 自动降级抽取式 | `server/app.py` | ✅ 实测 `mode:"llm"` |
 | **校园资讯数据资产：520 主条目（515 篇可全文检索）+ 1873 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
 | 数据工程流水线（采集/抓全文/清洗/去重/建索引，五步可单独重跑） | `scripts/*.py` | ✅ 齐全 |
+| 测试/验收体系（engine 458+ / ui 319+ / golden 快照 / RV 源码锁 / E2E 77 断言 / 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与纪律） |
 
 ### 数据资产说明（重要）
 
@@ -56,14 +60,15 @@
 - **不要重新爬取**。要新增数据请复用 `scripts/` 里的脚本增量采集，然后跑 `python scripts/rag.py build` 重建索引。
 - 重建索引需 `fastembed`（bge-small-zh-v1.5 ONNX，CPU），模型缓存在 `~/.workbuddy/cache/fastembed`。
 
-### 遗留 / 可以接手的活（按优先级）
+### 遗留 / 可以接手的活（按优先级，2026-10-01）
 
-1. **补数据缺口**：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 → 找后勤保障处 / 信息化办公室官网补爬。
-2. **重采全文**：部分公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
-3. **决赛材料**：申报书 / PPT / 演示视频（9/28 报名截止，10 月底决赛）。
-4. 前端：周排程算法打磨（增量滚动、锁定、截止驱动、跨校区转场 buffer）。
+1. **beta-v2 → dev 合并**：本地 beta-v2（主力工作树）与 origin/dev 为 unrelated histories，**必须人工评审合并**（见 `BLOCKERS.md` G 批条）。
+2. **四处 PARTIALS 契约扩展**：睡眠保底窗口（`identity.sleepMin` 进 PlanRequest）/ 每周活动量下限 / 三餐步行预算 / 画像变更受影响天——属跨人契约，需 CY+RAY 确认（`src/lib/planner/*_PARTIALS` 已登记）。
+3. **补数据缺口**：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 → 找后勤保障处 / 信息化办公室官网补爬。
+4. **重采全文**：部分公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
+5. **决赛材料**：申报书 / PPT / 演示视频（10 月底决赛）。
 
-> 详细清单见 `docs/progress-status.md` §8–§9。
+> 详细清单见 `docs/progress-status.md` §8；逐批明细见 `docs/wp-ledger-v2.md`（台账）与 `BLOCKERS.md`。
 
 ---
 
@@ -73,7 +78,7 @@
 - 每次改动后，都必须编写或更新相关测试，并在交付给用户前，确保所有测试和验证全部通过。
 - 提交前必须运行 `npm run typecheck`，确保类型检查全绿，禁止带红字提交。
 - 同时运行测试入口：`npm run test:ui`（全仓 UI/脚本测试）；引擎相关改动另跑 `npm run test:engine`。
-  （这两个入口随 **PR #3** 合入——它引入 `scripts/register-alias.mjs` 作为 `@/` 别名的加载钩子。）
+  （`scripts/register-alias.mjs` 作为 `@/` 别名的加载钩子，已随历史 PR 在库。）
 - **需要活后端的两个入口**（**不是 CI 测试**，跑前先 `python server/app.py` 且配好 Key）：
   - `npm run test:libao` → 45 轮真实对话，判**路由 + 内容**双判据
   - `npm run eval:libao` → 9 维度 / 25 项答案质量评测（找坏法用，产出失败模式原始数据）
@@ -163,6 +168,7 @@ python server/app.py                          # 后端 → http://127.0.0.1:8000
 | `docs/teammate-onboarding.md` | 环境/克隆/每日动作/冲突处理 | 人类队友 |
 | ~~`docs/PRD.md`~~ / ~~`docs/roadmap.md`~~ / ~~`docs/product-vision.md`~~ / ~~`docs/project-intro.md`~~ | **已归档**，定位口径作废 | 仅查历史 |
 | `docs/features.md` / `docs/engine-plan.md` / `docs/prompts.md` | 模块契约 / 引擎计划 / 提示词库 | 写具体模块前 |
+| `docs/week-view-design.md` | 周视图设计规范（视觉重心 / L0-L1-L2 分层 / 动效与令牌约束，可验收） | 改周视图呈现层前必读（E 批起生效） |
 
 ---
 
@@ -283,3 +289,50 @@ node scripts/gate_overnight.mjs
    只处理本次任务的产物，`src/features/week/`、`src/components/`、`src/lib/persona.ts`
    下的文件除非你有正当改动理由，否则一行都别碰（2026-09-21 曾误把全仓 300 个文件
    归一为 CRLF，含队友 51 个文件，已整体回退）。
+
+<!-- autoclaw:skill-path-guidance -->
+## Installing Skills
+
+When creating or installing a new skill, always place it in:
+
+`C:\Users\CY\.openclaw-autoclaw\skills/<skill-name>/SKILL.md`
+
+This is the managed skills directory. The agent will automatically discover
+any skill placed here — no extra configuration needed. Do NOT install skills
+into `~/.agents/skills/` (that directory is shared with other tools).
+
+
+<!-- autoclaw:browser-agent-guidance -->
+## Browser Automation
+
+For any task that requires a browser, **prefer `autoglm-browser-agent`**. Use it as the first choice. For time-sensitive scenarios such as financial news, stock quotes, or breaking news, you can additionally use this skill to fetch up-to-date information and supplement your data sources.
+
+- ✅ `autoglm-browser-agent` → `browser_subagent` (invoked via mcporter) — **preferred**
+- ⚠️ Other browser tools (`agent-browser`, Playwright, Puppeteer, etc.) — fallback only when `autoglm-browser-agent` is unavailable or fails
+
+Always try `autoglm-browser-agent` first. Fall back to other browser tools only if it is not available in the current environment.
+
+**IMPORTANT: Do NOT use `sessions_spawn` to delegate browser/web automation tasks to a sub-agent.** Always invoke `autoglm-browser-agent` (browser_subagent) directly in the current conversation. Browser tasks must be handled by yourself, not by a spawned child agent.
+<!-- /autoclaw:browser-agent-guidance -->
+
+<!-- autoclaw:image-recognition-guidance -->
+## Image Recognition
+
+For image tasks, prefer the model's native visual capability when the image is available to the selected model through its native image-input channel and the model supports image input.
+
+- ✅ Native image input + an image-capable model — read and judge the image directly; do not invoke `autoglm-image-recognition`
+- ✅ Existing `[图片参考描述]` — reuse the description; do not invoke the recognition skill again
+- ⚠️ `autoglm-image-recognition` — fallback only for text-only models, images offloaded or unavailable through the native input channel, or unavailable native vision capability
+
+<!-- /autoclaw:image-recognition-guidance -->
+
+<!-- autoclaw:feishu-lark-skill-guidance -->
+## Feishu / Lark Requests
+
+When the user asks about Feishu/Lark/飞书 matters, route through Feishu/Lark skills first. This includes messaging, contacts, calendars, approvals, tasks, docs, sheets, Base, Drive, Wiki, mail, meetings, minutes, attendance, OKRs, or any other Feishu/Lark workspace operation.
+
+1. If a relevant Feishu/Lark skill is already available, use that skill directly.
+2. If no relevant skill is available, search the skill catalog/store or available skill list for a matching Feishu/Lark skill.
+3. If you find a matching skill that is not installed or enabled, ask the user whether to install/enable and use it before proceeding.
+4. If no matching skill exists, say so briefly and continue with the safest available fallback.
+<!-- /autoclaw:feishu-lark-skill-guidance -->

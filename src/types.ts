@@ -275,6 +275,8 @@ export interface TransferHint {
    * **不要把它当 `false` 用** —— 语义是「未知」，不是「估算」。
    */
   reliable?: boolean;
+  /** 数据来源，如 `'osm'` / `'campus-estimate'` / `'manual'`（2026-09-19 契约：评分按可信度打折依赖此字段；beta-v2 原有，delta 融合补回） */
+  source?: string;
 }
 
 export interface TimeBlock {

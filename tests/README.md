@@ -135,6 +135,31 @@ node --import ./tests/register.mjs tests/golden-compare.ts        # AC-1 / AC-2 
 
 **未受影响**：`AC-1 硬约束`、`AC-3 预算` 的判定逻辑不变；重拍后 5/5 通过。
 
+### 重拍记录 ②（2026-10-01，G 批）：三灰度开关缺省全开 —— 实测零漂移，**无需重拍**
+
+**背景**：E 批给引擎接了知识/空间/画像三能力，用 `KNOWLEDGE_WIRED` / `SPATIAL_WIRED` /
+`PROFILE_PREFS_WIRED` 灰度（缺省关）。G 批（CY 拍板「三个全开」）把缺省翻为 true
+（env 显式 `'0'`/`'false'` 为逃生门），按 E 批预设「开启需 golden 另拍基线」。
+
+**实测**：五个 golden 语料在「全关（env=0）」与「全开（未设 env）」下
+`normalizePlan` 输出**逐字节一致**（week-04-typical / 04-usertasks / 06-practice /
+12-crosscampus / 19-exam，diff count = 0），`construct.test` AC-2 原样绿 ——
+快照未动一个字节。
+
+**零漂移的原因（代码走读 + 实测互证）**：
+1. `KNOWLEDGE_WIRED` 的档位替换只作用于「策略自习点不在模块库 → 现场造模板」分支
+   （construct.ts 现场工厂）；golden 语料的 `studyPlaces`（如 图书馆（图文信息中心））
+   全部命中模块库固定档位模板，该分支未触发；
+2. `SPATIAL_WIRED` 的步行排序只在「同一优先档内」改选，crosscampus 语料里
+   `orderByWalkFrom` 的首选与盲取偏好池第一个一致；
+3. `PROFILE_PREFS_WIRED` 需要 `req.persona`（HEA≥70）才产出时段窗口，
+   golden 语料一律不带 persona → 偏好为空。
+
+**结论**：E 批「开启会改变计划输出」是对**带画像/带未知自习点的真实用户输入**的
+预期；对 golden 冻结语料不成立。三开关的生效验收仍由三个 wiring 测试文件
+（knowledge-wiring / places-policy / profile-prefs，各含「缺省开启」断言 +
+关闭态基线锚 + RV 源码锁）把守。
+
 ### 验收有牙齿（变异测试记录）
 
 为证明 AC-2 不是「永远绿」，做过一次变异：把 `construct.ts` 的 `SOFT_BUFFER_MIN` 由 `5` 改成 `6`

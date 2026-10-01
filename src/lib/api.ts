@@ -267,5 +267,91 @@ export function routeBatch(
   return post<{ routes: Record<string, RouteResult | null>; mode: string }>(
     '/api/route/batch', { pairs, mode },
   );
+}
+
+/* ---------------- S 批 S3：排程理解（LLM 听懂，规则兜底在前端） ----------------
+ * server/plan_dialog.py 的 /api/plan/understand。契约与该文件 docstring 一致：
+ * HTTP 恒 200，LLM 不可用/超时/解析坏一律 { ok:false, reason } —— 前端视作
+ * 「走规则兜底」，不算错误、不弹提示（纪律①：规则优先，LLM 只补空）。 */
+
+export interface PlanSlotPatch {
+  title?: string;
+  when_text?: string;
+  month?: number;
+  day?: number;
+  relativeDays?: number;
+  relativeWeeks?: number;
+  weekday?: number;
+  perWeekCount?: number;
+  durationMin?: number;
+  totalHours?: number;
+  place?: string;
+  window_text?: string;
+  targetHint?: string;
+}
+
+export interface PlanUnderstandResult {
+  ok: boolean;
+  reason?: string;
+  /** scene=intent：这句话是否要动日程 */
+  action?: boolean;
+  intent?: 'create' | 'replace' | 'reschedule' | 'cancel' | 'query' | 'add_deadline' | 'hold';
+  patch?: PlanSlotPatch;
+  /** scene=answer：槽位 → 原话片段（LLM 只做定位，结构化仍在规则层） */
+  answers?: Record<string, string>;
+  /** scene=dialog（D 批 D2）：对话管理器的动作裁决 */
+  act?: string;
+  args?: {
+    slot?: string;
+    candidate_idx?: number;
+    target_text?: string;
+    pick_kind?: 'cancel' | 'reschedule' | 'replace';
+    option?: 'swap_block' | 'move_next_week' | 'reduce_scope' | 'give_time';
+    intent?: PlanUnderstandResult['intent'];
+    /** D7：用户选中的协商方案 id（blocking.options 照抄） */
+    replan_id?: string;
+    patch?: PlanSlotPatch;
+  };
+  /** 对话管理器的一句话说明（≤80 字，梨宝口吻） */
+  reply_note?: string;
+  confidence?: number;
+  elapsed_ms?: number;
+}
+
+/** dialog 场景递给后端的对话状态（前端已做白名单序列化，后端再兜一层 ≤4KB） */
+export interface PlanDialogState {
+  topic: Record<string, unknown> | null;
+  missStreak: number;
+}
+
+/**
+ * 排程理解。带 9s 客户端超时（服务端 8s + 1s 余量）—— 后端挂了也不能让
+ * 用户干等：超时同样落 { ok:false }，前端走规则兜底。
+ */
+export async function planUnderstand(body: {
+  scene: 'intent' | 'answer' | 'dialog';
+  q: string;
+  /** scene=answer：已问槽位清单，"slot: 话术原文" 形式 */
+  asked?: string[];
+  /** scene=intent：规则层已抽到的槽位（LLM 只补空） */
+  slots?: Record<string, unknown>;
+  today?: string;
+  /** 最近 ≤4 条「角色:文本」，防指代断裂 */
+  history?: string[];
+  /** scene=dialog：对话管理器状态（topic 白名单序列化 + missStreak） */
+  state?: PlanDialogState;
+}): Promise<PlanUnderstandResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/plan/understand`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+    return (await res.json()) as PlanUnderstandResult;
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : 'network' };
+  }
 }import { periodStartMin } from '@/constants/time';
 
