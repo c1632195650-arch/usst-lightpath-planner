@@ -82,6 +82,7 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - relativeDays: 相对天数（今天=0 明天=1 后天=2 大后天=3）
 - relativeWeeks: 相对周数（这周=0 下周=1）
 - weekday: 星期几（周一=1 … 周日=7）
+- weekNo: 学期周次（「第10周」=10；「第10周周五」= weekNo 10 + weekday 5）
 - perWeekCount: 每周几次（「每天」=7；「隔天/每两天」≈每周3-4次，按 4 记）
 - durationMin: 单次时长（分钟）（「每次2小时」=120；「6点到7点」这种回答时长的说法=60；
   **裸时长优先归单次**：「出去玩一小时」「排90分钟」=60/90 —— 只有带「一共/总共/要花/投入」才是总投入）
@@ -198,6 +199,9 @@ def _clean_patch(patch):
     n = _num(patch.get("weekday"))
     if n is not None and 1 <= n <= 7:
         out["weekday"] = int(n)
+    n = _num(patch.get("weekNo"))
+    if n is not None and 1 <= n <= 30:
+        out["weekNo"] = int(n)
     n = _num(patch.get("perWeekCount"))
     if n is not None and 1 <= n <= 7:
         out["perWeekCount"] = int(n)

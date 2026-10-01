@@ -148,10 +148,10 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
   if (!p) return patch;
   if (p.title) patch.title = p.title;
   if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
-    || p.relativeWeeks != null || p.weekday != null) {
+    || p.relativeWeeks != null || p.weekday != null || p.weekNo != null) {
     patch.when = {
       text: p.when_text ?? '',
-      kind: (p.month != null || p.day != null) ? 'exact'
+      kind: (p.month != null || p.day != null || (p.weekNo != null && p.weekday != null)) ? 'exact'
         : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
         : 'window',
     };
@@ -160,6 +160,7 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
     if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
     if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
     if (p.weekday != null) patch.when.weekday = p.weekday;
+    if (p.weekNo != null) patch.when.weekNo = p.weekNo;
   }
   if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
   if (p.durationMin != null) patch.durationMin = p.durationMin;
@@ -345,6 +346,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     () => Object.values(pending).map((g) => g.tasks.map((t) => t.id).join(',')).join('|'),
     [pending],
   );
+  /** 批 1.2/1.4：weekNo 与学期词的日期换算锚点 —— schedule.termStart（及校历）
+   *  传进理解层，让「第10周周五」「期末之前」落到真实日期；缺课表时理解层安全降级。 */
+  const whenOpts = useMemo(() => ({ termStart: schedule?.termStart }), [schedule?.termStart]);
   useEffect(() => {
     let alive = true;
     const weekNo = currentWeekNo(schedule.termStart, todayISO());
@@ -1245,10 +1249,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       // ask_slot(when) 时，用户这句话里的槽位（本地规则解析 + LLM patch）必须
       // 先并进现有槽位；目标槽位已经补上就不再重复问（真机实录：答了
       // 「下周一开始；一共10小时」仍被反问 when = 答非所问）。
-      const local = parseIntentSlots(ctx.q, ctx.today);
-      const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
+      const local = parseIntentSlots(ctx.q, ctx.today, whenOpts);
+      const withLocal = mergeLlmPrimary(t.slots, local, ctx.today, whenOpts);
       const llmPatch = mapUnderstandPatch(args.patch);
-      const merged0 = mergeLlmPrimary(withLocal, llmPatch, ctx.today);
+      const merged0 = mergeLlmPrimary(withLocal, llmPatch, ctx.today, whenOpts);
       const merged: IntentSlots = { ...merged0, intent: t.intent };
       merged.missing = missingSlots(merged);
       if (!merged.missing.includes(slot)) {
@@ -1357,7 +1361,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       // 确定性规则：**回答里说不出新目标名**（没有 title）且不是明确的动作词，
       // 就按原意图续答 —— 用户在答题，不是在开新话题。
       if (t && t.phase === 'collect' && intent !== t.intent) {
-        const fresh = parseIntentSlots(ctx.q, ctx.today);
+        const fresh = parseIntentSlots(ctx.q, ctx.today, whenOpts);
         const looksLikeAction = /\b(取消|替换|改时间|挪|推迟|提前)\b/.test(ctx.q);
         if (!fresh.title && !looksLikeAction) {
           intent = t.intent;
@@ -1370,9 +1374,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         // 强化计划 D（2026-10-02）：**双层并入** —— LLM patch 有时丢槽位
         // （真机实录：scene=intent 重试只带回 when、丢了 totalHours），先把
         // 回答的**本地规则解析**并进基线，再让 LLM patch 作主覆盖。
-        const local = parseIntentSlots(ctx.q, ctx.today);
-        const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
-        const merged = mergeLlmPrimary(withLocal, patch, ctx.today);
+        const local = parseIntentSlots(ctx.q, ctx.today, whenOpts);
+        const withLocal = mergeLlmPrimary(t.slots, local, ctx.today, whenOpts);
+        const merged = mergeLlmPrimary(withLocal, patch, ctx.today, whenOpts);
         merged.intent = intent;
         merged.missing = missingSlots(merged);
         if (merged.missing.length === 0) {
@@ -1392,7 +1396,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 「把 X 替换掉」隐含「用刚才想排的事替换」（B① 议题续用）：
       // 替换诉求没带新事的投入信息、而刚才有一件没排成的 → 用它的槽位当新事
-      let merged = mergeLlmPrimary(parseIntentSlots(ctx.q, ctx.today), patch, ctx.today);
+      let merged = mergeLlmPrimary(parseIntentSlots(ctx.q, ctx.today, whenOpts), patch, ctx.today, whenOpts);
       merged.intent = intent;
       if (intent === 'replace' && t?.priorFailed
         && merged.durationMin == null && merged.totalHours == null && merged.perWeekCount == null) {
@@ -1629,7 +1633,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 状态机出口④前哨：完全无关 —— 先给**新动作句**一次打断机会（以新句为准）。
       // 打断是有声的：回应里说明旧追问作废，不让用户猜自己上一轮的回答去哪了。
-      const interrupt = await parseGoalIntent(q, { today, llmJudge, history });
+      const interrupt = await parseGoalIntent(q, { today, llmJudge, history, whenOpts });
       if (interrupt.action) {
         setTopic(null);
         setMessages((current) => [...current, {

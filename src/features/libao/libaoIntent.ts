@@ -82,6 +82,8 @@ export interface WhenHint {
   relativeWeeks?: number;
   /** 星期几（1=周一…7=周日），配合 `relativeWeeks` 表示「下周三」 */
   weekday?: number;
+  /** 学期周次（批 1.2）：「第10周」= 10；配合 weekday 表示「第10周周五」。换算需 termStart。 */
+  weekNo?: number;
   /** 用户明说「时间没定」。与「没提到时间」是两回事 —— 前者要标注，后者要追问。 */
   unspecified?: boolean;
   /** 「每周三」这类循环约定 —— 不是某一天，不享受单日事件的投入豁免（hasEffort）。 */
@@ -309,6 +311,7 @@ const TITLE_STOP: string[] = [
   '的', '了', '着', '过', '把', '在', '和', '与', '跟', '为', '给', '到', '从',
   '我', '你', '他', '她', '它', '们', '这', '那', '是', '有', '要', '想', '能', '会',
   '请', '帮', '就', '还', '也', '都', '很', '最', '再', '又',
+  '交',
   // 批 1.1（金标 title 对齐）：时段词不是目标的一部分（「周五晚上班级聚餐」→ 聚餐）；
   // 「次」不是（「去一次健身房」→ 健身房）；完成词族不是（「实验报告写完」→ 实验报告）
   '早上', '早晨', '上午', '中午', '下午', '晚上', '晚间', '次', '写完', '做完', '弄完',
@@ -575,6 +578,22 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
     return { text: relDay[1], kind: 'relative', relativeDays: off };
   }
 
+  // 第 N 周（可带周X）—— 教务口径的学期周次（批 1.2）。必须在裸「周X」之前拦：
+  // 否则「第10周周五」会被当成最近的周五（探针实录：→ 错 4 周）。
+  const wk = /第\s*(\d{1,2}|[一二三四五六七八九十]{1,3})\s*周(?:\s*(周[一二三四五六日天]|星期[一二三四五六日天]))?/.exec(s);
+  if (wk) {
+    const n = /^\d+$/.test(wk[1]) ? Number(wk[1]) : cnToInt(wk[1]);
+    if (n != null && n >= 1 && n <= 30) {
+      const wdIn = wk[2] ? WD_NUM[wk[2].slice(1)] : undefined;
+      return {
+        text: wk[0],
+        kind: wdIn != null ? 'exact' : 'window',
+        weekNo: n,
+        ...(wdIn != null ? { weekday: wdIn } : {}),
+      };
+    }
+  }
+
   // 相对周 + 星期
   const relWeek = /(下周|下星期|这周|本周|这星期|本星期)/.exec(s);
   const wd = /(周[一二三四五六日天]|星期[一二三四五六日天])/.exec(s);
@@ -765,6 +784,22 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+/**
+ * 日期换算的学期锚点（批 1.2/1.4）：weekNo 换算要 termStart；「期中/期末」这类
+ * 学期词要校历日期。由调用方（LbaoChat，手里有 schedule 与 TERM_CALENDAR）构造，
+ * 本层保持纯函数 —— 不 import 校历、不读时钟。
+ */
+export interface ResolveTermOpts {
+  /** 学期第一周周一（ISO）—— weekNo 换算的锚点 */
+  termStart?: string;
+  /** 校历锚点（ISO）—— 学期词落地用（1.4） */
+  term?: {
+    midterm?: string;
+    finalsFrom?: string;
+    finalsTo?: string;
+  };
+}
+
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -781,12 +816,32 @@ function isoOf(d: Date): string {
 export function resolveWhen(
   hint: WhenHint | undefined,
   today: string,
+  opts?: ResolveTermOpts,
 ): { from?: string; to?: string; certainty: TimeCertainty } {
   if (!hint) return { certainty: 'unknown' };
   if (hint.kind === 'vague') return { certainty: 'unknown' };
 
   const base = new Date(`${today}T00:00:00`);
   if (Number.isNaN(base.getTime())) return { certainty: 'unknown' };
+
+  // 学期周次（批 1.2）：「第N周(周X)?」= 学期绝对坐标，必须在 month/relative
+  // 分支之前处理。没有 termStart 就**不换算**（不编日期），降级为 window。
+  if (hint.weekNo != null) {
+    const ts = opts?.termStart;
+    const tsDate = ts ? new Date(`${ts}T00:00:00`) : null;
+    if (!tsDate || Number.isNaN(tsDate.getTime())) return { certainty: 'window' };
+    const monday = new Date(tsDate);
+    monday.setDate(tsDate.getDate() + 7 * (hint.weekNo - 1));
+    if (hint.weekday != null) {
+      const one = new Date(monday);
+      one.setDate(monday.getDate() + (hint.weekday - 1));
+      const iso = isoOf(one);
+      return { from: iso, to: iso, certainty: 'exact' };
+    }
+    const sun = new Date(monday);
+    sun.setDate(monday.getDate() + 6);
+    return { from: isoOf(monday), to: isoOf(sun), certainty: 'window' };
+  }
 
   if (hint.kind === 'exact' && hint.month && hint.day) {
     // 没写年份 → 取「不早于今天太久」的最近一次（3 月问「九月中旬」= 今年 9 月）
@@ -1316,7 +1371,7 @@ function emptySlots(raw: string): IntentSlots {
  *
  * @param today 给了才做日期换算（`dateFrom` / `dateTo`）；不给则只保留语义。
  */
-export function parseIntentSlots(q: string, today?: string): IntentSlots {
+export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTermOpts): IntentSlots {
   const raw = (q || '').trim();
   const s = emptySlots(raw);
 
@@ -1347,7 +1402,7 @@ export function parseIntentSlots(q: string, today?: string): IntentSlots {
   s.priorityHint = pri.priorityHint;
 
   if (today) {
-    const r = resolveWhen(when, today);
+    const r = resolveWhen(when, today, whenOpts);
     if (r.from) s.dateFrom = r.from;
     if (r.to) s.dateTo = r.to;
     s.certainty = r.certainty;
@@ -1367,6 +1422,10 @@ export function parseIntentSlots(q: string, today?: string): IntentSlots {
   }
   if (s.when && (s.when.kind === 'window' || s.when.kind === 'vague') && !s.dateFrom) {
     s.unclear.push('这个时间要靠校历才能落到具体哪一周，我先按当前周往后排。');
+  }
+  // 批 1.2：「第N周」没换算出来（调用方没给 termStart）→ 如实说，不编日期
+  if (s.when?.weekNo != null && !s.dateFrom) {
+    s.unclear.push('「第N周」要知道学期第一天才能落到具体日期 —— 导入课表后我就能对上。');
   }
   if (s.perWeekCount == null && s.totalHours != null) {
     s.unclear.push('没给每周几次 —— 我按「总量摊到窗口内」来排。');
@@ -1421,25 +1480,31 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
  * 结构化数字（month/day/relativeDays/…），日期换算走 `resolveWhen`，
  * 防止 LLM 直接编 ISO 日期。
  */
-export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> | null, today?: string): IntentSlots {
+export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> | null, today?: string, whenOpts?: ResolveTermOpts): IntentSlots {
   if (!patch) return rule;
   const out: IntentSlots = { ...rule };
 
   if (patch.title) out.title = patch.title;
   if (patch.when) {
+    // 批 1.2：weekNo 越界（规约 1–30）→ 从 patch 里剥掉，同 patch 其余字段保留
+    let pw: WhenHint = patch.when;
+    if (pw.weekNo != null && (!Number.isFinite(pw.weekNo) || pw.weekNo < 1 || pw.weekNo > 30)) {
+      const { weekNo: _drop, ...rest } = pw;
+      pw = rest as WhenHint;
+    }
     // 强化计划 D（2026-10-02）· 劣质覆盖防护：patch 只有**一句原话**（window 型、
     // 无任何结构化字段）而规则层已有结构化 when（点名了星期/相对天数/日期）时，
     // 不整体覆盖 —— 否则「下周一开始」会被 LLM 的劣质转写抹掉（真机实录：
     // 用户答了时间，梨宝反问「大概什么时候开始」= 答非所问）。
-    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; month?: number | null; day?: number | null; kind?: string } | null) =>
+    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; month?: number | null; day?: number | null; weekNo?: number | null; kind?: string } | null) =>
       !!w && (w.weekday != null || w.relativeDays != null || w.relativeWeeks != null
-        || w.month != null || w.day != null || w.kind === 'exact');
-    const patchIsBareWindow = !structured(patch.when) && patch.when.kind === 'window' && !!patch.when.text;
+        || w.month != null || w.day != null || w.weekNo != null || w.kind === 'exact');
+    const patchIsBareWindow = !structured(pw) && pw.kind === 'window' && !!pw.text;
     const ruleHasStructure = structured(out.when);
     if (!(patchIsBareWindow && ruleHasStructure)) {
-      out.when = patch.when;
+      out.when = pw;
       if (today) {
-        const r = resolveWhen(patch.when, today);
+        const r = resolveWhen(pw, today, whenOpts);
         out.dateFrom = r.from;
         out.dateTo = r.to;
         out.certainty = r.certainty;
@@ -1448,7 +1513,7 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
         out.dateTo = patch.dateTo;
         out.certainty = patch.certainty ?? out.certainty;
       }
-      if (patch.when.unspecified) out.certainty = 'unknown';
+      if (pw.unspecified) out.certainty = 'unknown';
     }
   }
   if (!patch.when && patch.dateFrom) out.dateFrom = patch.dateFrom;
@@ -1474,9 +1539,9 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
  */
 export async function parseGoalIntent(
   q: string,
-  opts: { today?: string; llm?: LlmExtractor; llmJudge?: LlmJudge; history?: string[] } = {},
+  opts: { today?: string; llm?: LlmExtractor; llmJudge?: LlmJudge; history?: string[]; whenOpts?: ResolveTermOpts } = {},
 ): Promise<ParseOutcome> {
-  const ruleSlots = parseIntentSlots(q, opts.today);
+  const ruleSlots = parseIntentSlots(q, opts.today, opts.whenOpts);
 
   // ── T 批换向：LLM 先看一眼（CY 2026-09-27 晚拍板「不能每次都靠找关键词」）──
   if (opts.llmJudge) {
@@ -1484,7 +1549,7 @@ export async function parseGoalIntent(
       const verdict = await opts.llmJudge(q, ruleSlots, opts.history);
       if (verdict) {
         if (verdict.action) {
-          let slots = mergeLlmPrimary(ruleSlots, verdict.patch ?? null, opts.today);
+          let slots = mergeLlmPrimary(ruleSlots, verdict.patch ?? null, opts.today, opts.whenOpts);
           if (verdict.intent) slots = { ...slots, intent: verdict.intent };
           // WP9 同族：改/取消/替换的目标块名在 targetHint —— send 门要 title
           if (!slots.title && slots.targetHint

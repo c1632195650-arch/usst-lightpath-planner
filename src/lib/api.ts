@@ -282,6 +282,8 @@ export interface PlanSlotPatch {
   relativeDays?: number;
   relativeWeeks?: number;
   weekday?: number;
+  /** 学期周次（批 1.2）：「第10周周五」→ weekNo=10；换算成日期由前端按 termStart 做 */
+  weekNo?: number;
   perWeekCount?: number;
   durationMin?: number;
   totalHours?: number;
