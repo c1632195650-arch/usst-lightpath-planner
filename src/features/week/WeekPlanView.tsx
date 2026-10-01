@@ -87,7 +87,7 @@ import type { TaskDraft } from '@/features/feedback/planIntent';
 import type { CorrectionRule } from '@/lib/planner/corrections';
 // E 批 E4（2026-09-28）：块卡片的**渲染模型**（L0 减字 / 通勤徽章 / 来源与内情分层）。
 // 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
-import { blockChip, blockDetail } from '@/features/week/weekViewModel';
+import { blockChip, blockDetail, summarizeIssues } from '@/features/week/weekViewModel';
 import { DetailDrawer } from '@/components/ui/DetailDrawer';
 
 interface Props {
@@ -726,6 +726,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     const d = weekdayOf(todayISO()); // 0 = 周日
     return (d === 0 ? 7 : d) as number;
   }, [isCurrentWeek]);
+
+  /** 批 6.1：列头具体日期 —— 学期第 N 周星期 d 的 ISO（再压成 M/D 展示） */
+  const dayISO = (day: number): string => addDays(schedule.termStart, (weekNo - 1) * 7 + (day - 1));
+  const dayShort = (day: number): string => dayISO(day).slice(5).replace('-', '/');
 
   /**
    * 实际负荷（按星期几）—— 喂给引擎的 `actualLoadByDow`（P2-T2.2）。
@@ -1741,6 +1745,23 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       )}
 
+      {/* 批 6.1（规范 §3.2 欠账）：引擎 issue 明细收进顶部聚合条，点开展开 ——
+          周网格默认屏上不再出现 issue 长句（明细仍可在本条内看全） */}
+      {(() => {
+        const s = summarizeIssues(plan.issues);
+        if (!s.headline) return null;
+        return (
+          <details data-testid="issue-summary-bar" className="panel px-4 py-2.5 text-[12px]">
+            <summary className={`cursor-pointer font-medium ${s.errorCount > 0 ? 'text-red-700' : 'text-ink-soft'}`}>
+              {s.headline}
+            </summary>
+            <ul className="mt-2 space-y-1 text-ink-soft">
+              {s.details.map((d, i) => <li key={i}>· {d}</li>)}
+            </ul>
+          </details>
+        );
+      })()}
+
       {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
           E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
           让「时间轴是主角、其他都是注脚」（docs/week-view-design.md §2.1）。
@@ -1798,7 +1819,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           return (
             <div
               key={day}
-              className="panel p-3"
+              className={`panel p-3 ${day === todayDow ? 'ring-2 ring-brand/40' : ''}`}
+              data-today={day === todayDow ? '1' : undefined}
               onDragLeave={(e) => {
                 // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
                 if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
@@ -1818,7 +1840,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
               }}
             >
               <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[13px] font-semibold text-ink">{name}</span>
+                <span className="text-[13px] font-semibold text-ink">
+                  {name}
+                  {/* 批 6.1：列头补具体日期 —— 「周X」对不上「第几号」，跨周核对全靠它 */}
+                  <span className="ml-1 text-[11px] font-normal text-ink-faint">{dayShort(day)}</span>
+                </span>
                 <span className="inline-flex items-center gap-2">
                   {study > 0 && <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>}
                   <SaturationBar
