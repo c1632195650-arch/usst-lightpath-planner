@@ -18,6 +18,7 @@ import {
   type SchedMode,
 } from '@/features/libao/schedSession';
 import { TERM_CALENDAR } from '@/constants/term';
+import { toHHmm } from '@/constants/time';
 import {
   SNAPSHOT_V3_KEY,
   SNAPSHOT_V2_KEY,
@@ -53,6 +54,7 @@ import {
   planReschedule,
   planWeekForChat,
   planWeekWithTasks,
+  replanDaysForChat,
   summarizeWeekPlan,
   holdSlotFrom,
   holdToUnavailableSlot,
@@ -63,7 +65,7 @@ import {
   type ReplanOption,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import type { UnavailableSlot } from '@/features/week/userPlanStore';
+import type { MoveRecord, UnavailableSlot } from '@/features/week/userPlanStore';
 import { addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
@@ -106,7 +108,7 @@ interface Msg {
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
  *  WP9：kind 区分执行器（确认时走不同落层通道），缺省 create 兼容旧草稿。 */
 interface PendingGoal {
-  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold';
+  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold' | 'day_replan';
   title: string;
   tasks: UserTask[];
   /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
@@ -117,6 +119,8 @@ interface PendingGoal {
   movePreview?: ReschedulePreview;
   /** V2-2 hold：确认后 addSlot 的不可时段（一次性，只作用于当前周） */
   holdSlot?: UnavailableSlot;
+  /** 批 3 day_replan：确认后逐块 upsertMove 的保位钉（其余天保持原样的落盘形态） */
+  dayReplan?: { pins: MoveRecord[]; days: number[] };
 }
 
 /** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
@@ -645,6 +649,39 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
 
+    // ── 批 3·day_replan：确认 → 逐块 upsertMove 落层（source='edit' hard，
+    //    「其余天保持原样」是用户确认过的约束）──
+    if (g.kind === 'day_replan' && g.dayReplan) {
+      const dr = g.dayReplan;
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        const moves = dr.pins.reduce((acc, m) => upsertMove(acc, m), layer.moves);
+        const nextLayer = { ...layer, moves };
+        saveUserPlan(nextLayer);
+        pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
+        bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan'));
+        setTopic(null);
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `好，周${dr.days.map((d) => ['一', '二', '三', '四', '五', '六', '日'][d - 1]).join('、周')}重新排好了，其余天保持原样。不合适按 ↩ 撤销。`,
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '落盘的时候出了点小状况，没写成。可以再说一遍。',
+        }]);
+      }
+      return;
+    }
+
     // ── WP9·replace：取消 + 新增两步一次快照（一次确认）──
     if (g.kind === 'replace' && g.cancelTarget && g.tasks.length > 0) {
       const target = g.cancelTarget;
@@ -845,7 +882,70 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   /** WP9·reschedule 执行器：定位块 → dragTo 同一条合规校验 → 涟漪预览 → 确认落层。
    *  找不到/多个/没说挪到哪天 → 一律追问，不硬猜。 */
+  /** 批 3（5A-②）：「只重排周X」—— 整周照算 + 定点融合 + 非目标天 pin 保位。
+   *  previousPlan 用侧栏现行计划：没有它就兑现不了「其余天原样」，如实拒绝。 */
+  const runDayReplan = async (slots: IntentSlots, today: string) => {
+    const days = [...new Set(slots.replanDays ?? [])].sort((a, b) => a - b);
+    const WD = ['', '一', '二', '三', '四', '五', '六', '日'];
+    const weekNo = currentWeekNo(schedule.termStart, today);
+    if (!previewPlan || previewPlan.weekNo !== weekNo) {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '还没拿到本周的现行安排 —— 先去周计划页看一眼再来说「重排周X」，我才守得住「其余天不动」。',
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const pendingTasks = Object.values(pending).flatMap((g) => g.tasks);
+    const layerTasks = loadUserPlan()
+      .tasks
+      .filter((t) => (t.weeks ?? []).includes(weekNo))
+      .filter((t) => !pendingTasks.some((p) => p.id === t.id));
+    const result = await replanDaysForChat({
+      schedule, profile, weekNo,
+      tasks: [...layerTasks, ...pendingTasks],
+      days, previousPlan: previewPlan,
+    });
+    if (!result) {
+      setMessages((current) => [...current, { role: 'lbao', text: '这周排不了 —— 先看看课表的学期范围对不对？' }]);
+      setLoading(false);
+      return;
+    }
+    if (result.changedDays.length === 0) {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `重排了一圈 —— 周${days.map((d) => WD[d]).join('、周')}现在的安排已经没什么可优化的，就不动了。`,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const key = (pendingSeq.current += 1);
+    setPending((p) => ({
+      ...p,
+      [key]: { kind: 'day_replan', title: `周${days.map((d) => WD[d]).join('、周')}`, tasks: [], weeks: [weekNo], dayReplan: { pins: result.pins, days } },
+    }));
+    markDraft(key, slots);
+    const targetBlocks = result.plan.blocks.filter((b) => days.includes(b.dayOfWeek));
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: `把周${days.map((d) => WD[d]).join('、周')}重新排了一版（还没动手），其余 ${7 - days.length} 天保持原样：`,
+      planPoints: [
+        ...targetBlocks.filter((b) => b.kind !== 'blank').slice(0, 5)
+          .map((b) => `周${b.dayOfWeek} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)} ${b.title}`),
+        result.pins.length > 0 ? `其余天被动过的 ${result.pins.length} 个块会钉回原位` : '其余天没有被波及',
+      ],
+      goalAsk: key,
+    }]);
+    setLoading(false);
+  };
+
   const runReschedule = async (slots: IntentSlots, today: string) => {
+    // 批 3 歧义路由：点名了天、没点名块 → 整日重排；有块名 → 老的单块挪动
+    if ((slots.replanDays?.length ?? 0) > 0 && !slots.targetHint) {
+      await runDayReplan(slots, today);
+      return;
+    }
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
       setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, ['target'])); setMissStreak(0);
@@ -1679,7 +1779,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // runHold 永远到不了。放行 hold：when 槽位由 runHold 自己追问补齐。
     // S4 E2E 抓到同族缺口：add_deadline 也常无 title（「我要考驾照」——「驾照」
     // 不在目标词表），deadlineProposal 有「重要日子」缺省标题，同样放行。
-    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline')) {
+    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline'
+      || (outcome.slots.replanDays?.length ?? 0) > 0)) {
       // D0 双模式：问答模式听到排程意图 → 出切换提示，**不静默改道**。
       // 「揣测用意直接排」是议题断层的来源；用户点「继续」才切排程模式并原句重发。
       if (activeMode === 'chat') {
