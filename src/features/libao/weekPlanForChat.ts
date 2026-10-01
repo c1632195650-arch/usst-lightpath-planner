@@ -37,6 +37,7 @@ import { planWeek } from '@/lib/planner/planWeek';
 import { planWeekV2 } from '@/lib/planner/index';
 import type { UserTask } from '@/lib/planner/templates';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
+import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localizedReplan';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
@@ -95,6 +96,74 @@ export async function planWeekWithTasks(
     }),
   );
   return result.plan;
+}
+
+/* ============================================================
+ * 二·五、单日重排（批 3，5A-②）：「只重排周X，其余天原样」
+ * ========================================================== */
+
+/**
+ * 非目标天保位（纯函数）：`changedDays` 之外的天 = 用户点名要保留的。
+ * next 相对 prev 在这些天**位移/消失**的块 → hard move 钉回 prev 的位置；
+ * next 在这些天**新增**的块不用 pin —— 融合层（localizedPlan）直接沿用 prev
+ * 的天，用户看不见它。目标天的块不 pin —— 那是重排的对象本身。
+ *
+ * source 用 'edit'（hard）：「其余天保持原样」是用户确认过的约束，下次重排也不许动。
+ */
+export function dayReplanPins(prev: WeekPlan, next: WeekPlan, changedDays: number[]): MoveRecord[] {
+  const want = new Set(changedDays);
+  const nextById = new Map(next.blocks.map((b) => [b.id, b]));
+  const pins: MoveRecord[] = [];
+  for (const b of prev.blocks) {
+    if (want.has(b.dayOfWeek)) continue;
+    const nb = nextById.get(b.id);
+    if (nb && nb.dayOfWeek === b.dayOfWeek && nb.startMin === b.startMin && nb.endMin === b.endMin) continue;
+    pins.push({
+      weekNo: next.weekNo,
+      blockId: b.id,
+      dayOfWeek: b.dayOfWeek,
+      startMin: b.startMin,
+      endMin: b.endMin,
+      ...(b.place ? { place: b.place } : {}),
+      ...(b.room ? { room: b.room } : {}),
+      source: 'edit',
+    });
+  }
+  return pins;
+}
+
+export interface DayReplanResult {
+  /** 融合后的计划：目标天用新排，其余天沿用上一版 */
+  plan: WeekPlan;
+  /** 落盘用：非目标天被引擎挪动的块 → hard pin 钉回原位 */
+  pins: MoveRecord[];
+  /** 目标天里引擎**真的改动**了的天（空 = 没什么可优化） */
+  changedDays: number[];
+}
+
+/**
+ * 「只重排某几天」的对话侧入口。引擎整周照算（必须看全局才知道目标天是紧是松），
+ * 排完用 R6.1 定点融合：目标天用新版、其余天保留上一版 —— 用户审稿成本从七天
+ * 降回一天。previousPlan 缺失时返回「整周新版 + 空 pins」的**降级结果**，调用方
+ * （执行层）必须拒绝它：没有上一版就兑现不了「其余天原样」的承诺。
+ */
+export async function replanDaysForChat(args: {
+  schedule: Schedule;
+  profile: PersonaProfile | null;
+  weekNo: number;
+  tasks: UserTask[];
+  days: number[];
+  previousPlan: WeekPlan | null;
+}): Promise<DayReplanResult | null> {
+  if (args.days.length === 0) return null;
+  const next = await planWeekWithTasks(args.schedule, args.profile, args.weekNo, args.tasks);
+  if (!next) return null;
+  const fused = localizedPlan(args.previousPlan, next, args.days);
+  const actualChanged = args.previousPlan
+    ? diffPlanDays(args.previousPlan, next).filter((d) => args.days.includes(d))
+    : args.days;
+  const pins = args.previousPlan ? dayReplanPins(args.previousPlan, next, args.days) : [];
+  return { plan: fused.plan, pins, changedDays: actualChanged };
 }
 
 /**
