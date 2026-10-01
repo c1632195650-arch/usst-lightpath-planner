@@ -154,7 +154,7 @@ export const DEFAULT_WEIGHTS: Weights = {
 };
 
 /**
- * 评分口径（2026-09-19，PR-A）。
+ * 评分口径（2026-09-19，PR-A）。三线融合（2026-10-01）并回 —— Ray 分叉未及此批。
  *
  * 为什么需要灰度开关：`tests/golden/*.json` 是**冻结语料**（拍一次就不再改），
  * 而 transfer-aware 会改变 cost 数值 → 新口径上线必然让旧快照"失效"。
@@ -397,6 +397,9 @@ export interface PlanRequest {
    */
   mealPlaces?: { breakfast?: string; lunch?: string; dinner?: string } | null;
 
+  /** 用户住处（2026-09-20）：三餐外的宿舍类模板（午休/宿舍自习）地点跟随；未设置 = 地点留空 */
+  homeBase?: { name: string; campus: string } | null;
+
   /**
    * WP6（2026-09-27）：三餐自动就近食堂。
    *
@@ -445,6 +448,7 @@ export interface Diagnostics {  solver: 'greedy' | 'lns';
   /**
    * 跨周自适应（疲劳 / 逐日可行性）。**没有滚动数据时为 `undefined`** ——
    * 这保证「无自适应」与「自适应无效果」在诊断上可区分，而不是都表现为 1.0。
+   * （三线融合 2026-10-01 并回 —— Ray 分叉未及 #22 跨周滚动批。）
    */
   fatigue?: {
     /** 全局疲劳系数（0.75–1） */
@@ -538,7 +542,7 @@ export function resolveLockLevel(
 }
 
 /**
- * `free` 块的 churn 系数（**2026-09-19 起非零**，规格 §5.5 已修订）。
+ * `free` 块的 churn 系数（**2026-09-19 起非零**，规格书 §5.5 裁决修订，CY）。
  *
  * 原值 0 的含义是「引擎自排的软块，随便挪都不要钱」→ churn 代价恒为 0
  * ⇒「最小扰动」只有度量、没有驱动力（用户改一次计划仍然全盘重排）。
@@ -571,6 +575,7 @@ export function lockFactorOf(level: LockLevel): number {
  *    可用户看到的是：什么都没动，只是多了一件事。
  *    用户主动加的东西是**他要的变化**，不是**被打扰**；把它算进 churn，
  *    等于惩罚用户做他本来就想做的事。
+ *    （三线融合 2026-10-01 取 beta-v2 口径 —— Ray 分叉早于此修复。）
  */
 export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan): number {
   if (!previousPlan) return 0;
@@ -589,14 +594,8 @@ export function churnMinutes(previousPlan: WeekPlan | undefined, plan: WeekPlan)
 }
 
 /**
- * 计划扰动代价（规格书 §5.5 的 churn 项）——`evaluate()` 直接消费本函数。
+ * 计划扰动代价（规格书 §5.5 的 churn 项）——P1 的 `evaluate()` 直接消费本函数。
  * `cost = w.churn * Σ lockFactor(block) * changedMinutes(block)`
- *
- * 与 `churnMinutes` 同口径：**新增块不计代价**（理由见该函数）。
- * 顺带消掉一个数量级问题：用户 fixed 的块 `lockFactorOf('hard') = 100`，
- * 旧口径下「新增一个 60 分钟的固定任务」会凭空产生
- * `0.8 × 100 × 60 = 4800` 的代价 —— 比整周其余成本（约 78）高两个数量级，
- * 会让界面上的「质量分」完全失去可比性。
  */
 export function churnCost(
   previousPlan: WeekPlan | undefined,
@@ -610,9 +609,12 @@ export function churnCost(
   let cost = 0;
   for (const [id, b] of next) {
     const p = prev.get(id);
-    if (!p) continue; // 新增块：不计（见上）
+    const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
+    if (!p) {
+      cost += weights.churn * factor * (b.endMin - b.startMin);
+      continue;
+    }
     if (moved(p, b)) {
-      const factor = lockFactorOf(resolveLockLevel(b, lockLevels));
       cost += weights.churn * factor * Math.max(b.endMin - b.startMin, p.endMin - p.startMin);
     }
   }

@@ -39,7 +39,7 @@ import {
 } from '@/features/plan/planLock';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, humanizeMinutes } from '@/constants/time';
-import { addDays, currentWeekNo, diffDays, todayISO, weekdayOf } from '@/lib/date';
+import { addDays, currentWeekNo, diffDays, todayISO, weekdayOf, DAY_LABELS } from '@/lib/date';
 import { DEADLINES } from '@/data/usst';
 // ── 阶段 A：二次修改能力（加块 / 删块 / 手动重排）────────────────
 import { AddTaskPanel } from './AddTaskPanel';
@@ -73,7 +73,10 @@ import { SaturationBar } from './SaturationBar';
 import { dayBreakdown, daySaturation } from './saturation';
 import { blankTaskFor } from './userPlanStore';
 // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
-import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
+import { loadGoals } from '@/features/activity/goalStore';
+// 三线融合（2026-10-01）：goalTasksOf 迁至 goalDecompose（Ray S5.5），偏好从 goalPrefs 读取
+import { goalTasksOf } from '@/features/activity/goalDecompose';
+import { loadGoalPrefs } from '@/features/activity/goalPrefs';
 import { AchievementPanel } from '@/features/activity/GoalEditor';
 import type { UserTask } from '@/lib/planner/templates';
 // ── WP11：重要日体系 —— 用户重要日 ∪ 静态校历，喂准备块展开与「接下来」横排 ──
@@ -103,8 +106,6 @@ interface Props {
   /** H2：打开模式问询窗口（App 持有对话框状态）；缺省不显示入口 */
   onOpenModeSetup?: () => void;
 }
-
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 const KIND_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   course: { bg: 'bg-blue-100 border-blue-400', text: 'text-blue-900', label: '课' },
@@ -221,11 +222,19 @@ function BlockCard({
   return (
     <div
       draggable={editable && block.kind !== 'course' && block.source !== 'course'}
+      onMouseDown={(e) => {
+        // 🔴 抓块时冻结页面惯性滚动（Ray 2026-09-20，融合时移植）：
+        //    滚动进行中浏览器会把「拖」判成「滚」而取消 dragstart —— 「有时拖不动」的机制①。
+        if (e.button === 0) window.scrollTo(window.scrollX, window.scrollY);
+      }}
       onDragStart={(e) => {
         // dataTransfer 里带 id 是给**跨天**用的：目标列靠它知道拖过来的是哪一块
         e.dataTransfer.setData('text/plain', block.id);
         e.dataTransfer.effectAllowed = 'move';
-        onDragStartCard(block);
+        // 🔴 setDraggingId 推迟到下一帧（Ray 2026-09-20，融合时移植）：
+        //    dragstart 同步帧内的重渲染会让 Chrome 偶发**静默取消拖拽**
+        //    —— 「有时拖不动」的机制②。第一个 dragover 紧随其后，状态就位。
+        window.setTimeout(() => onDragStartCard(block), 0);
       }}
       onDragEnd={onDragEndCard}
       title={dragging ? '松手放到目标位置；拖到右侧投放区可删除' : '可以直接拖到别的天 / 别的时段'}
@@ -1178,7 +1187,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           // R5：目标 → 排程任务（2026-09-19）。设立了截止日期并选了节奏的目标，
           // 按节奏生成每周投入块 / 截止前冲刺块（与作业同一 UserTask 通道）。
           // ⚠️ goals 刻意不在 effect 依赖里：目标改动「攒着」，点「重新排一遍」生效（T3 语义一致）。
-          ...goalTasksOf(goals, weekNo, schedule.termStart),
+          // Ray S5.5：goalTasksOf 现返回 DecomposeOutput（tasks + warnings）
+          ...goalTasksOf(goals, weekNo, schedule.termStart, loadGoalPrefs()).tasks,
           /**
            * T6：作业 → `UserTask`。
            *
@@ -1650,7 +1660,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       )}
 
       {/* V1-1：投入与成就 —— CY 要求常驻（编辑模式之外也能看到），不再包在 editMode 门里 */}
-      <AchievementPanel key={activityVersion} weekNo={weekNo} />
+      <AchievementPanel key={activityVersion} weekNo={weekNo} termStart={schedule.termStart} />
 
       {/* 天气（2026-09-19 改版）：单独的天气栏已移除 ——
           天气的唯一落点在下面每一天列的标题下方（有数据的日子才显示）。 */}

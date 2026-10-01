@@ -39,13 +39,19 @@ const day = (
  * Ray 的 buildWeekPlan 转场估算与 dev 不同（平铺估算 vs 按校区距离），legacy 三档罚分
  * 在 week-04-usertasks 上差一档（total 恰差 10.0），故该锚点换底为新引擎产出。
  * 其余 4 个语料逐位未动。旧值：week-04-usertasks = 72.75（2026-09-15 dev 冻结）。
+ *
+ * 三线融合换底（2026-10-01，P1×WP5 双改总裁定后）：
+ * 合并引擎 = Ray P1（8 轴连续映射 + 同点自习合并）× beta-v2 WP4a/WP5（fatigue / 滚动 /
+ * scoring 契约接回）。golden 5/5 全过（合并引擎输出与重拍快照逐块一致）后，
+ * 锚点随之换底为本引擎产出（与 golden-compare 同源）。旧值存档：
+ * 76.25 / 75.75 / 96.25 / 72.25 / 62.75（2026-09-20 Ray 引擎口径）。
  */
 const LEGACY_ANCHOR: Record<string, number> = {
-  'week-04-typical': 76.25,
-  'week-06-practice': 75.75,
-  'week-12-crosscampus': 96.25,
-  'week-19-exam': 72.25,
-  'week-04-usertasks': 62.75,
+  'week-04-typical': 70.25,
+  'week-06-practice': 67.5,
+  'week-12-crosscampus': 93.75,
+  'week-19-exam': 69.75,
+  'week-04-usertasks': 63.75,
 };
 
 for (const g of GOLDEN_INPUTS) {
@@ -144,7 +150,9 @@ test('transfer-aware 下，同一计划的 transferRisk 随真实分钟变化（
     ...base, scoring: 'transfer-aware', transferTrust: 0.01,
   }).transferRisk;
 
-  assert.equal(legacy, 68, 'legacy 的 transferRisk 是冻结值');
+  // 三线融合换底（2026-10-01）：合并引擎下 week-04-typical 的 legacy transferRisk
+  // 为 64（旧引擎口径为 68 —— 见 LEGACY_ANCHOR 的换底说明）。
+  assert.equal(legacy, 64, 'legacy 的 transferRisk 是冻结值');
   // 折扣越低 ⇒ 分钟数越小 ⇒ 罚分不增（同一计划）
   assert.ok(awareZeroTrust <= aware, `折扣应降低风险分：${awareZeroTrust} vs ${aware}`);
 });

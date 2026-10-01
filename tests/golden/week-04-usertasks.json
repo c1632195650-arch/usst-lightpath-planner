@@ -5,8 +5,8 @@
     "engine": "src/lib/planner/schedule.ts::buildWeekPlan",
     "engineKind": "greedy-golden",
     "spec": "docs/scheduler-v2-spec.md#T1.6",
-    "gitRev": null,
-    "capturedAt": "2026-09-19T07:50:20.115Z"
+    "gitRev": "54b624caaedab72fa949d717f766e652085818fd",
+    "capturedAt": "2026-09-28T05:56:02.291Z"
   },
   "input": {
     "name": "week-04-usertasks",
@@ -61,6 +61,14 @@
     },
     {
       "dayOfWeek": 1,
+      "startMin": 450,
+      "endMin": 475,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 1,
       "startMin": 480,
       "endMin": 565,
       "kind": "course",
@@ -85,24 +93,24 @@
     },
     {
       "dayOfWeek": 1,
-      "startMin": 770,
-      "endMin": 830,
+      "startMin": 765,
+      "endMin": 790,
       "kind": "activity",
-      "title": "操场跑步",
-      "place": "运动场"
+      "title": "饭后消食",
+      "place": null
     },
     {
       "dayOfWeek": 1,
-      "startMin": 835,
-      "endMin": 895,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
+      "startMin": 795,
+      "endMin": 840,
+      "kind": "activity",
+      "title": "练英语听力",
+      "place": null
     },
     {
       "dayOfWeek": 1,
-      "startMin": 900,
-      "endMin": 960,
+      "startMin": 845,
+      "endMin": 970,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -117,10 +125,10 @@
     },
     {
       "dayOfWeek": 1,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
       "kind": "activity",
-      "title": "练英语听力",
+      "title": "饭后消食",
       "place": null
     },
     {
@@ -133,11 +141,11 @@
     },
     {
       "dayOfWeek": 2,
-      "startMin": 455,
-      "endMin": 515,
-      "kind": "study",
-      "title": "湛恩纪念图书馆自习",
-      "place": "湛恩纪念图书馆"
+      "startMin": 450,
+      "endMin": 475,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
     },
     {
       "dayOfWeek": 2,
@@ -157,16 +165,24 @@
     },
     {
       "dayOfWeek": 2,
-      "startMin": 770,
-      "endMin": 830,
+      "startMin": 765,
+      "endMin": 790,
       "kind": "activity",
-      "title": "操场跑步",
-      "place": "运动场"
+      "title": "饭后消食",
+      "place": null
     },
     {
       "dayOfWeek": 2,
-      "startMin": 835,
-      "endMin": 895,
+      "startMin": 795,
+      "endMin": 840,
+      "kind": "activity",
+      "title": "练英语听力",
+      "place": null
+    },
+    {
+      "dayOfWeek": 2,
+      "startMin": 845,
+      "endMin": 970,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -181,10 +197,10 @@
     },
     {
       "dayOfWeek": 2,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
       "kind": "activity",
-      "title": "练英语听力",
+      "title": "饭后消食",
       "place": null
     },
     {
@@ -199,9 +215,17 @@
       "dayOfWeek": 3,
       "startMin": 470,
       "endMin": 530,
+      "kind": "activity",
+      "title": "操场跑步",
+      "place": "运动场"
+    },
+    {
+      "dayOfWeek": 3,
+      "startMin": 570,
+      "endMin": 630,
       "kind": "study",
-      "title": "湛恩纪念图书馆自习",
-      "place": "湛恩纪念图书馆"
+      "title": "图书馆自习",
+      "place": "图书馆（图文信息中心）"
     },
     {
       "dayOfWeek": 3,
@@ -213,16 +237,16 @@
     },
     {
       "dayOfWeek": 3,
-      "startMin": 770,
-      "endMin": 830,
+      "startMin": 765,
+      "endMin": 790,
       "kind": "activity",
-      "title": "操场跑步",
-      "place": "运动场"
+      "title": "饭后消食",
+      "place": null
     },
     {
       "dayOfWeek": 3,
-      "startMin": 835,
-      "endMin": 895,
+      "startMin": 795,
+      "endMin": 855,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -237,6 +261,14 @@
     },
     {
       "dayOfWeek": 3,
+      "startMin": 1070,
+      "endMin": 1095,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 3,
       "startMin": 1140,
       "endMin": 1200,
       "kind": "activity",
@@ -246,23 +278,23 @@
     {
       "dayOfWeek": 4,
       "startMin": 420,
-      "endMin": 480,
+      "endMin": 465,
+      "kind": "activity",
+      "title": "练英语听力",
+      "place": null
+    },
+    {
+      "dayOfWeek": 4,
+      "startMin": 470,
+      "endMin": 530,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
     },
     {
       "dayOfWeek": 4,
-      "startMin": 485,
-      "endMin": 545,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
-    },
-    {
-      "dayOfWeek": 4,
-      "startMin": 550,
-      "endMin": 610,
+      "startMin": 570,
+      "endMin": 630,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -285,6 +317,14 @@
     },
     {
       "dayOfWeek": 4,
+      "startMin": 870,
+      "endMin": 930,
+      "kind": "study",
+      "title": "图书馆自习",
+      "place": "图书馆（图文信息中心）"
+    },
+    {
+      "dayOfWeek": 4,
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
@@ -293,24 +333,32 @@
     },
     {
       "dayOfWeek": 4,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 5,
+      "startMin": 420,
+      "endMin": 465,
       "kind": "activity",
       "title": "练英语听力",
       "place": null
     },
     {
       "dayOfWeek": 5,
-      "startMin": 420,
-      "endMin": 480,
+      "startMin": 470,
+      "endMin": 530,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
     },
     {
       "dayOfWeek": 5,
-      "startMin": 485,
-      "endMin": 545,
+      "startMin": 570,
+      "endMin": 630,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -325,8 +373,16 @@
     },
     {
       "dayOfWeek": 5,
-      "startMin": 770,
-      "endMin": 830,
+      "startMin": 765,
+      "endMin": 790,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 5,
+      "startMin": 795,
+      "endMin": 855,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -341,16 +397,24 @@
     },
     {
       "dayOfWeek": 5,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 6,
+      "startMin": 420,
+      "endMin": 465,
       "kind": "activity",
       "title": "练英语听力",
       "place": null
     },
     {
       "dayOfWeek": 6,
-      "startMin": 420,
-      "endMin": 480,
+      "startMin": 470,
+      "endMin": 530,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
@@ -365,6 +429,14 @@
     },
     {
       "dayOfWeek": 6,
+      "startMin": 765,
+      "endMin": 790,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 6,
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
@@ -373,16 +445,24 @@
     },
     {
       "dayOfWeek": 6,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 7,
+      "startMin": 420,
+      "endMin": 465,
       "kind": "activity",
       "title": "练英语听力",
       "place": null
     },
     {
       "dayOfWeek": 7,
-      "startMin": 420,
-      "endMin": 480,
+      "startMin": 470,
+      "endMin": 530,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
@@ -397,6 +477,14 @@
     },
     {
       "dayOfWeek": 7,
+      "startMin": 765,
+      "endMin": 790,
+      "kind": "activity",
+      "title": "饭后消食",
+      "place": null
+    },
+    {
+      "dayOfWeek": 7,
       "startMin": 1020,
       "endMin": 1070,
       "kind": "meal",
@@ -405,32 +493,32 @@
     },
     {
       "dayOfWeek": 7,
-      "startMin": 1075,
-      "endMin": 1120,
+      "startMin": 1070,
+      "endMin": 1095,
       "kind": "activity",
-      "title": "练英语听力",
+      "title": "饭后消食",
       "place": null
     }
   ],
   "metrics": {
     "weekNo": 4,
-    "blockCount": 45,
+    "blockCount": 56,
     "courseMin": 430,
-    "studyMin": 600,
-    "cost": 62.75,
+    "studyMin": 610,
+    "cost": 63.75,
     "costBreakdown": {
       "studyShortfall": 0,
       "blankDeficit": 0,
-      "switchCost": 4.75,
-      "transferRisk": 58,
+      "switchCost": 3.75,
+      "transferRisk": 60,
       "dueOverdue": 0,
       "churn": 0,
       "placeMismatch": 0,
-      "total": 62.75,
+      "total": 63.75,
       "raw": {
-        "studyMin": 600,
+        "studyMin": 610,
         "targetStudyMin": 600,
-        "blankMin": 2625,
+        "blankMin": 2460,
         "requiredBlankMin": 1200,
         "overdueUnits": 0,
         "churnMin": 0,
@@ -453,6 +541,6 @@
     "infoIssues": 8
   },
   "timing": {
-    "elapsedMs": 3.193
+    "elapsedMs": 0.781
   }
 }

@@ -59,6 +59,11 @@ export function reasonForMeal(a: MealReasonArgs): string {
     + (a.tail > 0 && a.nextPlace ? `；吃完走到${a.nextPlace}约 ${a.tail} 分钟` : '');
 }
 
+/** 饭后消食·散步（2026-09-28）：紧跟三餐块的恢复性活动 */
+export function reasonForDigest(): string {
+  return '饭后留一段消食散步 —— 吃完就坐下学习或跑步都不舒服';
+}
+
 /** 兜底理由（软块确实没理由时用，保证 QL-2 不为假） */
 export function reasonFallback(block: TimeBlock): string {
   const where = block.place ? `（${block.place}）` : '';
@@ -194,6 +199,7 @@ export interface WeekNotesInput {
   /**
    * 本周的**有效**自习目标（已含疲劳/可行性调节）。省略 = 用 `policy.dailyStudyMin`。
    * 不传它的后果是文案与实际排法不一致：计划按 96 分钟排，却写着「每天自习目标 120 分钟」。
+   * （三线融合 2026-10-01 并回 —— Ray 分叉未及 #22 跨周滚动批）
    */
   effectiveStudyMin?: number;
 }
@@ -204,6 +210,7 @@ export interface WeekNotesInput {
 export function buildWeekNotes(input: WeekNotesInput): string[] {
   const { weekNo, policy, effectiveCourseCount, scenarios, unverifiedMeals } = input;
   const notes: string[] = [];
+
   if (effectiveCourseCount === 0) {
     notes.push(`第 ${weekNo} 周没有课（已结课或处在考试周），整天都可以自己安排`);
   } else {
@@ -242,17 +249,16 @@ export function buildWeekNotes(input: WeekNotesInput): string[] {
   return notes;
 }
 
-/**
- * 「本周自习未达标」这一条（依赖统计结果，故单独一个函数）。
+/** 「本周自习未达标」这一条（依赖统计结果，故单独一个函数）。
  *
  * `wantMin` 由调用方按**有效**目标算好传进来（见 `fatigue.weeklyStudyTarget`）——
  * 本函数刻意不再自己乘 `policy.dailyStudyMin`：目标被跨周自适应调低之后，
  * 若还用基准值卡阈值，一份本来合理的计划会被冤枉成「未达标」。
+ * （三线融合 2026-10-01 并回 —— Ray 分叉未及 #22 跨周滚动批）
  */
 export function summaryStudyIssue(
   studyMin: number, wantMin: number, weekNo: number,
 ): PlanIssue | null {
-  // weekNo 保留在签名里便于将来按周差异化阈值；当前阈值：
   if (studyMin >= wantMin * 0.8) return null;
   void weekNo;
   return issueStudyShortfall(studyMin, wantMin);

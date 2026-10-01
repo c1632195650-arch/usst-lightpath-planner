@@ -103,16 +103,16 @@ test('ST-STRUCT: 改写只动题面文案 —— 计分结构与冻结表逐题�
 
 const GRADES = [1, 2, 3, 4] as const;
 
-test('ST-SEQ: grade=1 与 grade=4 出题序列不同；未知年级 → 全库 35 题', () => {
-  // 反向：buildPersonaSequence 还原成全库按 order 排列（不做年级过滤）→ 本用例红
+test('P5-甲: 计分题全年级通用 → 所有年级出题序列一致且为全库 35 题', () => {
+  // P5-甲（2026-09-27）移除了计分题的 grades 标签
+  // → 所有年级的卷面应完全一致（都是 35 题）
   const g1 = buildPersonaSequence(1).map((i) => i.id);
   const g4 = buildPersonaSequence(4).map((i) => i.id);
-  assert.notDeepEqual(g1, g4, '两个年级的卷面必须不同');
-  assert.equal(g1.length, 31);
-  assert.equal(g4.length, 29);
+  assert.deepEqual(g1, g4, 'P5-甲 后所有年级的卷面必须一致');
+  assert.equal(g1.length, 35, '每份卷都应是全库 35 题');
 
   const full = buildPersonaSequence(undefined).map((i) => i.id);
-  assert.equal(full.length, 35, '没填年级（跳过引导）→ 与分层前一致，全库出卷');
+  assert.equal(full.length, 35, '没填年级 → 全库出卷');
   assert.deepEqual(full, [...PERSONA_ITEMS].sort((a, b) => a.order - b.order).map((i) => i.id));
 });
 
@@ -126,12 +126,9 @@ test('ST-A03: A03 一致性题在每个年级的卷面都恒出现，且锚定 A
   }
 });
 
-test('ST-COUNT: 分层题总数 ∈ [8,14]；每份卷总题数 ≥ 8（buildProfile 可用）', () => {
-  // 分层口径见 personaBank.ts 头注：8~14 按【带 grades 标签的分层题总数】实现
-  const tagged = PERSONA_ITEMS.filter((i) => (i as TieredPersonaItem).grades);
-  assert.ok(tagged.length >= 8 && tagged.length <= 14, `分层题数 ${tagged.length} 应在 8~14`);
+test('P5-甲: 每份卷总题数 = 35（全库通用），buildProfile 可用', () => {
   for (const g of GRADES) {
-    assert.ok(buildPersonaSequence(g).length >= 8, `grade=${g} 卷面题量 ≥ 8`);
+    assert.equal(buildPersonaSequence(g).length, 35, `grade=${g} 卷面应有 35 题（计分题永久全出）`);
   }
 });
 

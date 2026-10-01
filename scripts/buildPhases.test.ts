@@ -188,3 +188,102 @@ test('phaseOfWeek 能定位任意一周', () => {
   assert.equal(phaseOfWeek(plan, 20).kind, 'exam');
   assert.equal(phaseOfWeek(plan, 99), undefined, '越界周应返回 undefined');
 });
+
+/* ============================================================
+ * P1（2026-09-27）：轴 → 策略 改成**连续映射**
+ * ------------------------------------------------------------
+ * 这一组是「改动不许变坏」的守门人：
+ *   ① 两个旧平台（≤35 / ≥70）必须与旧版**逐点一致** —— 原本已生效的人不能被削弱；
+ *   ② 全 50 = 中性（不许有莫名偏移）；
+ *   ③ 中段（35–70）必须真的动起来 —— 这正是本次改动的目的；
+ *   ④ 单调 + 连续（不许把旧悬崖换成新悬崖）。
+ * ========================================================== */
+
+/** 旧版二元跳变（本次改动前的实现）—— 作为「不许被削弱」的参照物 */
+const legacy = {
+  ACH: (v, base) => (v >= 70 ? base * 1.2 : v <= 35 ? base * 0.8 : base),
+  PLAN: (v, base) => (v >= 70 ? base + 30 : v <= 35 ? Math.min(base, 45) : base),
+  HEA: (v, base) => (v <= 35 ? Math.min(0.6, base + 0.1) : v >= 70 ? Math.max(0.1, base - 0.05) : base),
+};
+
+/** 取某阶段 kind 的策略；不存在则返回 undefined */
+const policyOfKind = (plan, kind) => plan.phases.find((p) => p.kind === kind)?.policy;
+
+/** 全轴 50 的画像 = 中性；此时 applyPersona 应逐项等于基准策略 */
+const neutralPlan = buildPhases(schedule, persona()).plan;
+
+test('P1①：轴落在旧阈值平台上（≤35 / ≥70）时，策略与旧版【逐点一致】', () => {
+  const kinds = ['adapt', 'normal', 'midterm', 'sprint', 'exam'];
+  let checked = 0;
+  for (const kind of kinds) {
+    const base = policyOfKind(neutralPlan, kind);
+    assert.ok(base, `中性计划里应存在 ${kind} 阶段`);
+    for (let v = 0; v <= 100; v += 5) {
+      if (v > 35 && v < 70) continue; // 中段是**有意**改动的区间，不在此断言范围
+      const plan = buildPhases(schedule, persona({ axes: { ACH: v, PLAN: v, HEA: v } })).plan;
+      const got = policyOfKind(plan, kind);
+      assert.ok(got, `ACH/PLAN/HEA=${v} 时 ${kind} 阶段消失了 —— 阶段切分不该被这三条轴影响`);
+      assert.equal(got.dailyStudyMin, Math.round(legacy.ACH(v, base.dailyStudyMin)),
+        `ACH=${v} @${kind}：dailyStudyMin 偏离旧版`);
+      assert.equal(got.maxBlockMin, legacy.PLAN(v, base.maxBlockMin),
+        `PLAN=${v} @${kind}：maxBlockMin 偏离旧版`);
+      assert.ok(Math.abs(got.blankRatio - legacy.HEA(v, base.blankRatio)) < 1e-9,
+        `HEA=${v} @${kind}：blankRatio 偏离旧版（${got.blankRatio} vs ${legacy.HEA(v, base.blankRatio)}）`);
+      checked += 1;
+    }
+  }
+  assert.ok(checked >= 40, `应覆盖足够多的平台点，实际只检查了 ${checked} 组`);
+});
+
+test('P1②：全轴 50 = 中性，策略与基准逐项相等（不留偏移）', () => {
+  const explicit50 = buildPhases(
+    schedule,
+    persona({ axes: { ACH: 50, PLAN: 50, HEA: 50, RES: 50, EXP: 50, SOC: 50 } }),
+  ).plan;
+  for (const kind of ['adapt', 'normal', 'midterm', 'sprint', 'exam']) {
+    const a = policyOfKind(neutralPlan, kind);
+    const b = policyOfKind(explicit50, kind);
+    assert.ok(a && b, `${kind} 阶段应存在`);
+    assert.equal(b.dailyStudyMin, a.dailyStudyMin, `${kind}：50 不应改动每日时长`);
+    assert.equal(b.maxBlockMin, a.maxBlockMin, `${kind}：50 不应改动单块上限`);
+    assert.ok(Math.abs(b.blankRatio - a.blankRatio) < 1e-9, `${kind}：50 不应改动留白`);
+  }
+});
+
+test('P1③：中段（35–70）不再是无感死区', () => {
+  const dailyAt = (v) => policyOfKind(buildPhases(schedule, persona({ axes: { ACH: v } })).plan, 'normal').dailyStudyMin;
+  const blankAt = (v) => policyOfKind(buildPhases(schedule, persona({ axes: { HEA: v } })).plan, 'normal').blankRatio;
+
+  // 旧版：36 与 69 都等于基准 120 —— 现在必须分别低于/高于基准
+  assert.ok(dailyAt(40) < dailyAt(50), `ACH=40 应低于中性（实得 ${dailyAt(40)} vs ${dailyAt(50)}）`);
+  assert.ok(dailyAt(60) > dailyAt(50), `ACH=60 应高于中性（实得 ${dailyAt(60)} vs ${dailyAt(50)}）`);
+  assert.notEqual(dailyAt(60), dailyAt(65), '相邻中段取值也应能区分');
+  assert.ok(blankAt(40) > blankAt(50), 'HEA=40 留白应多于中性');
+  assert.ok(blankAt(60) < blankAt(50), 'HEA=60 留白应少于中性');
+});
+
+test('P1④：单调 + 连续（不许把旧悬崖换成新悬崖）', () => {
+  const dailyAt = (v) => policyOfKind(buildPhases(schedule, persona({ axes: { ACH: v } })).plan, 'normal').dailyStudyMin;
+  const blockAt = (v) => policyOfKind(buildPhases(schedule, persona({ axes: { PLAN: v } })).plan, 'normal').maxBlockMin;
+  const blankAt = (v) => policyOfKind(buildPhases(schedule, persona({ axes: { HEA: v } })).plan, 'normal').blankRatio;
+
+  // 单调性
+  for (let v = 0; v < 100; v++) {
+    assert.ok(dailyAt(v) <= dailyAt(v + 1), `dailyStudyMin 在 ACH=${v} 处非单调`);
+    assert.ok(blockAt(v) <= blockAt(v + 1), `maxBlockMin 在 PLAN=${v} 处非单调`);
+    assert.ok(blankAt(v) >= blankAt(v + 1) - 1e-9, `blankRatio 在 HEA=${v} 处非单调`);
+  }
+
+  // 连续性：相邻整数点的跳跃不超过全程幅度的 1/10
+  const jumpOk = (fn, lo, hi, label) => {
+    const span = Math.abs(fn(100) - fn(0));
+    const cap = span / 10 + 1e-9;
+    for (let v = 0; v < 100; v++) {
+      assert.ok(Math.abs(fn(v + 1) - fn(v)) <= cap,
+        `${label} 在 ${v}→${v + 1} 处跳跃过大（>${cap.toFixed(4)}）`);
+    }
+  };
+  jumpOk(dailyAt, 60, 240, 'dailyStudyMin');
+  jumpOk(blockAt, 30, 150, 'maxBlockMin');
+  jumpOk(blankAt, 0.1, 0.6, 'blankRatio');
+});

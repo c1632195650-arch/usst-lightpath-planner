@@ -30,6 +30,13 @@
 import type { LockLevel, WeekPlan } from '@/types';
 import type { Commit } from './model.ts';
 import { improve, type ImproveContext, type ImproveResult } from './improve.ts';
+/**
+ * 只取常量 `DAY_LABELS`（星期中文名）。注意本模块的**纯函数纪律不受影响**：
+ * `lib/date.ts` 里的 `todayISO()` 等读时钟的函数本模块一个都不调用，
+ * 导入的只是一个字面量数组 —— 与 `planner/events.ts` 已在用 `../date.ts` 同一条边。
+ * 去重前这里是本地 `DAY_LABEL` 副本（全仓 8 份之一），见 `lib/date.ts` 的注释。
+ */
+import { DAY_LABELS } from '@/lib/date';
 
 /* ============================================================
  * 一、脏区域计算（§5.8）
@@ -274,8 +281,7 @@ export function incrementalNotes(res: IncrementalResult): string[] {
   const moved = res.improve.accepted.length;
   if (moved === 0 && res.frozenCount === 0) return [];
 
-  const DAY_LABEL = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-  const names = res.days.map((d) => DAY_LABEL[d - 1]).join('、');
+  const names = res.days.map((d) => DAY_LABELS[d - 1]).join('、');
 
   if (moved === 0) {
     return [`这次改动只影响 ${names}，其余几天的安排原样保留（没有需要调整的地方）`];

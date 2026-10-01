@@ -1,7 +1,7 @@
 /**
  * 课表导入联调页（开发用）
  *
- * 用途：验证「浏览器 → Vite 代理 /timetable → 127.0.0.1:8765 课表解析服务 → 适配层 → Schedule」整条链路。
+ * 用途：验证「浏览器 → Vite 代理 /timetable → serve.py（8000）课表解析 → 适配层 → Schedule」整条链路。
  * 只在 dev 环境的顶栏出现，不影响正式流程。
  *
  * 这里允许 fetch 和读文件 —— 真正的纯函数在 src/lib/parseSchedule.ts，测试逻辑不掺进去。
@@ -66,14 +66,14 @@ export function ImportTester({ onApply }: Props) {
           />
           <h2 className="text-base font-semibold tracking-tight text-ink">课表解析服务</h2>
           <span className="text-xs text-ink-faint">
-            {online === null ? '探测中…' : online ? '127.0.0.1:8765 已连通' : '未连通 —— 先跑 python server.py 8765'}
+            {online === null ? '探测中…' : online ? '课表解析服务已连通' : '未连通 —— 先在仓库根运行 python serve.py'}
           </span>
           <button onClick={() => void probe()} className="ml-auto text-xs font-semibold text-brand transition-colors hover:text-brand-dark">
             重试
           </button>
         </div>
         <div className="text-xs leading-relaxed text-ink-faint">
-          浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite 转发到 8765，所以没有跨域问题。
+          浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite 转发到 serve.py（8000），所以没有跨域问题。
         </div>
         {online === false && (
           /* 服务没起来时，光说「先跑 server.py」是不够的 —— 它是个**独立仓库**，

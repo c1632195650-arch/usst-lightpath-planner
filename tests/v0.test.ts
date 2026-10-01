@@ -46,10 +46,14 @@ test('V0-1 源码: 「重看引导」按钮在位（onboarded:false + 回 welcom
   assert.match(src, /patchState\(\{ onboarded: false \}\); setView\('welcome'\)/);
 });
 
-test('V0-2 源码: 结果页 onEnter 首落点 = 有课表落总览、没课表落导入', () => {
+test('V0-2 源码: 结果页 onEnter 首落点 = 有课表落今天、没课表落导入', () => {
   const src = APP_SRC();
-  // 验收修正（2026-09-27）：MOCK 兜底按引用判别（App:76 effect 会种入 MOCK_SCHEDULE，只比真值恒落总览）
-  assert.match(src, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/);
+  // 三线融合（2026-10-01）改注：App 改为 hash 路由（navigate），判别收敛进
+  // hasRealSchedule() —— 反向验证强度不变：删掉引用判别（state.schedule !==
+  // MOCK_SCHEDULE）→ 第一条断言红；删掉导入落点 → 第二条断言红。
+  // 原验收修正（2026-09-27）：MOCK 兜底按引用判别，只比真值恒落总览。
+  assert.match(src, /state\.schedule && state\.schedule !== MOCK_SCHEDULE/, 'MOCK 兜底必须按引用判别');
+  assert.match(src, /navigate\(hasRealSchedule\(state\) \? 'today' : 'import'\)/, '没课表首落导入');
 });
 
 test('V0-3 源码: OverviewPage 渲染 onboardingCard；梨宝 seedQuestion 预填链路在位', () => {

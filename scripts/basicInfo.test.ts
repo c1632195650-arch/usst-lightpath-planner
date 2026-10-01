@@ -1,8 +1,9 @@
 /**
  * WP1 基础信息前置 —— 纯逻辑层测试（scripts/basicInfo.test.ts）
  * ============================================================
- * 覆盖：冷启动视图闸门（onboarded） / 必填校验 / campus 值域 / 数字域 / 宿舍禁坐标 /
- *       草稿解析。校验实现在 src/features/welcome/basicInfo.ts（纯函数，不碰 React/storage）。
+ * 覆盖：冷启动视图闸门（onboarded × hasBasicInfo） / 必填校验 / campus 值域 / 数字域 /
+ *       宿舍禁坐标 / 草稿解析。校验实现在 src/features/welcome/basicInfo.ts
+ *       （纯函数，不碰 React/storage）。
  *
  * ⚠️ 反向验证纪律：每条带「反向」注释的用例，关掉对应实现必须变红 ——
  *    实验记录见 docs/wp-ledger-v2.md §WP1。
@@ -44,10 +45,32 @@ const VALID: BasicInfoDraft = {
 
 /* ---------------- 冷启动视图闸门 ---------------- */
 
-test('initialView：onboarded=true 冷启动直进 main，false 回欢迎页', () => {
-  // 反向：把 initialView 改成恒 return 'welcome'（删掉 onboarded 读取）→ 本用例红
-  assert.equal(initialView(true), 'main', '完成过引导的用户刷新不该再回欢迎页');
-  assert.equal(initialView(false), 'welcome');
+test('initialView：引导走完 + 信息齐 → 直进 main；没走完 → 回欢迎页', () => {
+  // 反向：把 initialView 改成恒 return 'welcome'（删掉读取）→ 本用例红
+  assert.equal(
+    initialView({ onboarded: true, hasBasicInfo: true }),
+    'main',
+    '完成过引导的用户刷新不该再回欢迎页',
+  );
+  assert.equal(
+    initialView({ onboarded: false, hasBasicInfo: true }),
+    'welcome',
+    '基础信息填过、引导没走完 → 回欢迎页继续',
+  );
+});
+
+test('initialView：onboarded=true 却没填过基础信息 → 落 basicinfo 补齐（RAY 报的问题）', () => {
+  // 反向：删掉 `if (!gate.hasBasicInfo) return 'basicinfo'` 那条分支 → 本用例红
+  assert.equal(
+    initialView({ onboarded: true, hasBasicInfo: false }),
+    'basicinfo',
+    '老账号 / 并入的旧快照：有画像却从没填过基础信息 —— 不许被 onboarded 直接送进 main',
+  );
+  assert.equal(
+    initialView({ onboarded: false, hasBasicInfo: false }),
+    'welcome',
+    '全新账号仍从欢迎页进入（「先浏览应用」捷径不受影响）',
+  );
 });
 
 /* ---------------- 必填校验 ---------------- */
@@ -119,4 +142,33 @@ test('parseBasicInfo：非法输入（坏年级/坏校区/坐标宿舍）不产�
   assert.equal(info.campus, undefined);
   assert.equal(info.dorm, undefined);
   assert.ok(info.nickname && info.college, '合法字段照常收');
+});
+
+/* ---------------- 接线 B（三线融合 2026-10-01）：未导入课表 → 落「导入课表」 ----------------
+ * MOCK_SCHEDULE 降级为演示兜底，不再是默认落点；引导齐了却从没导入过真实课表的
+ * 冷启动（老账号 / 并入快照 / 换号）落 import 页引导「从教务系统导出 PDF 上传」。
+ * 反向验证：删掉 `if (gate.hasSchedule === false) return 'import'` 分支 → 本用例红；
+ * 把引用判别改回只比真值 → App.tsx 侧 v3 用例红（hasRealSchedule 的定义被钉在源码锁里）。 */
+test('initialView：引导齐了但没导入过真实课表 → 落 import 引导上传（接线 B）', () => {
+  // hasSchedule 缺省 = 视为已导入（不强行拦人），老调用方行为零变化
+  assert.equal(
+    initialView({ onboarded: true, hasBasicInfo: true }),
+    'main',
+    '不传 hasSchedule 时维持原三输入行为',
+  );
+  assert.equal(
+    initialView({ onboarded: true, hasBasicInfo: true, hasSchedule: false }),
+    'import',
+    '引导齐了、只有 MOCK 兜底 → 落导入页引导上传',
+  );
+  assert.equal(
+    initialView({ onboarded: true, hasBasicInfo: true, hasSchedule: true }),
+    'main',
+    '有真实课表 → 直进 main',
+  );
+  assert.equal(
+    initialView({ onboarded: false, hasBasicInfo: true, hasSchedule: false }),
+    'welcome',
+    '引导没走完仍优先回欢迎页（导入分支不抢在引导之前）',
+  );
 });

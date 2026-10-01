@@ -1,9 +1,12 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 import { useCallback, useState } from 'react';
 import { DEFAULT_APP_STATE, type AppState } from '@/types';
 
 /**
- * 本地优先存储层 —— 数据一律不出用户设备。
- * 课表能定位一个人在特定时间的物理位置，属个人信息；不上传 = 合规友好。
+ * 本地优先存储层（持久化与账号系统实施规格书 §三）：
+ * 读写走 persistence.ts —— localStorage 为缓存层（保底），服务端 SQLite 为真源。
+ * 课表能定位一个人在特定时间的物理位置，属个人信息；数据只落本机 serve.py，
+ * 不出用户设备（合规口径不变 —— 数据库就在本仓库 data/ 下）。
  */
 
 const STORAGE_KEY = 'usst-life-assistant-v2';
@@ -69,7 +72,6 @@ export function migrate(raw: unknown): AppState {
     if (!isPlainObject(ps.locks)) ps.locks = {};
     if (!isPlainObject(ps.lockedPlacements)) ps.lockedPlacements = {};
     if (!isPlainObject(ps.rolling) && ps.rolling !== null) ps.rolling = null;
-    if (!isPlainObject(ps.rollingBase) && ps.rollingBase !== null) ps.rollingBase = null;
     if (typeof ps.churnMin !== 'number' || !Number.isFinite(ps.churnMin)) ps.churnMin = 0;
     if (typeof ps.updatedAt !== 'string') ps.updatedAt = '';
     if (typeof ps.version !== 'number') ps.version = 1;
@@ -81,7 +83,7 @@ export function migrate(raw: unknown): AppState {
 
 export function loadState(): AppState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = readRaw(STORAGE_KEY);
     if (!raw) return structuredClone(DEFAULT_APP_STATE);
     return migrate(JSON.parse(raw));
   } catch (e) {
@@ -92,7 +94,7 @@ export function loadState(): AppState {
 
 export function saveState(state: AppState): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    writeRaw(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
     console.warn('[storage] 写入失败', e);
   }

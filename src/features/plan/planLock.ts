@@ -24,7 +24,7 @@ export function emptyPlanState(now = ''): PlanPersistState {
     churnMin: 0,
     updatedAt: now,
     rolling: null,
-    rollingBase: null,
+    rollingBase: null, // 三线融合（2026-10-01）：#22 跨周滚动基线并回
   };
 }
 
@@ -38,8 +38,6 @@ export function normalizePlanState(
     ...state,
     locks: state.locks ?? {},
     lockedPlacements: state.lockedPlacements ?? {},
-    rolling: state.rolling ?? null,
-    rollingBase: state.rollingBase ?? null,
   };
 }
 

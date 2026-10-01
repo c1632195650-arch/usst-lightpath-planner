@@ -1,3 +1,4 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 /**
  * 用户覆盖层（UserPlanLayer）—— 阶段 R2
  * ============================================================
@@ -123,6 +124,8 @@ export interface MealPlaces {
 
 export interface UserPlanLayer {
   schemaVersion: number;
+  /** 用户住处（2026-09-20）：null = 未设置（宿舍类块地点留空，不猜） */
+  homeBase?: { name: string; campus: string } | null;
   /** 用户加的块；`weeks` 空 = 长期，指定 = 一次性/区间 */
   tasks: UserTask[];
   /** 删掉的块 blockId（重排后不回来） */
@@ -382,7 +385,7 @@ export function migrateFromLegacy(
  */
 export function loadUserPlan(): UserPlanLayer {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw(KEY);
     if (raw) {
       const parsed = normalize(JSON.parse(raw));
       if (parsed) return parsed;
@@ -393,8 +396,8 @@ export function loadUserPlan(): UserPlanLayer {
 
   // 迁移路径
   try {
-    const legacyEdits = localStorage.getItem(LEGACY_EDITS_KEY);
-    const legacyAssignments = localStorage.getItem(LEGACY_ASSIGNMENTS_KEY);
+    const legacyEdits = readRaw(LEGACY_EDITS_KEY);
+    const legacyAssignments = readRaw(LEGACY_ASSIGNMENTS_KEY);
     if (!legacyEdits && !legacyAssignments) return emptyUserPlan();
 
     const migrated = migrateFromLegacy(
@@ -402,7 +405,7 @@ export function loadUserPlan(): UserPlanLayer {
       legacyAssignments ? JSON.parse(legacyAssignments) : null,
     );
     // 写回 v2（失败也无所谓，下次还会再试一次迁移）
-    try { localStorage.setItem(KEY, JSON.stringify(migrated)); } catch { /* 配额满 */ }
+    try { writeRaw(KEY, JSON.stringify(migrated)); } catch { /* 配额满 */ }
     return migrated;
   } catch {
     return emptyUserPlan();
@@ -411,7 +414,7 @@ export function loadUserPlan(): UserPlanLayer {
 
 export function saveUserPlan(layer: UserPlanLayer): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...layer, schemaVersion: SCHEMA_VERSION }));
+    writeRaw(KEY, JSON.stringify({ ...layer, schemaVersion: SCHEMA_VERSION }));
   } catch (e) {
     console.warn('[user-plan] 写入失败：', e);
   }
@@ -419,7 +422,7 @@ export function saveUserPlan(layer: UserPlanLayer): void {
 
 export function clearUserPlan(): void {
   try {
-    localStorage.removeItem(KEY);
+    removeRaw(KEY);
   } catch {
     /* 隐私模式静默 */
   }
@@ -543,6 +546,11 @@ export function undoDepth(): number {
 /** 撤销：弹出最近一份快照；栈空返回 null（调用方不动） */
 export function popUndo(): UserPlanLayer | null {
   return undoStack.pop() ?? null;
+}
+
+/** 设置/清除住处（覆盖层字段，随 layer 一起持久化与撤销） */
+export function setHomeBase(layer: UserPlanLayer, homeBase: { name: string; campus: string } | null): UserPlanLayer {
+  return { ...layer, homeBase };
 }
 
 /** 清空撤销栈（换周/清空数据时调用，避免撤回别处的内容） */

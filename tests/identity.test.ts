@@ -125,3 +125,31 @@ test('闸门：偏好类 key 绝不能写进基础信息', () => {
   assert.deepEqual(loadBasicInfo(), { grade: 1 },
     '偏好/薄弱/课程不是客观事实，确认动作不得触碰基础信息');
 });
+
+/* ---------------- 接线 A（三线融合 2026-10-01）：登录态身份注入 ----------------
+ * 登录后 user_id = 真账号（梨宝记忆 / 课表事实回写挂到账号，跨浏览器不断链）；
+ * 未登录 = 维持随机设备 id 的既有降级路径。反向验证：删掉 getUserId 顶部的
+ * authedUsername 短路分支 → 第一条用例红；把 setAuthedUserId(null) 写成忽略
+ * null → 第二条用例红。 */
+import { setAuthedUserId, isAuthedIdentity } from '@/lib/identity';
+
+test('接线A：登录态身份注入 —— getUserId 返回真账号', () => {
+  const before = getUserId(); // 未登录：随机设备 id
+  assert.ok(before.startsWith('u-'), '前置：未登录时走设备 id 路径');
+  setAuthedUserId('temp');
+  assert.equal(getUserId(), 'temp', '登录后 /api/chat 必须携带真账号 user_id');
+  assert.equal(getUserId(), 'temp', '重复取值稳定（同一次登录会话内身份不变）');
+  assert.ok(isAuthedIdentity());
+  // 空串 / 空白用户名不允许把身份置成假值
+  setAuthedUserId('   ');
+  assert.ok(!isAuthedIdentity(), '空白用户名必须视为未登录');
+});
+
+test('接线A：登出降级 —— 回到随机设备 id 路径', () => {
+  setAuthedUserId('temp');
+  setAuthedUserId(null);
+  assert.ok(!isAuthedIdentity(), '登出后不再处于登录态身份');
+  const id = getUserId();
+  assert.ok(id.startsWith('u-'), '未登录 = 维持现状：随机设备 id + localStorage');
+  assert.equal(getUserId(), id, '降级路径下同一设备仍复用同一 id');
+});

@@ -1,3 +1,4 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 /**
  * 行为记录 —— 排程的反馈闭环（用户构想里一直没落地的那一环）
  * ============================================================
@@ -191,7 +192,7 @@ function isRecord(v: unknown): v is BehaviorRecord {
 
 export function loadRecords(): BehaviorRecord[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -204,7 +205,7 @@ export function loadRecords(): BehaviorRecord[] {
 
 export function saveRecords(records: BehaviorRecord[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(records));
+    writeRaw(KEY, JSON.stringify(records));
   } catch (e) {
     console.warn('[behavior] 写入失败', e);
   }
@@ -213,7 +214,7 @@ export function saveRecords(records: BehaviorRecord[]): void {
 /** 清空执行记录（供「重置」入口调用） */
 export function clearRecords(): void {
   try {
-    localStorage.removeItem(KEY);
+    removeRaw(KEY);
   } catch {
     /* 隐私模式下不可写，静默即可 */
   }

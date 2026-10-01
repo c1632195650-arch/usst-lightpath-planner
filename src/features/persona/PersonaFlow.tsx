@@ -3,6 +3,7 @@ import type { AnswerEntry, AnswerMap } from '@/types';
 import { buildPersonaSequence, SECTION_META } from '@/data/personaBank';
 import { isAnswered } from '@/lib/persona';
 import { loadBasicInfo } from '@/lib/identity';
+import { GoalPrefsAsk } from '@/features/activity/GoalPrefsAsk';
 
 interface Props {
   answers: AnswerMap;
@@ -28,6 +29,11 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   /** 按年级出卷（WP2）：基础信息里没年级（跳过引导）→ 全库出卷，与分层前一致。 */
   const items = useMemo(() => buildPersonaSequence(loadBasicInfo().grade), []);
   const [idx, setIdx] = useState(0);
+  /**
+   * G1（本地保留，合并时从 beta-v2 版补回）：35 题答完后的「目标偏好」附加组。
+   * 数据走独立 `goalPrefs` 存储（**不进 PersonaProfile**，types.ts 零改动）。
+   */
+  const [prefsStage, setPrefsStage] = useState(false);
   const [sortPick, setSortPick] = useState<string[]>(() => {
     const saved = answers.B05;
     return Array.isArray(saved) ? (saved as string[]) : [];
@@ -56,8 +62,13 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
 
   /** 所有题都由明确操作进入下一步，旧答案不会在页面打开时触发跳题。 */
   const goNext = () => {
-    if (isLast) onComplete();
-    else setIdx((current) => current + 1);
+    if (isLast) {
+      // G1：本卷题目完成 → 先收集「目标偏好」附加组（可跳过），再真正完成
+      if (!prefsStage) setPrefsStage(true);
+      else onComplete();
+      return;
+    }
+    setIdx((current) => current + 1);
   };
 
   /**
@@ -113,6 +124,11 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   };
 
   const sortDone = sortPick.length >= 5;
+
+  // G1：目标偏好附加组 —— 本卷题目完成后、生成画像前收集（可跳过）
+  if (prefsStage) {
+    return <GoalPrefsAsk onDone={() => onComplete()} />;
+  }
 
   return (
     <div className="min-h-screen bg-paper">

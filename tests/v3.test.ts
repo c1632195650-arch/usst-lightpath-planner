@@ -21,8 +21,11 @@ test('V3: 首访旅程 ①→④ 连线（标题→基本信息→问卷→结�
   assert.match(app, /<PersonaFlow/, '③ 问卷挂载');                          // 4
   assert.match(app, /view === 'result' && state\.persona/, '④ 结果页入口'); // 5
   // 验收修正（2026-09-27）：MOCK 兜底按引用判别——真课表才落「总览」，否则首落「导入」
-  assert.match(app, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/, '⑤ 首落点=导入（MOCK 不算已有课表）'); // 6
-  assert.match(app, /hasSchedule=\{!!state\.schedule && state\.schedule !== MOCK_SCHEDULE\}/, '⑤ checklist 导入项：MOCK 兜底不亮勾'); // 6b
+  // 三线融合（2026-10-01）改注：判别收敛进 hasRealSchedule()（引用判别仍在，删它即红），
+  // 导航从 setMainTab 换成 hash 路由的 navigate。
+  assert.match(app, /state\.schedule && state\.schedule !== MOCK_SCHEDULE/, 'MOCK 兜底必须按引用判别'); // 6
+  assert.match(app, /navigate\(hasRealSchedule\(state\) \? 'today' : 'import'\)/, '⑤ 首落点=导入（MOCK 不算已有课表）'); // 6
+  assert.match(app, /hasSchedule=\{hasRealSchedule\(state\)\}/, '⑤ checklist 导入项：MOCK 兜底不亮勾'); // 6b
 });
 
 test('V3: ⑥→⑦ 模式窗双入口 + 确认落 lifeMode', () => {

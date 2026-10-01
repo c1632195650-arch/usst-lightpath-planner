@@ -56,3 +56,47 @@ test('上限 30 步 —— 最旧的快照被挤出', () => {
   assert.deepEqual(last, ['x5'], '最旧的可恢复状态是第 6 步（x0–x4 被挤出）');
   assert.equal(popUndo(), null);
 });
+
+/* ============================================================
+ * 重做栈（F2c / D8 测试先行：搬持久化态前补齐 redo 语义单测）
+ * ========================================================== */
+
+import { canRedo, clearRedo, pushRedoSnapshot, redoDepth, popRedo } from '@/features/week/userPlanStore';
+
+test('重做：撤销时压入重做栈，popRedo 后进先出弹回', () => {
+  clearUndo();
+  clearRedo();
+  const base = emptyUserPlan();
+  // 「改动 A」：excluded=[a]；「改动 B」：excluded=[a,b]
+  const afterA = { ...base, excluded: ['a'] };
+  const afterB = { ...base, excluded: ['a', 'b'] };
+  // 模拟标准往返：B 之前 A 在撤销栈；撤销 B 时把 B 压入重做栈
+  pushUndoSnapshot(base);
+  pushUndoSnapshot(afterA);
+  pushRedoSnapshot(afterB); // 撤销 B
+  pushRedoSnapshot(afterA); // 再撤销 A
+  assert.equal(canRedo(), true);
+  assert.deepEqual(popRedo()!.excluded, ['a'], '先重做到 B 之前……实际先弹的是最后压入的 A');
+  assert.deepEqual(popRedo()!.excluded, ['a', 'b']);
+  assert.equal(canRedo(), false, '弹完就空了');
+  assert.equal(redoDepth(), 0);
+});
+
+test('发生新改动 → 重做历史作废（clearRedo，防「穿越」）', () => {
+  clearRedo();
+  pushRedoSnapshot({ ...emptyUserPlan(), excluded: ['a'] });
+  assert.equal(canRedo(), true);
+  clearRedo(); // 新改动发生
+  assert.equal(canRedo(), false, '重做历史必须清空');
+  assert.equal(popRedo(), null);
+});
+
+test('重做栈同样受 30 步上限约束', () => {
+  clearRedo();
+  for (let i = 0; i < 35; i++) {
+    pushRedoSnapshot({ ...emptyUserPlan(), excluded: [`y${i}`] });
+  }
+  assert.equal(redoDepth(), 30, '只保留最近 30 步');
+  const last = popRedo()!;
+  assert.deepEqual(last.excluded, ['y34'], '最新压入的最后弹出（LIFO 一致性）');
+});

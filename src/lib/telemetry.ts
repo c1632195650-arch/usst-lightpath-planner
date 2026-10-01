@@ -1,3 +1,4 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 /**
  * 交互埋点 —— 「第 6 环 · 行为记录」的交互侧
  * ============================================================
@@ -180,7 +181,7 @@ function isRecord(v: unknown): v is TelemetryRecord {
 
 export function loadEvents(): TelemetryRecord[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -193,7 +194,7 @@ export function loadEvents(): TelemetryRecord[] {
 
 export function saveEvents(list: TelemetryRecord[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    writeRaw(KEY, JSON.stringify(list));
   } catch (e) {
     // 隐私模式 / 配额满：静默降级。埋点是**辅助**功能，绝不能因为它让主流程报错
     console.warn('[telemetry] 写入失败', e);
@@ -202,7 +203,7 @@ export function saveEvents(list: TelemetryRecord[]): void {
 
 export function clearEvents(): void {
   try {
-    localStorage.removeItem(KEY);
+    removeRaw(KEY);
   } catch {
     /* 隐私模式下不可写，静默即可 */
   }

@@ -1,7 +1,7 @@
 /**
  * 课表适配层：timetable_parser 的输出 → 仓库契约 Schedule
  *
- * 上游：本地课表解析服务（timetable_parser/server.py，默认 127.0.0.1:8765）
+ * 上游：本地课表解析服务（timetable_parser 包，由仓库根 serve.py 进程内加载，默认 127.0.0.1:8000）
  *   GET  /courses         -> CourseRecord[]（中文键）
  *   POST /api/import_pdf  -> { ok, count, records } | { ok:false, error }
  *

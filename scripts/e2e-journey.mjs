@@ -1,9 +1,10 @@
 /**
  * V3 · 全旅程 E2E 锁（手动验收资产）
  * ============================================================
- * 断言 ≥15 条，覆盖 CY 的 19 拍理想旅程（§2）的机器可判部分：
- *   清 storage → ①标题 → ②基本信息 → ③问卷(自动作答) → ④结果 → ⑤导入(手填学期 key)
- *   → ⑥模式窗选「远方」 → ⑧日程+满溢度+「接下来」 → ⑨编辑模式切换+持久化
+ * 断言 ≥15 条，覆盖融合后动线（裁决③，2026-10-01）的机器可判部分：
+ *   清 storage → ①标题 → ②基本信息(含住处/作息) → ③问卷(自动作答) → ④结果
+ *   → ⑤导入课表 tab（未导入真实课表的首落点，接线 B）→ checklist 卡（今天页）
+ *   → ⑥模式窗选「远方」 → ⑧周计划日程+满溢度 → ⑨编辑模式切换+持久化
  *   → 删软块选「留空白」→ 留白块出现 → ⑫梨宝改期草稿卡 → ⑬记忆面板 pending → F5 恢复
  *
  * 运行方式（需要 5173 前端在跑，后端 8000 可选——离线路径均有降级）：
@@ -54,9 +55,12 @@ const run = async () => {
   await page.getByRole('button', { name: /下一步/ }).click();
   await T(500);
 
-  // ③ 问卷（自动作答：每个问题点第一个可点选项，直到结果页）
-  for (let i = 0; i < 40; i++) {
+  // ③ 问卷（自动作答：每个问题点第一个可点选项；末尾 Ray 的「目标偏好」组
+  //    用「保存并完成测评 / 跳过」收口 —— 都纳入循环，直到结果页）
+  for (let i = 0; i < 60; i++) {
     if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    const finish = page.getByRole('button', { name: /跳过（之后可在目标设置里补）|保存并完成测评/ }).first();
+    if (await finish.count()) { await finish.click(); await T(420); continue; }
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click(); await T(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();
@@ -64,24 +68,31 @@ const run = async () => {
   }
   ok(await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false), '④ 画像结果页可达');
 
-  // → 进入主界面（V0-2：没导课表 → 直达「课表」tab）
-  await page.getByRole('button', { name: /进入|看看/ }).first().click().catch(() => {});
-  await T(800);
-  ok(await page.getByText('解析服务未就绪', { exact: false }).or(page.locator('#root')).first().isVisible().catch(() => false), '⑤ 主界面可达（导入 tab 或降级提示）');
+  // 兴趣追问弹窗（画像完成后一次性）若弹出，先跳过 —— 不然会挡住「进入」按钮
+  const interestSkip = page.getByRole('button', { name: /跳过/ }).first();
+  if (await page.getByRole('dialog', { name: '兴趣追问' }).isVisible().catch(() => false)) {
+    await interestSkip.click().catch(() => {});
+    await T(600);
+  }
 
-  // V0-3 checklist：三条待办可见（卡在总览页 —— 先从「课表」切回「总览」）
-  await page.getByRole('button', { name: '总览' }).click().catch(() => {});
+  // → 进入主界面（V0-2 / 接线 B：没导入真实课表 → 首落「导入课表」tab）
+  await page.getByRole('button', { name: /进入我的本周安排|进入|看看/ }).first().click({ timeout: 8000 }).catch(() => {});
+  await T(800);
+  ok(await page.getByText('课表解析服务', { exact: false }).first().isVisible().catch(() => false), '⑤ 首落导入课表 tab（MOCK 兜底不算已有课表）');
+
+  // V0-3 checklist：三条待办可见（卡在「今天」页 —— 从「导入课表」切回「今天」）
+  await page.getByRole('button', { name: '今天' }).click().catch(() => {});
   await T(600);
   let checklistSeen = false;
   for (let i = 0; i < 3 && !checklistSeen; i++) {
     checklistSeen = await page.getByTestId('onboarding-checklist').isVisible().catch(() => false);
     if (!checklistSeen) {
-      await page.getByRole('button', { name: '总览' }).click().catch(() => {});
+      await page.getByRole('button', { name: '今天' }).click().catch(() => {});
       await T(900);
     }
   }
   if (!checklistSeen) {
-    console.log('  [诊断] 总览页头部文本:', (await page.locator('#root').textContent())?.slice(0, 260));
+    console.log('  [诊断] 今天页头部文本:', (await page.locator('#root').textContent())?.slice(0, 260));
   }
   ok(checklistSeen, 'V0-3 checklist 卡可见（未完成项）');
 
@@ -97,8 +108,8 @@ const run = async () => {
   ok(await page.getByText('预览 · 未落盘，以实际为准').isVisible().catch(() => false), '⑥ 远方模式干跑预览在位');
   await page.getByRole('button', { name: '就这么过' }).click();
   await T(1500);
-  // 确认后回到总览页 —— 从「打开本周安排」进周计划视图（日程主界面）
-  const openWeek2 = page.getByRole('button', { name: /打开本周安排/ });
+  // 确认后回到今天页 —— 从「查看 / 编辑本周安排」进周计划视图（日程主界面）
+  const openWeek2 = page.getByRole('button', { name: /查看 \/ 编辑本周安排|本周安排/ });
   if (await openWeek2.count()) { await openWeek2.first().click().catch(() => {}); await T(900); }
   ok(!(await page.getByTestId('onboarding-checklist').isVisible().catch(() => false)) === false || true, '确认后返回（checklist 状态按完成度变化）');
 
@@ -114,8 +125,8 @@ const run = async () => {
   ok(pressed === 'true', '⑨ 编辑态 aria-pressed=true');
   await page.reload();
   await T(1200);
-  // 刷新后回落总览子视图 —— 重进周计划视图（V0-2 首落点/视图状态不持久化属预期）
-  const reopen = page.getByRole('button', { name: /打开本周安排/ });
+  // 刷新后回落导入子视图 —— 重进周计划视图（V0-2 首落点/视图状态不持久化属预期）
+  const reopen = page.getByRole('button', { name: /查看 \/ 编辑本周安排|本周安排/ });
   if (await reopen.count()) { await reopen.first().click().catch(() => {}); await T(900); }
   ok((await page.getByTestId('edit-mode-toggle').getAttribute('aria-pressed')) === 'true', '⑨ 刷新后编辑态持久化');
   await page.getByTestId('edit-mode-toggle').click();
@@ -139,7 +150,7 @@ const run = async () => {
   }
 
   // ⑫ 梨宝改期草稿卡
-  await page.getByRole('button', { name: '梨宝' }).click();
+  await page.getByRole('button', { name: '梨宝', exact: true }).click();
   await T(800);
   const lbaoInput = page.getByPlaceholder('问梨宝');
   await lbaoInput.fill('把自习挪到周五');
@@ -169,7 +180,7 @@ const run = async () => {
   ok(await page.locator('#root').isVisible(), 'F5 刷新后应用可用');
 
   // V2-2 hold：自然语言「别排」→ 草稿卡 → 确认 → 落 unavailableSlots
-  await page.getByRole('button', { name: '梨宝' }).click();
+  await page.getByRole('button', { name: '梨宝', exact: true }).click();
   await T(1200);
   // F5 恢复期间 loading 可能未就绪（send 静默 no-op）→ 带重试发送
   for (let i = 0; i < 3; i++) {

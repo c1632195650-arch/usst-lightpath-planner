@@ -1,3 +1,4 @@
+import { readRaw, writeRaw, removeRaw } from '@/lib/persistence';
 /**
  * 偏好校正层 · 存储
  * ============================================================
@@ -127,7 +128,7 @@ export function isRule(v: unknown): v is CorrectionRule {
  */
 export function loadRules(): CorrectionRule[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Partial<CorrectionStore> | null;
     if (!parsed || !Array.isArray(parsed.rules)) return [];
@@ -142,7 +143,7 @@ export function loadRules(): CorrectionRule[] {
 export function saveRules(rules: readonly CorrectionRule[]): void {
   try {
     const store: CorrectionStore = { schemaVersion: SCHEMA_VERSION, rules: [...rules] };
-    localStorage.setItem(KEY, JSON.stringify(store));
+    writeRaw(KEY, JSON.stringify(store));
   } catch (e) {
     // 配额满 / 隐私模式 —— 不该让交互崩掉
     console.warn('[feedback] 写入失败：', e);
@@ -152,7 +153,7 @@ export function saveRules(rules: readonly CorrectionRule[]): void {
 /** 清空（「清掉我提过的要求」）。保留给设置页用。 */
 export function clearRules(): void {
   try {
-    localStorage.removeItem(KEY);
+    removeRaw(KEY);
   } catch {
     /* 隐私模式下静默 */
   }

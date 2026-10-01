@@ -8,7 +8,14 @@
  *    AI 在对话里听到身份信息时只能**提议**（后端 facts 表 pending），
  *    用户在建议卡里点了确认，才经 `applyObjectiveFact` 写进这里；
  *  · AI 永远不直接改写基础信息（core §4 L4：绝不替用户拍板）。
+ *
+ * 2026-09-27 合流（本地分支）：读写改走 `@/lib/persistence` 的 readRaw/writeRaw。
+ *  · 原因：本分支已有「账号 + 云同步」层（`serve.py` /api/db + persistence 双写）。
+ *    beta-v2 版直接裸用 localStorage，会让 `user_id` 与 `basic_info` **进不了云**，
+ *    换设备后 user_id 变化 → 后端记忆(以 user_id 为键)**断链**。
+ *  · 语义不变：写失败仍回落 'anon'（persistence 内部已是 try/catch，此处按回读判成败）。
  */
+import { readRaw, writeRaw } from '@/lib/persistence';
 
 const USER_KEY = 'usst.libao.user_id';
 const BASIC_KEY = 'usst.libao.basic_info';
@@ -68,14 +75,40 @@ function newId(): string {
 }
 
 /** 设备级标识（唯一来源）：持久化复用 —— 后端的「对话信号」靠它跨会话累积。
- *  ⚠️ 已知限制（2026-09-20 确认先不做跨设备）：换设备或清缓存 = 变成另一个人。 */
+ *  ⚠️ 已知限制（2026-09-20 确认先不做跨设备）：换设备或清缓存 = 变成另一个人。
+ *  2026-09-27 起经 persistence 双写：登录后可从云端回灌，缓解上面这条限制。
+ *
+ *  三线融合接线 A（2026-10-01）：登录态下 user_id = **真账号**（LoginPage → sessions
+ *  → username，唯一）。由组合根（App.tsx）在账号门解析完成后注入 `setAuthedUserId`；
+ *  未登录 = 维持随机设备 id + localStorage 的既有降级路径，行为零变化。
+ *  后端记忆（`/api/chat` 的 user_id 键）与 lightpath.db kv 表（按登录账号隔离，
+ *  规格书 §5.5 同机多账号）由此贯通到同一个身份真源。 */
+
+/** 当前登录账号的用户名；null = 未登录（走随机设备 id 路径）。模块级单值 ——
+ *  身份在一次页面生命周期内至多一个，切换账号经整页重载（规格书 §5.5）。 */
+let authedUsername: string | null = null;
+
+/** 登录/登出时由组合根注入。传 null = 回到未登录的随机设备 id 路径。 */
+export function setAuthedUserId(username: string | null): void {
+  authedUsername = typeof username === 'string' && username.trim() ? username : null;
+}
+
+/** 仅供测试：当前是否处于登录态身份。 */
+export function isAuthedIdentity(): boolean {
+  return authedUsername !== null;
+}
+
 export function getUserId(): string {
+  // 登录态：真账号优先 —— 梨宝记忆、课表事实回写都挂到账号上，换浏览器不断链
+  if (authedUsername) return authedUsername;
   try {
-    const saved = localStorage.getItem(USER_KEY);
+    const saved = readRaw(USER_KEY);
     if (saved) return saved;
     const id = `u-${newId()}`;
-    localStorage.setItem(USER_KEY, id);
-    return id;
+    writeRaw(USER_KEY, id);
+    // persistence 的写入是「本地保底 + 异步上云」，失败时静默；
+    // 因此按**回读**判成败：读不回来 = 真的落不了盘 → 降级 anon（后端退回默认档案）。
+    return readRaw(USER_KEY) ? id : 'anon';
   } catch {
     // 隐私模式等场景 localStorage 不可写 → 退回后端默认，功能降级但不报错
     return 'anon';
@@ -93,7 +126,7 @@ function intField(v: unknown, lo: number, hi: number): number | undefined {
 
 export function loadBasicInfo(): BasicInfo {
   try {
-    const raw = localStorage.getItem(BASIC_KEY);
+    const raw = readRaw(BASIC_KEY);
     if (!raw) return {};
     const data = JSON.parse(raw) as Record<string, unknown>;
     // 逐字段白名单校验；非法形状一律丢弃（存储层出错不报错、不污染）
@@ -121,7 +154,7 @@ export function loadBasicInfo(): BasicInfo {
 
 export function saveBasicInfo(info: BasicInfo): void {
   try {
-    localStorage.setItem(BASIC_KEY, JSON.stringify(info));
+    writeRaw(BASIC_KEY, JSON.stringify(info));
   } catch (e) {
     console.warn('[identity] 基础信息写入失败', e);
   }

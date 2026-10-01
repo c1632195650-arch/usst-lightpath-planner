@@ -50,10 +50,10 @@ export const PERSONA_ITEMS: TieredPersonaItem[] = [
   { id: 'A09', order: 9, section: 'A', type: 'L5', text: '课设被老师当面指出问题之后，我会反复想很久', reverse: true, trait: 'ES', sceneTag: '课设' },
   { id: 'A10', order: 10, section: 'A', type: 'L5', text: '我愿意为了军工路食堂「没吃过的窗口」多走十分钟', reverse: false, trait: 'O', sceneTag: '军工路食堂' },
   { id: 'A11', order: 11, section: 'A', type: 'L5', text: '就算图书馆的占座流程已经很熟了，我还是会想试试新方法', reverse: false, trait: 'O', sceneTag: '图书馆' },
-  { id: 'A12', order: 12, section: 'A', type: 'L5', text: '社团同学找我帮忙时我很难说「不」', reverse: false, trait: 'A', grades: [1, 2], sceneTag: '社团' },
+  { id: 'A12', order: 12, section: 'A', type: 'L5', text: '社团同学找我帮忙时我很难说「不」', reverse: false, trait: 'A', sceneTag: '社团' },
 
   // ---- B 价值与动机（分层题：B01 大二起；B02-B05 全年级） ----
-  { id: 'B01', order: 13, section: 'B', type: 'L5', text: '小A：绩点和履历是ta最在意的事，选课、光电杯、保研实习都围着这个转。这个人像你吗？', motif: 'ACH', grades: [2, 3, 4], sceneTag: '光电杯' },
+  { id: 'B01', order: 13, section: 'B', type: 'L5', text: '小A：绩点和履历是ta最在意的事，选课、光电杯、保研实习都围着这个转。这个人像你吗？', motif: 'ACH', sceneTag: '光电杯' },
   { id: 'B02', order: 14, section: 'B', type: 'L5', text: '小B：大学最重要的是认识有意思的人，社团活动能去的都去。这个人像你吗？', motif: 'SOC', sceneTag: '社团' },
   { id: 'B03', order: 15, section: 'B', type: 'L5', text: '小C：把身体和作息管好是第一位的，再忙也要赶上校园跑。这个人像你吗？', motif: 'HEA', sceneTag: '校园跑' },
   { id: 'B04', order: 16, section: 'B', type: 'L5', text: '小D：从光电杯到路演摆摊，什么都想试一试，新鲜感最重要。这个人像你吗？', motif: 'EXP', sceneTag: '光电杯' },
@@ -72,19 +72,17 @@ export const PERSONA_ITEMS: TieredPersonaItem[] = [
 
   // ---- C 认知与决策（分层题：C01 大三大四 / C02 大二起 / C05 大一大二；C03 C04 全年级） ----
   {
-    id: 'C01', order: 18, section: 'C', type: 'FC', text: '秋招 offer 和考研院校二选一的时候',
-    grades: [3, 4], sceneTag: '秋招',
+    id: 'C01', order: 18, section: 'C', type: 'FC', text: '秋招 offer 和考研院校二选一的时候', sceneTag: '秋招',
     options: [
       { key: 'A', text: '我更信数据和对比', value: 100 },
       { key: 'B', text: '我更信第一感觉', value: 0 },
     ], var: 'rationality',
   },
-  { id: 'C02', order: 19, section: 'C', type: 'L5', text: '看到一篇很长的上理选课或考研攻略，我会认真读完', var: 'nfc', grades: [2, 3, 4], sceneTag: '选课' },
+  { id: 'C02', order: 19, section: 'C', type: 'L5', text: '看到一篇很长的上理选课或考研攻略，我会认真读完', var: 'nfc', sceneTag: '选课' },
   { id: 'C03', order: 20, section: 'C', type: 'L5', text: '计划好的军工路食堂探店临时被打乱，我会明显不舒服', var: 'nfcc', sceneTag: '军工路食堂' },
   { id: 'C04', order: 21, section: 'C', type: 'L5', text: '买稍微贵一点的东西（比如通勤单车），我总要货比三家才下手', var: 'maximizing', sceneTag: '通勤' },
   {
-    id: 'C05', order: 22, section: 'C', type: 'MC', text: '高数题卡住或选课系统不会用，我的第一反应是',
-    grades: [1, 2], sceneTag: '高数',
+    id: 'C05', order: 22, section: 'C', type: 'MC', text: '高数题卡住或选课系统不会用，我的第一反应是', sceneTag: '高数',
     options: [
       { key: 'A', text: '自己搜攻略', output: 'search_self' },
       { key: 'B', text: '问身边的朋友', output: 'ask_friend' },
@@ -95,17 +93,15 @@ export const PERSONA_ITEMS: TieredPersonaItem[] = [
 
   // ---- D 行为倾向（分层题：D01 大一大二 / D02 大三大四 / D03 大一大二大三；D04 D05 全年级） ----
   {
-    id: 'D01', order: 23, section: 'D', type: 'FC', text: '看到光电杯、大创或者兼职的机会，我第一反应是',
-    grades: [1, 2], sceneTag: '光电杯',
+    id: 'D01', order: 23, section: 'D', type: 'FC', text: '看到光电杯、大创或者兼职的机会，我第一反应是', sceneTag: '光电杯',
     options: [
       { key: 'A', text: '兴奋，想报名', value: 100 },
       { key: 'B', text: '先想风险大不大', value: 0 },
     ], var: 'approach',
   },
-  { id: 'D02', order: 24, section: 'D', type: 'L5', text: '我愿意为了保研或秋招这种长远目标，放弃眼下的享乐', var: 'cfc', grades: [3, 4], sceneTag: '保研' },
+  { id: 'D02', order: 24, section: 'D', type: 'L5', text: '我愿意为了保研或秋招这种长远目标，放弃眼下的享乐', var: 'cfc', sceneTag: '保研' },
   {
-    id: 'D03', order: 25, section: 'D', type: 'FC', text: '上理选课的时候我会',
-    grades: [1, 2, 3], sceneTag: '选课',
+    id: 'D03', order: 25, section: 'D', type: 'FC', text: '上理选课的时候我会', sceneTag: '选课',
     options: [
       { key: 'A', text: '选给分高但没那么感兴趣的', value: 0 },
       { key: 'B', text: '选难但真想学的', value: 100 },
@@ -132,8 +128,7 @@ export const PERSONA_ITEMS: TieredPersonaItem[] = [
     ], output_field: 'planning',
   },
   {
-    id: 'E03', order: 30, section: 'E', type: 'FC', text: '上理公众号发了活动通知',
-    grades: [1, 2], sceneTag: '上理公众号',
+    id: 'E03', order: 30, section: 'E', type: 'FC', text: '上理公众号发了活动通知', sceneTag: '上理公众号',
     options: [
       { key: 'A', text: '只看跟学分专业相关的', output: 'narrow' },
       { key: 'B', text: '什么都点开看看', output: 'broad' },
@@ -175,8 +170,7 @@ export const PERSONA_ITEMS: TieredPersonaItem[] = [
     ], output_field: 'study_place',
   },
   {
-    id: 'E08', order: 35, section: 'E', type: 'MC', text: '上理校园信息（校历、讲座、抢票）的第一入口',
-    grades: [1, 2], sceneTag: '校历',
+    id: 'E08', order: 35, section: 'E', type: 'MC', text: '上理校园信息（校历、讲座、抢票）的第一入口', sceneTag: '校历',
     options: [
       { key: 'A', text: '班级群通知', output: 'group_chat' },
       { key: 'B', text: '公众号', output: 'wechat_mp' },

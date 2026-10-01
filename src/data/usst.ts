@@ -3,7 +3,18 @@ import { normalizeLifeModeId } from '@/lib/planner/lifeModePolicy';
 
 /* ============================================================
  * 上理工 · 生活模式（WP5 重命名 + 参数化，2026-09-27）
- * ========================================================== */
+ * ============================================================
+ * 【融合裁决①（2026-10-01）】Ray 线 2026-09-30 的实测结论保留在案：
+ * 旧六模式（平衡/摸鱼/猛攻/吃饭/健康/社交）最终只等价于**一个乘数** ——
+ * 引擎侧只有 `dailyStudyMin`（乘数）与 `blankRatio`（增量）两个标量被写过，
+ * 结构维度（排什么类别 / 块多长 / 什么时段 / 选哪些模板）一个都够不着；
+ * 旧版 `lib/lbao.ts::lbaoRecommend`（无结构差异的那套）已随本融合删除。
+ * 本处保留的是 beta-v2 的 **WP5 参数化版本**：`lifeModeExtras`
+ * （sportSessions / extraMeals / blankBlocks，见 `lib/planner/lifeModePolicy.ts`）
+ * 就是墓碑注释要求的「结构通道」—— 引擎真正消费它，不再是只换文案的按钮。
+ * 旧版 LIFE_MODES（slack/food/health/social 原始六项）**不复活**；
+ * `AppState.lifeMode` 对旧落盘数据保持 null 兼容（见 `scripts/storage.test.ts`）。
+ */
 
 /** color 取自光谱色板（constants/chartColors.ts 的 SPECTRUM），改色请两边同步。 */
 export const LIFE_MODES: LifeMode[] = [
@@ -27,20 +38,6 @@ export function normalizeLifeMode(id: string | null | undefined): string | null 
 export const MOCK_SEMESTER_NAME = '2026–2027 学年 · 第一学期';
 export const MOCK_TERM_START = '2026-08-31'; // 第一周周一
 export const MOCK_TOTAL_WEEKS = 18;
-
-export const CAL_EVENTS: CalEvent[] = [
-  { date: '2026-08-31', label: '开学 · 第一周', type: 'term' },
-  { date: '2026-09-07', label: '选课周开始', type: 'term' },
-  { date: '2026-09-11', label: '四六级报名开启', type: 'exam' },
-  { date: '2026-09-25', label: '中秋节', type: 'holiday' },
-  { date: '2026-09-28', label: '光电杯报名截止', type: 'activity' },
-  { date: '2026-10-01', label: '国庆假期（10.1–10.7）', type: 'holiday' },
-  { date: '2026-10-25', label: '建校 120 周年校庆日', type: 'anniversary' },
-  { date: '2026-11-09', label: '期中考试周', type: 'exam' },
-  { date: '2026-11-21', label: '四六级口试', type: 'exam' },
-  { date: '2026-12-12', label: '四六级笔试', type: 'exam' },
-  { date: '2027-01-11', label: '期末考试周', type: 'exam' },
-];
 
 /* ============================================================
  * 上理工 · 时间节点 / 倒计时（即将到来的重要节点）

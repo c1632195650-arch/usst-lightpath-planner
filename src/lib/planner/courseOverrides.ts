@@ -41,6 +41,15 @@ export interface AppliedOverride {
   action: 'cancel' | 'move';
   periodLabel: string;
   scope: 'once' | 'long';
+  /**
+   * 原节次所在天（1=周一…7=周日）。
+   *
+   * 2026-09-21（P2-5）补：R6.1 的定点重排需要知道「这次调课动了哪一天」，
+   * 否则 `localizedDaysFor` 拿不到天就只能退化成整周重排（或更糟：漏掉那天）。
+   */
+  day: DayOfWeek;
+  /** 调课**之后**的天；`cancel` 无此项。与 `day` 不同时表示跨天调课（两天都要重排） */
+  newDay?: DayOfWeek;
 }
 
 /** 分钟 → 最接近的节次（调课给的是具体时间，而排程内部按「节」计算时间） */
@@ -140,6 +149,7 @@ export function applyCourseOverrides(
         applied.push({
           id: ov.id, courseName: c.name, action: 'cancel',
           periodLabel: labelOf(target), scope: ov.weekNo === null ? 'long' : 'once',
+          day: target.dayOfWeek,
         });
         continue;
       }
@@ -160,6 +170,8 @@ export function applyCourseOverrides(
         id: ov.id, courseName: c.name, action: 'move',
         periodLabel: `${labelOf(target)} → ${periodLabelOf(moved)}`,
         scope: ov.weekNo === null ? 'long' : 'once',
+        day: target.dayOfWeek,
+        newDay: moved.dayOfWeek,
       });
     }
     return { ...c, slots };

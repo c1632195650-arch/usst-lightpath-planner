@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   CAMPUS_OPTIONS,
   GRADE_LABELS,
@@ -6,11 +6,22 @@ import {
   saveBasicInfo,
   type BasicInfo,
 } from '@/lib/identity';
+import { FIELD_LABEL, fieldCls } from '@/components/ui/field';
 import { EMPTY_DRAFT, parseBasicInfo, validateBasicInfo, type BasicInfoDraft } from './basicInfo';
 
 interface Props {
   onComplete: () => void;
   onBack: () => void;
+  /**
+   * 「住处 + 作息」字段 —— 由**组合根**（`App.tsx`）注入 week 域组件。
+   * 本组件只当插槽，绝不 import `features/week/**`（否则新增 welcome → week
+   * 跨域依赖，撞架构护栏 AC-6·R5）。详见 `features/week/OnboardingSetup.tsx` 头注。
+   *
+   * ⚠️ 注入的是**同一张表单网格里的若干格**（fragment，不带自己的外框/标题），
+   * 不是「表单下面另起一栏」—— RAY 2026-10-01 明确要求统一风格并入。
+   * 因此这里把它放进 `.grid` 内部，让注入项与其它字段共享同一条栅格。
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -19,8 +30,13 @@ interface Props {
  * 校验逻辑在 ./basicInfo.ts（纯函数，node --test 可直跑）；
  * 必填缺失禁「下一步」，campus 只认军工路本部 | 1100（数据红线）。
  * 提交写入 identity.ts 的单一来源（localStorage），与画像页的基础信息卡同源。
+ *
+ * 2026-09-28：本步同时承载「住处 + 作息」（`children` 注入）——
+ * 即 onboarding 由「个人信息 → 问卷 → 作息」三段收成「个人信息（含住处/作息）→ 问卷」。
+ * 2026-10-01：并入方式改为**同一张表单网格内的统一字段**（不再另起带边框的区块），
+ * 外观由中立层 `@/components/ui/field` 统一提供，week 域组件与这里共用同一套样式。
  */
-export function BasicInfoStep({ onComplete, onBack }: Props) {
+export function BasicInfoStep({ onComplete, onBack, children }: Props) {
   const [draft, setDraft] = useState<BasicInfoDraft>(() => {
     // 已有基础信息（如中途刷新回来）→ 预填，不让人重打一遍
     const saved: BasicInfo = loadBasicInfo();
@@ -52,39 +68,38 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
     onComplete();
   };
 
-  const inputCls = (err?: string | false) =>
-    `mt-1.5 min-h-11 w-full rounded-xl border bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:ring-2 ${
-      err ? 'border-warn focus:border-warn focus:ring-warn/10' : 'border-ink/15 focus:border-brand focus:ring-brand/10'
-    }`;
-
   return (
     <div className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
       <div className="page-shell mx-auto max-w-2xl">
         <div className="panel rounded-2xl border border-ink/[0.07] bg-white px-6 py-8 sm:px-10">
-          <p className="section-label">FIRST SETUP · 1/2</p>
+          <p className="section-label">FIRST SETUP · 基础信息</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">先让梨宝认识你</h1>
           <p className="mt-3 max-w-lg text-sm leading-6 text-ink-soft">
             填基本事实就够了，30 秒。年级和校区会影响后面的题与建议；这些都只保存在本机。
           </p>
 
+          {/*
+            单条表单网格：必填事实 + 选填「住处 / 作息」都在这里。
+            注入的 children 是若干 `.grid` 子项（见文件头注），与其它字段同宽同款。
+          */}
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs text-ink-faint">称呼 *</span>
+              <span className={FIELD_LABEL}>称呼 *</span>
               <input
                 value={draft.nickname}
                 onChange={(e) => set('nickname', e.target.value)}
                 placeholder="怎么称呼你"
-                className={inputCls(touched && errors.nickname)}
+                className={fieldCls(touched && errors.nickname)}
               />
               {touched && errors.nickname && <span className="mt-1 block text-xs text-warn">{errors.nickname}</span>}
             </label>
 
             <label className="block">
-              <span className="text-xs text-ink-faint">年级 *</span>
+              <span className={FIELD_LABEL}>年级 *</span>
               <select
                 value={draft.grade}
                 onChange={(e) => set('grade', e.target.value)}
-                className={inputCls(touched && errors.grade)}
+                className={fieldCls(touched && errors.grade)}
               >
                 <option value="">请选择</option>
                 {([1, 2, 3, 4] as const).map((g) => (
@@ -95,32 +110,32 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
             </label>
 
             <label className="block">
-              <span className="text-xs text-ink-faint">学院 *</span>
+              <span className={FIELD_LABEL}>学院 *</span>
               <input
                 value={draft.college}
                 onChange={(e) => set('college', e.target.value)}
                 placeholder="如：光电学院"
-                className={inputCls(touched && errors.college)}
+                className={fieldCls(touched && errors.college)}
               />
               {touched && errors.college && <span className="mt-1 block text-xs text-warn">{errors.college}</span>}
             </label>
 
             <label className="block">
-              <span className="text-xs text-ink-faint">专业</span>
+              <span className={FIELD_LABEL}>专业</span>
               <input
                 value={draft.major}
                 onChange={(e) => set('major', e.target.value)}
                 placeholder="如：光电信息科学与工程"
-                className={inputCls()}
+                className={fieldCls()}
               />
             </label>
 
             <label className="block">
-              <span className="text-xs text-ink-faint">校区 *</span>
+              <span className={FIELD_LABEL}>校区 *</span>
               <select
                 value={draft.campus}
                 onChange={(e) => set('campus', e.target.value)}
-                className={inputCls(touched && errors.campus)}
+                className={fieldCls(touched && errors.campus)}
               >
                 <option value="">请选择</option>
                 {CAMPUS_OPTIONS.map((c) => (
@@ -130,40 +145,32 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
               {touched && errors.campus && <span className="mt-1 block text-xs text-warn">{errors.campus}</span>}
             </label>
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">宿舍楼号</span>
-              <input
-                value={draft.dorm}
-                onChange={(e) => set('dorm', e.target.value)}
-                placeholder="如：五公寓，只填楼号"
-                className={inputCls(touched && errors.dorm)}
-              />
-              {touched && errors.dorm && <span className="mt-1 block text-xs text-warn">{errors.dorm}</span>}
-            </label>
+            {/*
+              「宿舍楼号」输入已移除（2026-09-28）：同一步里已经有「🏠 我的住处」
+              （App 注入的 OnboardingSetup 提供），那才是引擎真正消费的字段
+              （`layer.homeBase` → `construct` 替换宿舍类块的 `__HOME__` 占位）。
+              旁边再放一个自由文本的「楼号」只会制造第二个真源。
+              `BasicInfo.dorm` 字段与校验保留（向后兼容读取旧数据），但 UI 不再产出。
+            */}
 
             <label className="block">
-              <span className="text-xs text-ink-faint">平日就寝（分钟 0-1440）</span>
-              <input
-                value={draft.sleepMin}
-                onChange={(e) => set('sleepMin', e.target.value)}
-                inputMode="numeric"
-                placeholder="如：1380（23:00）"
-                className={inputCls(touched && errors.sleepMin)}
-              />
-              {touched && errors.sleepMin && <span className="mt-1 block text-xs text-warn">{errors.sleepMin}</span>}
-            </label>
-
-            <label className="block">
-              <span className="text-xs text-ink-faint">每周运动几次（0-7）</span>
+              <span className={FIELD_LABEL}>每周运动几次（0-7）</span>
               <input
                 value={draft.exercisePerWeek}
                 onChange={(e) => set('exercisePerWeek', e.target.value)}
                 inputMode="numeric"
                 placeholder="如：3"
-                className={inputCls(touched && errors.exercisePerWeek)}
+                className={fieldCls(touched && errors.exercisePerWeek)}
               />
               {touched && errors.exercisePerWeek && <span className="mt-1 block text-xs text-warn">{errors.exercisePerWeek}</span>}
             </label>
+
+            {/*
+              选填硬边界（住处 + 作息）：由组合根注入的 week 域组件。
+              它是**本网格的若干格**（fragment）—— 不是表单下另起的一栏。
+              不注入时这里什么都不渲染。
+            */}
+            {children}
           </div>
 
           {touched && !canNext && errorList.length > 0 && (

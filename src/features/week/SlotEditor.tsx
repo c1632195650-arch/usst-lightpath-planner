@@ -19,8 +19,7 @@ import { TimeWheelPicker } from './TimeWheelPicker';
 import { ActivityCapture } from '../activity/ActivityCapture';
 import type { Goal } from '../activity/goalStore';
 import { addSlot, makeLayerId, removeSlot, type UnavailableSlot } from './userPlanStore';
-
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+import { DAY_LABELS } from './weekViewUtils';
 
 export function SlotEditor({
   weekNo, slots, overridesVersion = 0, goals, mondayISO, onChange,

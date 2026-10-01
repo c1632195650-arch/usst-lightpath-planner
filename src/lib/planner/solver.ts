@@ -18,12 +18,14 @@ import {
   type Commit, type Diagnostics, type PlanRequest, type PlanResult, type RollingState,
   type SolverConfig, type Weights,
 } from './model.ts';
-import { attachTransfers, construct, DAY_NAME, type ConstructCtx } from './construct.ts';
+import { attachTransfers, construct, mergeAdjacentStudy, DAY_NAME, type ConstructCtx } from './construct.ts';
 import type { TransferProvider } from './campusLookup.ts';
 import { campusFallbackTransfer } from './campusLookup.ts';
 import { evaluate } from './objective.ts';
-import { improve } from './improve.ts';
+// 三线融合（2026-10-01）接回 dev 侧 #22 / PR-A / PR-B 输入契约（rolling / scoring /
+// transferTrust / transfer）—— 接线范式沿用 beta-v2 solver 的 2026-09-20 融合注记。
 import { fatigueAdjustment, weeklyStudyTarget } from './fatigue.ts';
+import { improve } from './improve.ts';
 import {
   dirtyRegion, incrementalImprove, incrementalNotes, type IncrementalResult,
 } from './incremental.ts';
@@ -336,18 +338,18 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   const n = normalize(req, ctx);
   const { weights, config } = n;
 
-  // 跨周自适应（§4.4）：构造 / 改进 / 评分 / 解释必须共用同一份目标。
-  // 融合注记（2026-09-20）：Ray 的 ux-round4 分叉自 #22 合入之前，此处的接线在其
-  // 版本里缺失 —— 按 CY 裁决「引擎取舍全部用 Ray」，引擎逻辑保持 Ray 版，
-  // 但 dev 侧 #22 / PR-A / PR-B 的输入契约在此接回（rolling / scoring / transferTrust / transfer）。
-  const adj = fatigueAdjustment(req.policy, req.rolling);
-
   // `PlanRequest` 的可选字段允许 `null`（调用方（UI）手里常常是 `X | null`）。
   // 在这里一次性收敛成 `undefined`，下游（improve / evaluate / churn / 增量）
   // 就不必到处写 `?? undefined` —— 那些内部函数只关心「有 / 没有」，
   // 不关心是 `null` 还是 `undefined` 造成的「没有」。
   const previousPlan = req.previousPlan ?? undefined;
   const previousCommits = req.previousCommits ?? undefined;
+
+  // 跨周自适应（§4.4）：构造 / 改进 / 评分 / 解释必须共用同一份目标。
+  // 融合注记（2026-09-20，beta-v2）：Ray 的 ux-round4 分叉自 #22 合入之前，此处的接线在其
+  // 版本里缺失 —— 按 CY 裁决「引擎取舍全部用 Ray」，引擎逻辑保持 Ray 版，
+  // 但 dev 侧 #22 / PR-A / PR-B 的输入契约在此接回（rolling / scoring / transferTrust / transfer）。
+  const adj = fatigueAdjustment(req.policy, req.rolling);
 
   /**
    * T9（2026-09-19）：**上一版计划里仍然存在的块，默认按 `soft` 锁对待。**
@@ -441,7 +443,7 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
       lockLevels: effectiveLockLevels,
       previousPlan,
       config: req.config,
-      // dev 侧契约（#22 / PR-A / PR-B）： improve 必须与 evaluate 同口径，
+      // dev 侧契约（#22 / PR-A / PR-B）：improve 必须与 evaluate 同口径，
       // 否则 improve 会朝旧目标爬（实测会让 aware 口径白拿便宜）
       rolling: n.req.rolling ?? undefined,
       scoring: config.scoring,
@@ -466,8 +468,21 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     acceptedCount = incrementalRes.improve.accepted.length;
   }
 
+  /**
+   * ④.6 同地点相邻自习合并（2026-09-28）—— construct 末尾合并过一次，
+   * 但 improve（以及锁恢复后的布局）可能搬出**新的**相邻同点对；
+   * 在这里再跑一遍，保证用户看到的最终计划里没有「搬两次东西去同一个地方」。
+   * 硬锁的块不参与（合并会吞 id，锁就找不到了）。合并改变块数 → 转场要重挂。
+   */
+  const hardLockedIds = new Set(
+    Object.entries(req.lockLevels ?? {}).filter(([, lv]) => lv === 'hard').map(([id]) => id),
+  );
+  const beforeMergeCount = plan.blocks.length;
+  plan = { ...plan, blocks: mergeAdjacentStudy(plan.blocks, hardLockedIds) };
+  const mergedCount = beforeMergeCount - plan.blocks.length;
+
   // ④.5 重挂转场 —— improve 会移动块，而 `attachTransfers` 只在 construct 里跑过一次
-  if (config.solver === 'lns' || lockRes.restored.length > 0) {
+  if (config.solver === 'lns' || lockRes.restored.length > 0 || mergedCount > 0) {
     plan = reattachTransfers(plan, n.req.transfer ?? campusFallbackTransfer);
   }
 
@@ -524,7 +539,7 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
   };
 
   // 自适应说明排在求解器日志之前 —— 它解释的是「为什么目标变了」，优先级更高
-  const notes = [...ex.notes, ...adj.reasons];
+  const notes = [...adj.reasons, ...ex.notes];
   if (iterations > 0) {
     notes.push(`求解器跑了 ${iterations} 轮改进，接受了 ${acceptedCount} 处调整（成本降到 ${cost.total.toFixed(1)}）`);
   }

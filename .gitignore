@@ -16,15 +16,6 @@ dist-ssr/
 .env.local
 .env.*.local
 
-# 远程验收循环的干净检出目录（临时产物，可重建）
-_eng_check/
-
-# 评测系统：数据集进仓库（golden 是 CI 唯一依赖），
-# 中间产物与运行记录不进（可复现，别把仓库撑大）
-evals/silver/*.jsonl
-evals/runs/run_*.json
-evals/runs/engine_[0-9]*.json
-
 # 编辑器
 .vscode/*
 !.vscode/extensions.json
@@ -38,12 +29,6 @@ desktop.ini
 
 # Vite 临时产物
 vite.config.ts.timestamp-*.mjs
-
-# 变异测试 / 契约模糊测试产物（2026-09-19）
-.stryker-tmp/
-stryker-incremental.json
-reports/mutation/
-st_out.txt
 
 # 日志
 *.log
@@ -79,6 +64,10 @@ data/libao_memory.db
 docs/_coverage_stat.json
 data/*.bak-*
 
-# Playwright 产物（视觉基线快照 e2e/**-snapshots 进仓库，运行产物不进）
-test-results/
-playwright-report/
+# ---- 持久化与账号系统（2026-09-27 规格书）：数据库与上传件不进仓库 ----
+data/lightpath.db
+data/lightpath.db-wal
+data/lightpath.db-shm
+data/uploads/
+.venv/
+public/dev-persona.json
