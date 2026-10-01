@@ -1312,8 +1312,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     },
 
     new_intent: async (args, ctx) => {
-      const intent = args.intent ?? 'create';
-      const patch = mapUnderstandPatch(args.patch);
+      let intent = args.intent ?? 'create';
+      let patch = mapUnderstandPatch(args.patch);
       const t = ctx.topic;
 
       // D7：用户按编号选中协商方案 → 直接用干跑过的槽位走正常草稿通路（确认卡照旧）
@@ -1322,6 +1322,20 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         if (opt) {
           await runGoalSlots(opt.slots, ctx.today);
           return;
+        }
+      }
+
+      // 强化计划 D（2026-10-02）· 换向守卫：collect 相下的回答被 LLM 误判成
+      // 换意图（真机实录：追问「什么时候/投入多少」，用户答「下周一开始；一共
+      // 10 小时」，被裁成 replace → 反问「你要动的是哪一块」= 答非所问）。
+      // 确定性规则：**回答里说不出新目标名**（没有 title）且不是明确的动作词，
+      // 就按原意图续答 —— 用户在答题，不是在开新话题。
+      if (t && t.phase === 'collect' && intent !== t.intent) {
+        const fresh = parseIntentSlots(ctx.q, ctx.today);
+        const looksLikeAction = /\b(取消|替换|改时间|挪|推迟|提前)\b/.test(ctx.q);
+        if (!fresh.title && !looksLikeAction) {
+          intent = t.intent;
+          patch = {};
         }
       }
 
@@ -1419,10 +1433,34 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         state: serializeDialogState({ topic, missStreak }),
       });
       if (!res.ok || !res.act) return false;
-      const args = (res.args ?? {}) as DialogActArgs;
+      let args = (res.args ?? {}) as DialogActArgs;
       const confidence = typeof res.confidence === 'number' ? res.confidence : 0.5;
       // 双层校验的前端层：act 枚举 / idx 必须在候选清单（防编造）/ negotiate 要有阻塞事实
       if (!validateDialogAct(res.act, args, { topic })) return false;
+      // 强化计划 D · collect 乱问守卫（2026-10-02 真机实录）：create 追问被回答后，
+      // LLM 伪造 target 追问（act=ask_slot, slot=target）—— target 只属于
+      // replace/reschedule/cancel 意图，create/hold 相问它就是答非所问。
+      // 降级：scene=intent 重抽本句的结构化槽位 → 按 new_intent 同意图续答。
+      if (res.act === 'ask_slot' && args.slot === 'target'
+        && topic?.phase === 'collect' && (topic.intent === 'create' || topic.intent === 'hold')) {
+        const retry = await planUnderstand({
+          scene: 'intent',
+          q,
+          slots: {
+            title: topic.slots.title || undefined,
+            perWeekCount: topic.slots.perWeekCount,
+            durationMin: topic.slots.durationMin,
+            totalHours: topic.slots.totalHours,
+            place: topic.slots.place,
+            targetHint: topic.slots.targetHint,
+          },
+          today,
+          history,
+        });
+        if (!retry.ok || retry.action === false) return false; // 兜底失败 → 规则链路
+        res.act = 'new_intent';
+        args = { intent: topic.intent, patch: retry.patch ?? {} } as DialogActArgs;
+      }
       // 议题轮数上限：> TOPIC_TURNS_LIMIT 自动作废并说明（不静默）
       if (topic && topicExpired({ ...topic, turns: topic.turns + 1 }) && res.act !== 'discard_topic') {
         setTopic(null);
