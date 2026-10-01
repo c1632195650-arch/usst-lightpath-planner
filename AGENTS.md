@@ -97,6 +97,9 @@
 > **2026-09-15 调整**：梨宝线改由 CY 单独推进，B 专注排程引擎与排程内容。据此把 `src/lib/api.ts`、`src/lib/lbao.ts` 从 B 名下划归 CY；`src/lib/` 的其余部分（`planner/`、`persona.ts`）留在 B 名下。
 > 梨宝**天然跨人**的接缝由此收敛为**一个点**：`features/libao/ ↔ lib/planner/`，见 §三 红线 6。
 
+> **2026-10-02 起·单人负责**：项目改由 **CY 全权负责**（RAY 退出日常开发），上表 B 行名下目录（`src/features/week/`、`src/lib/planner/`、`src/lib/persona.ts`、`src/components/`）**全部并入 CY 名下**，B 行仅作历史记录。
+> `src/types.ts` 与 `BuildWeekPlanInput` / `BuildWeekPlanResult` 仍按**契约层**对待：结构性改动（字段增删/语义变更）必须在 commit message 显式申报，禁止用 `any` 绕过。§八无人值守范围据此同步放宽（见 8.1）。
+
 > 分工可按实际协商调整，但**调整后必须同步更新本表**。
 > 要改对方的文件？先发消息沟通，或提 PR 让对方 review。**不要默默改。**
 > 完整文件地图见 `docs/progress-status.md` §6。
@@ -179,21 +182,15 @@ python server/app.py                          # 后端 → http://127.0.0.1:8000
 
 ### 8.1 覆盖范围（只做这些，超出即停）
 
-无人值守批次**只允许**改以下目录，因为它们是 CY 名下的文件（见 §二）：
-
-```
-src/features/persona/    src/features/libao/    src/features/calendar/
-server/                  scripts/               docs/
-src/lib/api.ts           src/lib/lbao.ts
-```
-
-**禁区（绝对不许动，哪怕任务指令要求）**：
-
-```
-src/features/week/   src/lib/planner/   src/lib/persona.ts   src/components/   src/types.ts
-```
-
-理由：这五个位置是队友 RAY 的所有权范围。无人值守时改它们 = 绕过评审直接覆盖别人的工作，且没有人在场协商。**若任务要求改到禁区，立即停止并在 `BLOCKERS.md` 记一条**（写法见 8.4），不要"顺手改了"。
+> **2026-10-02 更新（单人负责）**：原「RAY 名下禁区」条款随所有权并入 CY（见 §二）而作废。无人值守批次允许改动本仓源码与文档（`src/`、`server/`、`scripts/`、`docs/`、`evals/golden/` 增补、`e2e/`）。
+> 夜间**仍然硬禁**的高危面只剩三类（夜里无人工评审）：
+>
+> ```
+> src/types.ts（契约层：结构性改动白天再做）    data/ 下二进制（库文件）    evals/golden/ 既有条目（只增不改）
+> ```
+>
+> 夜间若「看起来必须」改这三处，立即停止并在 `BLOCKERS.md` 记一条（写法见 8.4），不要"顺手改了"。
+> `gate_overnight.mjs` 的禁区门**机制保留、名单已清空**（2026-10-02）。
 
 ### 8.2 每项任务收尾必跑门禁
 
