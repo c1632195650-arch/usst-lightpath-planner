@@ -18,7 +18,7 @@
  * 状态迁移的接线在 `LbaoChat.tsx`（React 侧，靠 E2E 走查守）。
  */
 
-export type SchedMode = 'idle' | 'collect';
+export type SchedMode = 'idle' | 'collect' | 'draft' | 'blocked';
 
 /**
  * 显式退出词。collect 态下用户说这些 = 不要再追问了。

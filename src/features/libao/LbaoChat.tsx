@@ -6,7 +6,7 @@ import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderst
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -59,6 +59,7 @@ import {
   proposeReplanOptions,
   type CancelTarget,
   type GoalVerdict,
+  type ReplanOption,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
 import type { UnavailableSlot } from '@/features/week/userPlanStore';
@@ -347,7 +348,16 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   useEffect(() => {
     let alive = true;
     const weekNo = currentWeekNo(schedule.termStart, todayISO());
-    const tasks = Object.values(pending).flatMap((g) => g.tasks);
+    // 强化计划 A（2026-10-02）：任务源 = **落盘层（已确认）∪ pending（未确认草稿）**。
+    // 此前只喂 pending —— 确认瞬间任务从 pending 移进落盘层，预览却退回「无任务」
+    // 基线：梨宝说「写进日程了」，预览里新块凭空消失（真机实录）。落盘层按
+    // `weeks` 含当前周过滤，且与 pending 按 id 去重（确认后 pending 已删，正常不重叠）。
+    const pendingTasks = Object.values(pending).flatMap((g) => g.tasks);
+    const layerTasks = loadUserPlan()
+      .tasks
+      .filter((t) => (t.weeks ?? []).includes(weekNo))
+      .filter((t) => !pendingTasks.some((p) => p.id === t.id));
+    const tasks = [...layerTasks, ...pendingTasks];
     (async () => {
       try {
         const plan = tasks.length > 0
@@ -378,8 +388,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     };
   }, [topic]);
 
-  /** S 批 S2 · 排程会话状态机：collect = 正在等用户的排程回应。D1 起为 topic 的投影。 */
-  const schedMode: SchedMode = topic ? 'collect' : 'idle';
+  /** S 批 S2 · 排程会话状态机：collect = 正在等用户的排程回应。D1 起为 topic 的投影。
+   *  强化计划 E（2026-10-02）：draft / blocked 相位有自己的投影 —— 输入框提示按相位说话，
+   *  「回 ①②③」的问题不能再配「分号多答」的提示（提示必须能回答当前所问）。 */
+  const schedMode: SchedMode = !topic
+    ? 'idle'
+    : topic.phase === 'draft' ? 'draft'
+      : topic.phase === 'blocked' ? 'blocked'
+        : 'collect';
   const [missStreak, setMissStreak] = useState(() => boot?.missStreak ?? 0);
 
   /** D0 双模式（问答/排程硬区分）：问答模式只答问题，排程意图出切换提示不静默改道；
@@ -396,8 +412,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   }, []);
 
   /** D3 topic 生命周期：conflict/infeasible → topic{blocked} + priorFailed 记录。
-   *  blockingBlocks 由引擎干跑给出（D4）；LLM 协商（negotiate_block）只许引用这些事实。 */
-  const markBlocked = useCallback((slots: IntentSlots, kind: 'no_placement' | 'partial_placed' | 'conflict', verdict: GoalVerdict) => {
+   *  blockingBlocks 由引擎干跑给出（D4）；LLM 协商（negotiate_block）只许引用这些事实。
+   *  强化计划 D（2026-10-02）：options 由调用方确定性算好传入并写进 blocking ——
+   *  编号回答的规则层兜底（send 里 parseOptionChoice）依赖它非空。 */
+  const markBlocked = useCallback((slots: IntentSlots, kind: 'no_placement' | 'partial_placed' | 'conflict', verdict: GoalVerdict, options: ReplanOption[] = []) => {
     setTopic((prev) => {
       const base = prev ?? blockedTopic(slots, { kind, verdict, blockingBlocks: [] });
       return transitionTopic(base, {
@@ -407,6 +425,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         blocking: {
           kind,
           verdict,
+          options,
           blockingBlocks: (verdict.blockingBlocks ?? []).map((b, i) => ({
             idx: i, title: b.title, hint: b.hint, origin: 'plan' as const,
             target: { blockId: b.blockId, title: b.title, origin: 'plan' as const, hint: b.hint },
@@ -561,6 +580,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         saveUserPlan(nextLayer);
         pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8：梨宝改日程也进记忆信号
         bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan')); // 与 hold 对齐：周计划页活着时也即时刷新
+        setTopic(null); // 强化计划 C：议题完结，draft/blocked 横幅与「退出」按钮随之收口
         setPending((p) => {
           const next = { ...p };
           delete next[key];
@@ -589,6 +610,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         saveUserPlan(nextLayer);
         pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
         bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan')); // 与 hold 对齐
+        setTopic(null); // 强化计划 C：议题完结
         setPending((p) => {
           const next = { ...p };
           delete next[key];
@@ -620,6 +643,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         saveUserPlan(nextLayer);
         pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
         bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan')); // 与 hold 对齐
+        setTopic(null); // 强化计划 C：议题完结
         setPending((p) => {
           const next = { ...p };
           delete next[key];
@@ -649,6 +674,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       saveUserPlan(nextLayer);
       pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
       bumpPlanVersion();
+      window.dispatchEvent(new CustomEvent('usst:replan')); // 与 hold 对齐：周计划页活着时也即时刷新
+      setTopic(null); // 强化计划 C：议题完结，draft 横幅与「退出」按钮随之收口
       setPending((p) => {
         const next = { ...p };
         delete next[key];
@@ -1059,19 +1086,31 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // conflict / infeasible → 说清楚卡在哪 + 给选项，**不出确认按钮**。
       // D3：挂 topic{blocked} + priorFailed —— B① 议题续用与 negotiate_block 的依据。
-      markBlocked(
-        slots,
+      // 强化计划 D（2026-10-02）：编号方案在进 blocked 相时就**确定性**算好，
+      // 直接把真排得上的选项亮在消息里并写进 topic.blocking.options ——
+      // 「回 ①②③」的承诺必须有机制接住，不能指望 LLM 恰好触发 negotiate_block。
+      const options = proposeReplanOptions({
+        slots, verdict, schedule, profile, today,
+      });
+      markBlocked(slots,
         verdict.kind === 'infeasible'
           ? 'no_placement'
           : verdict.placedCount > 0 && verdict.placedCount < verdict.candidateCount ? 'partial_placed' : 'conflict',
         verdict,
+        options,
       );
       setMessages((current) => [...current, {
         role: 'lbao',
         text: verdict.kind === 'conflict'
           ? `「${slots.title}」这么排会撞车：`
           : `「${slots.title}」我排不进去：`,
-        planPoints: lines,
+        planPoints: [
+          ...lines,
+          ...(options.length > 0
+            ? ['好在有几条**真排得上**的路（回编号就行，如「1」）：'
+              + options.map((o, i) => `${i + 1}. ${o.label}`).join('；')]
+            : []),
+        ],
         goWeek: true,
       }]);
     } catch {
@@ -1439,6 +1478,20 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
 
+    // ── 强化计划 D · blocked 态编号回答兜底（确定性，不耗 LLM）─────────────
+    // blocked 文案承诺了「回 ①②③」→ 编号回答就必须接住。此前「1」不匹配任何
+    // 意图，被 LLM 裁成闲聊掉进 RAG —— 用户按提示回答却得到「校园资料服务
+    // 未连接」（2026-10-02 真机实录）。候选在 markBlocked 时已确定性写好。
+    if (activeMode === 'sched' && topic?.phase === 'blocked' && topic.blocking?.options?.length) {
+      const pick = parseOptionChoice(q, topic.blocking.options.length);
+      if (pick != null) {
+        const chosen = topic.blocking.options[pick - 1];
+        setTopic(null); // 议题交付：runGoalSlots 出新草稿卡（draft 相接管）
+        await runGoalSlots(chosen.slots, today);
+        return;
+      }
+    }
+
     // ── D3 · 对话管理器主干：排程模式 + 后端在线 → 每轮恰一次 dialog 裁决 ──
     // act 接管本轮（含 chit_chat，议题保留）；端点挂/超时/校验拒 → 原样落回
     // 下面的规则链路（S/T 批产出全保留为 fallback，离线可用性不变）。
@@ -1763,11 +1816,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                       就这么排
                     </button>
                     <button
-                      onClick={() => setPending((p) => {
-                        const next = { ...p };
-                        delete next[message.goalAsk as number];
-                        return next;
-                      })}
+                      onClick={() => {
+                        setPending((p) => {
+                          const next = { ...p };
+                          delete next[message.goalAsk as number];
+                          return next;
+                        });
+                        setTopic(null); // 强化计划 C：拒绝 = 议题完结，横幅/退出按钮收口
+                      }}
                       className="rounded-xl border border-ink/15 px-3 py-2 text-xs text-ink-soft transition-colors hover:border-ink/30"
                     >
                       先不排
@@ -1893,11 +1949,15 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && send()}
-            placeholder={schedMode === 'collect'
-              ? '排程中 —— 回答上面的问题，多个答案用分号隔开；说「退出排程」结束…'
-              : mode === 'sched'
-                ? '排程模式：说一件要安排的事（如「周四晚上出去玩一小时」）…'
-                : '问梨宝，或说「帮我安排这周」…'}
+            placeholder={schedMode === 'blocked'
+              ? '梨宝在等你选 —— 回编号（如「1」）或直接说要怎么改…'
+              : schedMode === 'draft'
+                ? '草稿待确认 —— 点「就这么排」，或说「就这么排 / 先不排」…'
+                : schedMode === 'collect'
+                  ? '排程中 —— 回答上面的问题，多个答案用分号隔开；说「退出排程」结束…'
+                  : mode === 'sched'
+                    ? '排程模式：说一件要安排的事（如「周四晚上出去玩一小时」）…'
+                    : '问梨宝，或说「帮我安排这周」…'}
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-4 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
           <button onClick={() => send()} disabled={loading || !input.trim()} className="button-primary shrink-0 px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">

@@ -590,11 +590,21 @@ export function extractWhen(q: string): WhenHint | undefined {
 /**
  * 抽投入量。总小时与单次时长**分开** —— 前者是「备赛总量」，
  * 后者是「单个块多长」，混在一起会把 20 小时的备赛排成一个 20 小时的块。
+ *
+ * 2026-10-02 语义修正（强化计划 B）：此前**裸**时长（前面没有「每」）一律归总量，
+ * 于是「周四晚上出去玩一小时」被解析成「总投入 1 小时」→ 块长回退默认 90 分钟，
+ * 草稿卡显示与实际自相矛盾。修正后的口径：
+ *   · 带「每」（每次/每天/每小时…）→ 单次时长 `durationMin`（不变）；
+ *   · 带总量词（一共/总共/要花/投入…）→ 备赛总量 `totalHours`（备赛语义不丢）；
+ *   · **裸** N 小时/分钟（两者都没有）→ 单次时长 `durationMin` —— 口语里孤立给出
+ *     的时长几乎总是「这一件事多长」，不是「备赛总预算」。
  */
 export function extractEffort(q: string): { totalHours?: number; durationMin?: number } {
   const s = q || '';
   const out: { totalHours?: number; durationMin?: number } = {};
   const PER = /每(?:次|回|天|日)/;
+  // 总量口径词（出现在数字前 6 字内才算）——「一共 20 小时」是总量，「玩一小时」不是。
+  const TOTAL_PRE = /一共|总共|总计|累计|合计|要花|要投入|投入|花费|花/;
   // 数字一律「阿拉伯 **或** 中文」：真实口语是「每天两小时 / 半小时 / 一共二十小时」，
   // 只认阿拉伯数字会让用户的投入量整段白说（2026-09-22 真机抓到）。
   const NUM = '([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十]+)';
@@ -615,14 +625,32 @@ export function extractEffort(q: string): { totalHours?: number; durationMin?: n
   // 只在没算出单次时长时才兜 —— 「每次一小时，路上半小时」不该把 60 改成 30。
   if (out.durationMin == null && /半\s*(?:个)?\s*小时/.test(s)) out.durationMin = 30;
 
-  const total = new RegExp(`${NUM}\\s*(?:个)?\\s*(?:小时|h|H)`, 'i').exec(s);
-  if (total) {
-    const idx = total.index ?? 0;
-    const before = s.slice(Math.max(0, idx - 4), idx);
-    // 「每次 N 小时」已归入单次时长，不再重复计入总量
-    const v = cnAmount(total[1]);
-    if (!PER.test(before) && v != null) out.totalHours = v;
+  // 裸「N 小时」：按前文口径词分流总量/单次；「每天两小时」这类已被 ① 覆盖的
+  // （PER 命中前文）不重复计。
+  const bareHour = new RegExp(`${NUM}\\s*(?:个)?\\s*(?:小时|h|H)`, 'i').exec(s);
+  if (bareHour) {
+    const idx = bareHour.index ?? 0;
+    const before = s.slice(Math.max(0, idx - 6), idx);
+    const v = cnAmount(bareHour[1]);
+    if (v != null && !PER.test(before)) {
+      if (TOTAL_PRE.test(before)) {
+        out.totalHours = v;
+      } else if (out.durationMin == null) {
+        out.durationMin = Math.round(v * 60);
+      }
+    }
   }
+
+  // 裸「N 分钟」：分钟量级天然是单次口径（「一共 600 分钟」不是真实口语），
+  // 有总量词也归单次 —— 90 分钟的「总量」经 goalToTasks 的 nBlocks=1 本来就落成一块。
+  const bareMin = new RegExp(`${NUM}\\s*分钟`).exec(s);
+  if (bareMin && out.durationMin == null) {
+    const idx = bareMin.index ?? 0;
+    const before = s.slice(Math.max(0, idx - 6), idx);
+    const v = cnAmount(bareMin[1]);
+    if (v != null && !PER.test(before)) out.durationMin = Math.round(v);
+  }
+
   return out;
 }
 
@@ -1468,4 +1496,41 @@ export function describeSlots(s: IntentSlots): string[] {
   if (s.window) out.push(`只在：${s.window.text}`);
   if (s.targetHint) out.push(`对象：${s.targetHint}`);
   return out;
+}
+
+/**
+ * 解析协商态的**编号回答**（强化计划 D，2026-10-02）。
+ *
+ * 为什么必须有它：blocked 文案承诺「回 ①②③」，但此前编号回答不匹配任何意图，
+ * 会被 LLM 裁成闲聊掉进 RAG —— 用户按提示回答却得到「校园资料服务未连接」。
+ * 这是规则层的确定性兜底，不依赖 LLM 是否听懂。
+ *
+ * 认得的形态：`1` / `①` / `方案1` / `第一个` / `第 1 个` / `2 吧` / `就 3`。
+ * 不当编号处理（返回 null）：无数字、数字越界、或句子里有别的意图信号
+ * （比如「四六级什么时候报名」里也有数字，但它是个问答）。
+ */
+export function parseOptionChoice(q: string, optionCount: number): number | null {
+  const s = (q || '').trim();
+  if (!s || optionCount <= 0) return null;
+  // 句子太长或有问句/疑问信号 → 当普通话处理（编号回答是短促的选择动作）
+  if (s.length > 12 || /[?？]|什么|怎么|多少|为什么/.test(s)) return null;
+
+  const CIRCLED: Record<string, number> = { '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5, '⑥': 6 };
+  if (CIRCLED[s]) {
+    const n = CIRCLED[s];
+    return n <= optionCount ? n : null;
+  }
+
+  const m = /^(?:方案|选项|第|就|选)?\s*([0-9一二两三四五六七八九十]+)\s*(?:号|个|吧|嘛|啊|呀)?$/.exec(s);
+  if (!m) return null;
+  const digits = m[1];
+  let n: number;
+  if (/^[0-9]+$/.test(digits)) {
+    n = parseInt(digits, 10);
+  } else {
+    const CN: Record<string, number> = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    n = CN[digits] ?? NaN;
+  }
+  if (!Number.isFinite(n) || n < 1 || n > optionCount) return null;
+  return n;
 }

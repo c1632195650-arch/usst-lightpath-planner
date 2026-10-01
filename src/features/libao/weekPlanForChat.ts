@@ -216,10 +216,16 @@ export function goalToTasks(
   if (days.length === 0) return out;
 
   // ③ 块数：给了总量按总量摊；只给频率按频率乘周数；都没给就一块。
-  const blockMin = slots.durationMin != null && slots.durationMin > 0 ? slots.durationMin : DEFAULT_BLOCK_MIN;
+  // 双保险（强化计划 B）：没给单次时长、且总量摊下来只有一块时，块长直接用总量
+  // （封顶单次上限）——「一共 1 小时」不该被默认块长 90 撑成自相矛盾的排法。
+  const GOAL_SINGLE_MAX_MIN = 180;
+  let blockMin = slots.durationMin != null && slots.durationMin > 0 ? slots.durationMin : DEFAULT_BLOCK_MIN;
   let nBlocks: number;
   if (slots.totalHours != null && slots.totalHours > 0) {
     nBlocks = Math.max(1, Math.ceil((slots.totalHours * 60) / blockMin));
+    if (slots.durationMin == null && nBlocks === 1) {
+      blockMin = Math.min(Math.round(slots.totalHours * 60), GOAL_SINGLE_MAX_MIN);
+    }
   } else if (slots.perWeekCount != null && slots.perWeekCount > 0) {
     const spanWeeks = Math.max(1, Math.ceil((span + 1) / 7));
     nBlocks = Math.max(1, slots.perWeekCount * spanWeeks);

@@ -29,6 +29,7 @@ import {
   extractTitle,
   extractWhen,
   extractWindow,
+  parseOptionChoice,
   looksLikeAction,
   mergeLlmPrimary,
   mergeSlots,
@@ -215,6 +216,21 @@ test('投入：中文数字同样要认 —— 真实口语说「两小时」，
   // 十位进位：旧 cnToInt 会把「二十」算成 12，时长不能复用它的进位逻辑
   assert.equal(extractEffort('一共二十小时').totalHours, 20);
   assert.equal(extractEffort('九十九分钟').totalHours, undefined);
+});
+
+test('投入：裸时长归单次，不归总量 —— 「出去玩一小时」不是「总投入 1 小时」', () => {
+  // 强化计划 B（2026-10-02）：真机实录「周四晚上出去玩一小时」被解析成
+  // totalHours=1 → 块长回退默认 90 分钟，草稿卡显示与实际自相矛盾。
+  // 反向验证：把 TOTAL_PRE 分流删掉 → 「出去玩一小时」重新误归总量 → 本用例红。
+  const bare = extractEffort('周四晚上出去玩一小时');
+  assert.equal(bare.durationMin, 60, '裸「一小时」必须是单次 60 分钟');
+  assert.equal(bare.totalHours, undefined, '裸时长不得再被记成总量');
+
+  assert.equal(extractEffort('周五排90分钟').durationMin, 90);
+  // 带总量词的仍是总量 —— 备赛语义不能被本次修正误伤
+  assert.equal(extractEffort('一共10小时').totalHours, 10);
+  assert.equal(extractEffort('备赛要花20小时').totalHours, 20);
+  assert.equal(extractEffort('备赛要花20小时').durationMin, undefined, '总量词在场不得同时落单次');
 });
 
 test('投入：中文数字要能一路走到「缺口清零」—— 别在追问环节掉链子', () => {
@@ -801,4 +817,25 @@ test('T批 mergeLlmPrimary：LLM title 覆盖规则 title（方向与 mergeSlots
   assert.equal(merged.title, '学生会面试', 'LLM 主理解：更完整的 title 覆盖词表抽取');
   assert.equal(merged.when?.relativeDays, 1);
   assert.equal(merged.dateFrom, '2026-09-06', '明天 = TODAY+1，换算在规则层');
+});
+
+test('协商编号：blocked 态的「1 / ① / 方案2 / 第三个」必须接得住', () => {
+  // 强化计划 D（2026-10-02）真机实录：梨宝承诺「回 ①②③」，用户答「1」
+  // 却被裁成闲聊掉 RAG（回了句「校园资料服务未连接」）。
+  // 反向验证：send 里删掉 parseOptionChoice 兜底 → 用户按提示回答再次掉 RAG。
+  assert.equal(parseOptionChoice('1', 3), 1);
+  assert.equal(parseOptionChoice('①', 3), 1);
+  assert.equal(parseOptionChoice('②', 3), 2);
+  assert.equal(parseOptionChoice('方案2', 3), 2);
+  assert.equal(parseOptionChoice('第三个', 3), 3);
+  assert.equal(parseOptionChoice('第 2 个', 3), 2);
+  assert.equal(parseOptionChoice('2 吧', 3), 2);
+  assert.equal(parseOptionChoice('就 1', 3), 1);
+  // 越界 / 无数字 → 不是编号
+  assert.equal(parseOptionChoice('4', 3), null, '越界编号不得误接');
+  assert.equal(parseOptionChoice('0', 3), null);
+  assert.equal(parseOptionChoice('换个时间吧', 3), null, '普通话不算编号');
+  // 问句 / 长句里出现数字 → 是普通话，不是选择（否则「四六级什么时候报名」会被误吞）
+  assert.equal(parseOptionChoice('四六级什么时候报名', 3), null);
+  assert.equal(parseOptionChoice('帮我排个每周三次每次一小时的实验报告', 3), null);
 });
