@@ -27,3 +27,11 @@
 - [2026-09-28 白天 E 批·结项] E0–E6 全部落地（E1 `cd0be00` / E2 `356728b` / E3 `eef62f6` / E4 `fd01b7e` / E5 `56ee2c9` / E6 `9cc568b`）：E2E 离线 **77 过 / 0 挂**、tsc 0、ui 319、engine 458、风格 8/8、禁区仅授权文件；12 个变异体反向验证全过；零断言漂移（wp7 类名锁用内联 style 绕开，未改断言）｜明细在台账 §F
 - [2026-09-28 白天 E 批·待决定] **三个灰度开关的开启时机**：`KNOWLEDGE_WIRED`（知识库钳 maxBlockMin≤90、自习档位换 25/50）｜`SPATIAL_WIRED`（自习点按步行分钟排序、估算留余量）｜`PROFILE_PREFS_WIRED`（自习块按时段亲和度落位）。三者缺省**全关**（关=与既往逐位一致），开启会改变计划输出 → 需各自重拍 golden 基线 + 人工过目周视图｜已排除：E1–E6 已按关闭态验收（engine/ui/E2E 全绿、golden 未动）｜需要人决定：先开哪一个（建议先开 E2 空间库——用户可感知且不触碰 study 统计口径），以及是否附「块卡片 📍 更近/🚶 徽章」视觉确认
 - [2026-09-28 白天 E 批·登记] 三处**未接线**知识/空间/画像能力（各模块内 `*_PARTIALS` 常量已如实登记）：睡眠保底窗口（需 identity.sleepMin 进 PlanRequest 契约）、每周活动量下限、三餐选点消费 mealWalkBudgetMin、画像变更的「受影响天」集合（待接 `localizedReplan`）｜已排除：均需扩契约或动 RAY 属地文件，本批不越界｜需要人决定：是否立项（建议并入 F 批后续）
+
+# G 批 · 重构至完成（2026-10-01，CY 会话内拍板「重构至完成」+「三个全开」）
+
+- [2026-10-01 G 批·结项] understand 边界闸待决定项：探明 T 批换向已实现「在线时全部消息过 understand 端点（scene:intent 的 llmJudge），looksLikeAction 仅作端点不可用时的规则兜底」（libaoIntent.ts:1389-1413、LbaoChat.tsx llmJudge/parseGoalIntent 调用链）——BLOCKERS 2026-09-27「是否把规则拒绝但疑似排程的句子送端点复判」在代码层面已成立，无需改动，本条结项。
+- [2026-10-01 G 批·结项] 三开关开启时机：CY 拍板「三个全开」，commit `f707ed2` 落地（缺省 true，env 显式 '0'/'false' 逃生门）。golden 实测零漂移（五语料全关 vs 全开逐字节一致，原因见台账 §G），无需重拍基线；周视图视觉验收 4/4 pass（截图 _g-shots/，visual-judge 子代理供应商不可用，按协议本体逐张判定留痕台账 §G）。
+- [2026-10-01 G 批·结项] D 批偏差申报项：CY 拍板「彻底删除」，commit `a11545b` 落地——删 ClarifyState/PickingState/updateClarify/updatePicking，约 21 写点直写 topic；派生形状类型复用 dialogManager 的 V2*Shape；d-batch.test.ts B② 源码锁随调用形态更新（断言漂移已申报，锁意图不变）。
+- [2026-10-01 G 批·新增] 阻塞点：四处 PARTIALS 接线（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限；三餐消费 mealWalkBudgetMin；画像变更受影响天集合接 localizedReplan）均属跨人契约扩展（BuildWeekPlanInput→toPlanRequest→PlanRequest 三处，RAY 名下 model.ts/schedule.ts）｜已排除：AGENTS.md 红线 6「契约字段增删必须双方确认」，单方不擅动｜需要人决定：CY 与 B（RAY）协商后立项（建议并入后续批次，E 批未接线登记同步结转）。
+- [2026-10-01 G 批·新增] 阻塞点：本地 beta-v2（含 D/E/G 批 42+ 提交）与 origin/dev **无共同祖先**（unrelated histories；beta-v2 根=`5546be9` 三树快照，dev 根=`e387fb6` 脚手架，dev 另有 150 条独有提交），合并需 `--allow-unrelated-histories` 且逐段人工核对｜已排除：机器自动合流在两线根提交不同的情况下会静默丢工作，AGENTS.md §8.6 同款纪律适用｜需要人决定：CY+RAY 白天人工评审合并策略（建议先由人比对两侧文件地图再定 merge/rebase/手工搬运，不设时限）。

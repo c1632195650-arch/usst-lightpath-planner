@@ -387,3 +387,20 @@
 - **未接线项如实登记**（防「以为接了」）：`knowledge.ts::KNOWLEDGE_PARTIALS`（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限需活动块生成策略）｜`placesPolicy.ts::SPATIAL_PARTIALS`（三餐食堂选取；1100 路网未入库 → 保持未知不吸附）｜`profilePrefs.ts::PROFILE_PARTIALS`（夜猫子无辩护依据不臆造；三餐步行预算待三餐接线消费；画像变更「受影响天」集合待接 `localizedReplan`）。
 - 环境备注：`gate_overnight.mjs` 在本沙箱 `spawnSync cmd.exe EBUSY`（脚本未改、md5 锚未动）——五项按脚本逻辑逐条等价复现：tsc 0 / ui 319 / engine 458 / 禁区仅授权文件 / 风格 8/8。
 - 待 CY 决定：三个开关的**开启时机**（开启会改变计划输出，需各自 golden 另拍基线 + 人工过目块卡片视觉）。
+
+## §G G 批 · 重构至完成（2026-10-01 白天，CY 会话内拍板「重构至完成」+ 三开关「三个全开」）
+
+- 状态：[x] G1/G2/G3 全部落地。G1=`a11545b`（派生类型层清理）｜G2=`f707ed2`（三开关缺省开）｜G3=本文档批（BLOCKERS/README/progress-status/AGENTS）。
+
+| 项 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| G1 | `a11545b` | D 批偏差结项：删 LbaoChat 的 ClarifyState/PickingState/updateClarify/updatePicking，约 21 写点直写 setTopic(collectTopic/pickingTopic)，missStreak 清零语义逐点保留；形状类型复用 dialogManager 的 V2ClarifyShape/V2PickingShape；只读投影 clarify/clarifyPicking/schedMode 保留 | tsc 0 / v2+d-batch 23/0 / ui 319/0 / RV：删落点行→d-batch 恰 1 红→还原 sha256 一致（34607eba） |
+| G2 | `f707ed2` | KNOWLEDGE_WIRED/SPATIAL_WIRED/PROFILE_PREFS_WIRED 缺省 false→true（env 显式 '0'/'false' 逃生门）；三个 wiring 测试翻转（关=显式 '0'，新增「未设=缺省开」断言，用例数不减） | tsc 0 / wiring 26/26 / engine 458/458 / ui 319/319 |
+| G3 | 本 commit | BLOCKERS 五条（三结项+两新增）/ tests/README 重拍记录 ② / progress-status 与 AGENTS.md 快照重写 | 见下「验收」 |
+
+- **断言漂移申报（G1 共 1 处）**：d-batch.test.ts B② 源码锁 `/kind: 'replace', slots, candidates: targets/` → `/pickingTopic\('replace', slots, targets\)/`——锁的意图（replace 多候选改道 picking）不变，调用形态随适配器删除而更新。
+- **golden 零漂移（G2 实测，未重拍）**：五语料全关 vs 全开 `normalizePlan` 逐字节一致（diff=0）。原因：① 语料 studyPlaces 全走模块库固定档位模板，现场工厂档位替换分支未触发；② crosscampus 的步行排序首选与原序一致；③ 语料不带 persona → 块级偏好为空。详见 tests/README「重拍记录 ②」。
+- **周视图视觉验收（G2 后）**：隔离 vite 5178（VITE_API_BASE 指死端口）真实渲染，4 张截图（浏览态视口/整页/详情抽屉/梨宝页）逐张判定 **4/4 pass**——块卡片 L0 无工程文案泄漏、七列均匀、抽屉层级清晰（时间/地点/为什么排在这/来源）、梨宝预览卡与降级提示正常。⚠️ visual-judge 子代理供应商不可用（provider-not-found），按验收协议降级为本体逐张判定，截图留痕 `_g-shots/`（`_*` gitignore，不入仓）。
+- **E2E（G1+G2 后）**：隔离 vite 5178 离线跑 `scripts/e2e-sched-session.mjs` **77 过 / 0 挂**（含 E 批新增 O/P/Q），跑完实例已清、端口核释放。
+- **DIALOG_ENABLED 零影响**：三个 planner 开关文件与 LbaoChat 无 import 关系（复核维持 E 批结论）。
+- 未做（转人工/BLOCKERS）：四处 PARTIALS 契约扩展（需双方确认）、beta-v2→dev 合并（unrelated histories，BLOCKERS 新增条）、push 远程。
