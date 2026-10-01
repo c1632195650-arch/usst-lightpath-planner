@@ -176,13 +176,15 @@ test('E2 池重排: 画像池内的可达项保持原序，不可达项降级', 
 
 /* ---------------- ⑦ 源码锁 ---------------- */
 
-test('E2 源码锁: construct 的候选排序受 spatialWired 控制且保留既有兜底链', () => {
+test('E2 源码锁: construct 的候选排序受 spatialWired 控制且质量闸保留', () => {
+  // 2026-10-02 delta 融合改版：construct 主体取 Ray 循环体（minStudyDurationAt/
+  // openAt 进门闸/恢复带），E2 由「单选兜底链」改为「门控候选排序」织入。
+  // 锁的意图不变、强度不放松：闸必须在、排序必须受闸控制、关闭态路径必须原样。
   const c = src('/src/lib/planner/construct.ts');
-  assert.match(c, /if \(spatialWired\(\) && prev\?\.place\)/, '开关闸在位');
-  assert.match(c, /orderByWalkFrom\(pool, prev\.place/, '按步行排序在位');
-  assert.match(
-    c,
-    /cands\.find\(\(t\) => openAt\(t, gap\.endMin - MIN_CHUNK, gap\.endMin\)\)/,
-    '既有「末尾仍开门」兜底链必须保留（关闭态逐位等价的前提）',
-  );
+  assert.match(c, /\(spatialWired\(\) && prev\?\.place\)/, '开关闸在位（去掉闸用例即红）');
+  assert.match(c, /orderByWalkFrom\(cands, prev\.place/, '按步行排序在位且作用于候选池');
+  assert.match(c, /: cands;/, '关闭态必须逐位回到原候选顺序（行为零变化的前提）');
+  assert.match(c, /for \(const tpl of ordered\)/, '迭代消费的必须是排序后的池');
+  assert.match(c, /dur < minStudyDurationAt\(tpl\.place\)/, 'Ray 线质量闸（自习不宜过短）必须保留');
+  assert.match(c, /if \(!openAt\(tpl, gap\.startMin, gap\.startMin \+ MIN_CHUNK\)/, '进门闸（此刻或末尾开门）必须保留');
 });

@@ -71,3 +71,6 @@ data/lightpath.db-shm
 data/uploads/
 .venv/
 public/dev-persona.json
+
+# 账号系统运行时数据库（2026-10-02 delta 融合；含用户凭据，绝不入库）
+server/lp_auth.db

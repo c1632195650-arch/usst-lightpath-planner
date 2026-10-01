@@ -62,6 +62,9 @@ WRITABLE_KEYS = frozenset({
     "usst.libao.deadlines.v1",
     "usst.libao.chat.v1",
     "usst.libao.chat.cleared",
+    # delta 融合（2026-10-02）补登记：dialogManager 快照 v2/v3（storageRegistry 同步）
+    "usst.libao.chat.v2",
+    "usst.libao.chat.v3",
 })
 
 # 简单防爆破：用户名 → 最近失败时间戳列表（进程内存态，重启即清）

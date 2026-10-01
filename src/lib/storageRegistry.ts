@@ -174,6 +174,18 @@ export const STORAGE_KEYS = {
     module: 'features/libao/LbaoChat',
   },
 
+  /** 梨宝对话本地快照 v2（S/T/D 批 topic 容器版；dialogManager SNAPSHOT_V2_KEY） */
+  'usst.libao.chat.v2': {
+    owner: 'CY',
+    module: 'features/libao/dialogManager',
+  },
+
+  /** 梨宝对话本地快照 v3（D3 起：topic 单容器 + missStreak；dialogManager SNAPSHOT_V3_KEY） */
+  'usst.libao.chat.v3': {
+    owner: 'CY',
+    module: 'features/libao/dialogManager',
+  },
+
   /** 梨宝「清空对话」本页标记（清空后本标签页不再自动恢复历史） */
   'usst.libao.chat.cleared': {
     owner: 'CY',

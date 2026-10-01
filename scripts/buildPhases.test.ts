@@ -9,6 +9,11 @@ import {
   buildPhases, buildPhasesFromCalendar, phaseOfWeek,
 } from '../src/lib/planner/buildPhases.ts';
 
+// P1 系列锁的是「轴映射」这一层的逐点行为；知识钳制（E1，G 批起缺省全开）是
+// 正交层、有自己的 wiring 测试（tests/knowledge-wiring.test.ts）。此处显式关掉，
+// 避免缺省开关变化误伤本层锁 —— 2026-10-02 delta 融合（beta-v2 G2 并入）时发现。
+process.env.KNOWLEDGE_WIRED = '0';
+
 /* ---------------- 测试夹具 ---------------- */
 
 function slot(dayOfWeek, startPeriod, endPeriod, weeks) {

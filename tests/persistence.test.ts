@@ -24,8 +24,10 @@ import { STORAGE_KEY_LIST, metaOf } from '@/lib/storageRegistry';
  * 2026-10-01：16 → 17（+`usst.local_owner.v1`，localOnly 本机专属、不入库）。
  * 三线融合 2026-10-01：17 → 20（+beta-v2 侧梨宝链路三 key：`usst.libao.deadlines.v1` /
  * `usst.libao.chat.v1` / `usst.libao.chat.cleared`，serve.py WRITABLE_KEYS 已同步）。
+ * delta 融合 2026-10-02：20 → 22（+`usst.libao.chat.v2` / `v3`，dialogManager 快照键；
+ * serve.py 与 server/auth_api.py 两份 WRITABLE_KEYS 已同步）。
  */
-const REGISTERED_TOTAL = 20;
+const REGISTERED_TOTAL = 22;
 
 test('① cloudKeys：legacy 只迁不写、localOnly 只写本机，其余登记 key 全部可入库', () => {
   const keys = cloudKeys();
@@ -51,18 +53,25 @@ test('① cloudKeys：legacy 只迁不写、localOnly 只写本机，其余登�
   assert.ok(keys.includes('usst-life-assistant-v2'));
 });
 
-test('③ serve.py 的 WRITABLE_KEYS 必须覆盖 cloudKeys()（前端登记了、服务端不认 = 静默丢同步）', () => {
-  const servePy = join(dirname(fileURLToPath(import.meta.url)), '..', 'serve.py');
-  const src = readFileSync(servePy, 'utf8');
-  const block = src.match(/WRITABLE_KEYS\s*=\s*frozenset\(\{([\s\S]*?)\}\)/);
-  assert.ok(block, 'serve.py 里没找到 WRITABLE_KEYS = frozenset({...})');
-  const serverKeys = new Set(block[1].match(/'[^']+'|"[^"]+"/g)?.map((s) => s.slice(1, -1)) ?? []);
-  const missing = cloudKeys().filter((k) => !serverKeys.has(k));
-  assert.deepEqual(
-    missing,
-    [],
-    `serve.py 的 WRITABLE_KEYS 缺这些 key（会被 400 拒绝且前端静默降级）：\n${missing.join('\n')}`,
-  );
+test('③ 服务端 WRITABLE_KEYS 必须覆盖 cloudKeys()（前端登记了、服务端不认 = 静默丢同步）', () => {
+  // 2026-10-02 delta 融合起有**两份**现役服务端白名单：
+  //   serve.py（Ray 线生产托管形态） 与 server/auth_api.py（app.py 单后端形态）。
+  // 两份都必须覆盖 —— 哪份不认 key，哪条链路就静默丢同步。
+  const extract = (rel: string): Set<string> => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', rel), 'utf8');
+    const block = src.match(/WRITABLE_KEYS\s*=\s*frozenset\(\{([\s\S]*?)\}\)/);
+    assert.ok(block, `${rel} 里没找到 WRITABLE_KEYS = frozenset({...})`);
+    return new Set(block[1].match(/'[^']+'|"[^"]+"/g)?.map((s) => s.slice(1, -1)) ?? []);
+  };
+  for (const rel of ['serve.py', 'server/auth_api.py']) {
+    const serverKeys = extract(rel);
+    const missing = cloudKeys().filter((k) => !serverKeys.has(k));
+    assert.deepEqual(
+      missing,
+      [],
+      `${rel} 的 WRITABLE_KEYS 缺这些 key（会被 400 拒绝且前端静默降级）：\n${missing.join('\n')}`,
+    );
+  }
 });
 
 test('② jsonSame：键序无关、嵌套结构、不等与脏串回落', () => {
