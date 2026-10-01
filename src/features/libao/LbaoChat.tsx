@@ -1341,7 +1341,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 续答（collect 相 + 同一意图）：补丁并进现有槽位，不打断
       if (t && t.phase === 'collect' && intent === t.intent) {
-        const merged = mergeLlmPrimary(t.slots, patch, ctx.today);
+        // 强化计划 D（2026-10-02）：**双层并入** —— LLM patch 有时丢槽位
+        // （真机实录：scene=intent 重试只带回 when、丢了 totalHours），先把
+        // 回答的**本地规则解析**并进基线，再让 LLM patch 作主覆盖。
+        const local = parseIntentSlots(ctx.q, ctx.today);
+        const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
+        const merged = mergeLlmPrimary(withLocal, patch, ctx.today);
         merged.intent = intent;
         merged.missing = missingSlots(merged);
         if (merged.missing.length === 0) {
