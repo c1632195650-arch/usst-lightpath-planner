@@ -196,6 +196,9 @@ export const GOAL_NOUNS = [
   // 事务性事件（2026-09-27 CY 真机三连翻车：「我明天有一个学生会面试」——
   // 「面试」不在词表 → 标题抽空 → 要么掉进 RAG 聊天，要么被当成泛泛一周建议）
   '面试', '答辩', '宣讲', '讲座', '体检', '例会', '班会', '团建',
+  // 组织/事务补充 + 习惯目标（批 1.1，金标 i02/i29/i30）：「学生会」让 title 能
+  // 扩出「学生会面试」；晨跑/健身族是习惯陈述句（「隔天去一次健身房」）的目标名词
+  '学生会', '开题报告', '晨跑', '跑步', '健身', '健身房', '背单词', '晨读',
 ];
 
 /**
@@ -210,6 +213,9 @@ const ACTION_VERBS = [
   // WP9 收口（2026-09-27 真机 W5 验收抓到）：改期/取消语族的动词不在词表 →
   // detectIntent 认得 reschedule，但 looksLikeAction 拦下 → 整句漏判成 RAG。
   '挪', '换到', '改到', '调到', '取消',
+  // 完成语族（批 1.1，金标 i25）：「期末周之前把实验报告写完」——
+  // 「写完」本身就是要排的事，且不在标题词里（TITLE_STOP 同步拦截）。
+  '写完', '做完', '弄完',
 ];
 
 /** 第一人称意愿 —— 命中即视为「要动日程」（用户已经在表达自己的事） */
@@ -238,6 +244,16 @@ const ADVICE_MARK = ['怎么', '如何', '怎样', '咋', '值不值得', '要�
  *    这条也被回归测试守着（`快筛：求建议不命中`）。
  */
 const ASK_OPINION = /(要不要|该不该|是不是应该|需不需要|是否要|是否应该|值不值得|值得吗|好不好)/;
+
+/**
+ * 疑问词守卫（批 1.1）：陈述句兜底只认「无疑问词」的句子 —— 问句一律留给 RAG。
+ * 金标 b03「今天校园里有什么讲座」、b06「学校有什么社团」都是
+ * 「时间词 + 目标名词」的问句形态，没有这道守卫就会被新兜底误拽进排程。
+ */
+const QUESTIONISH_RE = /(什么时候|何时|几号|几点|哪|多少|几个|什么|怎么|如何|怎样|咋|吗)/;
+
+/** 频率约定词（批 1.1）：「隔天去一次健身房」这类习惯陈述的判据之一 */
+const FREQ_RE = /(每天|每日|天天|隔天|每两天|每周|每星期|每礼拜)/;
 
 /**
  * 与 `LbaoChat.tsx::isRecommendIntent` **逐字一致**的既有口径。
@@ -293,6 +309,9 @@ const TITLE_STOP: string[] = [
   '的', '了', '着', '过', '把', '在', '和', '与', '跟', '为', '给', '到', '从',
   '我', '你', '他', '她', '它', '们', '这', '那', '是', '有', '要', '想', '能', '会',
   '请', '帮', '就', '还', '也', '都', '很', '最', '再', '又',
+  // 批 1.1（金标 title 对齐）：时段词不是目标的一部分（「周五晚上班级聚餐」→ 聚餐）；
+  // 「次」不是（「去一次健身房」→ 健身房）；完成词族不是（「实验报告写完」→ 实验报告）
+  '早上', '早晨', '上午', '中午', '下午', '晚上', '晚间', '次', '写完', '做完', '弄完',
 ];
 
 /** 中文数字 → 整数（覆盖 一~十二，够用于月份/次数） */
@@ -370,11 +389,24 @@ export function looksLikeAction(q: string): boolean {
 
   if (SELF_INTENT.some((t) => s.includes(t))) return true;
 
+  // 批 1.1（金标 i02/i29）：「我周五下午要在学生会面试」「我每天要晨跑」——
+  // 意愿词被时间词隔开，连续匹配抓不到。放宽为「我 + ≤6 个非标点字符 + 意愿词」，
+  // 但间隔里不许含疑问/建议词（「我什么时候要交作业」是问句，得留给下面的 PURE_FACT）。
+  const selfGap = /我([^，。！？,.；;?？!！\s]{1,6}?)(要|想|打算|准备)/.exec(s);
+  if (selfGap && !PURE_FACT.some((t) => selfGap[1].includes(t))
+    && !ADVICE_MARK.some((t) => selfGap[1].includes(t))) return true;
+
   if (LEGACY_RECOMMEND.test(s)) return true;
   if (LEGACY_RECOMMEND_DAY.test(s) && LEGACY_RECOMMEND_ACT.test(s)) return true;
 
   if (PURE_FACT.some((t) => s.includes(t))) return false;
   if (ADVICE_MARK.some((t) => s.includes(t))) return false;
+
+  // 批 1.1（金标 i21）：「我这周忙不忙」是 query 意图的排程语境 —— detectIntent
+  // 早就认得，快筛却把它拦成 RAG。放在 ADVICE 之后：「忙不忙是怎么算的」这类
+  // 求解释的句子已在上一步被拦，走不到这里。（「有没有空」与 PURE_FACT 的
+  // 「有没有」相抵，维持现状不在此放行。）
+  if (/(忙不忙|排得开|来不来得及|排得下|装得下)/.test(s)) return true;
 
   // WP11：重要日/截止类诉求 —— 说的是「有件带截止日的事」。
   // 刻意放在 ADVICE 门**之后**：「怎么备赛」是求方法，不该被拽进来。
@@ -388,6 +420,13 @@ export function looksLikeAction(q: string): boolean {
   const hasGoal = GOAL_NOUNS.some((n) => s.includes(n));
   const hasVerb = ACTION_VERBS.some((v) => s.includes(v));
   if (hasGoal && hasVerb) return true;
+
+  // 批 1.1（金标 i23/i29/i30）：习惯/日程**陈述句**兜底 —— 目标名词 +（频率约定
+  // 或具体时间表达）+ 无疑问词。「周五晚上班级聚餐」「隔天去一次健身房」没有
+  // 「我要」也没有动作动词，但说话人分明在交代日程素材。疑问词守卫是硬前提：
+  // b03「今天校园里有什么讲座」同属「时间 + 名词」，必须留在 RAG。
+  if (hasGoal && !QUESTIONISH_RE.test(s)
+    && (FREQ_RE.test(s) || extractConcreteWhen(s) != null)) return true;
 
   // 陈述句兜底（2026-09-27 CY 真机翻车）：「我明天有一个学生会面试」——
   // 说话人在**交代日程素材**，却没有动作动词也没有「我要」字面，
@@ -547,8 +586,18 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
   }
   if (relWeek) {
     const isNext = relWeek[1].startsWith('下');
+    // 「下周一一起」里 wd 的「周一」与周词的「周」重叠 —— 文本取合并跨度，
+    // 别拼出「下周周一」这种碎片（批 1.1，金标 i29 when_text 对齐）。
+    let text = relWeek[0];
+    if (wd) {
+      const wStart = wd.index ?? 0;
+      const wEnd = wStart + wd[0].length;
+      const rEnd = relWeek.index + relWeek[0].length;
+      if (wStart <= rEnd && wEnd >= rEnd - 1) text = s.slice(relWeek.index, wEnd);
+      else text = relWeek[0] + wd[0];
+    }
     return {
-      text: relWeek[0] + (wd ? wd[0] : ''),
+      text,
       kind: 'relative',
       relativeWeeks: isNext ? 1 : 0,
       weekday: wdNum,
@@ -666,8 +715,13 @@ export function extractFrequency(q: string): number | undefined {
 
 /** 抽地点。只认「在/去/到 + X楼/馆/厅/室/中心/食堂」这种可判定的形态。 */
 export function extractPlace(q: string): string | undefined {
-  const m = /(?:在|去|到|往|前往)\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(q || '');
-  return m ? m[1] : undefined;
+  const s = q || '';
+  // 「在」优先（批 1.1，金标 i15）：「两点到四点在图书馆自习」里「到」是时间
+  // 连词，先试「在 X」再退「去/到/往」，避免吃进「四点在图书馆」这种碎片。
+  const m = /在\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(s);
+  if (m) return m[1];
+  const m2 = /(?:去|到|往|前往)\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(s);
+  return m2 ? m2[1] : undefined;
 }
 
 /** 抽时段窗（「只在晚上」）。 */
