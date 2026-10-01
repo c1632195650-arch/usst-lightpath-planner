@@ -92,6 +92,8 @@ export async function planWeekWithTasks(
       weekNo,
       policy: phase.policy,
       scenarios: profile?.scenarios ?? null,
+      // 批 4.3（1A-③）：对话侧同样把完整画像喂进引擎（socialCap 链路）
+      persona: profile,
       tasks,
     }),
   );
