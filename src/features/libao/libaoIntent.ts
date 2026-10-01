@@ -315,8 +315,8 @@ const TITLE_STOP: string[] = [
   '请', '帮', '就', '还', '也', '都', '很', '最', '再', '又',
   '交',
   // 批 1.1（金标 title 对齐）：时段词不是目标的一部分（「周五晚上班级聚餐」→ 聚餐）；
-  // 「次」不是（「去一次健身房」→ 健身房）；完成词族不是（「实验报告写完」→ 实验报告）
-  '早上', '早晨', '上午', '中午', '下午', '晚上', '晚间', '次', '写完', '做完', '弄完',
+  // 「次」不是（「去一次健身房」→ 健身房）；完成词族与「完」不是（「实验报告写完」→ 实验报告）
+  '早上', '早晨', '上午', '中午', '下午', '晚上', '晚间', '次', '写完', '做完', '弄完', '完',
 ];
 
 /** 中文数字 → 整数（覆盖 一~十二，够用于月份/次数） */
@@ -493,6 +493,10 @@ export function deadlineProposal(slots: IntentSlots): DeadlineProposal | { needD
 /** 能拼进标题的字符（中文、字母、数字） */
 const TITLE_CHAR = /^[\u4e00-\u9fffA-Za-z0-9]+$/;
 
+/** 学期词作**时间锚**的形态（批 1.4）：后面紧跟「之前/以前/前」——
+ *  此时它是修饰语不是目标（「期末考试前我要把高数复习完」要排的是高数复习） */
+const TERM_ANCHOR_USAGE = /(期末考试周?|期末周?|期中考试周?|期中|开学|学期末|考试周)(之前|以前|前)/;
+
 /**
  * 抽目标名。
  *
@@ -504,7 +508,14 @@ const TITLE_CHAR = /^[\u4e00-\u9fffA-Za-z0-9]+$/;
  *   3. 抽不到 → 空串。**这是有意的**：宁可追问，也不拿半个动词当目标。
  */
 export function extractTitle(q: string): string {
-  const s = q || '';
+  let s = q || '';
+
+  // 批 1.4：学期词作时间锚不参与 title —— 等长占位掩码保住 indexOf 的位置映射，
+  // 左右扩展撞到占位符（非 TITLE_CHAR）自然停。
+  const anchor = TERM_ANCHOR_USAGE.exec(s);
+  if (anchor) {
+    s = s.slice(0, anchor.index) + '○'.repeat(anchor[0].length) + s.slice(anchor.index + anchor[0].length);
+  }
 
   let best = '';
   let at = -1;
@@ -639,8 +650,9 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
   if (wd && wdNum != null) return { text: wd[0], kind: 'relative', relativeWeeks: 0, weekday: wdNum };
   if (/周末/.test(s)) return { text: '周末', kind: 'relative', relativeWeeks: 0, weekday: 6 };
 
-  // 学期词 —— 要靠校历换算，本层只记原话
-  const term = /(期末|期中考试|开学|学期末|寒假|暑假|毕业前)/.exec(s);
+  // 学期词 —— 有校历锚点时由 resolveWhen 落地；本层记**完整原话**（含「之前/前」，
+  // 批 1.4：语义在 resolveWhen 分流）。「期中」裸词补入（原先只认「期中考试」）。
+  const term = /(期末考试周?|期末周?|期中考试周?|期中|开学|学期末|结课|考试周|寒假|暑假|毕业前)(之前|以前|前)?/.exec(s);
   if (term) return { text: term[0], kind: 'window' };
 
   return undefined;
@@ -814,6 +826,39 @@ export interface ResolveTermOpts {
   };
 }
 
+/** 校历条目的结构化最小接口（与 constants/term.ts 的 TermCalendar 天然兼容） */
+export interface TermCalendarLike {
+  termStart: string;
+  phases?: Array<{ name: string; fromWeek: number; toWeek: number; kind: string }>;
+}
+
+function addDaysISO(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return isoOf(d);
+}
+
+/**
+ * 校历 → 学期词锚点（批 1.4）。
+ * 期中 = 理论教学**中点周**的周一（校历没有「期中」相位，取 round((from+to)/2)——
+ * 2026-2027-1：round((3+18)/2)=11 → 与 DEADLINES 的「期中考试周」日期互证）；
+ * 期末 = 第一个 exam 相位的 [周一, 周日]。缺相位就缺锚点，不编。
+ */
+export function termAnchorsFrom(entry: TermCalendarLike | undefined): ResolveTermOpts['term'] {
+  if (!entry) return undefined;
+  const theory = entry.phases?.find((p) => p.kind === 'theory');
+  const exam = entry.phases?.find((p) => p.kind === 'exam');
+  const out: NonNullable<ResolveTermOpts['term']> = {};
+  if (theory) {
+    out.midterm = addDaysISO(entry.termStart, 7 * (Math.round((theory.fromWeek + theory.toWeek) / 2) - 1));
+  }
+  if (exam) {
+    out.finalsFrom = addDaysISO(entry.termStart, 7 * (exam.fromWeek - 1));
+    out.finalsTo = addDaysISO(entry.termStart, 7 * (exam.toWeek - 1) + 6);
+  }
+  return out.midterm || out.finalsFrom ? out : undefined;
+}
+
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -926,6 +971,29 @@ export function resolveWhen(
       const sun = new Date(monday);
       sun.setDate(monday.getDate() + 6);
       return { from: isoOf(monday), to: isoOf(sun), certainty: 'window' };
+    }
+  }
+
+  // 学期词（批 1.4）：有校历锚点 → 落到真实窗口；没有 → 维持 window（不编日期）。
+  // 「…之前/前」= 目标窗口止于锚点前一日（「期末考试前把高数复习完」要的是
+  // [今天, 考试周前] 的复习窗，不是考试周里那一块）；裸学期词 = 锚点本身
+  // （「期中考试」是重要日，落当天；「期末」是考试周整段）。
+  if (opts?.term && /(期中|期末|考试周|学期末|结课)/.test(hint.text)) {
+    const t = opts.term;
+    const isBefore = /(之前|以前|前)$/.test(hint.text);
+    if (/期中/.test(hint.text) && t.midterm) {
+      if (isBefore) {
+        const to = addDaysISO(t.midterm, -1);
+        return { from: isoOf(base), to: to >= isoOf(base) ? to : undefined, certainty: 'window' };
+      }
+      return { from: t.midterm, to: t.midterm, certainty: 'window' };
+    }
+    if (/(期末|考试周|学期末|结课)/.test(hint.text) && t.finalsFrom && t.finalsTo) {
+      if (isBefore) {
+        const to = addDaysISO(t.finalsFrom, -1);
+        return { from: isoOf(base), to: to >= isoOf(base) ? to : undefined, certainty: 'window' };
+      }
+      return { from: t.finalsFrom, to: t.finalsTo, certainty: 'window' };
     }
   }
 

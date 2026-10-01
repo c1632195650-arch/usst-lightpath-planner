@@ -6,7 +6,7 @@ import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderst
 import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -17,6 +17,7 @@ import {
   shouldExpireSession,
   type SchedMode,
 } from '@/features/libao/schedSession';
+import { TERM_CALENDAR } from '@/constants/term';
 import {
   SNAPSHOT_V3_KEY,
   SNAPSHOT_V2_KEY,
@@ -349,7 +350,15 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   );
   /** 批 1.2/1.4：weekNo 与学期词的日期换算锚点 —— schedule.termStart（及校历）
    *  传进理解层，让「第10周周五」「期末之前」落到真实日期；缺课表时理解层安全降级。 */
-  const whenOpts = useMemo(() => ({ termStart: schedule?.termStart }), [schedule?.termStart]);
+  const termEntry = useMemo(() => {
+    const list = Object.values(TERM_CALENDAR);
+    // 校历是学期起点的权威：先按课表 termStart 对条目，对不上就取唯一收录的学年
+    return list.find((t) => t.termStart === schedule?.termStart) ?? list[0];
+  }, [schedule?.termStart]);
+  const whenOpts = useMemo(
+    () => ({ termStart: schedule?.termStart, term: termAnchorsFrom(termEntry) }),
+    [schedule?.termStart, termEntry],
+  );
   useEffect(() => {
     let alive = true;
     const weekNo = currentWeekNo(schedule.termStart, todayISO());
