@@ -14,15 +14,22 @@
  *   · 依据只取**画像里真实存在**的轴与场景字段，映射写在 `_MAPPING_DOC` 里逐条说明；
  *   · 没有可辩护依据的（如"夜猫子"——`night_supply` 说的是**夜间补给方式**，
  *     不是作息倾向）**不猜**，登记在 `PROFILE_PARTIALS` 里等数据支持；
- *   · 与本文件同构的开关 `prefsWired()` 缺省关闭 = 引擎行为与既往逐位一致。
+ *   · 与本文件同构的开关 `prefsWired()` 缺省开启（G 批 2026-10-01 拍板全开）；
+ *     env 显式置 `'0'`/`'false'` 可关闭回退。
  */
 import type { AxisKey, PersonaProfile, ScenarioFields } from '@/types';
 
 /* ============================================================
- * 一、总开关（缺省关闭 = 零行为变化）
+ * 一、总开关（缺省开启；G 批 2026-10-01 起，golden 已按开启态重拍）
  * ========================================================== */
 
+/**
+ * 画像偏好开关。双路读取（Node 测试 / Vite 浏览器）。**缺省 true**（E 批灰度期
+ * 已结束，G 批拍板全开）；env 显式置 `'0'`/`'false'` 关闭 —— 逃生门。
+ * 每次调用都读 —— 用例内可翻开关再复原，不在 import 期定死。
+ */
 export function prefsWired(): boolean {
+  const on = (v: string | undefined) => v == null || (v !== '0' && v !== 'false');
   let v: string | undefined;
   try {
     v = typeof process !== 'undefined'
@@ -31,14 +38,14 @@ export function prefsWired(): boolean {
   } catch {
     v = undefined;
   }
-  if (v != null) return v === '1';
+  if (v != null) return on(v);
   try {
     v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
       ?.VITE_PROFILE_PREFS_WIRED;
   } catch {
     v = undefined;
   }
-  return v === '1';
+  return on(v);
 }
 
 /* ============================================================

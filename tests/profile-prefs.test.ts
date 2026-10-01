@@ -1,7 +1,7 @@
 /**
  * E 批 E3 · 画像 → 块级偏好验收（2026-09-28）
  * ============================================================
- * 判据：① 开关缺省关闭；② 映射有据可依（HEA 作息 / planning 碎片 / meal_radius 步行预算）；
+ * 判据：① 开关缺省开启（G 批 2026-10-01 拍板全开），env 显式 '0' 关闭；② 映射有据可依（HEA 作息 / planning 碎片 / meal_radius 步行预算）；
  *       ③ **没依据不臆造**（HEA 低 → 不给上午偏好；night_supply 不当作息用）；
  *       ④ 亲和度只认「有实质重叠」的窗口，且确定性；⑤ 指纹可作「画像变更」判据。
  * 反向验证锚点（RV，删实现必红）：
@@ -45,9 +45,10 @@ function persona(over: Partial<PersonaProfile['axes']> = {}, scen: Partial<Scena
   };
 }
 
+/** G 批起缺省开启：关 = 显式置 '0'（逃生门），不再用「删变量」表达关闭。 */
 function withPrefs<T>(on: boolean, fn: () => T): T {
   const prev = process.env.PROFILE_PREFS_WIRED;
-  if (on) process.env.PROFILE_PREFS_WIRED = '1'; else delete process.env.PROFILE_PREFS_WIRED;
+  process.env.PROFILE_PREFS_WIRED = on ? '1' : '0';
   try { return fn(); } finally {
     if (prev === undefined) delete process.env.PROFILE_PREFS_WIRED; else process.env.PROFILE_PREFS_WIRED = prev;
   }
@@ -55,9 +56,14 @@ function withPrefs<T>(on: boolean, fn: () => T): T {
 
 /* ---------------- ① 开关 ---------------- */
 
-test('E3 开关: prefsWired() 缺省 false，置 1 为 true', () => {
+test('E3 开关: prefsWired() 缺省 true（G 批起），env 显式 0 为逃生门', () => {
   withPrefs(false, () => assert.equal(prefsWired(), false));
   withPrefs(true, () => assert.equal(prefsWired(), true));
+  const prev = process.env.PROFILE_PREFS_WIRED;
+  delete process.env.PROFILE_PREFS_WIRED;
+  try { assert.equal(prefsWired(), true, '未设变量 = 缺省开启'); } finally {
+    if (prev === undefined) delete process.env.PROFILE_PREFS_WIRED; else process.env.PROFILE_PREFS_WIRED = prev;
+  }
 });
 
 /* ---------------- ② 映射 ---------------- */

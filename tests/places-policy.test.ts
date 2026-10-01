@@ -1,7 +1,7 @@
 /**
  * E 批 E2 · 空间库 → 引擎选取策略验收（2026-09-28）
  * ============================================================
- * 判据：① 开关缺省关闭；② 校区确证（跨校区 / UNKNOWN 一律剔除，**不猜**）；
+ * 判据：① 开关缺省开启（G 批 2026-10-01 拍板全开），env 显式 '0' 关闭；② 校区确证（跨校区 / UNKNOWN 一律剔除，**不猜**）；
  *       ③ 营业三态（未知 ≠ 关，也不假装开）；④ **估算留余量**（估算走更紧的步行预算）；
  *       ⑤ 排序确定性（同输入同序，不引入随机数）；⑥ 超预算只**挪后**不删除。
  * 反向验证锚点（RV，删实现必红）：
@@ -41,9 +41,10 @@ const NO_HOURS = place('第三教学楼', 'JG516', []);      // 时段未知
 const SOUTH = place('南校自习室', 'JG334', [[480, 1200]]);
 const UNKNOWN_CAMPUS = place('某处', 'UNKNOWN', []);
 
+/** G 批起缺省开启：关 = 显式置 '0'（逃生门），不再用「删变量」表达关闭。 */
 function withSpatial<T>(on: boolean, fn: () => T): T {
   const prev = process.env.SPATIAL_WIRED;
-  if (on) process.env.SPATIAL_WIRED = '1'; else delete process.env.SPATIAL_WIRED;
+  process.env.SPATIAL_WIRED = on ? '1' : '0';
   try { return fn(); } finally {
     if (prev === undefined) delete process.env.SPATIAL_WIRED; else process.env.SPATIAL_WIRED = prev;
   }
@@ -51,9 +52,14 @@ function withSpatial<T>(on: boolean, fn: () => T): T {
 
 /* ---------------- ① 开关 ---------------- */
 
-test('E2 开关: spatialWired() 缺省 false，置 1 为 true', () => {
+test('E2 开关: spatialWired() 缺省 true（G 批起），env 显式 0 为逃生门', () => {
   withSpatial(false, () => assert.equal(spatialWired(), false));
   withSpatial(true, () => assert.equal(spatialWired(), true));
+  const prev = process.env.SPATIAL_WIRED;
+  delete process.env.SPATIAL_WIRED;
+  try { assert.equal(spatialWired(), true, '未设变量 = 缺省开启'); } finally {
+    if (prev === undefined) delete process.env.SPATIAL_WIRED; else process.env.SPATIAL_WIRED = prev;
+  }
 });
 
 /* ---------------- ③ 营业三态 ---------------- */

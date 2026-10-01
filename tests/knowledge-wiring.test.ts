@@ -2,7 +2,8 @@
  * E 批 E1 · 知识库 → 引擎接线验收（2026-09-28）
  * ============================================================
  * 「知识在库里，决策在拍脑袋」的收口验收。四条判据：
- *   ① 开关缺省关闭 = **零行为变化**（基线锚，这是本批最重要的保证）；
+ *   ① 开关缺省开启（G 批 2026-10-01 拍板全开）；env 显式 '0' 关闭 =
+ *      **零行为变化**（基线锚，E 批灰度语义原样保留）；
  *   ② 开启后知识确实生效（可观测差异：maxBlockMin 被钳到深度工作上限）；
  *   ③ 档位替换纯函数正确（方法库档位 + 久坐安全档）；
  *   ④ 叠加顺序 = 知识赢画像自动调整、**输用户明确说过的话**（源码位置锁）。
@@ -67,11 +68,11 @@ const PERSONA: PersonaProfile = {
   confidence: {}, quality: 'ok', updatedAt: '2026-09-28',
 };
 
-/** 在指定开关状态下跑一段代码，跑完复原（避免污染同进程的其它用例） */
+/** 在指定开关状态下跑一段代码，跑完复原（避免污染同进程的其它用例）。
+ *  G 批起缺省开启：关 = 显式置 '0'（逃生门），不再用「删变量」表达关闭。 */
 function withWired<T>(on: boolean, fn: () => T): T {
   const prev = process.env.KNOWLEDGE_WIRED;
-  if (on) process.env.KNOWLEDGE_WIRED = '1';
-  else delete process.env.KNOWLEDGE_WIRED;
+  process.env.KNOWLEDGE_WIRED = on ? '1' : '0';
   try {
     return fn();
   } finally {
@@ -82,9 +83,17 @@ function withWired<T>(on: boolean, fn: () => T): T {
 
 /* ---------------- ① 开关 ---------------- */
 
-test('E1 开关: knowledgeWired() 读环境变量，缺省 false', () => {
-  withWired(false, () => assert.equal(knowledgeWired(), false, '未设变量 = 关闭'));
+test('E1 开关: knowledgeWired() 缺省 true（G 批起），env 显式 0 为逃生门', () => {
+  withWired(false, () => assert.equal(knowledgeWired(), false, "'0' = 显式关闭"));
   withWired(true, () => assert.equal(knowledgeWired(), true, "'1' = 开启"));
+  const prev = process.env.KNOWLEDGE_WIRED;
+  delete process.env.KNOWLEDGE_WIRED;
+  try {
+    assert.equal(knowledgeWired(), true, '未设变量 = 缺省开启');
+  } finally {
+    if (prev === undefined) delete process.env.KNOWLEDGE_WIRED;
+    else process.env.KNOWLEDGE_WIRED = prev;
+  }
 });
 
 /* ---------------- ② 关闭 = 零行为变化（基线锚，最重要） ---------------- */

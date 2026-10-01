@@ -14,21 +14,23 @@
  *     （`ESTIMATE_SLACK_EXTRA_MIN`），宁可少走一段去确定的地方；
  *   · **不引入随机数**：同输入必得同序（末位用名称字典序兜底）。
  *
- * 边界：本文件不改区块内容、不写盘；开关 `spatialWired()` 缺省关闭 = 方案不参与排序
- * （引擎行为与既往逐位一致，见工作单 §6）。
+ * 边界：本文件不改区块内容、不写盘；开关 `spatialWired()` 缺省开启（G 批 2026-10-01
+ * 拍板全开，golden 已按开启态重拍），env 显式置 `'0'`/`'false'` 可关闭回退。
  */
 import type { CampusId } from '@/types';
 import type { Place } from './model.ts';
 
 /* ============================================================
- * 一、总开关（缺省关闭 = 零行为变化）
+ * 一、总开关（缺省开启；G 批 2026-10-01 起，golden 已按开启态重拍）
  * ========================================================== */
 
 /**
- * 空间策略开关。双路读取（Node 测试 / Vite 浏览器），缺省 false。
+ * 空间策略开关。双路读取（Node 测试 / Vite 浏览器）。**缺省 true**（E 批灰度期
+ * 已结束，G 批拍板全开）；env 显式置 `'0'`/`'false'` 关闭 —— 逃生门。
  * 每次调用都读 —— 用例内可翻开关再复原，不在 import 期定死。
  */
 export function spatialWired(): boolean {
+  const on = (v: string | undefined) => v == null || (v !== '0' && v !== 'false');
   let v: string | undefined;
   try {
     v = typeof process !== 'undefined'
@@ -37,14 +39,14 @@ export function spatialWired(): boolean {
   } catch {
     v = undefined;
   }
-  if (v != null) return v === '1';
+  if (v != null) return on(v);
   try {
     v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
       ?.VITE_SPATIAL_WIRED;
   } catch {
     v = undefined;
   }
-  return v === '1';
+  return on(v);
 }
 
 /* ============================================================

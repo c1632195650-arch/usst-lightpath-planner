@@ -8,8 +8,8 @@
  * 边界（与 methods.ts / health.ts 同构且更严）：
  *   · 只做**钳制与档位替换**，不发明任何新数值 —— 每个数字都能溯源到
  *     methodParams.generated / healthParams.generated（构建期编译，出处见 _meta.provenance）；
- *   · 总开关 `knowledgeWired()`：缺省**关闭** = 引擎行为与既往**逐位一致**；
- *     开启后才生效（灰度，golden 另拍基线，见《知识融合与周视图交互升级通宵包》§5.3）；
+ *   · 总开关 `knowledgeWired()`：缺省**开启**（G 批 2026-10-01 拍板全开，golden 已按
+ *     开启态重拍）；env 显式置 `'0'`/`'false'` 可关闭 —— 逃生门，回 E 批前行为；
  *   · 本文件是 CY 新增叶子：不 import `templates.ts`，也不被它 import；
  *     目录归属 Ray，归属与命名请 B 复核（AGENTS.md 文件红线）。
  *
@@ -23,17 +23,19 @@ import { SEDENTARY } from './health.ts';
 import type { PhasePolicy } from '@/types';
 
 /* ============================================================
- * 一、总开关（缺省关闭 = 零行为变化）
+ * 一、总开关（缺省开启；G 批 2026-10-01 起，golden 已按开启态重拍）
  * ========================================================== */
 
 /**
  * 知识接线开关。双路读取：
- *   · Node（测试/脚本）：`process.env.KNOWLEDGE_WIRED === '1'`；
- *   · Vite（浏览器）：`import.meta.env.VITE_KNOWLEDGE_WIRED === '1'`。
- * 两个环境各缺一样，所以按「谁在谁说了算」读，缺省 false。
- * 每次调用都读（不在 import 期定死）——测试可以在用例内翻开关再复原。
+ *   · Node（测试/脚本）：`process.env.KNOWLEDGE_WIRED`；
+ *   · Vite（浏览器）：`import.meta.env.VITE_KNOWLEDGE_WIRED`。
+ * 两个环境各缺一样，所以按「谁在谁说了算」读。**缺省 true**（E 批灰度期已结束）；
+ * env 显式置 `'0'`/`'false'` 关闭。每次调用都读（不在 import 期定死）——
+ * 测试可以在用例内翻开关再复原。
  */
 export function knowledgeWired(): boolean {
+  const on = (v: string | undefined) => v == null || (v !== '0' && v !== 'false');
   let v: string | undefined;
   try {
     v = typeof process !== 'undefined'
@@ -42,14 +44,14 @@ export function knowledgeWired(): boolean {
   } catch {
     v = undefined;
   }
-  if (v != null) return v === '1';
+  if (v != null) return on(v);
   try {
     v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
       ?.VITE_KNOWLEDGE_WIRED;
   } catch {
     v = undefined;
   }
-  return v === '1';
+  return on(v);
 }
 
 /* ============================================================
