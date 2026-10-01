@@ -149,6 +149,64 @@ export function blockPrefs(
  * ========================================================== */
 
 /**
+ * 四·五、画像 → 排程的逐元素解释（批 5，7A）
+ * ----------------------------------------------------------
+ * 画像页「这会如何影响你的排程」面板的数据源：把**当前画像命中**的规则
+ * 逐条列出来，让 35 题问卷从「测着玩」变成「可解释的输入」。
+ * ⚠️ phase 组的阈值与 `buildPhases.applyPersona` 逐条对齐 —— 两处必须同步改
+ * （第一版独立实现 + 注释互锚，合表 TODO 见 PROFILE_PARTIALS 后续批次）。
+ */
+export interface ProfileExplainItem {
+  /** 画像元素（轴名或场景字段名） */
+  element: string;
+  /** 当前值（如「HEA=80」「planning=flexible」） */
+  value: string;
+  /** 对排程的实际影响（人话） */
+  effect: string;
+  /** 规则出处：phase=阶段策略 / prefs=块级偏好 / template=模块触发 */
+  source: 'phase' | 'prefs' | 'template';
+}
+
+export function explainProfile(
+  profile: PersonaProfile | null,
+  scenarios: ScenarioFields | null,
+): ProfileExplainItem[] {
+  const out: ProfileExplainItem[] = [];
+  const ax = (k: AxisKey): number | null => profile?.axes?.[k] ?? null;
+
+  // ── phase：与 buildPhases.applyPersona 的阈值逐条对齐（两处必须同步改）──
+  const ach = ax('ACH');
+  if (ach != null && ach >= 70) out.push({ element: 'ACH 成就驱动', value: `ACH=${ach}`, effect: '每天自习目标上调两成', source: 'phase' });
+  else if (ach != null && ach <= 35) out.push({ element: 'ACH 成就驱动', value: `ACH=${ach}`, effect: '每天自习目标下调两成，先保住节奏', source: 'phase' });
+  const plan = ax('PLAN');
+  if (plan != null && plan >= 70) out.push({ element: 'PLAN 计划性', value: `PLAN=${plan}`, effect: '单块上限 +30 分钟，可以放长专注', source: 'phase' });
+  else if (plan != null && plan <= 35) out.push({ element: 'PLAN 计划性', value: `PLAN=${plan}`, effect: '单块压到 45 分钟以内，靠短块推进', source: 'phase' });
+  const hea = ax('HEA');
+  if (hea != null && hea <= 35) out.push({ element: 'HEA 健康自律', value: `HEA=${hea}`, effect: '留白率上调 10%，别把自己排满', source: 'phase' });
+  else if (hea != null && hea >= 70) out.push({ element: 'HEA 健康自律', value: `HEA=${hea}`, effect: '留白率下调 5%，可以承受更密的安排', source: 'phase' });
+  const res = ax('RES');
+  if (res != null && res <= 35) out.push({ element: 'RES 稳定恢复', value: `RES=${res}`, effect: '留白率再上调 5%，多留恢复时间', source: 'phase' });
+
+  // ── prefs：与 blockPrefs 同源 ──
+  if (hea != null && hea >= PREFS.HIGH) out.push({ element: 'HEA 健康自律', value: `HEA=${hea}`, effect: '自习优先排在上午（8:00–12:00），其次下午（13:00–17:00）', source: 'prefs' });
+  else if (hea != null && hea <= PREFS.LOW) out.push({ element: 'HEA 健康自律', value: `HEA=${hea}`, effect: '不指定自习时段偏好，由大空档决定（不把早起专注当默认）', source: 'prefs' });
+  const planning = scenarios?.planning ?? null;
+  if (planning === 'flexible') out.push({ element: 'planning 计划习惯', value: 'planning=flexible', effect: '接受 30–59 分钟的碎片自习档', source: 'prefs' });
+  else if (planning === 'planned') out.push({ element: 'planning 计划习惯', value: 'planning=planned', effect: '只用 60 分钟以上的整块自习', source: 'prefs' });
+  const radius = scenarios?.meal_radius ?? null;
+  if (radius === 'far') out.push({ element: 'meal_radius 就餐半径', value: 'meal_radius=far', effect: '三餐按最多步行 25 分钟推荐食堂（排程约束接线中）', source: 'prefs' });
+  else if (radius === 'near') out.push({ element: 'meal_radius 就餐半径', value: 'meal_radius=near', effect: '三餐按最多步行 10 分钟就近推荐（排程约束接线中）', source: 'prefs' });
+
+  // ── template：模块触发（construct 按场景字段决定要不要排）──
+  if (scenarios?.exercise_trigger === 'self_plan') out.push({ element: 'exercise_trigger 运动方式', value: 'self_plan', effect: '排程会加入自主运动块', source: 'template' });
+  if (scenarios?.night_supply === 'convenience') out.push({ element: 'night_supply 夜间补给', value: 'convenience', effect: '晚间会排便利店夜宵补给块', source: 'template' });
+  if (scenarios?.social_radius === 'wide') out.push({ element: 'social_radius 社交半径', value: 'wide', effect: '会安排「搭子自习」这类社交学习块', source: 'template' });
+  if (scenarios?.event_breadth === 'broad') out.push({ element: 'event_breadth 活动广度', value: 'broad', effect: '会安排社团活动块', source: 'template' });
+
+  return out;
+}
+
+/**
  * 稳定指纹：轴值 + 场景字段 + 画像版本。用途是**变更检测**（增量重排的触发条件），
  * 不是安全哈希 —— 明文拼接、可读、可断言，同输入必得同串。
  * 轴值四舍五入到整数：浮点尾差不该导致"整周重排"。
