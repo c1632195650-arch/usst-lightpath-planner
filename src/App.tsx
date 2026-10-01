@@ -235,6 +235,24 @@ export default function App() {
       </header>
 
       <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
+        {/* 批 4.2（8B）：示例课表横幅 —— 新用户首启看到的是演示课表，必须告知与引导；
+            导入成功（source 变更）后自然消失 */}
+        {schedule.source === 'demo' && (
+          <div
+            data-testid="demo-schedule-banner"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
+          >
+            <span>你现在的课表是<b>示例数据</b>，不是你的真实课表 —— 排程会按它来。</span>
+            <button
+              type="button"
+              data-testid="demo-schedule-goto-import"
+              onClick={() => setMainTab('import')}
+              className="rounded-lg bg-white px-3 py-1 font-medium text-amber-800 ring-1 ring-amber-300 transition-colors hover:bg-amber-100"
+            >
+              去「课表」页导入 →
+            </button>
+          </div>
+        )}
         {mainTab === 'import' ? (
           <ImportTester onApply={(s) => {
             patchState({ schedule: s });
@@ -306,6 +324,7 @@ export default function App() {
                 // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
                 lifeMode={normalizeLifeMode(state.lifeMode)}
                 onOpenModeSetup={() => setModeSetupOpen(true)}
+                onShiftWeek={shiftWeekBy}
               />
             ) : (
               <WeekView

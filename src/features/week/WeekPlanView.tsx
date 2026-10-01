@@ -106,6 +106,9 @@ interface Props {
   lifeMode: string | null;
   /** H2：打开模式问询窗口（App 持有对话框状态）；缺省不显示入口 */
   onOpenModeSetup?: () => void;
+  /** 批 4.1（2A）：切上一周/下一周（±1）。不传 = 不渲染按钮（老调用点零改动）。
+   *  键盘 ←/→ 切周早已存在（App 全局 keydown），本字段只负责**可见性**。 */
+  onShiftWeek?: (d: number) => void;
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -429,7 +432,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1455,7 +1458,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       {/* 阶段头：现在处于什么阶段、策略是什么、为什么 */}
       <div className="panel px-4 py-3.5 sm:px-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
+          <span className="flex items-center gap-1.5">
+            {onShiftWeek && (
+              <button
+                type="button"
+                data-testid="weekplan-prev-week"
+                aria-label="上一周"
+                onClick={() => onShiftWeek(-1)}
+                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                ‹
+              </button>
+            )}
+            <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
+            {onShiftWeek && (
+              <button
+                type="button"
+                data-testid="weekplan-next-week"
+                aria-label="下一周"
+                onClick={() => onShiftWeek(1)}
+                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                ›
+              </button>
+            )}
+          </span>
+          {onShiftWeek && <span className="text-[11px] text-ink-faint">键盘 ←/→ 也可切周</span>}
           <span className="text-[12px] text-ink-soft">
             每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
             留白 {Math.round(phase.policy.blankRatio * 100)}% ·
