@@ -2,6 +2,8 @@
 > **§1 项目定位与愿景**、**§2 需求演进脉络**中的定位表述，已被 [`docs/project-core.md`](./project-core.md)（v3）取代。
 > **仍然有效且必须遵守**：§3 需求全景（ID 体系）、§3.6 NF 合规红线、§6 阶段路线、§8 风险、**§9 契约锁定（动了 = 推倒重来）**。
 > 本文**不再**自称"正式搭建的唯一依据"。
+>
+> 🔄 **架构变更注记 · 2026-09-30**：「生活模式」整体移除（`data/usst.ts` 的 `LIFE_MODES`、`lib/planner/lifeModePolicy.ts` 及 `tests/lifeModeAndSocial.test.ts`），随之清理死代码 `lib/lbao.ts`、`features/libao/LbaoPlanView.tsx`、`features/libao/weekPlanAdapter.ts`；总览页删去 `MonthCalendar` / `TodayCard` / `WeekStrip`。下方"已实现"表已就地更新。
 
 ---
 
@@ -84,7 +86,7 @@
 |---|---|---|---|---|
 | EN-1 | 画像计分引擎（L5/FC/SORT/MC → 8 轴） | P0 | 🟩 | `lib/persona.ts`，含置信度、一致性校验 |
 | EN-2 | 原型匹配（加权欧氏距离） | P0 | 🟩 | 6 原型 + 匹配阈值 |
-| EN-3 | 梨宝推荐引擎（规则版：画像打分→选生活模式→生成日程块） | P0 | 🟩 | `lib/lbao.ts` |
+| EN-3 | 梨宝推荐引擎（规则版：画像打分→选生活模式→生成日程块） | P0 | ⬜ 已移除 | ~~`lib/lbao.ts`~~ —— 2026-09-30 随「生活模式移除」清理（规则版无结构差异、等价一个乘数）；真引擎入口是 `lib/planner/planWeek.ts`，梨宝侧经 `features/libao/weekPlanForChat.ts` 接入 |
 | EN-4 | 课程优先级（可解释"为什么"） | P1 | ⬜ | 旧方向核心，升级为"选课/复习建议" |
 | EN-5 | 排程引擎（贪心 + 疲劳 + 强制留白 + 跨校区转场） | P1 | ⬜ | 旧方向遗珠，可并入生活 mod 细化 |
 | EN-6 | 跨校区转场 buffer（五校区） | P1 | 🟩(常量) | `constants/campus.ts` 已建，待接入 |
@@ -139,9 +141,9 @@
 | 35 题画像流程（分段+进度+拖拽排序） | `features/persona/PersonaFlow.tsx`、`data/personaBank.ts` | 🟩 |
 | 画像计分 + 原型 + 场景 | `lib/persona.ts` | 🟩 |
 | 画像结果（雷达+原型+八轴+场景） | `features/persona/PersonaResult.tsx`、`components/Radar.tsx` | 🟩 |
-| 月历（校历 mock） | `features/calendar/MonthCalendar.tsx` | 🟩 |
+| ~~月历（校历 mock）~~ | ~~`features/calendar/MonthCalendar.tsx`~~ —— **已于 2026-09-30 移除**（静态数据没人用，见 `features/overview/OverviewPage.tsx` 头注） | ⬜ 已移除 |
 | 时间节点倒计时 | `features/calendar/DeadlineBoard.tsx` | 🟩 |
-| 周程（课表+选日+生活 mod+梨宝） | `features/week/WeekView.tsx`、`lib/lbao.ts` | 🟩 |
+| 周计划（课表网格 + 计划时间轴） | `features/week/WeekPlanPage.tsx`、`WeekPlanView.tsx`、`WeekView.tsx`（课表网格） | 🟩 |
 | 数据 mock（课表/食堂/自习/活动/校历/时间节点） | `data/usst.ts` | 🟩(mock) |
 | 状态持久化 | `lib/storage.ts`、`types.ts` | 🟩 |
 | 卡通设计系统（上理红 + 马卡龙 + 硬阴影贴纸） | `tailwind.config.js`、`index.css` | 🟩 |

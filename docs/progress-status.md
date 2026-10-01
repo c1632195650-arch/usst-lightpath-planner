@@ -2,6 +2,8 @@
 
 > 更新：2026-09-15（§0/§2/§3 数字已按**实测**刷新）｜ 适用对象：刚加入 / 接手本项目、想快速对齐现状的同学。
 > 本文只讲「**现在做到哪了**」。定位以 `docs/project-core.md` 为准；上手与纪律见 `teammate-onboarding.md` 与 `AGENTS.md`。
+>
+> 🔄 **架构变更注记 · 2026-09-30（本文部分条目已过时）**：「生活模式 / lifeMode」整体移除（`data/usst.ts` 的 `LIFE_MODES`、`lib/planner/lifeModePolicy.ts`、`tests/lifeModeAndSocial.test.ts`），随之清理死代码 `src/lib/lbao.ts::lbaoRecommend`、`features/libao/LbaoPlanView.tsx`、`features/libao/weekPlanAdapter.ts`；总览页删去 `MonthCalendar` / `TodayCard` / `WeekStrip`。**周计划页现为 `features/week/WeekPlanPage.tsx`（计划时间轴）+ `WeekPlanView.tsx` + `WeekView.tsx`（课表网格）**。下方 §4.3 与目录树保留原貌、仅作**历史记录**，勿据此判断现状。
 
 ---
 
@@ -72,8 +74,9 @@
 - **可降级**：有 `LLM_API_KEY` → DeepSeek 以「梨宝人格」合成 150 字内口语回答；无 Key → 抽取式（直接引用检索到的最相关原文片段）。
 - 梨宝人格常量 `LIBAO_PERSONA`（数字闷骚梨 / 口头禅 / 反内卷 / 括号小声 bb / 表情包文字化）作为 system prompt 注入。
 
-### 4.3 推荐（前端 `src/lib/lbao.ts` + `LbaoPlanView.tsx`）
-- 周程页的 `lifeMode` 与梨宝对话里的推荐逻辑已**收敛到同一套**：`lbaoRecommend(profile, schedule, days, modeId?)` + 共享卡片组件 `LbaoPlanView`。
+### 4.3 推荐（~~前端 `src/lib/lbao.ts` + `LbaoPlanView.tsx`~~）—— **已于 2026-09-30 移除**
+- ~~周程页的 `lifeMode` 与梨宝对话里的推荐逻辑已**收敛到同一套**：`lbaoRecommend(profile, schedule, days, modeId?)` + 共享卡片组件 `LbaoPlanView`。~~
+- **现状**：`lbaoRecommend` 早已无人调用（无结构差异、等价于一个乘数），随「生活模式移除」一并清理；梨宝对话只输出**文本排程要点**（`features/libao/weekPlanForChat.ts` → `planPoints`），计划渲染在 `features/week/WeekPlanView.tsx`。
 
 ---
 
@@ -108,14 +111,12 @@ usst-planner/
 ├─ src/
 │  ├─ App.tsx                      # 三 Tab 壳 + 路由（welcome/persona/result/main）
 │  ├─ features/
-│  │  ├─ calendar/                 # 月历 MonthCalendar + DeadlineBoard
-│  │  ├─ week/WeekView.tsx         # 周排程（lifeMode → lbaoRecommend）
+│  │  ├─ calendar/                 # 时间节点 DeadlineBoard（月历 MonthCalendar 已于 2026-09-30 移除）
+│  │  ├─ week/WeekPlanPage.tsx     # 周计划页（计划时间轴 + 课表网格）
 │  │  ├─ persona/                  # 画像问卷 + 结果页
 │  │  ├─ libao/LbaoChat.tsx        # 梨宝对话（意图分流）
-│  │  ├─ libao/LbaoPlanView.tsx    # 共享推荐卡片
 │  │  └─ welcome/Welcome.tsx       # 首页
 │  ├─ lib/
-│  │  ├─ lbao.ts                   # 规则推荐（lbaoRecommend）
 │  │  ├─ persona.ts                # 画像映射 buildProfile
 │  │  ├─ api.ts                    # 后端 /api 调用
 │  │  ├─ storage.ts / date.ts      # 本地存储 / 日期工具
