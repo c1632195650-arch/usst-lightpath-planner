@@ -281,6 +281,8 @@ export interface PlanSlotPatch {
   day?: number;
   relativeDays?: number;
   relativeWeeks?: number;
+  /** 相对月锚（批 1.3）：本月=0、下月=1；「下月底」= relativeMonths 1 + 原话佐证 */
+  relativeMonths?: number;
   weekday?: number;
   /** 学期周次（批 1.2）：「第10周周五」→ weekNo=10；换算成日期由前端按 termStart 做 */
   weekNo?: number;

@@ -81,6 +81,7 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - month / day: 明确说到几月几日时给数字（month 1-12, day 1-31）
 - relativeDays: 相对天数（今天=0 明天=1 后天=2 大后天=3）
 - relativeWeeks: 相对周数（这周=0 下周=1）
+- relativeMonths: 相对月锚（本月=0 下月=1 下下月=2；「下月底」= 1 + when_text 照抄）
 - weekday: 星期几（周一=1 … 周日=7）
 - weekNo: 学期周次（「第10周」=10；「第10周周五」= weekNo 10 + weekday 5）
 - perWeekCount: 每周几次（「每天」=7；「隔天/每两天」≈每周3-4次，按 4 记）
@@ -196,6 +197,9 @@ def _clean_patch(patch):
     n = _num(patch.get("relativeWeeks"))
     if n is not None and 0 <= n <= 12:
         out["relativeWeeks"] = int(n)
+    n = _num(patch.get("relativeMonths"))
+    if n is not None and 0 <= n <= 24:
+        out["relativeMonths"] = int(n)
     n = _num(patch.get("weekday"))
     if n is not None and 1 <= n <= 7:
         out["weekday"] = int(n)

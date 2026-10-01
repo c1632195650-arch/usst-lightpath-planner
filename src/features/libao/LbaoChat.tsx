@@ -159,6 +159,7 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
     if (p.day != null) patch.when.day = p.day;
     if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
     if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
+    if (p.relativeMonths != null) patch.when.relativeMonths = p.relativeMonths;
     if (p.weekday != null) patch.when.weekday = p.weekday;
     if (p.weekNo != null) patch.when.weekNo = p.weekNo;
   }

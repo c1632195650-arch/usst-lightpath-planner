@@ -80,6 +80,8 @@ export interface WhenHint {
   relativeDays?: number;
   /** 相对周偏移：下周 = 1、这周 = 0 */
   relativeWeeks?: number;
+  /** 相对月锚（批 1.3）：本月 = 0、下月 = 1、下下月 = 2；与 decade（旬）正交 ——「下月底」 */
+  relativeMonths?: number;
   /** 星期几（1=周一…7=周日），配合 `relativeWeeks` 表示「下周三」 */
   weekday?: number;
   /** 学期周次（批 1.2）：「第10周」= 10；配合 weekday 表示「第10周周五」。换算需 termStart。 */
@@ -564,6 +566,18 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
     if (month) return { text: dec[0], kind: 'window', month, decade };
   }
 
+  // 相对月锚（批 1.3）：「下月底 / 月初 / 月中 / 下下个月初」。必须在「只有月」
+  // 之前拦；负向环视挡住「12月底」这类数字月份（那是明确月份不是相对锚）。
+  // 「周末」没有「月」字，不受影响。
+  const relMonth = /(?<![一二三四五六七八九十\d年])(下下|下|这|本)?个?月(上旬|中旬|下旬|底|末|初|中)/.exec(s);
+  if (relMonth) {
+    const rm = relMonth[1] === '下下' ? 2 : relMonth[1] === '下' ? 1 : 0;
+    const decade = relMonth[2] === '上旬' || relMonth[2] === '初' ? 'early'
+      : relMonth[2] === '中旬' || relMonth[2] === '中' ? 'middle'
+      : 'late';
+    return { text: relMonth[0], kind: 'window', relativeMonths: rm, decade };
+  }
+
   // 只有月
   const mo = /([一二三四五六七八九十\d]{1,2})月/.exec(s);
   if (mo) {
@@ -844,12 +858,34 @@ export function resolveWhen(
   }
 
   if (hint.kind === 'exact' && hint.month && hint.day) {
-    // 没写年份 → 取「不早于今天太久」的最近一次（3 月问「九月中旬」= 今年 9 月）
+    // 没写年份 → 取下一次发生（批 1.3：**整日早于今天 → 滚年**。旧 90 天规则会把
+    // 「10 月说九月中旬」留在已过去的 9 月，铺块落进过去 = 用户看到一块灰色回忆）
     let year = base.getFullYear();
     const mk = (y: number) => new Date(y, hint.month! - 1, hint.day!);
-    if (mk(year).getTime() < base.getTime() - 90 * 864e5) year += 1;
+    if (mk(year).getTime() < base.getTime()) year += 1;
     const iso = isoOf(mk(year));
     return { from: iso, to: iso, certainty: 'exact' };
+  }
+
+  // 相对月锚（批 1.3）：本月/下月/下下月 + 旬窗。旬窗用**真实月末**（11 月 30、
+  // 12 月 31），不是旧代码的 28 截断 —— 「下月底」排到 28 号等于偷走两三天。
+  if (hint.relativeMonths != null) {
+    let year = base.getFullYear();
+    let m0 = base.getMonth() + hint.relativeMonths;
+    while (m0 > 11) {
+      m0 -= 12;
+      year += 1;
+    }
+    const monthLen = new Date(year, m0 + 1, 0).getDate();
+    const span: [number, number] =
+      hint.decade === 'early' ? [1, 10] :
+      hint.decade === 'middle' ? [11, 20] :
+      hint.decade === 'late' ? [21, monthLen] : [1, 28];
+    return {
+      from: isoOf(new Date(year, m0, span[0])),
+      to: isoOf(new Date(year, m0, span[1])),
+      certainty: 'window',
+    };
   }
 
   if (hint.month) {
@@ -858,7 +894,9 @@ export function resolveWhen(
       hint.decade === 'early' ? [1, 10] :
       hint.decade === 'middle' ? [11, 20] :
       hint.decade === 'late' ? [21, 28] : [1, 28];
-    if (new Date(year, hint.month - 1, span[0]).getTime() < base.getTime() - 90 * 864e5) year += 1;
+    // 批 1.3：滚年条件从「早于今天 90 天」改为「**整个窗口**早于今天」——
+    // 窗口还含着今天（10 月说「10月」）就不滚。
+    if (new Date(year, hint.month - 1, span[1]).getTime() < base.getTime()) year += 1;
     return {
       from: isoOf(new Date(year, hint.month - 1, span[0])),
       to: isoOf(new Date(year, hint.month - 1, span[1])),
@@ -1496,9 +1534,9 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
     // 无任何结构化字段）而规则层已有结构化 when（点名了星期/相对天数/日期）时，
     // 不整体覆盖 —— 否则「下周一开始」会被 LLM 的劣质转写抹掉（真机实录：
     // 用户答了时间，梨宝反问「大概什么时候开始」= 答非所问）。
-    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; month?: number | null; day?: number | null; weekNo?: number | null; kind?: string } | null) =>
+    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; relativeMonths?: number | null; month?: number | null; day?: number | null; weekNo?: number | null; kind?: string } | null) =>
       !!w && (w.weekday != null || w.relativeDays != null || w.relativeWeeks != null
-        || w.month != null || w.day != null || w.weekNo != null || w.kind === 'exact');
+        || w.relativeMonths != null || w.month != null || w.day != null || w.weekNo != null || w.kind === 'exact');
     const patchIsBareWindow = !structured(pw) && pw.kind === 'window' && !!pw.text;
     const ruleHasStructure = structured(out.when);
     if (!(patchIsBareWindow && ruleHasStructure)) {
