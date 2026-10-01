@@ -1373,18 +1373,29 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
 
   if (patch.title) out.title = patch.title;
   if (patch.when) {
-    out.when = patch.when;
-    if (today) {
-      const r = resolveWhen(patch.when, today);
-      out.dateFrom = r.from;
-      out.dateTo = r.to;
-      out.certainty = r.certainty;
-    } else {
-      out.dateFrom = patch.dateFrom;
-      out.dateTo = patch.dateTo;
-      out.certainty = patch.certainty ?? out.certainty;
+    // 强化计划 D（2026-10-02）· 劣质覆盖防护：patch 只有**一句原话**（window 型、
+    // 无任何结构化字段）而规则层已有结构化 when（点名了星期/相对天数/日期）时，
+    // 不整体覆盖 —— 否则「下周一开始」会被 LLM 的劣质转写抹掉（真机实录：
+    // 用户答了时间，梨宝反问「大概什么时候开始」= 答非所问）。
+    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; month?: number | null; day?: number | null; kind?: string } | null) =>
+      !!w && (w.weekday != null || w.relativeDays != null || w.relativeWeeks != null
+        || w.month != null || w.day != null || w.kind === 'exact');
+    const patchIsBareWindow = !structured(patch.when) && patch.when.kind === 'window' && !!patch.when.text;
+    const ruleHasStructure = structured(out.when);
+    if (!(patchIsBareWindow && ruleHasStructure)) {
+      out.when = patch.when;
+      if (today) {
+        const r = resolveWhen(patch.when, today);
+        out.dateFrom = r.from;
+        out.dateTo = r.to;
+        out.certainty = r.certainty;
+      } else {
+        out.dateFrom = patch.dateFrom;
+        out.dateTo = patch.dateTo;
+        out.certainty = patch.certainty ?? out.certainty;
+      }
+      if (patch.when.unspecified) out.certainty = 'unknown';
     }
-    if (patch.when.unspecified) out.certainty = 'unknown';
   }
   if (!patch.when && patch.dateFrom) out.dateFrom = patch.dateFrom;
   if (!patch.when && patch.dateTo) out.dateTo = patch.dateTo;
