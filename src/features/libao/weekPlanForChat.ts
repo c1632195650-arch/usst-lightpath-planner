@@ -216,10 +216,16 @@ export function goalToTasks(
   if (days.length === 0) return out;
 
   // ③ 块数：给了总量按总量摊；只给频率按频率乘周数；都没给就一块。
-  const blockMin = slots.durationMin != null && slots.durationMin > 0 ? slots.durationMin : DEFAULT_BLOCK_MIN;
+  // 双保险（强化计划 B）：没给单次时长、且总量摊下来只有一块时，块长直接用总量
+  // （封顶单次上限）——「一共 1 小时」不该被默认块长 90 撑成自相矛盾的排法。
+  const GOAL_SINGLE_MAX_MIN = 180;
+  let blockMin = slots.durationMin != null && slots.durationMin > 0 ? slots.durationMin : DEFAULT_BLOCK_MIN;
   let nBlocks: number;
   if (slots.totalHours != null && slots.totalHours > 0) {
     nBlocks = Math.max(1, Math.ceil((slots.totalHours * 60) / blockMin));
+    if (slots.durationMin == null && nBlocks === 1) {
+      blockMin = Math.min(Math.round(slots.totalHours * 60), GOAL_SINGLE_MAX_MIN);
+    }
   } else if (slots.perWeekCount != null && slots.perWeekCount > 0) {
     const spanWeeks = Math.max(1, Math.ceil((span + 1) / 7));
     nBlocks = Math.max(1, slots.perWeekCount * spanWeeks);
@@ -590,7 +596,10 @@ export function describeVerdict(v: GoalVerdict): string[] {
     for (const q of v.questions) out.push(`· ${q}`);
   }
   if (v.kind === 'conflict') {
-    out.push('· 可以：① 换个时间段；② 缩短或拆分；③ 顶掉现有的一块。你说哪个，我来改。');
+    // 强化计划 D（2026-10-02）：不再硬编码「①②③」承诺 —— 真编号选项由
+    // `proposeReplanOptions` 干跑产出、在 LbaoChat 侧追加；这里只给**说得出口**的
+    // 方向，避免「承诺了编号、实际一个都拿不出」的脱节（真机实录）。
+    out.push('· 可以说「换个时间」「缩短或拆分」，或者告诉我愿意让出哪一块 —— 我来改。');
   }
   if (v.kind === 'infeasible') {
     // D4：去硬编码 —— 有挡路事实时给「顶掉其中一块」的方向；
@@ -672,6 +681,19 @@ export function proposeReplanOptions(args: {
   if (slots.durationMin != null && slots.durationMin > 30) {
     const s: IntentSlots = { ...slots, durationMin: Math.max(30, Math.floor(slots.durationMin / 2)), missing: [] };
     if (feasible(s)) options.push({ id: 'reduce_duration', label: `单次降到 ${s.durationMin} 分钟`, slots: s });
+  }
+
+  // ④ 降一档目标量（总量型诉求，强化计划 D 2026-10-02）：此前 ③ 只认 durationMin，
+  // 纯总量诉求（「一共10小时」但窗口只装得下 1.5 小时）在 blocked 态一个编号方案
+  // 都拿不到，而 verdict 文案仍承诺「回①②③」—— 承诺与能力脱节（真机实录）。
+  if (slots.totalHours != null && slots.totalHours > 0 && verdict.candidateCount > 0) {
+    const capacityHours = Math.round(((verdict.candidateCount * (slots.durationMin ?? DEFAULT_BLOCK_MIN)) / 60) * 2) / 2;
+    if (capacityHours > 0 && capacityHours < slots.totalHours) {
+      const s: IntentSlots = { ...slots, totalHours: capacityHours, missing: [] };
+      if (feasible(s)) {
+        options.push({ id: 'reduce_total', label: `降一档目标量：先排这个窗口装得下的约 ${capacityHours} 小时`, slots: s });
+      }
+    }
   }
 
   return options.slice(0, 3);

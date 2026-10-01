@@ -277,6 +277,32 @@ test('D7: proposeReplanOptions —— 每个方案过引擎干跑，只出真排
   }
 });
 
+test('D7+: 纯总量诉求在 blocked 态必须拿得到「降一档目标量」编号方案（强化计划 D）', async () => {
+  // 反向验证：删掉 proposeReplanOptions 的 ④ reduce_total 分支 → 本用例红。
+  // 真机实录：「帮我排个实验报告」→「下周一开始；一共10小时」→ 撞车协商，
+  // 旧实现一个编号方案都产出不了（③ 只认 durationMin），文案却承诺「回①②③」。
+  const { checkGoalFeasibility, proposeReplanOptions } = await import('@/features/libao/weekPlanForChat');
+  type Schedule = import('@/types').Schedule;
+  const SCHEDULE: Schedule = {
+    semesterName: '2026-2027-1', semesterType: 'autumn', termStart: '2026-09-07',
+    totalWeeks: 20, source: 'demo', courses: [],
+  };
+  const slots = {
+    intent: 'create', title: '实验报告', certainty: 'exact' as const, priorityHint: 85,
+    missing: [], unclear: [], raw: '下周一开始；一共10小时',
+    dateFrom: '2026-10-05', dateTo: '2026-10-05', totalHours: 10,
+    when: { text: '下周一开始', kind: 'relative' as const, relativeWeeks: 1, weekday: 1 },
+  } as Parameters<typeof checkGoalFeasibility>[0]['slots'];
+  const verdict = checkGoalFeasibility({ slots, schedule: SCHEDULE, profile: null, today: '2026-10-02' });
+  assert.equal(verdict.kind, 'conflict', '单日 10 小时应当是「量放不下」的 conflict');
+  const options = proposeReplanOptions({ slots, verdict, schedule: SCHEDULE, profile: null, today: '2026-10-02' });
+  const reduce = options.find((o) => o.id === 'reduce_total');
+  assert.ok(reduce, `应产出 reduce_total 方案，实际只有: ${options.map((o) => o.id).join(', ')}`);
+  // 干跑语义自洽：降档后的量必须真的排得上
+  const v = checkGoalFeasibility({ slots: { ...reduce.slots, missing: [] }, schedule: SCHEDULE, profile: null, today: '2026-10-02' });
+  assert.ok(v.kind === 'ok' || v.kind === 'tight', `reduce_total 干跑未通过：${v.kind}`);
+});
+
 /* ---------------- 白天终验修复（2026-09-28） ---------------- */
 
 test('终验修复: WeekPlanView 挂载/重排时同步跨页 undo 深度（↩ 按钮不再恒禁用）', () => {

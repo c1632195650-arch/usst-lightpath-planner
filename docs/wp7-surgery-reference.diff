@@ -1,0 +1,134 @@
+diff --git a/src/features/week/WeekPlanView.tsx b/src/features/week/WeekPlanView.tsx
+index adf7e28..9439a90 100644
+--- a/src/features/week/WeekPlanView.tsx
++++ b/src/features/week/WeekPlanView.tsx
+@@ -68,6 +68,7 @@ import { applyCourseOverrides } from '@/lib/planner/courseOverrides';
+ import { localizedDaysFor, localizedPlan, overrideAffectedDays } from '@/lib/planner/localizedReplan';
+ import { dropTargetMin } from './dragPreview';
+ import { fillGap } from '@/lib/planner/ripple';
++import { SaturationBar, daySaturation } from './SaturationBar';
+ // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
+ import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
+ import { AchievementPanel } from '@/features/activity/GoalEditor';
+@@ -160,11 +161,13 @@ function sameRolling(
+ }
+ 
+ function BlockCard({
+-  block, date, locked, onToggleLock, onExclude,
++  editable = true, block, date, locked, onToggleLock, onExclude,
+   assignmentMin, onSetAssignment, onClearAssignment,
+   edited, onEditBlock, onRevertEdit,
+   dragging, onDragStartCard, onDragEndCard,
+   isNew, onDismissNew,
++  /** WP7-E5：浏览态 false —— 拖拽与 hover 工具全关（纯看，防误拖） */
++  editable?: boolean;
+ }: {
+   block: TimeBlock;
+   /** 这个块所属的 ISO 日期 —— 供无障碍标注（行为记录已下线，2026-09-19） */
+@@ -212,7 +215,7 @@ function BlockCard({
+   const isEvent = Boolean(block.fromEventId);
+   return (
+     <div
+-      draggable={block.kind !== 'course' && block.source !== 'course'}
++      draggable={editable && block.kind !== 'course' && block.source !== 'course'}
+       onDragStart={(e) => {
+         // dataTransfer 里带 id 是给**跨天**用的：目标列靠它知道拖过来的是哪一块
+         e.dataTransfer.setData('text/plain', block.id);
+@@ -451,6 +454,18 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+     setRedoDepth(0);
+   }, []);
+ 
++  /* ── WP7-E5：编辑模式开关（单一状态源）──────────────────
++     * 浏览态：日程 7 天一行铺满视野，工具面板全部隐藏，拖拽关闭（纯看，防误拖）；
++     * 编辑态：网格降回四档自适应，工具面板回来，拖拽可用。
++     * 开关持久化到 localStorage —— 刷新后保持用户上次的习惯。 */
++  const [editMode, setEditMode] = useState<boolean>(() => {
++    try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
++  });
++  const toggleEditMode = () => setEditMode((v) => {
++    try { localStorage.setItem('usst.week.editMode', v ? '0' : '1'); } catch {}
++    return !v;
++  });
++
+   /* ---------- Toast 操作反馈（2026-09-19） ---------- */
+   const [toasts, setToasts] = useState<ToastItem[]>([]);
+   const toastSeq = useRef(0);
+@@ -1520,6 +1535,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+         >
+           重新排一遍
+         </button>
++        <button
++          type="button"
++          onClick={toggleEditMode}
++          aria-pressed={editMode}
++          data-testid="edit-mode-toggle"
++          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
++            editMode
++              ? 'bg-brand text-white ring-brand'
++              : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
++          }`}
++        >
++          {editMode ? '✎ 编辑中' : '✎ 编辑'}
++        </button>
++        {!editMode && (
++          <span className="text-[11.5px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>
++        )}
+         {/* T3：改动不再自动应用 —— 必须**明说**还没生效，否则用户会以为按钮坏了 */}
+         {pendingEdits && (
+           <span className="rounded-md bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900 ring-1 ring-amber-700/20">
+@@ -1543,6 +1574,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+         )}
+       </div>
+ 
++      {editMode && (
++      <>
+       <AddTaskPanel onAdd={handleAddTask} weekNo={weekNo} />
+ 
+       {/* S4：我常去的食堂 —— 引擎不猜（T2），但给用户一个显式设定的地方 */}
+@@ -1589,6 +1622,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+       <AchievementPanel key={activityVersion} weekNo={weekNo} />
+ 
+       <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
++      </>
++      )}
+ 
+       {/* 天气（2026-09-19 改版）：单独的天气栏已移除 ——
+           天气的唯一落点在下面每一天列的标题下方（有数据的日子才显示）。 */}
+@@ -1604,8 +1639,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+         </div>
+       )}
+ 
+-      {/* 七天时间轴 */}
+-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
++      {/* 七天时间轴。WP7-E6：浏览态 7 天同屏一行（窄屏横向滚动），编辑态降密度腾空间 */}
++      <div className={editMode ? '' : 'overflow-x-auto'}>
++      <div className={editMode
++        ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
++        : 'grid grid-cols-7 gap-3 min-w-[1120px]'}>
+         {DAY_LABELS.map((name, idx) => {
+           const day = idx + 1;
+           const baseBlocks = (shownPlan ?? plan).blocks
+@@ -1671,6 +1709,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+                 {study > 0 && (
+                   <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>
+                 )}
++                <SaturationBar sat={daySaturation(baseBlocks, 7 * 60, 23 * 60)} />
+               </div>
+ 
+               {/* 天气 —— 就在星期名称下面（2026-09-19 改版）。
+@@ -1754,6 +1793,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+                     return (
+                       <BlockCard
+                         key={b.id}
++                        editable={editMode}
+                         block={b}
+                         date={dateOfDay(day)}
+                         locked={isLockedThisWeek(planState, weekNo, b)}
+@@ -1778,6 +1818,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
+           );
+         })}
+       </div>
++      </div>
+ 
+       {/* 拖拽删除投放区 —— 只在拖动时浮现（侧边固定，不随页面滚动）。
+           松手 = 删除（与块上「🗑 删除」同通道，可「全部恢复」撤销）。 */}
