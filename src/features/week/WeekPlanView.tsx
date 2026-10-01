@@ -1278,6 +1278,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // R3：喂的是**派生后的课表**（已应用调课/停课），原始 `schedule` 不受影响
             schedule: effectiveSchedule, weekNo, policy: phase.policy,
             scenarios: persona?.scenarios ?? null,
+            // 批 4.3（1A-③）：完整画像进引擎 —— socialCap 与画像块级偏好的入口
+            persona,
             tasks,
           }),
           // 锁的两半都要传：
