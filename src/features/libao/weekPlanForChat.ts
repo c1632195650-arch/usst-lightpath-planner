@@ -233,6 +233,20 @@ export function goalToTasks(
     nBlocks = 1;
   }
 
+  // 批 2（6C）：有截止目标的后程加长 —— 均匀取样下按窗口三分位给块长阶梯
+  // （60/90/120）：距截止越近块越长，呈现「冲刺」形态（探针实录：30h 备考
+  // 十周的均匀摊平和三天冲刺一个样，不像备考）。只在「给了总量 + 有截止 +
+  // 没显式给单次时长 + 块数 ≥3」时启用 —— 习惯目标和用户 explicit 的块长不动。
+  const pacingOn = slots.totalHours != null && slots.totalHours > 0
+    && slots.dateTo != null && slots.durationMin == null && nBlocks >= 3;
+  const blockLenFor = (dayIdx: number): number => {
+    if (!pacingOn) return blockMin;
+    const third = days.length / 3;
+    if (dayIdx < third) return 60;
+    if (dayIdx < third * 2) return 90;
+    return 120;
+  };
+
   // ④ 窗口内均匀取样 + 同一天去重（与 `expandDeadlines` 逐行同构）
   const picked = new Set<number>();
   for (let i = 0; i < nBlocks; i++) {
@@ -259,7 +273,7 @@ export function goalToTasks(
       // ⚠️ 刻意**不给 `startMin`**：给了就成了 hard 锁定的固定块，引擎再也动不了它，
       //    而用户说的是「安排一下」，不是「钉死在这一刻」。时段偏好靠 `notBeforeMin` 表达。
       weeks: [wk],
-      durationMin: blockMin,
+      durationMin: blockLenFor(idx),
       ...(slots.place ? { place: slots.place } : {}),
       priority: slots.priorityHint,
       ...(slots.essential ? { essential: true } : {}),
@@ -268,7 +282,9 @@ export function goalToTasks(
       ...(slots.window ? { notAfterMin: slots.window.toMin } : {}),
       // D4：用户点名块豁免活动预算与每日上限 —— 「出去玩 1 小时」不再被静默挤掉
       budgetExempt: true,
-      note: noteForGoal(slots),
+      note: pacingOn
+        ? `${noteForGoal(slots)}｜临近截止的块已按 60/90/120 分钟阶梯加长`
+        : noteForGoal(slots),
     });
   }
   return out;
