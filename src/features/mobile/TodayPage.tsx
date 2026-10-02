@@ -33,6 +33,7 @@ import EditSheet, { type EditAction } from './EditSheet.tsx';
 import TomorrowPreview from './TomorrowPreview.tsx';
 import WeekGlance from './WeekGlance.tsx';
 import IcsGuide from './IcsGuide.tsx';
+import WhitelistGuide from './WhitelistGuide.tsx';
 
 /** 本 APP 的版本（F18 semver 比较；APK 打包时与服务端 version.json 对齐） */
 const APP_VERSION = '0.1.0';
@@ -402,10 +403,11 @@ export default function TodayPage({ identity, onLogout }: {
               ))}
             </section>
 
-            {/* F7 / F10 / F6 */}
+            {/* F7 / F10 / F6 / F17 */}
             <TomorrowPreview blocks={tomorrow.blocks} tomorrowDow={tomorrowDow} loading={tomorrow.loading} />
             <WeekGlance plan={plan} layer={layer} weekNo={weekNo ?? 0} todayDow={dow} />
             <IcsGuide icsToken={identity.icsToken} />
+            <WhitelistGuide />
           </>
         )}
       </main>

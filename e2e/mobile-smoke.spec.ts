@@ -121,6 +121,12 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   await expect(page.getByTestId('m-ics-url')).toHaveValue(/\/api\/sync\/plan\.ics\?token=ics-e2e-token/);
   await expect(page.getByTestId('m-ics-copy')).toBeVisible();
 
+  // F17 白名单引导：展开 → 三家机型路径渲染
+  await page.getByTestId('m-whitelist-toggle').click();
+  await expect(page.getByTestId('m-whitelist-guide')).toContainText('华为 / 鸿蒙');
+  await expect(page.getByTestId('m-whitelist-guide')).toContainText('小米 / Redmi');
+  await expect(page.getByTestId('m-whitelist-guide')).toContainText('重启后提醒排程会清空');
+
   // F4 顺延 +15：写覆盖层（唯一写法）→ debounce 上报
   await firstBlock.click();
   await expect(page.getByTestId('m-edit-sheet')).toBeVisible();

@@ -1,0 +1,6 @@
+{
+  "name": "lightpath-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "光溯 APK 壳工程（Capacitor；依赖复用仓库根 node_modules，构建待白天装 JDK/SDK）"
+}

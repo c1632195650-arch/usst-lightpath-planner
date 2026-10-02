@@ -38,6 +38,58 @@ function notifId(blockId: string, dateKey: string, offset: number): number {
   return stableHash(`${blockId}@${dateKey}#${offset}`) % 100_000_000;
 }
 
+/** 一条待排通知的纯描述（与 Capacitor 插件解耦，可在 Node 单测） */
+export interface NotifSpec {
+  id: number;
+  /** 触发时刻：当日分钟偏移（调用方换算成 Date） */
+  atMin: number;
+  title: string;
+  body: string;
+  actionTypeId: 'block-actions';
+  extra: { blockId: string; action: 'before' | 'start' };
+}
+
+/**
+ * 「今天剩余块 → 通知清单」的**纯调度决策**（方案 §8.2）：
+ *   · 每个未结束块两条：开始前 10 分钟（nowMin 之后才排）+ 开始时刻；
+ *   · 已开始的块只排「现在开始」一条（下一分钟触发）；
+ *   · id 确定性 = stableHash(blockId@dateKey#offset) —— 覆盖式重排靠它幂等替换。
+ * done 过滤由调用方完成（传入的 blocks 应已是「剩余块」）。
+ */
+export function planTodayNotifications(
+  blocks: readonly TimeBlock[],
+  nowMin: number,
+  dateKey: string,
+): NotifSpec[] {
+  const out: NotifSpec[] = [];
+  for (const b of blocks) {
+    if (b.endMin <= nowMin) continue; // 已结束：不排
+    const title = `${b.emoji ?? ''}${b.title}`;
+    const body = b.place ? `${title} · ${b.place}` : title;
+    if (b.startMin - 10 > nowMin) {
+      out.push({
+        id: notifId(b.id, dateKey, 0),
+        atMin: b.startMin - 10,
+        title: `即将开始：${fmtMin(b.startMin)} ${title}`,
+        body,
+        actionTypeId: 'block-actions',
+        extra: { blockId: b.id, action: 'before' },
+      });
+    }
+    if (b.startMin > nowMin || nowMin < b.endMin) {
+      out.push({
+        id: notifId(b.id, dateKey, 1),
+        atMin: Math.max(b.startMin, nowMin + 1),
+        title: `现在开始：${title} · 至 ${fmtMin(b.endMin)}`,
+        body,
+        actionTypeId: 'block-actions',
+        extra: { blockId: b.id, action: 'start' },
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * 全量重排「今天剩余块」的通知（覆盖式，幂等）。
  * blocks 应为**已套覆盖层**的当日块列表；nowMin 之前的块不再排。
@@ -73,38 +125,20 @@ export async function rescheduleToday(blocks: readonly TimeBlock[], nowMin: numb
     const now = new Date();
     const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     const upcoming = blocks.filter((b) => b.endMin > nowMin);
-    const pending = upcoming.flatMap((b) => {
-      const at = (min: number) => {
-        const d = new Date(now);
-        d.setHours(0, 0, 0, 0);
-        d.setMinutes(min);
-        return d;
-      };
-      const title = `${b.emoji ?? ''}${b.title}`;
-      const place = b.place ? ` · ${b.place}` : '';
-      const schedule: Parameters<typeof LocalNotifications.schedule>[0]['notifications'] = [];
-      if (b.startMin - 10 > nowMin) {
-        schedule.push({
-          id: notifId(b.id, dateKey, 0),
-          title: `即将开始：${fmtMin(b.startMin)} ${title}`,
-          body: `${title}${place}`,
-          schedule: { at: at(b.startMin - 10), allowWhileIdle: true },
-          actionTypeId: 'block-actions',
-          extra: { blockId: b.id, action: 'before' },
-        });
-      }
-      if (b.startMin > nowMin || nowMin < b.endMin) {
-        schedule.push({
-          id: notifId(b.id, dateKey, 1),
-          title: `现在开始：${title} · 至 ${fmtMin(b.endMin)}`,
-          body: `${title}${place}`,
-          schedule: { at: at(Math.max(b.startMin, nowMin + 1)), allowWhileIdle: true },
-          actionTypeId: 'block-actions',
-          extra: { blockId: b.id, action: 'start' },
-        });
-      }
-      return schedule;
-    });
+    const pending: Parameters<typeof LocalNotifications.schedule>[0]['notifications'] = [];
+    for (const spec of planTodayNotifications(upcoming, nowMin, dateKey)) {
+      const at = new Date(now);
+      at.setHours(0, 0, 0, 0);
+      at.setMinutes(spec.atMin);
+      pending.push({
+        id: spec.id,
+        title: spec.title,
+        body: spec.body,
+        schedule: { at, allowWhileIdle: true },
+        actionTypeId: spec.actionTypeId,
+        extra: spec.extra,
+      });
+    }
 
     // 覆盖式：先清今天的全部再排（cancel 旧 id；未知的旧 id 由 getPending 过滤）
     const old = await LocalNotifications.getPending();

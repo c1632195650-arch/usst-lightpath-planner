@@ -87,3 +87,10 @@ playwright-report/
 data/libao_account.db
 data/libao_account.db-wal
 data/libao_account.db-shm
+
+# 光溯 APK：签名库与本地配置绝不进仓（方案 §8.4 / §11）
+mobile/signing/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/*.iml
+mobile/android/capacitor-cordova-android-plugins/
