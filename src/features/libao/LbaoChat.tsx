@@ -7,7 +7,7 @@ import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objecti
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, crossIntentEscape, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -1682,13 +1682,43 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       .slice(-4)
       .map((m) => `${m.role === 'user' ? '用户' : '梨宝'}: ${m.text.slice(0, 80)}`);
 
-    // ── S2 · 状态机出口①：collect 态显式退出（最高优先，确定性，不耗 LLM）────
+    // ── S2 · 状态机出口①：排程态显式退出（最高优先，确定性，不耗 LLM）────
     // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
-    if (schedMode === 'collect' && isExitCommand(q)) {
+    // P0-2（白天批）：出口扩到全部排程相位（draft/blocked 也该能说「算了」）。
+    if (schedMode !== 'idle' && isExitCommand(q)) {
       setTopic(null);
       setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
       setLoading(false);
       return;
+    }
+
+    // ── P0-2 · 追问态跨意图逃逸（确定性，不耗 LLM）─────────────────────
+    // 前追问未结时的新意图不得被当续答吞掉（走查实录：reschedule 的「挪哪件事」
+    // 追问中用户说了件新事，被 applyClarifyAnswer 硬吃）。判据在纯函数
+    // crossIntentEscape（意图族跨族 + 名字/疑问信号守卫，单测 ≥3 条）。
+    if (activeMode === 'sched' && (topic?.phase === 'collect' || topic?.phase === 'picking')) {
+      const escape = crossIntentEscape(q, topic.intent, today, whenOpts);
+      if (escape) {
+        setTopic(null); // 旧议题放弃；按新意图重开
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '好，刚才那件先放下 —— 按新说的办。',
+        }]);
+        const fresh = { ...escape.fresh, missing: missingSlots(escape.fresh) };
+        if (fresh.missing.length === 0) {
+          await runGoalSlots(fresh, today);
+          return;
+        }
+        const pairs = topQuestionPairs(fresh);
+        setTopic(collectTopic(fresh, pairs.map((p) => p.slot)));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '还差一点：',
+          planPoints: numberedQuestions(questionsForSlots(fresh, pairs.map((p) => p.slot))),
+        }]);
+        setLoading(false);
+        return;
+      }
     }
 
     // ── 强化计划 D · blocked 态编号回答兜底（确定性，不耗 LLM）─────────────

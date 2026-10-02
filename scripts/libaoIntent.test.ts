@@ -32,6 +32,7 @@ import {
   parseOptionChoice,
   looksLikeAction,
   mergeLlmPrimary,
+  crossIntentEscape,
   mergeSlots,
   missingSlots,
   parseGoalIntent,
@@ -876,4 +877,42 @@ test('P0-1 周锚保留守卫：LLM 相对猜测不得覆盖规则层的 weekNo 
     when: { text: '11月6日', kind: 'exact', month: 11, day: 6 },
   } as never, '2026-10-02', opts);
   assert.equal(mergedC.dateFrom, '2026-11-06', 'month/day 日历日期应覆盖周锚（更具体者赢）');
+});
+
+test('P0-2 跨意图逃逸：reschedule 追问中插 create/goal → 逃逸（走查场景）', () => {
+  // 反向验证锚：send 层删掉 crossIntentEscape 调用 → 该场景被 applyClarifyAnswer 硬吃。
+  const r = crossIntentEscape(
+    '帮我排个实验报告',
+    'reschedule',
+    '2026-10-02',
+  );
+  assert.ok(r, 'mutate 追问中来了带名字的新目标 → 应逃逸');
+  assert.equal(r.reason, 'mutate→new');
+  assert.equal(r.fresh.title, '实验报告');
+  assert.equal(r.fresh.intent, 'create');
+});
+
+test('P0-2 跨意图逃逸：create 追问中插 query（带疑问信号）→ 逃逸', () => {
+  const r = crossIntentEscape('四六级什么时候报名？', 'create', '2026-10-02');
+  assert.ok(r, 'create 追问中插问句 → 应逃逸');
+  assert.equal(r.reason, 'new→query');
+  // fresh.intent 保持 detectIntent 的原始判定（可能是 create 误判）——逃逸后 topic 已清，
+  // 下游 RAG/对话层按问句处理；本函数只负责『不要把问句当续答硬吃』。
+  // 疑问信号守卫：反问式回答（无疑问词）不逃逸 —— 不硬吃也不误逃
+  assert.equal(crossIntentEscape('下周一', 'create', '2026-10-02'), null, '正常续答不逃逸');
+});
+
+test('P0-2 跨意图逃逸：create 追问中插「顺便把X取消」→ 逃逸；同族不逃逸', () => {
+  const r = crossIntentEscape('顺便把操场跑步取消', 'create', '2026-10-02');
+  assert.ok(r, 'new 追问中插 mutate 且点名对象 → 应逃逸');
+  assert.equal(r.reason, 'new→mutate');
+  assert.equal(r.fresh.intent, 'cancel');
+  // 同族：create 追问中又来一件新事 = 换目标（保留式追问的既有语义）→ 不逃逸
+  assert.equal(
+    crossIntentEscape('帮我排个实验报告', 'create', '2026-10-02')?.reason ?? null,
+    null,
+    'new→new 同族不逃逸（换目标走既有换向守卫）',
+  );
+  // mutate→mutate 同族不逃逸
+  assert.equal(crossIntentEscape('把图书馆自习取消', 'reschedule', '2026-10-02'), null, 'mutate→mutate 同族不逃逸');
 });

@@ -2019,3 +2019,60 @@ export function parseOptionChoice(q: string, optionCount: number): number | null
   if (!Number.isFinite(n) || n < 1 || n > optionCount) return null;
   return n;
 }
+
+/**
+ * P0-2（白天批 2026-10-02）· 追问态跨意图逃逸判据（纯函数，可单测）。
+ *
+ * 走查实录：reschedule 的「挪哪件事」追问未结时，用户说了件新事
+ * （create/goal），被 applyClarifyAnswer 当续答**硬吃** —— 与 D 批
+ * 「答非所问不硬吃」的设计语义不符。本函数给出确定性的逃逸判定，
+ * send 层据此放弃旧议题、按新意图走。
+ *
+ * 意图族三分：new（create/add_deadline，开新话题）/ query（问问题）/
+ * mutate（cancel/reschedule/replace/hold，动既有安排）。**跨族**才逃逸：
+ *   · mutate 追问中来了带名字的新目标 → 逃逸（走查场景）；
+ *   · new 追问中来了 query（带疑问信号）→ 逃逸（用户中途插问）；
+ *   · new 追问中来了 mutate 且 targetHint 可解析 → 逃逸（「顺便把X取消」）；
+ *   · 同族 / 无名字的新目标（泛泛「安排一下」）/ 不成句 → 不逃逸（续答）。
+ *
+ * @returns null = 不逃逸；非 null = 逃逸，并携带**本句的全新槽位**（调用方据此重开议题）。
+ */
+export function crossIntentEscape(
+  q: string,
+  oldIntent: IntentSlots['intent'] | undefined,
+  today?: string,
+  whenOpts?: ResolveTermOpts,
+): { reason: string; fresh: IntentSlots } | null {
+  const fresh = parseIntentSlots(q, today, whenOpts);
+  const familyOf = (i: IntentSlots['intent'] | undefined): 'new' | 'query' | 'mutate' | 'none' => {
+    if (i === 'create' || i === 'add_deadline') return 'new';
+    if (i === 'query') return 'query';
+    if (i === 'cancel' || i === 'reschedule' || i === 'replace' || i === 'hold') return 'mutate';
+    return 'none';
+  };
+  const oldFam = familyOf(oldIntent);
+  const newFam = familyOf(fresh.intent);
+
+  // 问句判据（独立于 detectIntent —— 它会把「四六级什么时候报名」误判成 create，
+  // 因为『报名』命中目标名词；这里不改全局检测（golden 风险），只在本判据内识别）：
+  //   · 显式问号，或疑问词 + 足够长度（>8 字）；
+  //   · 反回声守卫：以数量词/『大概』开头的短句是**填槽答案**（「大概什么时候开始」），不算插问。
+  const queryLike = /[?？]/.test(q)
+    || (/什么时候|怎么办|在哪|多少钱|怎么报名|要不要/.test(q) && q.trim().length > 8
+        && !/^[0-9一二两三四五六七八九十]+|^大概|^就|^要/.test(q.trim()));
+
+  if (oldFam !== 'none' && oldFam !== 'query' && queryLike) {
+    return { reason: 'new→query', fresh };
+  }
+  if (oldFam === 'none' || newFam === 'none' || (newFam === oldFam && !queryLike)) return null;
+
+  // mutate → 带名字的新目标（走查场景：reschedule 追问中插 create/goal）
+  if (oldFam === 'mutate' && newFam === 'new' && fresh.title) {
+    return { reason: 'mutate→new', fresh };
+  }
+  // new → mutate 且点名了既有事项（「顺便把X取消」）
+  if (oldFam === 'new' && newFam === 'mutate' && fresh.targetHint) {
+    return { reason: 'new→mutate', fresh };
+  }
+  return null;
+}
