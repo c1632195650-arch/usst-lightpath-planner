@@ -3,7 +3,8 @@ import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
-import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
+import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objectiveKeyToField } from '@/lib/identity';
+import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
 import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
@@ -50,6 +51,7 @@ import {
   describeVerdict,
   quickOptionsFor,
   replanOptionButtons,
+  categoryMinutesOfWeek,
   findCancelTargets,
   findMoveTargets,
   goalToTasks,
@@ -1202,12 +1204,19 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           weeks,
         } }));
         markDraft(key, slots); // D3：草稿卡挂 topic{draft}
+        // 批次 3（6.3）：带依据的推荐 —— 类目命中有权威口径时补一行（≤1 行），
+        // 个性化输入 = 本周已排量（previewPlan 统计）+ 用户自报运动频率。
+        const cat = classifyGoal(slots.title);
+        const evidence = evidenceLine(cat, {
+          ...(previewPlan ? { weekMinutes: categoryMinutesOfWeek(previewPlan, cat) } : {}),
+          ...(loadBasicInfo().exercisePerWeek != null ? { exercisePerWeek: loadBasicInfo().exercisePerWeek } : {}),
+        });
         setMessages((current) => [...current, {
           role: 'lbao',
           text: verdict.kind === 'ok'
             ? `「${slots.title}」我排了一版草稿（还没写进日程）：`
             : `「${slots.title}」排得下，但会紧一点。草稿在这（还没写进日程）：`,
-          planPoints: lines,
+          planPoints: [...lines, ...(evidence ? [evidence] : [])],
           goalAsk: key,
           goWeek: true,
         }]);
@@ -1237,7 +1246,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           : `「${slots.title}」我排不进去：`,
         planPoints: [
           ...lines,
-          ...(options.length > 0 ? [`给你 ${options.length} 条**真排得上**的路（点选或回编号都行）：`] : []),
+          ...(options.length >= 3 ? [`给你 ${options.length} 条**真排得上**的路（点选或回编号都行）：`]
+            : options.length > 0 ? [`可选的路有限（${options.length} 条，都是干跑过的）：`]
+              : []),
         ],
         ...(options.length > 0 ? { options: replanOptionButtons(options) } : {}),
         goWeek: true,
@@ -1392,7 +1403,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '记下了 —— 还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
-          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today }),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;
@@ -1404,7 +1415,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: '好，那我还得问一句：',
         planPoints: numberedQuestions(questionsForSlots(slots, [slot])),
-        options: quickOptionsFor(slot, slots, { today: ctx.today }),
+        options: quickOptionsFor(slot, slots, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
       }]);
       setLoading(false);
     },
@@ -1517,7 +1528,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
-          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today }),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;
@@ -1752,7 +1763,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             role: 'lbao',
             text: '还差一点：',
             planPoints: numberedQuestions(questionsForSlots(merged.slots, nextAsked)),
-            options: quickOptionsFor(nextAsked[0], merged.slots, { today }),
+            options: quickOptionsFor(nextAsked[0], merged.slots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
           }]);
           setLoading(false);
           return;
@@ -1788,7 +1799,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: HOLD_ON_PREFIX,
           planPoints: numberedQuestions(questionsForSlots(clarify.slots, clarify.asked)),
-          options: quickOptionsFor(clarify.asked[0], clarify.slots, { today }),
+          options: quickOptionsFor(clarify.asked[0], clarify.slots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;

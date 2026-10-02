@@ -42,6 +42,7 @@ import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
 import { isSingleDayEvent, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
+import { classifyGoal, evidenceLine, type GoalCategory } from './taxonomy';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
 function calendarOf(schedule: Schedule) {
@@ -755,6 +756,20 @@ export function describeVerdict(v: GoalVerdict): string[] {
   return out;
 }
 
+/**
+ * 批次 3（交互升级方案 6.2）· 本周类目分钟统计。
+ * 照 `summarizeWeekPlan` 的读侧范式：不改锁死的 types.ts、不给 TimeBlock 加字段
+ * —— 分类只是读侧视图（kind + title 关键词 → taxonomy）。
+ */
+export function categoryMinutesOfWeek(plan: WeekPlan, cat: GoalCategory): number {
+  let total = 0;
+  for (const b of plan.blocks) {
+    if (b.kind !== 'activity' && b.kind !== 'study') continue;
+    if (classifyGoal(b.title) === cat) total += b.endMin - b.startMin;
+  }
+  return total;
+}
+
 /* ============================================================
  * 批次 2（交互升级方案 5.1-5.3）· 快捷选项（能按钮不打字）
  * ============================================================
@@ -781,7 +796,7 @@ export interface QuickOption {
 export function quickOptionsFor(
   slot: SlotKey | 'place',
   slots: IntentSlots,
-  opts?: { today?: string },
+  opts?: { today?: string; plan?: WeekPlan | null; exercisePerWeek?: number },
 ): QuickOption[] {
   switch (slot) {
     case 'when': {
@@ -798,19 +813,36 @@ export function quickOptionsFor(
       return out;
     }
     case 'effort': {
+      // 批次 3（6.3/6.4）：按钮卡次行小字 = 时长概念锚（tips 轮换）；
+      // 推荐档（第二项）的次行给**带来源的依据行**（健康库/方法库 + 本周已排量）。
+      const cat = classifyGoal(slots.title);
+      const tips = cat === 'generic' ? TAXONOMY_TIPS_FALLBACK : null;
+      const catTips = tips ?? TAXONOMY_TIPS(cat);
+      const evidence = evidenceLine(cat, {
+        ...(opts?.plan ? { weekMinutes: categoryMinutesOfWeek(opts.plan, cat) } : {}),
+        ...(opts?.exercisePerWeek != null ? { exercisePerWeek: opts.exercisePerWeek } : {}),
+      });
       if (isSingleDayEvent(slots)) {
-        return [
+        const items = [
           { label: '45 分钟', value: '45分钟' },
           { label: '60 分钟', value: '60分钟' },
           { label: '90 分钟', value: '90分钟' },
           { label: '2 小时', value: '2小时' },
         ];
+        return items.map((it, i) => ({
+          ...it,
+          hint: i === 1 && evidence ? evidence : catTips[i % catTips.length],
+        }));
       }
-      return [
+      const items = [
         { label: '每周 1-2 次', value: '每周2次' },
         { label: '每周 3-4 次', value: '每周4次' },
         { label: '每天 30 分钟', value: '每天都来，每次30分钟' },
       ];
+      return items.map((it, i) => ({
+        ...it,
+        hint: i === 0 && evidence ? evidence : catTips[i % catTips.length],
+      }));
     }
     case 'place':
       return [
@@ -823,6 +855,10 @@ export function quickOptionsFor(
       return [];
   }
 }
+
+import { TAXONOMY } from './taxonomy';
+const TAXONOMY_TIPS = (cat: GoalCategory): string[] => TAXONOMY[cat].tips;
+const TAXONOMY_TIPS_FALLBACK: string[] = ['说个大概时长就行，我按你的日历找空档'];
 
 /** blocked 编号方案 → 按钮卡。value 用「方案N」—— parseOptionChoice 确定性接住，
  *  不经 LLM（强化计划 D 的兜底通道原样复用）。 */
@@ -911,7 +947,51 @@ export function proposeReplanOptions(args: {
     }
   }
 
-  return options.slice(0, 3);
+  // ⑤ 换空档（批次 3 · 6.5）：从明天起扫 14 天，把窗口收成单日干跑 ——
+  // 真排得上的前 2 天各出一条，label 直接用干跑落点（改到周X HH:MM–HH:MM）。
+  // **每个候选都过干跑闸**：排不上的日子一个都不许出现（不编「排好了」）。
+  if (slots.dateFrom) {
+    const moveOptions: ReplanOption[] = [];
+    for (let off = 1; off <= 14 && moveOptions.length < 2; off++) {
+      const day = addDays(slots.dateFrom, off);
+      // 「换个日子」= 放开星期钉（when.weekday/recurring），时段窗/钟点照旧收窄 ——
+      // 否则候选日永远撞同一根钉（探针实录：周一晚上被占，扫 14 天全是周一）。
+      const s: IntentSlots = { ...slots, when: undefined, dateFrom: day, dateTo: day, missing: [] };
+      if (!feasible(s)) continue;
+      const v = checkGoalFeasibility({
+        slots: { ...s, missing: [] }, schedule, profile, today,
+        ...(tasks?.length ? { tasks } : {}),
+      });
+      const at = v.placedAt[0] ?? '';
+      const dowCn = WEEKDAY_CN[isoToDayOfWeek(day) % 7];
+      moveOptions.push({
+        id: `move_to:${day}`,
+        label: `改到${dowCn}${at ? ` ${at.split(' ').slice(1).join(' ')}` : ''}`.trim(),
+        slots: s,
+      });
+    }
+    options.push(...moveOptions);
+  }
+
+  // ⑥ 拆分（批次 3 · 6.5）：单次减半 + 频率翻倍（纯总量诉求则只减单次 ——
+  // goalToTasks 会按更短的块长摊出更多块）。单次 <60 分钟没有拆的意义；
+  // 单日事件没法「分两天」；循环约定（每周一）随翻倍放开星期钉。
+  if (slots.durationMin != null && slots.durationMin >= 60 && !isSingleDayEvent(slots)) {
+    const half = Math.max(30, Math.floor(slots.durationMin / 2));
+    const s: IntentSlots = {
+      ...slots,
+      durationMin: half,
+      ...(slots.perWeekCount != null ? { perWeekCount: Math.min(14, slots.perWeekCount * 2) } : {}),
+      ...(slots.when?.recurring ? { when: undefined } : {}),
+      missing: [],
+    };
+    if (feasible(s)) {
+      const per = slots.perWeekCount != null ? `× 每次 ${half} 分钟` : '';
+      options.push({ id: 'split', label: `拆成两天排${per}`, slots: s });
+    }
+  }
+
+  return options.slice(0, 4);
 }
 
 /* ============================================================
