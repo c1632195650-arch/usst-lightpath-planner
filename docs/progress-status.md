@@ -1,6 +1,6 @@
 # 项目进度对齐 · 上理生活助手 USST（光溯 · 梨宝）
 
-> 更新：2026-10-01（G 批「重构至完成」收口后重写；此前 2026-09-15 版本中 PR 合入 / lbaoRecommend 等口径已作废）
+> 更新：2026-10-02（三线融合 + 夜间 delta 验收后补记；G 批「重构至完成」口径继续有效）
 > 本文只讲「**现在做到哪了**」。定位以 `docs/project-core.md` 为准；上手与纪律见 `teammate-onboarding.md` 与 `AGENTS.md`。
 >
 > 🔄 **架构变更注记 · 2026-09-30（Ray 线，三线融合已采纳其 App 壳）**：「生活模式 / lifeMode」的旧 UI 双轨已移除，总览页删去 `MonthCalendar` / `TodayCard` / `WeekStrip`；**周计划页现为 `features/week/WeekPlanPage.tsx`（计划时间轴）+ `WeekPlanView.tsx` + `WeekView.tsx`（课表网格）**。注意：`lifeMode` 的**引擎参数化通道**（`lib/planner/lifeModePolicy.ts`，WP5）按融合裁决①保留。
@@ -10,8 +10,9 @@
 
 ## 0. 一句话现状
 
-> **前端（光溯）+ 后端（梨宝 · RAG 问答 + 分层记忆 + 对话管理器）+ 排程真引擎 + 数据资产全部就绪；梨宝线重构已完成**（旧规则模板 `lbaoRecommend` 已删，对话/排程收敛到真引擎一条链路，S/T/D 批追问链路整改 + 对话管理器 + 终验全绿，E 批知识/空间/画像接线 + G 批三开关全开）。
-> 剩下的是：**beta-v2 → dev 人工合并评审**（unrelated histories，见 BLOCKERS）、四处 PARTIALS 契约扩展（需双方确认）、决赛材料（PPT / 申报书 / 演示视频）。
+> **前端（光溯）+ 后端（梨宝 · RAG 问答 + 分层记忆 + 对话管理器）+ 排程真引擎 + 数据资产全部就绪；三线融合完成**（beta-v2 × Ray feat/ux-round4 按《三线融合任务书》裁决表合入 `integration-full`，含 Ray 的账号/持久化、课表 PDF 解析进仓库、长目标体系、总览重构）**；夜间批梨宝排程强化 A-E + 协商链路 + ask_slot 五次 delta 全部并入**。
+> 验收（2026-10-02）：门禁五门全绿（tsc 0 / engine 592 / ui 319 / 禁区 / 风格 8/8）+ test:libao 40/45（内容 45/45）+ 真机走查 5 场景（流程全通；遗留缺口见 §2 快照与台账 §H）。
+> 剩下的是：**白天批次**（previousCommits 语义 / sleepMin 进引擎 / 4B 视图切换 / 8A 首启导入步 / 页面按钮 / 6A 日期解析修复——RAY 已退出协作，跨人契约约束解除，由 CY 侧推进）、beta-v2 → dev 人工合并评审（BLOCKERS）、决赛材料。
 
 ---
 
@@ -26,10 +27,14 @@
 
 ---
 
-## 2. 当前进度快照（2026-10-01）
+## 2. 当前进度快照（2026-10-02）
 
 | 模块 | 状态 | 一句话说明 |
 |---|---|---|
+| 三线融合 | ✅ 完成 | `integration-full` = beta-v2 × Ray（账号/SQLite 持久化、`server/timetable_parser` 课表 PDF 进仓库、长目标体系、总览重构、周计划交互包）；裁决与冲突实录见 `docs/wp-ledger-v2.md` §H |
+| 夜间批（梨宝强化） | ✅ 并入 | A-E 五修（预览读落盘层/裸时长归单次/确认收口/协商编号/提示按相位）+ 协商链路补强 + collect 续答双层并入 + mergeLlmPrimary 防护 + ask_slot 先并答案 |
+| 验收（10-02） | ✅ 全绿带缺口 | 门禁 tsc 0 / engine 592 / ui 319 / 禁区 / 风格 8/8；test:libao 40/45（内容 45/45）；走查 5 场景流程全通 |
+| 遗留缺口（白天批） | 🟡 进行中 | 「第10周」周次解析错（6A-①）｜天级重排（5A）｜学期语义（6C/6B）｜周计划切周按钮（2A）｜画像解释面板（7A）｜追问态跨意图吞消息｜previousCommits 语义｜sleepMin 进引擎｜4B 视图切换｜8A 首启导入步 |
 | 前端壳（三 Tab） | ✅ 跑通 | 顶栏「总览 / 梨宝 / 我的画像 / 课表」，卡通风 |
 | 画像问卷 | ✅ 跑通 | 8–10 题（含 WP2 年级分层 + 上理场景化、WP1 基础信息前置），非 MBTI |
 | 排程真引擎 | ✅ 跑通 | `buildWeekPlan`（`src/lib/planner/`）：两遍法 + 增量滚动 / 锁定 / 涟漪预览 / 跨校区转场 buffer；**`lbaoRecommend` 规则模板已于 2026-09-19 删除** |
