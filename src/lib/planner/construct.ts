@@ -481,6 +481,27 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     // 逐块累积：引擎每放一个块，都要考虑「从上个块走过来要多久」
     let placed: TimeBlock[] = [...courseBlocks, ...userBlocks, ...commitFixedBlocks];
 
+    /* --- 6.2c 用户点名软块预放（budgetExempt；2026-10-02 白天批） ---
+     * 为什么在三餐**之前**：餐段会紧跟 25 分钟「饭后消食」占住饭后第一段时间
+     * （裁决①保留的 digest）。用户点名块（goalToTasks 全部 budgetExempt）若晚于
+     * 餐段才尝试，晚上 300 分钟的值班/打球会被 30 分钟消食挤得放不下而**静默
+     * 丢弃**（taxonomy 扩容测试在融合线上实录）。beta-v2 线的段落顺序天然是
+     * 「用户候选先于三餐」，本预放在融合线上补齐同一语义：
+     * golden 语料不带用户任务 → 预放空转，golden 零漂移。 */
+    const preCustom = floatingTasks
+      .filter(taskActive)
+      .filter((t) => t.budgetExempt && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .sort((a, b) => (b.priority ?? 90) - (a.priority ?? 90));
+    for (const t of preCustom) {
+      const block = placeTemplate({
+        tpl: customTemplate(t), day, placed, dayCampus, mkId, policy, transfer,
+        dayStartMin: softFloorMin, dayEndMin,
+        homeBaseName: req.homeBase?.name,
+        recoveryUntil: 0,
+      });
+      if (block) placed = [...placed, block];
+    }
+
     /* --- 6.3 三餐（按地点就近 + 营业时段 + 走路时间） --- */
     let digestMin = 0;
     if (withMeals) {
