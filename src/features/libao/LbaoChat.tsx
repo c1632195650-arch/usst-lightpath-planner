@@ -1184,6 +1184,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: `想把「${slots.title}」排进日程，我还得问${pairs.length > 1 ? '两' : ''}句：`,
           planPoints: numberedQuestions(pairs),
+          // 2026-10-02 终验修复（交互升级方案批次2 漏接最主路径）：这是**新鲜意图**的
+          // 首问（needs_clarification），批次2 的快捷项按钮卡只接在续答路径
+          // （ask_slot/new_intent/clarify），首问反而不出按钮 —— 真机实证：
+          // 「帮我规划一下我明天要打篮球」首问只有文字，第二轮才冒出 45/60/90/2h。
+          // 与其余五个挂载点（1406/1418/1531/1769/1805）同一口径补齐。
+          options: pairs.length > 0
+            ? quickOptionsFor(pairs[0].slot, slots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek })
+            : undefined,
         }]);
         setLoading(false);
         return;

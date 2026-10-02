@@ -404,3 +404,51 @@
 - **E2E（G1+G2 后）**：隔离 vite 5178 离线跑 `scripts/e2e-sched-session.mjs` **77 过 / 0 挂**（含 E 批新增 O/P/Q），跑完实例已清、端口核释放。
 - **DIALOG_ENABLED 零影响**：三个 planner 开关文件与 LbaoChat 无 import 关系（复核维持 E 批结论）。
 - 未做（转人工/BLOCKERS）：四处 PARTIALS 契约扩展（需双方确认）、beta-v2→dev 合并（unrelated histories，BLOCKERS 新增条）、push 远程。
+
+## §H 梨宝排程交互智能化优化方案 · 批次0-3 终验（2026-10-02 白天，MOSS 独立复核；工作单 docs/libao-sched-interaction-upgrade-plan-2026-10-02.md）
+
+- 状态：[x] 终验通过（7 条真机剧本 + 五门禁 + E2E 全绿），含**2 处终验修复**落盘。
+- 交付链（zcode）：批次0 回归锚 `50ca123` → 批次1 钟点通道+时长推导+频率互斥 `e4705be` → 批次2 按钮卡+反馈精简 `d20ccb1` → 批次3 类目推荐+协商扩容 `1d1982f` → 结项留痕 `a202d50`。
+- 终验链（MOSS）：`922ac85`（E2E 修复：相位守卫 + 稳定 testid）+ 本批（首问按钮卡修复 + 源码锁）。
+
+### 1. 门禁独立复现（不采信声称值）
+
+| 门禁 | 声称 | MOSS 实测 |
+|---|---|---|
+| typecheck | 0 错 | tsc **0** ✓ |
+| engine | 480 | **480/480** ✓（v2 由源码锁增至 9） |
+| ui | 413 | **413/413** ✓ |
+| 风格 8/8 | 过 | `check_style_drift.py` **8/8** ✓（gate_overnight.mjs 在本沙箱 spawnSync EBUSY 属正常 fail-closed，逐项等价复现） |
+| 离线金标 | F1=1.0 | `eval_plan_understand.py`（`LLM_EVAL_OFFLINE=1`）**P/R/F1 = 1.0/1.0/1.0（TP35·FP0·FN0）** ✓；金标 105 条在本跨度**只增不改**（+5 插入 0 删除）→「零漂移」成立 |
+| E2E | 留白天 | 隔离离线 vite 5178 `e2e-sched-session.mjs` **77 过 / 0 挂** ✓ |
+
+### 2. 七条真机剧本（live LLM + live vite 5173，隔离后端 8003）→ **19 过 / 0 挂**
+
+> 验收资产：`scripts/e2e-libao-live.mjs`（手动验收资产，不进 CI；前置见文件头注）。
+
+| 剧本 | 结果 | 实测证据 |
+|---|---|---|
+| 1 周四晚上出去玩一小时 | ✅ | 草稿卡「时间：周四 · 单次：60 分钟 · 只在：晚上 · 排到：第6周 周四 18:00-19:00」 |
+| 2 排实验报告→下周一开始；一共10小时 | ✅ | 首问两问（when/effort）；答后冲突卡含 📦 量放不下 + ⏰ 时间撞×2（真块名） |
+| 3 问答模式 RAG | ✅ | 校历问答有实质回答 + 来源；不触发排程流 |
+| 4 明天打篮球 | ✅（**修复后**） | 首问即 4 个快捷项：45 分钟 / 60 分钟（依据：健康库 A 级 ≥150 分钟）/ 90 分钟 / 2 小时 |
+| 5 周六晚上6点到8点打球 | ✅ | 零追问直接草稿：「单次：120 分钟 · 排到 第5周 周六 18:00-20:00」 |
+| 6 真冲突（周一上午9-11点开会撞课） | ✅ | 「排不进去」卡；协商按钮 2 条（改到周六/周日 09:00-11:00，均干跑过）；verdict 行 **3 行**（代码上界 6） |
+| 7 周五下午；每天两小时 | ✅ | 无「每周 7 次」幻觉；正确追问「你要排的是哪件事」（无目标名） |
+
+### 3. 终验发现与修复（2 处）
+
+- **① 首问不挂快捷项按钮卡（真缺陷，批次2 漏接最主路径）**：`LbaoChat.tsx` 的 `runGoalSlots`→`needs_clarification` 分支（新鲜意图的**首次**追问）只出 `planPoints`、无 `options`；批次2 的 `quickOptionsFor` 只接在续答路径（ask_slot/new_intent/clarify 共 5 处）。真机实证：修前「帮我规划一下我明天要打篮球」首问只有文字，第二轮才冒按钮。**修复**：与该五处同口径补齐 `options: quickOptionsFor(pairs[0].slot, …)`（含空数组守卫）。**RV**：拆该 options 行 → `v2.test.ts` 源码锁恰 1 红 → 还原 sha256 `07536302` 一致。**复验**：首问即 4 按钮（见剧本 4）。
+- **② 相位守卫只认 collect（真缺陷，源码自洽性）**：`schedMode` 已扩为 idle/collect/draft/blocked 四值，但徽章渲染与「显式退出」两处守卫仍写 `=== 'collect'` → draft/blocked 相位徽章不显示（A6 断言红）、打字说「退出排程」无兜底。**修复**：两处改 `!== 'idle'`。**RV**：回退徽章守卫 → E2E 恰 A6 红。见 commit `922ac85`。
+- **③ E2E 资产过期（非代码回归）**：UI 批把输入框 placeholder 改为**相位动态**文案，`e2e-sched-session.mjs` 本轮零改动 → `say()` 正则枚举追不上 → D 剧本 30s 超时。**修复**：输入框加稳定 `data-testid="libao-input"`，`say()` 改用 `getByTestId`。见 `922ac85`。
+
+### 4. 环境坑（写进本台账防复现）
+
+- **CORS 白名单只放行 5173/5174**（`server/app.py` `_CORS_DEFAULT`；可用 `LIBAO_CORS_ORIGINS` 临时放开）。**非 5173/5174 端口的前端会被浏览器 CORS 拒绝 → `/api/plan/understand` 静默失败 → 梨宝降级到规则层**，表现为「离线也能排、但在线按钮卡不出现 / 泛泛周总结」。真机验证**必须用 5173 或 5174**。
+- `src/lib/api.ts` 默认 `API_BASE=http://127.0.0.1:8000`，非 8003/8001。用隔离后端验证时**必须** `VITE_API_BASE=http://127.0.0.1:8003` 起 vite，否则连到 8000（空）→ 离线横幅 + 规则兜底。
+- 诊断范式：Playwright `page.on('request')/on('requestfailed')` 追踪端点调用 + 读 `[aria-live="polite"]` 容器气泡（勿用 `body.innerText` 做前后差分——历史消息会污染断言）。
+
+### 5. 待 CY 决定
+
+- 方案 §5.3「频率语义→持续到什么时候」追问链**未接**（需扩 DialogTopic 追问槽位）——交付方已在 BLOCKERS 如实登记，建议并入后续批次。
+- beta-v2 累计 **45 commit 未推远端**；与 origin/dev 仍 unrelated histories（见 §G/BLOCKERS）。
