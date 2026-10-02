@@ -36,3 +36,10 @@
 - [2026-10-01 G 批·新增] 阻塞点：四处 PARTIALS 接线（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限；三餐消费 mealWalkBudgetMin；画像变更受影响天集合接 localizedReplan）均属跨人契约扩展（BuildWeekPlanInput→toPlanRequest→PlanRequest 三处，RAY 名下 model.ts/schedule.ts）｜已排除：AGENTS.md 红线 6「契约字段增删必须双方确认」，单方不擅动｜需要人决定：CY 与 B（RAY）协商后立项（建议并入后续批次，E 批未接线登记同步结转）。
 - [2026-10-01 G 批·新增] 阻塞点：本地 beta-v2（含 D/E/G 批 42+ 提交）与 origin/dev **无共同祖先**（unrelated histories；beta-v2 根=`5546be9` 三树快照，dev 根=`e387fb6` 脚手架，dev 另有 150 条独有提交），合并需 `--allow-unrelated-histories` 且逐段人工核对｜已排除：机器自动合流在两线根提交不同的情况下会静默丢工作，AGENTS.md §8.6 同款纪律适用｜需要人决定：CY+RAY 白天人工评审合并策略（建议先由人比对两侧文件地图再定 merge/rebase/手工搬运，不设时限）。
 - [2026-10-02 交互升级方案·批次0-3结项] 梨宝排程交互智能化优化方案（docs/libao-sched-interaction-upgrade-plan-2026-10-02.md）批次 0-3 全部落地：批次0 回归锚 `50ca123` / 批次1 钟点通道+时长推导+频率互斥 `e4705be` / 批次2 按钮卡+反馈精简 `d20ccb1` / 批次3 类目推荐+选项扩容 `1d1982f`；每批 gate 全绿（engine 480 / ui 413 / tsc 0）、离线评测 F1=1.0 零漂移、新断言全部反向验证（先红后绿）｜已排除：本地已完成全部离线验证｜需要人决定：① 双树（5173/5174）真机剧本验收（方案 §七 新旧 7 条）需起服务+浏览器，白天人工过；② e2e 77 断言需离线 vite 实例，夜间不起服务未跑；③ 台账（wp-ledger-v2）与 progress-status 批次登记留给白天人工做；④ 方案 5.3 的「频率语义→持续到什么时候」追问链未接（需扩 DialogTopic 追问槽位，建议登记后续批次）
+
+# H 批 · 交互升级批次0-3 终验（2026-10-02 白天，MOSS）
+
+- [2026-10-02 H 批·结项] 终验通过：五门禁独立复现（tsc 0 / engine 481 / ui 413 / 风格 8-8 / 离线金标 F1=1.0 零漂移 / E2E 77-0）+ **七条真机剧本 live LLM 19/0**（验收资产 `scripts/e2e-libao-live.mjs`）。含 3 处修复：`922ac85`（相位守卫 `!== 'idle'` + E2E 稳定 testid）、`4ad2893`（**首问快捷项按钮卡补齐**——批次2 的 quickOptionsFor 漏接 runGoalSlots→needs_clarification 这条最主路径 + v2 源码锁）。明细台账 §H。
+- [2026-10-02 H 批·待决定] **双树验收第二遍未做**：`_integration_full`（integration-full 支）HEAD 在 11:11 前移到 `9de8520` 且近 10 分钟仍有文件写入 → **有并行会话正在该树作业**，本轮不碰（避免撞车）；且该树**不含** `922ac85`/`4ad2893` 两笔修复（其融合只并到 beta-v2 `a202d50`）。**需要人决定**：由谁把这两笔并入融合线（本次 tsc 在该树实测 0 错，代码层可合）。
+- [2026-10-02 H 批·环境坑] 真机验证必须用 **5173/5174** + `VITE_API_BASE` 指向实际后端：①`server/app.py` CORS 白名单默认只放行 5173/5174，其他端口前端会被浏览器 CORS 拒 → `plan/understand` 静默失败 → 梨宝退化规则层（表现为「按钮卡不出现 / 泛泛周总结」）；②`src/lib/api.ts` 默认 `API_BASE=http://127.0.0.1:8000`，用隔离后端（8003）时不设 `VITE_API_BASE` 会连空 → 离线横幅。诊断范式见台账 §H.4。
+- [2026-10-02 H 批·登记] 方案 §5.3「频率语义→持续到什么时候」追问链仍未接（需扩 DialogTopic 追问槽位）——交付方原登记，本轮维持，建议与四处 PARTIALS 一并立项。
