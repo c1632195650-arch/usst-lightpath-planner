@@ -1352,11 +1352,30 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
 };
 
 /**
+ * R批 P1-1（R5.1）· 长期诉求判据（纯函数，可单测）。
+ *
+ * 「这学期想养成健身的习惯」此前按 slots 有没有 day/clock 被归到**单日** →
+ * 走 45/60/90 单次档（CY 走查实录：「养成习惯这个怎么能是一天两天的事情？」）。
+ * 本判据命中即**必须**视为长期：isSingleDayEvent 返回 false、goalToTasks 按学期铺
+ * （R5.4）、effort 追问拆成 频率 → 时长 两步（R5.3）。
+ *
+ * ⚠️ 与 `features/feedback/parseCorrection.ts::detectScope` 的 LONG_WORDS 是**同一口径
+ * 的两个落点**（跨域 import 被冻结基线禁新增，不能互导）——改词必须两处同步。
+ */
+const LONG_TERM_RE = /(想养成|想坚持|要坚持|养成习惯|这学期|整个学期|长期|保持)/;
+
+export function isLongTermWish(text: string | undefined): boolean {
+  return !!text && LONG_TERM_RE.test(text);
+}
+
+/**
  * 单日事件：只占**一个**块，所以「每次多久」就是全部投入 —— 不该再追问频率或总量。
  * 「周四吃大餐」「明天体检 1 小时」vs「备赛 20 小时」「每周 3 次」是两类诉求。
  * ⚠️ `recurring`（每周三）不算单日 —— 循环约定没有「一共占多久」的天然上限。
+ * R5.1：长期诉求（「这学期想养成…」）**必须**返回 false —— 哪怕 slots 里带了个窗口。
  */
 export function isSingleDayEvent(s: IntentSlots): boolean {
+  if (isLongTermWish(s.raw)) return false;
   if (s.when?.recurring) return false;
   // 解析过日期（传了 today）：起止同一天 = 单日
   if (s.dateFrom && s.dateTo && s.dateFrom === s.dateTo) return true;
@@ -1403,9 +1422,17 @@ const SLOT_QUESTION: Record<SlotKey, string> = {
 };
 
 /** 单槽追问话术。effort 对**单日事件**换问法 —— 问「投入多少」吃顿饭的人听不懂；
- *  例子带「每次」是为了把回答引向 `durationMin`（单日豁免认的就是它）。 */
+ *  例子带「每次」是为了把回答引向 `durationMin`（单日豁免认的就是它）。
+ *  R5.3：长期诉求的 effort 拆成**频率 → 时长**两步 —— 先问多久一次，
+ *  答了频率再问每次多久（applyClarifyAnswers 补一半后 failed=[effort] 会自然重问）。 */
 function questionFor(s: IntentSlots, slot: SlotKey): string {
-  if (slot === 'effort' && isSingleDayEvent(s)) return '大概占多久？（比如「每次 2 小时」）';
+  if (slot === 'effort') {
+    if (isLongTermWish(s.raw)) {
+      if (s.perWeekCount == null) return '想养成的是长期节奏 —— 多久一次？（比如「每周3次」）';
+      return '每次大概多久？（比如「每次30分钟」）';
+    }
+    if (isSingleDayEvent(s)) return '大概占多久？（比如「每次 2 小时」）';
+  }
   return SLOT_QUESTION[slot];
 }
 

@@ -598,6 +598,49 @@ const D_SCENARIOS = async (browser) => {
     await page.close();
   }
 
+  // ── 剧本 R3（R批 P1-1 · R5）：长期诉求 —— 频率→时长→时段，铺到第 N 周 ──
+  {
+    const page = await browser.newPage();
+    await page.route('**/api/plan/understand', (route) => route.abort()); // 纯规则链路口径
+    await onboard(page);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '这学期我想养成晨跑的习惯'); // 离线规则闸要第一人称意愿词（在线走 LLM 主理解不须）
+    ok(
+      await page.getByText(/多久一次|什么时候开始/).first().isVisible().catch(() => false),
+      'R3-1 长期句进入追问（when + 频率）',
+    );
+    await say(page, '从下周开始；每周3次');
+    ok(
+      await page.getByText('每次大概多久', { exact: false }).first().isVisible().catch(() => false),
+      'R3-2 频率收下后第二步问时长（R5.3 频率→时长）',
+    );
+    await say(page, '每次30分钟');
+    ok(
+      await page.getByText('想排在什么时段', { exact: false }).first().isVisible().catch(() => false),
+      'R3-3 时长收下后问时段（R5.3 → R2 时段软追问）',
+    );
+    await say(page, '空闲时间，你来安排');
+    ok(
+      await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
+      'R3-4 长期草稿卡出现',
+    );
+    ok(
+      await page.getByText(/铺到第 \d+ 周/).first().isVisible().catch(() => false),
+      'R3-5 草稿说明学期覆盖口径（R5.4「铺到第 N 周」，不再说 21 天窗口）',
+    );
+    ok(
+      await page.getByText(/另有 \d+ 块排在后面的周|第 \d+ 周/).first().isVisible().catch(() => false),
+      'R3-6 落点跨多周（覆盖周数 > 1）',
+    );
+    ok(
+      !(await page.getByText('21 天的窗口', { exact: false }).first().isVisible().catch(() => false)),
+      'R3-7 不再出现「21 天窗口」自相矛盾口径',
+    );
+    await page.close();
+  }
+
   // ── 剧本 M（B③ 协商基于事实）：blocked 相下协商回复引用挡路块，不硬编码「降一档」 ──
   {
     const page = await browser.newPage();

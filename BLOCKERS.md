@@ -50,3 +50,7 @@
   - **已排除**：`cc7f618` / `d1fbb9e` 两条 docs 提交（台账留痕类，不涉产品代码）不再搬运；`922ac85` 的全相位守卫已被主线 P1-3/P0-2 等价覆盖（`schedMode !== 'idle'` 两树均 2 处），`data-testid="libao-input"` 亦无需移植（主线 `e2e-sched-session.mjs` 用 placeholder 正则定位）。
   - **历史阻塞项处置**：本清单上方 [2026-10-01 G 批]「beta-v2 与 origin/dev 无共同祖先」阻塞点 **随本次收敛失效**（主线已改 `integration-full`，不再走 `dev` 合并路径）；[2026-10-02 交互升级方案] 待决项①「双树真机验收」已由 zcode 完成（七剧本 live 19/0 + 离线 E2E 77/0）。
   - **口令**：此后新开发**只在 `_integration_full` 内进行**；`_work_dev` 仅供查历史对照，不再写入。
+
+# R 批（2026-10-02 夜，任务书《R批任务书-交zcode-2026-10-02》）· 裁决申报
+
+- [2026-10-02 R批 P1-1] 阻塞点：**R5.2 重复块（recurring slot）数据结构**需 CY 裁决，本批未实现 —— 长期习惯要落盘成「每周重复」的块，会波及引擎重排、planLock、userPlanStore 序列化与旧数据兼容。①**兼容层设计**：旧数据读成一次性块（`UserTask.weeks` 数组本就逐周展开，天然兼容）；新写入带 recurring 标记（建议挂 `UserTask.note` 之外的正式字段，`src/types.ts` 契约层改动须白天做）。②**受影响面**：`src/types.ts`（契约）、`src/lib/planner/templates.ts`/`construct.ts`（重复块展开）、`src/features/week/userPlanStore.ts`（序列化 + storageRegistry 版本）、`src/features/plan/planLock.ts`（锁语义：锁一周还是锁全部周）、tests/{construct,userPlanStore,longLock,persistence}.test.ts。③**两条路线**：A. 块级 recurring 标记（UserTask 加 `recurring?: { weekday; untilWeek }`，construct 按周展开——改动集中、序列化向后兼容好）；B. 独立 recurring 表 + 展开层（`userPlanStore.recurrings` 单独存，渲染前展开成 UserTask——语义干净但要动存储 schema 与全部消费方）。**建议 A**（展开逻辑复用现有 weeks 通道，B 的独立表在 localStorage KV 下没有额外收益）｜已排除：R5.1/5.3/5.4 已按任务书先行落地（长期判据 + 频率→时长→时段 + 学期铺开），不依赖本项；本批以「逐周一次性块」如实铺开学期（goalToTasks 学期跨度），界面上说清「铺到第 N 周」｜需要人决定：A 还是 B，以及 recurring 块在重排（ripple）里的锁定语义（每周独立可挪 vs 全部周联动）。

@@ -41,7 +41,7 @@ import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localized
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
-import { isSingleDayEvent, PERIOD_OPTION_TEXTS, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
+import { isLongTermWish, isSingleDayEvent, PERIOD_OPTION_TEXTS, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
 import { classifyGoal, evidenceLine, replacementAffinity, type GoalCategory } from './taxonomy';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
@@ -235,6 +235,17 @@ const GOAL_EARLIEST_MIN = toMinutes('09:00');
 /** 窗口天数上限：防「时间待定且无锚点」时算出一个荒唐的长窗口。 */
 const MAX_GOAL_DAYS = 120;
 
+/**
+ * R5.4（R批 P1-1）· 长期诉求按学期铺开的判据：长期 + 用户给了频率 + 没明说
+ * 结束点。「从下周开始」只是起点（落成一周的窗），不是终点；「到 12 月 / 截止 /
+ * 期末之前」才是用户亲自画的终点 —— 那就尊重它，不铺满学期。
+ * goalToTasks（铺窗）与 checkGoalFeasibility（口径说明）共用，防两处漂移。
+ */
+function longTermSpanActive(slots: IntentSlots): boolean {
+  if (!isLongTermWish(slots.raw) || slots.perWeekCount == null || slots.perWeekCount <= 0) return false;
+  return !/(截止|之前|以前|为止|结束|到期末|到期|到第\s*\d+\s*周)/.test(slots.raw);
+}
+
 /** ISO 日期 → DayOfWeek（1=周一 … 7=周日；`weekdayOf` 是 0=周日） */
 function isoToDayOfWeek(iso: string): number {
   const wd = weekdayOf(iso);
@@ -276,6 +287,16 @@ export function goalToTasks(
   // ① 窗口：有锚点用锚点，没锚点从今天起算
   const from = slots.dateFrom ?? today;
   let to = slots.dateTo ?? addDays(from, DEFAULT_GOAL_SPAN_DAYS - 1);
+  // R5.4（R批 P1-1）：长期诉求按**学期跨度**铺 —— 「这学期想养成…」给了频率却
+  // 只铺 21 天，就是把习惯当一天两天的事情（CY 原话）。判据 longTermSpanActive：
+  // 长期 + 用户给了频率 + 没明说结束点（「从下周开始」只给了起点，落成的
+  // 周窗不是终点）。封顶仍是 MAX_GOAL_DAYS（防荒唐长窗）。
+  if (longTermSpanActive(slots) && schedule.totalWeeks > 0) {
+    const semEnd = addDays(schedule.termStart, schedule.totalWeeks * 7 - 1);
+    const capped = addDays(from, MAX_GOAL_DAYS - 1);
+    const end = semEnd < capped ? semEnd : capped;
+    if (diffDays(from, end) > diffDays(from, to)) to = end;
+  }
   if (diffDays(from, to) < 0) to = from;
   if (diffDays(from, to) > MAX_GOAL_DAYS) to = addDays(from, MAX_GOAL_DAYS - 1);
 
@@ -521,7 +542,18 @@ export function checkGoalFeasibility(args: {
   }
 
   // 诚实标注：用了默认窗口就是用了，别说成是用户给的
-  if (!slots.dateTo) {
+  if (longTermSpanActive(slots)) {
+    // R5.4：长期按学期铺了 —— 草稿卡说清覆盖口径（「铺到第 N 周」），别再说 21 天窗口
+    const lastWeek = candidates.reduce((m, t) => Math.max(m, t.weeks?.[0] ?? 0), 0);
+    const spanWeeks = slots.perWeekCount && slots.perWeekCount > 0
+      ? Math.max(1, Math.round(candidates.length / slots.perWeekCount))
+      : 1;
+    caveats.push(
+      lastWeek > 0
+        ? `这是长期安排 —— 按你给的节奏铺到第 ${lastWeek} 周（约 ${spanWeeks} 周），不是只排这几天。`
+        : '这是长期安排 —— 按你给的节奏铺进本学期，不是只排这几天。',
+    );
+  } else if (!slots.dateTo) {
     caveats.push(`你没说到什么时候为止，我按 ${DEFAULT_GOAL_SPAN_DAYS} 天的窗口先铺了一版。`);
   }
   if (slots.certainty === 'unknown') {
