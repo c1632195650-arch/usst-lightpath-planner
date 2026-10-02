@@ -7,7 +7,7 @@ import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objecti
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, needsPeriodAsk, parseIntentSlots, parseOptionChoice, termAnchorsFrom, crossIntentEscape, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, needsPeriodAsk, hasConcreteScheduleSignal, parseIntentSlots, parseOptionChoice, termAnchorsFrom, crossIntentEscape, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -1762,6 +1762,16 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
      *  **超集**，且有专门的超集测试守着（scripts/libaoIntent.test.ts）。 */
     const today = todayISO();
 
+    /* R批 P0-4（R6.3）：「只是问事」= 用户对上一条二选一的显式裁决 ——
+     * 直接走 RAG 问答，**不重跑意图解析**。否则「只是问事」这四个字本身会被
+     * 当成一句待解析的话（它没有目标名词/时间信号，绕一圈又回到同一个二选一
+     * → 死循环）。选项卡按钮统一走 `send(o.value)`，所以在这里拦最稳。 */
+    if (q === '只是问事') {
+      setLoading(false);
+      await ragReply(q);
+      return;
+    }
+
     /** T 批：最近对话尾巴随理解请求发出 —— 「周二晚上；6点到7点」这类续答句
      *  靠它接住被打断的排程上下文。只发角色+截断文本，不带 planPoints 等渲染噪音。 */
     const history = messages.slice(-8)
@@ -2077,6 +2087,30 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           goWeek: true,
         }]);
       }
+      setLoading(false);
+      return;
+    }
+
+    /* R批 P0-4（R6.3）：未识别**必须显式**，不再静默转 RAG。
+     *
+     *  背景：此前 `action:false` 就直接 `ragReply(q)`，用户既看不到「没排进
+     *  日程」也拿不到补救入口 —— 一句「周六晚上要出去吃自助餐」被当成了校园
+     *  问答，答完就没了。真正的「没看懂」文案原先只存在于 feedback 层的
+     *  CorrectionCapture（放错了层：那是「改一句计划」的入口，不是对话入口）。
+     *
+     *  判据要**克制**：只在「句中有明确日程信号（具体时间/日期）」时才提示。
+     *  否则「光溯是什么」也会被反问「要不要排进日程」，比静默更糟。
+     *  门槛：extractConcreteWhen 抽得出具体时间表达（libaoIntent 已导出）。
+     */
+    if (hasConcreteScheduleSignal(q)) {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '这句我没排进日程 —— 是我还没听懂你要做的事。你要：',
+        options: [
+          { label: '加进日程', value: `把「${q}」排进日程` },
+          { label: '只是问事', value: '只是问事' },
+        ],
+      }]);
       setLoading(false);
       return;
     }

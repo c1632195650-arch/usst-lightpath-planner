@@ -22,6 +22,11 @@
 import type { BlockKind, DayOfWeek } from '@/types';
 import { matchDays, matchWindow, parseCorrection, type CorrectionDraft } from './parseCorrection.ts';
 import { toMinutes } from '@/constants/time';
+// R批 P0-4（R6.4）：生活事件词单一来源 —— 词表下沉到中立层 src/lib/lifeWords.ts。
+// ⚠️ 不能从 `@/features/libao` 引：AC-6·R5 架构守卫禁止新增 features 跨域对
+//   （tests/arch-guards.test.ts:247，存量基线只许缩短）。下沉到 lib 是唯一
+//   能让两侧共用又不动守卫的做法。
+import { hasLifeWord, LIFE_MEAL_NOUNS, LIFE_MEAL_VERBS, LIFE_SOCIAL_NOUNS } from '@/lib/lifeWords';
 
 /** 「加一件事」的草稿（还没有 id） */
 export interface TaskDraft {
@@ -124,12 +129,20 @@ function extractClock(t: string): number | null {
   return null;
 }
 
-/** 识别块类型（与 parseCorrection 的词表保持一致的语义） */
+/**
+ * 识别块类型（与 parseCorrection 的词表保持一致的语义）
+ *
+ * R批 P0-4（R6.4）：meal / social 两支改用 `src/lib/lifeWords.ts` 的**共享词表**
+ * —— 与对话层判生活事件用同一份词，消除两处漂移（此前这里是写死的两行正则
+ * `/吃饭|午饭|晚饭|聚餐/`、`/社团|活动|约|玩|聚会/`，与 GOAL_NOUNS 各维护一份，
+ * 于是「周六晚上要出去吃自助餐」在对话层是生活事件、在反馈层认不出块类型）。
+ * study/activity 仍靠上面的正则 —— 它们各有更强的上下文信号，不需要共享。
+ */
 function kindOf(t: string): BlockKind | undefined {
   if (/实验|报告|作业|复习|预习|学习|自习|看书/.test(t)) return 'study';
   if (/运动|跑步|健身|锻炼|球/.test(t)) return 'activity';
-  if (/吃饭|午饭|晚饭|聚餐/.test(t)) return 'meal';
-  if (/社团|活动|约|玩|聚会/.test(t)) return 'activity';
+  if (hasLifeWord(t, LIFE_MEAL_NOUNS) || hasLifeWord(t, LIFE_MEAL_VERBS)) return 'meal';
+  if (hasLifeWord(t, LIFE_SOCIAL_NOUNS) || /约|玩/.test(t)) return 'activity';
   return undefined;
 }
 
