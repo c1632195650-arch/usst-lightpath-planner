@@ -13,6 +13,8 @@ import { addTimetableFacts } from '@/lib/api';
 import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist';
 import { loadUserDeadlines } from '@/features/calendar/deadlineStore';
 import { getUserId } from '@/lib/identity';
+import { installWebSyncHook } from '@/features/mobile/lib/webSync';
+import { loadIdentity } from '@/features/mobile/lib/auth';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -55,6 +57,10 @@ export default function App() {
   useEffect(() => {
     if (mainTab !== 'libao' && libaoSeed) setLibaoSeed(null); // 离开梨宝 tab 即清，防重挂载反复预填
   }, [mainTab, libaoSeed]);
+
+  // F8 网页端云同步观察者（BLOCKERS#3 白天接线）：开关默认关（usst.mobile.cloudSync!=='1'
+  // 时零网络，tests/syncContract.test.ts 有锁），登录后由移动页写入开关与身份
+  useEffect(() => installWebSyncHook({ identity: loadIdentity() }), []);
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
