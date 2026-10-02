@@ -190,6 +190,12 @@ export interface PlanDigest {
   /** 睡前一小时内仍有排事的天数（咖啡因/屏幕/亢奋代理指标） */
   lateNightBlockDays: DigestFact<number>;
 
+  /* —— 作息设置真源（H3）—— */
+  /** 排到用户设置的就寝（+15 分钟宽限）之后的天数；作息未设置 → not confident */
+  bedtimeConflictDays: DigestFact<number>;
+  /** 早于用户设置的起床时间就开始排事的天数；作息未设置 → not confident */
+  preWakeConflictDays: DigestFact<number>;
+
   /* —— 饮食（对应健康库 nutrition 域）—— */
   /** 有 meal 块的天数（阈值：mealsPerDay = 3，实际排 meal 块数是上限代理） */
   mealDays: DigestFact<number>;
@@ -215,6 +221,12 @@ export interface PlanDigest {
 
   /* —— 习惯 —— */
   habits: HabitCoverage[];
+
+  /* —— 成长（H4，GoalsPage / recurring 接线）—— */
+  /** 长期重复任务的学期周覆盖；ctx.habitSpans 未传 = 空数组（unknown 而非 0） */
+  habitSpans: Array<{ title: string; weeksCovered: number; totalWeeks: number | null }>;
+  /** 目标进度：active 目标 × 本周相关块（标题互相包含） */
+  goals: Array<{ title: string; weeksLeft: number | null; relatedBlocks: number; dueAt: string | null }>;
 
   /** 启发式来源声明 —— UI 不得把本摘要包装成医学评估 */
   intensityConfidence: 'heuristic';
@@ -277,12 +289,33 @@ const DAY_END = 24 * 60;
  * 抽取主函数
  * ========================================================== */
 
-export function digestPlan(plan: WeekPlan): PlanDigest {
-  return digestBlocks(plan.blocks, plan.weekNo);
+/**
+ * 摘要的**外部数据上下文**（H3/H4 接线，全部可选 —— 缺省行为与 H1 逐位一致）：
+ *  · `routine` —— 作息设置真源（Q1a/Q1b store，P1-2 白天批接进引擎日窗的同一份）。
+ *    没有手环/睡眠监测数据，「你 declare 的节奏」就是可得的最好数据源；
+ *  · `goals` —— GoalsPage 的 active 目标（H4 成长维度）；
+ *  · `habitSpans` —— R5.2 recurring 重复任务的学期周覆盖（H4 habitCoverage）。
+ */
+export interface DigestContext {
+  routine?: { wakeMin: number; sleepMin: number } | null;
+  goals?: Array<{
+    title: string;
+    dueAt?: string;
+    status?: string;
+    /** 距截止还有几周（调用方用 today + termStart 折算好 —— 摘要层不读时钟） */
+    weeksLeft?: number | null;
+  }>;
+  habitSpans?: Array<{ title: string; weeks: number[] }>;
+  /** 学期总周数（habitSpans 覆盖率的分母；不传则不算覆盖率） */
+  totalWeeks?: number;
+}
+
+export function digestPlan(plan: WeekPlan, ctx?: DigestContext): PlanDigest {
+  return digestBlocks(plan.blocks, plan.weekNo, ctx);
 }
 
 /** 纯函数入口：只吃块列表。测试与「单日评估」都走这个。 */
-export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0): PlanDigest {
+export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0, ctx?: DigestContext): PlanDigest {
   const blocks = rawBlocks.filter(isLoad);
 
   /* —— 运动 —— */
@@ -343,6 +376,21 @@ export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0): PlanD
       return !!last && last.endMin > 23 * 60;
     }),
   );
+
+  /* —— 作息设置真源（H3）——
+   * 「你在作息设置里 declare 的节奏」是可得的最好数据源（没有手环/监测）。
+   * 宽限 15 分钟：22:45 结束对 22:30 就寝不算冲突 —— 收尾、洗漱是真实生活。 */
+  const BEDTIME_GRACE_MIN = 15;
+  const routineBedtime = ctx?.routine?.sleepMin ?? null;
+  const routineWake = ctx?.routine?.wakeMin ?? null;
+  const bedtimeConflictList = routineBedtime == null
+    ? []
+    : blocks.filter((b) => b.endMin > routineBedtime + BEDTIME_GRACE_MIN);
+  const bedtimeConflictDays = new Set(bedtimeConflictList.map((b) => b.dayOfWeek));
+  const preWakeList = routineWake == null
+    ? []
+    : blocks.filter((b) => b.startMin < routineWake);
+  const preWakeDays = new Set(preWakeList.map((b) => b.dayOfWeek));
 
   /* —— 饮食 —— */
   const mealBlocks = blocks.filter((b) => b.kind === 'meal');
@@ -410,6 +458,25 @@ export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0): PlanD
     .filter((h) => h.days.length >= 2)
     .sort((a, b) => b.dayRatio - a.dayRatio || b.totalMin - a.totalMin);
 
+  /* —— 成长（H4）：长期重复块的学期覆盖 + 目标进度 —— */
+  const habitSpans = (ctx?.habitSpans ?? []).map((h) => ({
+    title: h.title,
+    weeksCovered: (h.weeks ?? []).length,
+    totalWeeks: ctx?.totalWeeks ?? null,
+  }));
+  const goals: Array<{ title: string; weeksLeft: number | null; relatedBlocks: number; dueAt: string | null }> =
+    (ctx?.goals ?? []).map((g) => {
+      // 相关块：标题互相包含（「四六级真题」↔「四六级」）—— 与挑块匹配同口径
+      const needle = (g.title || '').replace(/\s+/g, '');
+      const related = needle
+        ? blocks.filter((b) => {
+            const t = (b.title || '').replace(/\s+/g, '');
+            return !!t && (t.includes(needle) || needle.includes(t));
+          })
+        : [];
+      return { title: g.title, weeksLeft: g.weeksLeft ?? null, relatedBlocks: related.length, dueAt: g.dueAt ?? null };
+    });
+
   const fact = <T>(value: T, evidence: string[], extra?: Partial<DigestFact<T>>): DigestFact<T> => ({
     value,
     evidence,
@@ -462,6 +529,14 @@ export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0): PlanD
       ? NO_DATA()
       : fact(lateDays.size, lateBlocks.map((b) => b.id)),
 
+    // H3：作息设置真源 —— 未设置时 not confident（unknown，不冒充 0）
+    bedtimeConflictDays: routineBedtime == null
+      ? UNKNOWN(0, '还没有你的作息设置 —— 在「周计划 → 我的作息」里填一下就能对上你自己的节奏')
+      : fact(bedtimeConflictDays.size, bedtimeConflictList.map((b) => b.id)),
+    preWakeConflictDays: routineWake == null
+      ? UNKNOWN(0, '还没有你的作息设置 —— 在「周计划 → 我的作息」里填一下就能对上你自己的节奏')
+      : fact(preWakeDays.size, preWakeList.map((b) => b.id)),
+
     mealDays: mealBlocks.length === 0
       ? NO_DATA()
       : fact(mealDays.size, mealBlocks.map((b) => b.id)),
@@ -494,6 +569,10 @@ export function digestBlocks(rawBlocks: readonly TimeBlock[], weekNo = 0): PlanD
     blankMin: fact(blankTotal, []),
 
     habits,
+
+    // H4：成长维度数据（ctx 未传 = 空 → 评估器出 unknown，不冒充 0）
+    habitSpans,
+    goals,
     intensityConfidence: 'heuristic',
     sparseData: sparse,
   };

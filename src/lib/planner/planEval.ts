@@ -331,10 +331,78 @@ function evalSleep(d: PlanDigest): EvalDimension {
     );
   }
 
+  // H3：作息设置真源 —— 用户 declare 的就寝/起床。没有手环数据，
+  // 「你自己的节奏」就是可得的最好对照；未设置时如实 unknown，并给一句指引。
+  if (d.bedtimeConflictDays.confident) {
+    withData++;
+    const n = d.bedtimeConflictDays.value;
+    scoreSum += n === 0 ? 100 : round(clamp01(1 - n / 7) * 100);
+    findings.push(
+      n === 0
+        ? {
+            id: 'sleep-bedtime-ok',
+            headline: '每天收尾都在你设置的就寝之前',
+            status: 'good',
+            severity: 'info',
+            basis: basisFrom('sleep-duration-adult'),
+            evidence: d.bedtimeConflictDays.evidence,
+            advice: [],
+          }
+        : {
+            id: 'sleep-bedtime-conflict',
+            headline: `有 ${n} 天排到了你设置的就寝时间之后`,
+            status: 'gap',
+            severity: 'warn',
+            basis: basisFrom('sleep-duration-adult'),
+            evidence: d.bedtimeConflictDays.evidence,
+            advice: [
+              '这是和你在「我的作息」里设置的节奏对照的结果 —— 排不开就说一声，我按新节奏重排',
+            ],
+          },
+    );
+  } else {
+    findings.push({
+      id: 'sleep-bedtime-unknown',
+      headline: '还没有你的作息设置',
+      status: 'unknown',
+      severity: 'info',
+      basis: null,
+      evidence: [],
+      advice: [],
+      notVisible: '在「周计划 → 我的作息」里填一下就寝/起床，评估就能对上你自己的节奏（不填也能评，只对照通用区间）',
+    });
+  }
+  if (d.preWakeConflictDays.confident) {
+    withData++;
+    const n = d.preWakeConflictDays.value;
+    scoreSum += n === 0 ? 100 : round(clamp01(1 - n / 7) * 100);
+    findings.push(
+      n === 0
+        ? {
+            id: 'sleep-wake-ok',
+            headline: '没有早于你设置的起床时间排事',
+            status: 'good',
+            severity: 'info',
+            basis: basisFrom('sleep-duration-adult'),
+            evidence: d.preWakeConflictDays.evidence,
+            advice: [],
+          }
+        : {
+            id: 'sleep-wake-conflict',
+            headline: `有 ${n} 天早于你设置的起床时间就开始排事`,
+            status: 'gap',
+            severity: 'warn',
+            basis: basisFrom('sleep-duration-adult'),
+            evidence: d.preWakeConflictDays.evidence,
+            advice: ['早起赶事偶尔有之；连续几天都这样，值得把前一天晚上的一项挪过来'],
+          },
+    );
+  }
+
   return {
     key: 'sleep',
     label: '睡眠',
-    coverage: withData / 2,
+    coverage: withData / 4,
     score: withData === 0 ? null : round(scoreSum / withData),
     findings,
   };
@@ -581,6 +649,142 @@ const SEV_ORDER: Record<Severity, number> = { serious: 0, warn: 1, info: 2 };
 /**
  * 评估一版日程。**纯函数** —— 同样的 plan 必然给出同样的结论。
  */
+/**
+ * H4（R批 Wave3）· 成长维度 —— 习惯覆盖（R5.2 recurring × 学期周）+ 目标进度（GoalsPage）。
+ *
+ * 数据全部来自 DigestContext（WeekPlanView 注入 routine/goals/recurring spans）：
+ * 没接 GoalsPage 之前这里是两个永远 unknown 的占位，现在是真接线。
+ * 依据：habit-formation-loop（方法库 B 级：习惯靠稳定线索-行为-奖励循环固化）
+ * + mcm-3day-timeline（先搭时间线再铺块）。
+ */
+function evalGrowth(d: PlanDigest): EvalDimension {
+  const findings: EvalFinding[] = [];
+  let withData = 0;
+  let scoreSum = 0;
+
+  /* —— 习惯覆盖（recurring × 学期周）—— */
+  if (d.habitSpans.length > 0) {
+    withData++;
+    for (const h of d.habitSpans) {
+      const total = h.totalWeeks;
+      const ratio = total && total > 0 ? h.weeksCovered / total : null;
+      if (ratio == null) {
+        findings.push({
+          id: `growth-habit-${h.title}`,
+          headline: `「${h.title}」是每周重复安排（覆盖 ${h.weeksCovered} 周）`,
+          status: 'good',
+          severity: 'info',
+          basis: basisFrom('habit-formation-loop'),
+          evidence: [],
+          advice: [],
+        });
+        scoreSum += 100;
+        continue;
+      }
+      const pct = Math.round(ratio * 100);
+      findings.push(
+        ratio >= 0.8
+          ? {
+              id: `growth-habit-${h.title}`,
+              headline: `「${h.title}」覆盖到第 ${total} 周（学期 ${pct}%），习惯有整段跑道`,
+              status: 'good',
+              severity: 'info',
+              basis: basisFrom('habit-formation-loop'),
+              evidence: [],
+              advice: [],
+            }
+          : {
+              id: `growth-habit-${h.title}`,
+              headline: `「${h.title}」只覆盖了学期的 ${pct}%`,
+              status: ratio < 0.5 ? 'gap' : 'good',
+              severity: ratio < 0.5 ? 'warn' : 'info',
+              basis: basisFrom('habit-formation-loop'),
+              evidence: [],
+              advice: ratio < 0.5
+                ? [`习惯要整段跑道才养得成 —— 说「把「${h.title}」延续到学期末」我就补齐剩余的周`]
+                : [],
+            },
+      );
+      scoreSum += round(clamp01(ratio) * 100);
+    }
+  } else {
+    findings.push({
+      id: 'growth-habit-unknown',
+      headline: '还没有长期重复的安排',
+      status: 'unknown',
+      severity: 'info',
+      basis: null,
+      evidence: [],
+      advice: [],
+      notVisible: '想养成的习惯（比如「每周 3 次晨跑」）落进日程后，这里会显示它的学期覆盖进度',
+    });
+  }
+
+  /* —— 目标进度（GoalsPage）—— */
+  const activeGoals = d.goals.filter((g) => !!g.title);
+  if (activeGoals.length > 0) {
+    withData++;
+    for (const g of activeGoals) {
+      const weeksTxt = g.weeksLeft != null ? `还有约 ${g.weeksLeft} 周` : '未设截止';
+      const related = g.relatedBlocks;
+      if (related === 0 && g.weeksLeft != null && g.weeksLeft <= 6) {
+        scoreSum += 0;
+        findings.push({
+          id: `growth-goal-${g.title}`,
+          headline: `目标「${g.title}」${weeksTxt}到期，本周日程里还没有相关安排`,
+          status: 'gap',
+          severity: g.weeksLeft <= 2 ? 'serious' : 'warn',
+          basis: basisFrom('mcm-3day-timeline', '先搭时间线再铺块 —— 越近截止，块越要提前铺'),
+          evidence: [],
+          advice: [`直接跟我说「帮我排「${g.title}」」，我把准备块铺进接下来的周`],
+        });
+      } else if (related === 0) {
+        scoreSum += 60;
+        findings.push({
+          id: `growth-goal-${g.title}`,
+          headline: `目标「${g.title}」${weeksTxt}，本周暂无相关安排`,
+          status: 'unknown',
+          severity: 'info',
+          basis: null,
+          evidence: [],
+          advice: [],
+          notVisible: '相关的事可能没排进这一周，也可能在日程之外 —— 不等于没推进',
+        });
+      } else {
+        scoreSum += 100;
+        findings.push({
+          id: `growth-goal-${g.title}`,
+          headline: `目标「${g.title}」${weeksTxt}，本周排了 ${related} 个相关块`,
+          status: 'good',
+          severity: 'info',
+          basis: basisFrom('implementation-intentions'),
+          evidence: [],
+          advice: [],
+        });
+      }
+    }
+  } else {
+    findings.push({
+      id: 'growth-goal-unknown',
+      headline: '目标页还没有目标',
+      status: 'unknown',
+      severity: 'info',
+      basis: null,
+      evidence: [],
+      advice: [],
+      notVisible: '在「目标」页建一个（比如「四六级」「数模国赛」），评估会对照它的截止日期看这一周的推进',
+    });
+  }
+
+  return {
+    key: 'growth',
+    label: '成长',
+    coverage: withData / 2,
+    score: withData === 0 ? null : round(scoreSum / withData),
+    findings,
+  };
+}
+
 export function evaluateDigest(d: PlanDigest): PlanEvaluation {
   const dimensions: EvalDimension[] = [
     evalExercise(d),
@@ -588,6 +792,7 @@ export function evaluateDigest(d: PlanDigest): PlanEvaluation {
     evalNutrition(d),
     evalStudy(d),
     evalLoad(d),
+    evalGrowth(d),
   ];
 
   const coverage = round(

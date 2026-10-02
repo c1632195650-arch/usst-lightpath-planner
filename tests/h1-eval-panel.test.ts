@@ -87,10 +87,11 @@ test('H1.3 评估结果满足面板消费的全部字段（改字段会白屏，
   }
 });
 
-test('H1.3 五个维度都在（面板按维度分区渲染，缺一个就少一块）', () => {
+test('H1.3 六个维度都在（面板按维度分区渲染，缺一个就少一块）', () => {
   const e = evaluateDigest(digestBlocks([blk(1, 7 * 60, 8 * 60, '慢跑')]));
   const keys = e.dimensions.map((d) => d.key).sort();
-  assert.deepEqual(keys, ['exercise', 'load', 'nutrition', 'sleep', 'study']);
+  // 断言漂移申报（R批 Wave3 H4，2026-10-03）：成长维度（habitSpans/goals 接线）入列
+  assert.deepEqual(keys, ['exercise', 'growth', 'load', 'nutrition', 'sleep', 'study']);
 });
 
 /* ============================================================

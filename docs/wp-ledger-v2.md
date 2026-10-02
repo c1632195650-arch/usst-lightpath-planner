@@ -530,3 +530,21 @@
 **反向验证（3 处，全部删实现→恰红→sha256 一致还原）**：RV-R52a 删 recurring 生成分支恰 5 红｜RV-R52b 砍 weeks 展开为 slice(0,1) 恰 1 红（placedCount 3≠45）｜RV-R52c 关周级去重恰 2 红（双放复现）。
 
 **门禁**：tsc 0｜engine **728/0**（含 golden AC-2 冻结快照逐块一致，construct 改动零漂移）｜ui **424/0**｜BLOCKERS R5.2 条目结项。
+
+### §R·Wave3 收官（2026-10-03，H2/H3/H4 三项，zcode 执行）
+
+> H1（纯前端评估）之后的三项收尾。H3 的「数据源」按可得性落定为**作息设置真源**
+> （routineStore，Q1a/Q1b——与引擎日窗同一份，P1-2 接线）；手环/监测数据仍无，
+> 「你 declare 的节奏」是当前可得的最好对照，未设置时如实 unknown 不冒充 0。
+
+| 项 | commit | 内容 |
+|---|---|---|
+| H3 | 本批 | planDigest 增 DigestContext（routine/goals/habitSpans/totalWeeks，全可选——缺省与 H1 逐位一致）；bedtimeConflictDays / preWakeConflictDays 两个事实（就寝宽限 15 分钟；未设置 → unknown+指引文案「周计划 → 我的作息」）；planEval 睡眠维度增两 finding（对齐你的节奏=good / N 天冲突=gap+warn；coverage 分母 2→4）；WeekPlanView evalCtx 注入 loadRoutine() |
+| H4 | 本批 | planEval 增**成长维度**（key=growth）：习惯覆盖（R5.2 recurring 任务 weeks ÷ totalWeeks，≥80% good / <50% gap+补齐建议）+ 目标进度（GoalsPage active 目标 × 本周相关块标题互含；临期 ≤6 周无相关块 → gap，≤2 周 serious，advice 点名目标）；weeksLeft 由调用方折算（摘要层不读时钟）；评估维度 5→6（H1.3 维度锁随更并申报） |
+| H2 | 本批 | **server/plan_review.py**（新）：/api/plan/review（router 模式同 plan_dialog）——入参 plan_digest+user_id+week_no，每维度调健康库/方法库**真检索**（retrieve 惰性导入+全异常兜底），findings+advice 每条带 source{lib,slug,tier,quote,retrieved}；检索命中同名 slug 用库内 tier（真检索），缺失降级静态口径标 retrieved=false；判定不依赖检索；unknown 不冒充 0；**只建议不改日程（L4）**。前端：api.planReview 客户端 + WeekPlanView 面板展开时拉取（失败静默 offline）+ PlanEvalPanel「后端三库复核」区（advice 带 source 徽标，静态降级如实标注） |
+
+**测试**：tests/h3h4-eval 8 条（作息冲突天数/未设置 unknown/growth 三态/源码锁）+ scripts/test_plan_review.py（离线 6 组：达标/不达标/unknown/检索降级/同库命中/纯函数 L4，`全部通过 ✅`）；engine 728→**737**/0；ui **424**/0；E2E 98/0 + 19/0；后端离线套件 8 套全绿。
+
+**反向验证（6 处，全部删实现→恰红→sha256 一致还原）**：后端 aerobic 阈值翻倍恰 3 红｜RV-H3 删作息冲突计算恰 2 红｜RV-H4a 删 growth 注册恰 3 红｜RV-H4b 删 evalCtx 接线恰 1 红｜（另：H2 检索降级路径由用例 4 直接断言）。
+
+**断言漂移申报（1 处）**：H1.3 维度清单锁 5→6（growth 入列，锁意图=面板按维度分区渲染，不变）。

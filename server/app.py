@@ -57,12 +57,14 @@ import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand（LLM 听懂，规则兜底在前端）
+import plan_review  # R批 Wave3 H2：后端日程复核 /api/plan/review（三库检索，findings+advice 带 source）
 import auth_api     # 账号系统（2026-10-02 delta 融合：Ray 线 serve.py /api/auth 的 FastAPI 移植，
                     #   补口前 /api/auth/me 恒 404 → 前端 auth 恒 offline → 登录页永远不出现）
 auth_api.init_db()
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 app.include_router(plan_dialog.router)
+app.include_router(plan_review.router)  # R批 H2
 app.include_router(auth_api.router)
 
 # CORS 白名单：默认本机前端；演示/局域网真机测试时用环境变量临时放开

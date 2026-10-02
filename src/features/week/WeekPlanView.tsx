@@ -60,7 +60,8 @@ import { Toasts, type ToastItem, type ToastKind } from './toast';
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
 // P1-2（白天批）：作息真源（routineStore）→ 引擎日窗；问卷就寝兜底
 import { dayWindowWithFallback, loadRoutine } from './routineStore';
-import { loadBasicInfo } from '@/lib/identity';
+import { getUserId, loadBasicInfo } from '@/lib/identity';
+import { planReview, type PlanReviewReport } from '@/lib/api';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
 import { SlotEditor } from './SlotEditor';
 // ── R3：调课/停课覆盖层 + 时间追问 ────────────────────────────
@@ -747,11 +748,58 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * unknown + 稀疏数据提示，不会给出任何指控。
    */
   const [evalOpen, setEvalOpen] = useState(false);
+  // H3/H4（R批 Wave3）：评估摘要接真实数据源 ——
+  //  · routine = 作息设置真源（Q1a/Q1b，与引擎日窗同一份，P1-2）→ 睡眠维度对「你自己的节奏」判定；
+  //  · goals = GoalsPage active 目标（weeksLeft 用 today+termStart 折算，摘要层不读时钟）；
+  //  · habitSpans = R5.2 recurring 重复任务的学期周覆盖 → 习惯跑道进度。
+  const evalCtx = useMemo(() => {
+    const r = loadRoutine();
+    const routine = r.wakeMin != null && r.sleepMin != null
+      ? { wakeMin: r.wakeMin, sleepMin: r.sleepMin }
+      : null;
+    const cur = currentWeekNo(schedule.termStart, todayISO());
+    const wkOf = (iso: string | undefined | null): number | null => {
+      if (!iso) return null;
+      const n = currentWeekNo(schedule.termStart, iso);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      routine,
+      goals: goals
+        .filter((g) => (g.status ?? 'active') === 'active' && !!g.title)
+        .map((g) => {
+          const due = wkOf(g.dueAt);
+          return {
+            title: g.title,
+            dueAt: g.dueAt,
+            weeksLeft: due != null ? Math.max(0, due - cur) : null,
+          };
+        }),
+      habitSpans: layer.tasks
+        .filter((t) => t.recurring)
+        .map((t) => ({ title: t.title, weeks: t.weeks ?? [] })),
+      totalWeeks: schedule.totalWeeks,
+    };
+  }, [goals, layer, schedule.termStart, schedule.totalWeeks]);
   const evalDigest = useMemo(
-    () => digestPlan(plan ?? EMPTY_PLAN),
-    [plan],
+    () => digestPlan(plan ?? EMPTY_PLAN, evalCtx),
+    [plan, evalCtx],
   );
   const evalResult = useMemo(() => evaluateDigest(evalDigest), [evalDigest]);
+
+  // H2（R批 Wave3）：后端三库复核 —— 面板展开时取一次；失败静默
+  //（本地 planEval 评估照常，后端只是「对照真库再核一遍」的增强层）。
+  const [evalReview, setEvalReview] = useState<
+    { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport }>({ state: 'loading' });
+  useEffect(() => {
+    if (!evalOpen) return;
+    let alive = true;
+    setEvalReview({ state: 'loading' });
+    planReview({ user_id: getUserId(), week_no: weekNo, digest: evalDigest as unknown as Record<string, unknown> })
+      .then((report) => { if (alive) setEvalReview(report.ok ? { state: 'ok', report } : { state: 'offline' }); })
+      .catch(() => { if (alive) setEvalReview({ state: 'offline' }); });
+    return () => { alive = false; };
+  }, [evalOpen, evalDigest, weekNo]);
 
   /**
    * 「此刻」是否落在本周 —— `fromNow` 的前置条件。
@@ -1888,7 +1936,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </summary>
         {evalOpen && (
           <div className="mt-3">
-            <PlanEvalPanel digest={evalDigest} evaluation={evalResult} />
+            <PlanEvalPanel digest={evalDigest} evaluation={evalResult} review={evalReview} />
           </div>
         )}
       </details>

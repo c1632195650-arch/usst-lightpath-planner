@@ -28,6 +28,7 @@ import {
   type Severity,
 } from '@/lib/planner/planEval';
 import type { PlanDigest } from '@/lib/planner/planDigest';
+import type { PlanReviewReport } from '@/lib/api';
 import type { TimeBlock } from '@/types';
 
 /* ============================================================
@@ -213,9 +214,12 @@ function DimensionBlock({
 export function PlanEvalPanel({
   digest,
   evaluation,
+  review,
 }: {
   digest: PlanDigest;
   evaluation: PlanEvaluation;
+  /** H2（R批 Wave3）：后端三库复核 —— loading 拉取中 / ok 有报告 / offline 不可达 */
+  review?: { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport };
 }) {
   const slugs = useMemo(() => citedSlugs(evaluation), [evaluation]);
   const judged = evaluation.dimensions.filter((d) => d.score != null);
@@ -283,6 +287,48 @@ export function PlanEvalPanel({
               </li>
             ))}
           </ul>
+        </details>
+      )}
+
+      {/* H2（R批 Wave3）：后端三库复核 —— 每条建议带 source（库名 + slug + tier）。
+          检索缺失时后端降级为静态口径并标「静态」，如实展示不冒充真检索。 */}
+      {review?.state === 'loading' && (
+        <p className="text-[11px] leading-5 text-ink-faint" data-testid="plan-review-loading">
+          正在对照知识库复核…
+        </p>
+      )}
+      {review?.state === 'offline' && (
+        <p className="text-[11px] leading-5 text-ink-faint" data-testid="plan-review-offline">
+          后端库检未连接 —— 以上是本地编译阈值评估；启动后端后可对照知识库复核。
+        </p>
+      )}
+      {review?.state === 'ok' && review.report && (
+        <details className="rounded-xl border border-ink/10 px-4 py-3" data-testid="plan-review-backend">
+          <summary className="cursor-pointer text-[12px] text-ink-soft">
+            后端三库复核（{review.report.dimensions.reduce((n, d) => n + d.advice.length, 0)} 条建议 ·{' '}
+            {Object.values(review.report.retrieval).filter(Boolean).length}/{Object.keys(review.report.retrieval).length} 库命中）
+          </summary>
+          <div className="mt-2 space-y-2">
+            {review.report.dimensions.map((dim) => (
+              <div key={dim.key}>
+                <p className="text-[11.5px] font-semibold text-ink">{dim.label}</p>
+                <ul className="mt-1 space-y-1">
+                  {dim.advice.length === 0 && (
+                    <li className="text-[11px] leading-5 text-ink-faint">· 无需调整</li>
+                  )}
+                  {dim.advice.map((a, i) => (
+                    <li key={i} className="text-[11.5px] leading-5 text-ink-soft">
+                      · {a.text}
+                      <span className="ml-1 whitespace-nowrap rounded border border-ink/15 px-1 text-[10px] text-ink-faint">
+                        {a.source.lib} {a.source.tier} 级 · {a.source.slug}{a.source.retrieved ? '' : '（静态口径）'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            <p className="text-[10.5px] leading-4 text-ink-faint">{review.report.caveats[0]}</p>
+          </div>
         </details>
       )}
 
