@@ -209,3 +209,28 @@ test('R5.2 源码锁: templates 的 recurring 字段与 goalToTasks 生成分支
   assert.match(wpc, /byWeek.get\(w as number\) \?\? \[\]/, '干跑逐周展开在位');
   assert.match(wpc, /const expectedBlocks = candidates\.reduce/, '展开块数口径');
 });
+
+test('R5.2 源码锁: 块认领用 endsWith 而非 includes（MOSS 验收补，2026-10-03）', () => {
+  // 背景：rec 序号会互为前缀（rec1 是 rec10 的子串），slug 也可能互为前缀。
+  //   块 id 形如 `w6-d1-morning-custom-goal-打球-rec10`：
+  //     includes('goal-打球-rec1') → true  ← 误认：rec10 的块被 rec1 认走
+  //     endsWith('goal-打球-rec1') → false ← 精确：只有完整 id 尾部才算命中
+  // 现状实测：placed 用 `some()` 且**不记录归属**，故两种写法计数等价 →
+  //   这条锁是**意图锁**而非行为锁：防止未来 placed 改为记录归属时，
+  //   误认领悄悄回来（那时才会真正影响「哪个任务的块没落位」的判断）。
+  const wpc = src('/src/features/libao/weekPlanForChat.ts');
+  const claim = wpc.match(/candidates\.some\(\(t\) => b\.id\.(endsWith|includes)\(t\.id\)\)/);
+  assert.ok(claim, '块认领写法在位');
+  assert.equal(
+    claim![1],
+    'endsWith',
+    `块认领必须用 endsWith（当前是 ${claim![1]}）—— includes 会让 rec1 认领 rec10 的块`,
+  );
+  // 顺带把「不记录归属」这一事实钉住：它是当前两种写法等价的原因，
+  // 一旦改成记录归属，上面那条锁就从意图锁升级为行为锁。
+  assert.match(
+    wpc,
+    /for \(const b of after\.blocks\) \{\s*\n\s*if \(b\.id && candidates\.some\(/,
+    'placed 仍按 some() 布尔认领（未记录归属）',
+  );
+});
