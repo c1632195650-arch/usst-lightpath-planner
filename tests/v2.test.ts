@@ -91,3 +91,13 @@ test('V2-2 源码: looksLikeAction 放行 hold 语族（入口闸与 send 门双
   assert.match(src, /\(别排\|不要排\|留出来\|空出来\|这段时间有空\|没空\)/);
   assert.match(src, /looksLikeAction[\s\S]*?别排[\s\S]*?return true;/s);
 });
+
+test('2026-10-02 源码: needs_clarification 首问必须挂快捷项按钮卡（批次2 曾漏接最主路径）', () => {
+  // 反向：删掉该处 options 行 → 本用例红。真机实证（终验）：修前
+  // 「帮我规划一下我明天要打篮球」首问只有文字，第二轮才冒出 45/60/90/2h。
+  const src = readFileSync(fileURLToPath(new URL('../src/features/libao/LbaoChat.tsx', import.meta.url)), 'utf8');
+  assert.match(
+    src,
+    /planPoints: numberedQuestions\(pairs\),[\s\S]{0,400}?options: pairs\.length > 0[\s\S]{0,200}?quickOptionsFor\(pairs\[0\]\.slot, slots,/s,
+  );
+});
