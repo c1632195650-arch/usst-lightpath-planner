@@ -1682,9 +1682,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       .slice(-4)
       .map((m) => `${m.role === 'user' ? '用户' : '梨宝'}: ${m.text.slice(0, 80)}`);
 
-    // ── S2 · 状态机出口①：collect 态显式退出（最高优先，确定性，不耗 LLM）────
+    // ── S2 · 状态机出口①：显式退出（最高优先，确定性，不耗 LLM）──────
     // 词表与判定在 schedSession.ts；退出 = 清空追问/挑块并回 idle，不再追问。
-    if (schedMode === 'collect' && isExitCommand(q)) {
+    // 2026-10-02 终验修复：守卫原为 `schedMode === 'collect'`，而 schedMode 已扩为
+    // idle/collect/draft/blocked 四值 → draft/blocked 相位打字说「退出排程」不再生效
+    // （与草稿卡提示「就这么排 / 先不排」矛盾，离线时更无 dialog 兜底）。改为**除 idle 外全相位**。
+    if (schedMode !== 'idle' && isExitCommand(q)) {
       setTopic(null);
       setMessages((current) => [...current, { role: 'lbao', text: EXIT_ACK }]);
       setLoading(false);
@@ -1964,7 +1967,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           </div>
         )}
 
-        {schedMode === 'collect' && (
+        {schedMode !== 'idle' && (
           <div
             data-testid="sched-badge"
             className="mb-3 flex items-center gap-2 rounded-xl border border-brand/25 bg-brand/5 px-3 py-2 text-xs leading-5 text-ink-soft"
@@ -2183,6 +2186,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
         <div className="mt-3 flex items-center gap-2 border-t border-ink/10 pt-3">
           <input
+            data-testid="libao-input"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && send()}

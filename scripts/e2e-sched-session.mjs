@@ -74,10 +74,11 @@ async function onboard(page) {
 }
 
 /** 发一句话并等梨宝回完（loading 消失）。
- *  placeholder 在 collect 态会换成「排程中 ——」文案（S2 的 UI 信号之一）；
- *  D0 起排程模式（非 collect）也有专属 placeholder，三个都要认。 */
+ *  2026-10-02 终验修复：placeholder 已按**相位动态变化**（问答/排程模式/collect/
+ *  draft「草稿待确认」/blocked「梨宝在等你选」…），靠正则枚举变体必然追不上 ——
+ *  改用稳定 `data-testid="libao-input"`（同步加在 LbaoChat 输入框上）。 */
 async function say(page, text) {
-  await page.getByPlaceholder(/问梨宝|排程中|排程模式/).fill(text);
+  await page.getByTestId('libao-input').fill(text);
   await page.getByRole('button', { name: '发送' }).click();
   await page.waitForFunction(
     () => !document.body.innerText.includes('掐指一算'),
