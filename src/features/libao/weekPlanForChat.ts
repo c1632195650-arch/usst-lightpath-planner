@@ -819,32 +819,38 @@ export function quickOptionsFor(
       // 批次 3（6.3/6.4）：按钮卡次行小字 = 时长概念锚（tips 轮换）；
       // 推荐档（第二项）的次行给**带来源的依据行**（健康库/方法库 + 本周已排量）。
       const cat = classifyGoal(slots.title);
-      const tips = cat === 'generic' ? TAXONOMY_TIPS_FALLBACK : null;
-      const catTips = tips ?? TAXONOMY_TIPS(cat);
+      const entry = TAXONOMY[cat];
       const evidence = evidenceLine(cat, {
         ...(opts?.plan ? { weekMinutes: categoryMinutesOfWeek(opts.plan, cat) } : {}),
         ...(opts?.exercisePerWeek != null ? { exercisePerWeek: opts.exercisePerWeek } : {}),
       });
       if (isSingleDayEvent(slots)) {
+        // R批 P0-3（R3.1/R3.2）：**按档位查表**，不再 `i % catTips.length` 轮换。
+        // 轮换会让「45 分钟」配到「每周 ≥150 分钟」这种周总量说明（CY：tips 跟
+        // 选项相关性不大）。依据行（evidence）只出现在推荐档（i===1），其余档
+        // 各取自己那一条；缺项回退到该类目的推荐档一句话，**不回退到轮换**。
         const items = [
-          { label: '45 分钟', value: '45分钟' },
-          { label: '60 分钟', value: '60分钟' },
-          { label: '90 分钟', value: '90分钟' },
-          { label: '2 小时', value: '2小时' },
+          { label: '45 分钟', value: '45分钟', min: 45 },
+          { label: '60 分钟', value: '60分钟', min: 60 },
+          { label: '90 分钟', value: '90分钟', min: 90 },
+          { label: '2 小时', value: '2小时', min: 120 },
         ];
         return items.map((it, i) => ({
-          ...it,
-          hint: i === 1 && evidence ? evidence : catTips[i % catTips.length],
+          label: it.label,
+          value: it.value,
+          hint: i === 1 && evidence ? evidence : durationTip(entry, it.min),
         }));
       }
+      // 频率档同理（键 = 每周次数）：「每天 30 分钟」= 7 次/周
       const items = [
-        { label: '每周 1-2 次', value: '每周2次' },
-        { label: '每周 3-4 次', value: '每周4次' },
-        { label: '每天 30 分钟', value: '每天都来，每次30分钟' },
+        { label: '每周 1-2 次', value: '每周2次', perWeek: 2 },
+        { label: '每周 3-4 次', value: '每周4次', perWeek: 4 },
+        { label: '每天 30 分钟', value: '每天都来，每次30分钟', perWeek: 7 },
       ];
       return items.map((it, i) => ({
-        ...it,
-        hint: i === 0 && evidence ? evidence : catTips[i % catTips.length],
+        label: it.label,
+        value: it.value,
+        hint: i === 0 && evidence ? evidence : frequencyTip(entry, it.perWeek),
       }));
     }
     case 'period': {
@@ -868,9 +874,19 @@ export function quickOptionsFor(
   }
 }
 
-import { TAXONOMY } from './taxonomy';
-const TAXONOMY_TIPS = (cat: GoalCategory): string[] => TAXONOMY[cat].tips;
-const TAXONOMY_TIPS_FALLBACK: string[] = ['说个大概时长就行，我按你的日历找空档'];
+import { TAXONOMY, type TaxonomyEntry } from './taxonomy';
+
+/**
+ * R批 P0-3（R3.1）· 档位 → 该档说明。
+ *
+ *  缺项回退 = 该类目 `tips[0]`（一句话总纲），**不回退到轮换** —— 轮换正是
+ *  本条要消灭的缺陷（档位与说明无语义关系）。generic 的 tips[0] 就是引导语。
+ */
+const durationTip = (entry: TaxonomyEntry, min: number): string =>
+  entry.tipsByDuration?.[min] ?? entry.tips[0];
+
+const frequencyTip = (entry: TaxonomyEntry, perWeek: number): string =>
+  entry.tipsByFrequency?.[perWeek] ?? entry.tips[0];
 
 /** blocked 编号方案 → 按钮卡。value 用「方案N」—— parseOptionChoice 确定性接住，
  *  不经 LLM（强化计划 D 的兜底通道原样复用）。 */
