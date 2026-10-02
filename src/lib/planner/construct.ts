@@ -393,6 +393,13 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const rollingRes = dayCapacityFactors(req.rolling, ctx.actualLoadByDow ?? undefined);
   const loadDecisions = rollingRes.days;
 
+  // R5.2（路线 A，2026-10-03）· 周级预放去重：一个浮动用户任务**每周至多一块**。
+  // 6.2c 预放（2026-10-02 白天批引入）与 6.5 活动循环此前**各放一次**，浮动
+  // budgetExempt 任务（无 dayOfWeek，每天可参与）会被放到 7 天 × 2 处 —— 探针
+  // 实录（一次性任务也双放：540+1100 两块）。用户任务「说一次 = 一周一块」，
+  // 每周重复块（recurring）更依赖这一语义。周级集合跨天生效。
+  const weekPlacedTaskIds = new Set<string>();
+
   for (const day of DAY_ORDER) {
     const dayName = DAY_NAME[day];
     const daySlots = slotsOn(schedule, weekNo, day);
@@ -490,16 +497,21 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
      * golden 语料不带用户任务 → 预放空转，golden 零漂移。 */
     const preCustom = floatingTasks
       .filter(taskActive)
-      .filter((t) => t.budgetExempt && (t.dayOfWeek == null || t.dayOfWeek === day))
+      .filter((t) => t.budgetExempt && !weekPlacedTaskIds.has(t.id))
+      .filter((t) => t.dayOfWeek == null || t.dayOfWeek === day)
       .sort((a, b) => (b.priority ?? 90) - (a.priority ?? 90));
     for (const t of preCustom) {
+      if (weekPlacedTaskIds.has(t.id)) continue; // 天循环跨周防重入（同日 filter 不够）
       const block = placeTemplate({
         tpl: customTemplate(t), day, placed, dayCampus, mkId, policy, transfer,
         dayStartMin: softFloorMin, dayEndMin,
         homeBaseName: req.homeBase?.name,
         recoveryUntil: 0,
       });
-      if (block) placed = [...placed, block];
+      if (block) {
+        placed = [...placed, block];
+        weekPlacedTaskIds.add(t.id);
+      }
     }
 
     /* --- 6.3 三餐（按地点就近 + 营业时段 + 走路时间） --- */
@@ -619,6 +631,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
      */
     const socialCap = (req.persona?.axes.SOC ?? 0) >= 70 ? 2 : 1;
     for (const tpl of candidates) {
+      // R5.2：6.2c 已预放过的用户任务不再参与活动循环（一周一块，防双放）
+      if (tpl.id.startsWith('custom-') && weekPlacedTaskIds.has(tpl.id.slice('custom-'.length))) continue;
       const cat = tpl.category as ActivityCategory;
       const cap = cat === 'social' ? socialCap : (CATEGORY_PER_DAY[cat] ?? 1);
       // D4：用户点名块（budgetExempt）不受每日类目上限与活动预算闸约束 ——

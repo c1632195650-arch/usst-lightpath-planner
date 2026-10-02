@@ -84,11 +84,14 @@ test('R5.3: 非长期句的 effort 问法不变（单日「占多久」/ 常规�
 
 /* ---------------- R5.4 · 学期跨度与「覆盖到第 N 周」 ---------------- */
 
-test('R5.4: goalToTasks 长期 + 频率 → 块铺开跨多周（RV-R5b 锚）', () => {
+test('R5.4: goalToTasks 长期 + 频率 → 每周重复任务覆盖多周（RV-R5b 锚；R5.2 路线 A 后为 recurring 形态）', () => {
   const s = parseIntentSlots('这学期想养成晨跑的习惯；从下周开始；每周3次，每次30分钟', TODAY);
   const tasks = goalToTasks(s, SCHEDULE, TODAY);
-  assert.ok(tasks.length >= 6, `长期铺开应产出多块，实际 ${tasks.length}`);
-  const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))];
+  // R5.2（CY 裁决路线 A）：不再逐周采样成几十个一次性任务 ——
+  // 每个「每周名额」一个任务，weeks 覆盖整段 + recurring 标记
+  assert.equal(tasks.length, 3, `每周 3 次 = 3 个重复任务，实际 ${tasks.length}`);
+  assert.ok(tasks.every((t) => t.recurring === true), '全部带 recurring 标记');
+  const weeks = [...new Set(tasks.flatMap((t) => (t.weeks ?? []).filter((w): w is number => Number.isFinite(w))))];
   assert.ok(weeks.length > 1, `落盘覆盖周数必须 > 1，实际 ${weeks.length}（${weeks.join(',')}）`);
 });
 

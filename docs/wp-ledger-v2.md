@@ -511,3 +511,22 @@
 - 门禁：tsc 0 / engine 718/0 / ui 424/0 / test_memory_facts 15/0。
 
 **R5.2 裁决建议（仍未拍板）**：**建议路线 A**，但理由与zcode 申报的不同——实读契约后发现 `UserTask.weeks` **已经**能表达「每周重复」（空/未给 = 全学期，`[5,6,7,8]` = 只这四周），「独立表」在 localStorage KV 下没有额外语义收益，而 B 要动`storageRegistry` schema 版本 + 全部消费方。A 只需在 `UserTask` 加可选 `recurring?: { weekday; untilWeek }`，展开逻辑复用现有 weeks 通道，旧数据零迁移。**待 CY 一并拍板第二问：重复块在重排（ripple）里的锁定语义 —— 每周独立可挪 vs 全部周联动。**
+
+### §R·R5.2 重复块落地（2026-10-03，CY 裁决「路线 A + 每周独立可挪」）
+
+> 裁决理由（CY，与 zcode 原申报不同）：实读契约发现 `UserTask.weeks` 本就能表达「每周重复」
+> （空/未给=全学期，`[5,6,7,8]`=只这四周，construct::taskActive 逐周消费）——独立表在
+> localStorage KV 下没有额外语义收益，却要动 schema 版本 + 全部消费方；A 只需加一个可选
+> recurring 字段，展开复用现有 weeks 通道，旧数据零迁移。
+
+| 项 | 内容 | 实据 |
+|---|---|---|
+| 生成侧 | `templates.UserTask` 增可选 `recurring?: boolean`；`goalToTasks` 长期分支改为**每「每周名额」一个重复任务**（`goal-{slug}-rec{i}`，weeks=起点周…学期末整段 + recurring:true + budgetExempt；点名星期则第一名额钉那天）——不再逐周采样几十个一次性块 | tests/r52-recurring（生成形态/点名钉天/非长期零漂移） |
+| 干跑侧 | `checkGoalFeasibility` 按 weeks **展开逐周干跑**：candidateCount/placedCount=Σ\|weeks\|（一次性任务展开仍=1，旧口径逐位一致）；容量口径同步展开；块认领 includes→endsWith（任务 id 是块 id 后缀，防 rec 前缀互撞） | placedCount=45=candidateCount（每周3次×15周） |
+| 每周独立可挪 | **零引擎改动成立**：blockId 自带 w{week} 前缀、LockedPlacement 按块 id 作键 → 第 7 周的锁写回第 7 周、第 8 周布局逐块不变（测试实证三步法：无锁取真实块 id → hard 锁写回 → 跨周布局逐块相等） | tests/r52「每周独立可挪」 |
+| 附带缺陷修复 | **construct 双放**：白天批（2026-10-02）引入的 6.2c 预放与 6.5 活动循环各放一次 → 浮动用户任务一周两块（一次性任务也中招，探针实录 540+1100）。修法=周级预放去重（weekPlacedTaskIds 跨天生效 + 6.5 循环跳过已预放任务）；golden 语料不带用户任务 → 零漂移 | tests/r52「修复双放」恰一块断言 |
+| 草稿卡 | LbaoChat 草稿 weeks 收集 weeks[0] → 全跨度 flatMap；caveat 口径升格「每周 N 次，铺到第 X 周（约 N 周）」 | E2E R3 剧本口径 |
+
+**反向验证（3 处，全部删实现→恰红→sha256 一致还原）**：RV-R52a 删 recurring 生成分支恰 5 红｜RV-R52b 砍 weeks 展开为 slice(0,1) 恰 1 红（placedCount 3≠45）｜RV-R52c 关周级去重恰 2 红（双放复现）。
+
+**门禁**：tsc 0｜engine **728/0**（含 golden AC-2 冻结快照逐块一致，construct 改动零漂移）｜ui **424/0**｜BLOCKERS R5.2 条目结项。

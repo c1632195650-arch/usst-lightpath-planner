@@ -370,6 +370,16 @@ export interface UserTask {
    * 豁免 = 不参与活动预算闸与每日上限闸；不改 kind、不入 study 统计。
    */
   budgetExempt?: boolean;
+  /**
+   * R批 P1-1（R5.2，CY 裁决路线 A）：每周重复标记 —— 「每周重复的习惯块」。
+   * 展开语义**完全复用 `weeks` 通道**（construct::taskActive：空 = 全学期、
+   * 区间 = 只那些周），本字段只做三件事：① UI 把它读成「每周重复」而不是
+   * 几十个一次性块；② 干跑/容量统计按 weeks 跨度展开（见
+   * weekPlanForChat::checkGoalFeasibility）；③ 涟漪语义 = **每周独立可挪**
+   * （blockId 自带 w{week} 前缀、LockedPlacement 按块 id 作键，天然逐周独立，
+   * 无需引擎改动）。可选字段：旧数据没有它，读层零迁移。
+   */
+  recurring?: boolean;
 }
 
 /** 由用户输入构造一个可排程的模块 */

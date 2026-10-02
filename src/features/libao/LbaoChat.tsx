@@ -1199,7 +1199,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     const tasks = goalToTasks(effSlots, schedule, today);
-    const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
+    const weeks = [...new Set(tasks.flatMap((t) => (t.weeks ?? []).filter((w) => Number.isFinite(w))))].sort((a, b) => a - b);
     const key = (pendingSeq.current += 1);
     setPending((p) => ({ ...p, [key]: { kind: 'replace', title: effSlots.title, tasks, weeks, cancelTarget: target } }));
     markDraft(key, effSlots); // D3：草稿卡挂 topic{draft}
@@ -1303,7 +1303,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         // 排得下 → 出草稿，**等确认**。这是 L4 边界：梨宝不替用户拍板。
         // 窗口常跨多周 —— 落盘的周从任务本身取，不假设是「当前周」。
         const goalTasks = goalToTasks(slots, schedule, today);
-        const weeks = [...new Set(goalTasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
+        const weeks = [...new Set(goalTasks.flatMap((t) => (t.weeks ?? []).filter((w) => Number.isFinite(w))))].sort((a, b) => a - b);
         const key = (pendingSeq.current += 1);
         setPending((p) => ({ ...p, [key]: {
           title: slots.title,

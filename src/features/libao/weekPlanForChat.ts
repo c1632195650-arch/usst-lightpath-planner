@@ -343,6 +343,52 @@ export function goalToTasks(
     return 120;
   };
 
+  // ⑤·先（R5.2 路线 A，CY 裁决 2026-10-03）：**每周重复**的长期块不再逐周
+  // 采样成几十个一次性任务 —— `weeks` 通道本就能表达「每周重复」（空 = 全学期、
+  // 区间 = 只那些周，construct::taskActive 逐周消费），所以每个「每周名额」
+  // 一个任务：weeks 覆盖整段 + `recurring: true` 标记。旧数据没有该字段，
+  // 读层零迁移；涟漪语义 = 每周独立可挪（blockId 自带 w{week} 前缀）。
+  const slug = slugOf(slots.title);
+  // 批次 1（交互升级方案 4.4）：用户点名的钟点收窄引擎放置窗 —— 零引擎侧改动，
+  // 仍走既有 `notBeforeMin`/`notAfterMin` 通道（D4 已为 window 接好）。clock 优先
+  // 于 window（「晚上6点到8点」不该被放宽回整个晚上）；单端点缺哪端就回退哪端
+  // 的 window 口径，再缺回默认（09:00 起）。**仍不给 `startMin` 硬锁定** ——
+  // 「软偏好、引擎可挪」的哲学不变，草稿卡会如实展示实际排到的时段。
+  const goalNotBefore = slots.clock?.startMin ?? slots.window?.fromMin ?? GOAL_EARLIEST_MIN;
+  const goalNotAfter = slots.clock?.endMin ?? slots.window?.toMin;
+
+  if (longTermSpanActive(slots) && slots.perWeekCount != null && slots.perWeekCount > 0) {
+    const wkStart = Math.max(1, currentWeekNo(schedule.termStart, from));
+    const wkEnd = Math.min(schedule.totalWeeks, Math.max(wkStart, currentWeekNo(schedule.termStart, to)));
+    if (Number.isFinite(wkStart) && Number.isFinite(wkEnd) && wkEnd >= wkStart) {
+      const weeks: number[] = [];
+      for (let w = wkStart; w <= wkEnd; w++) weeks.push(w);
+      for (let i = 0; i < slots.perWeekCount; i++) {
+        out.push({
+          id: `goal-${slug}-rec${i}`,
+          title: slots.title,
+          emoji: '🎯',
+          // 备赛/备考本质上是「学」，用餐/活动都不对；非必做的事才降为 activity
+          kind: slots.essential ? 'study' : 'activity',
+          category: 'custom',
+          // 用户点名了星期（每周三）→ 第一个名额落在那天，其余交给引擎找空档
+          ...(wantDow != null && i === 0 ? { dayOfWeek: wantDow } : {}),
+          weeks,
+          durationMin: blockMin,
+          recurring: true,
+          ...(slots.place ? { place: slots.place } : {}),
+          priority: slots.priorityHint,
+          ...(slots.essential ? { essential: true } : {}),
+          notBeforeMin: goalNotBefore,
+          ...(goalNotAfter != null ? { notAfterMin: goalNotAfter } : {}),
+          budgetExempt: true,
+          note: `${noteForGoal(slots)}｜每周重复（第${wkStart}–${wkEnd}周），每周独立可挪`,
+        });
+      }
+      return out;
+    }
+  }
+
   // ④ 窗口内均匀取样 + 同一天去重（与 `expandDeadlines` 逐行同构）
   const picked = new Set<number>();
   for (let i = 0; i < nBlocks; i++) {
@@ -352,14 +398,7 @@ export function goalToTasks(
 
   // ⑤ 生成任务。id **只与「目标 + 周次 + 星期」有关，不含时间** ——
   //    语义键含时间会让引擎把同一块认成「删一个 + 新增一个」（见 `userPlanStore` 的 id 纪律）。
-  const slug = slugOf(slots.title);
-  // 批次 1（交互升级方案 4.4）：用户点名的钟点收窄引擎放置窗 —— 零引擎侧改动，
-  // 仍走既有 `notBeforeMin`/`notAfterMin` 通道（D4 已为 window 接好）。clock 优先
-  // 于 window（「晚上6点到8点」不该被放宽回整个晚上）；单端点缺哪端就回退哪端
-  // 的 window 口径，再缺回默认（09:00 起）。**仍不给 `startMin` 硬锁定** ——
-  // 「软偏好、引擎可挪」的哲学不变，草稿卡会如实展示实际排到的时段。
-  const goalNotBefore = slots.clock?.startMin ?? slots.window?.fromMin ?? GOAL_EARLIEST_MIN;
-  const goalNotAfter = slots.clock?.endMin ?? slots.window?.toMin;
+  //    （R5.2：每周重复的任务在上面已经提前 return —— 这里的 id 仍含周次，是一次性块。）
   for (const idx of [...picked].sort((a, b) => a - b)) {
     const iso = days[idx];
     const wk = currentWeekNo(schedule.termStart, iso);
@@ -543,14 +582,22 @@ export function checkGoalFeasibility(args: {
 
   // 诚实标注：用了默认窗口就是用了，别说成是用户给的
   if (longTermSpanActive(slots)) {
-    // R5.4：长期按学期铺了 —— 草稿卡说清覆盖口径（「铺到第 N 周」），别再说 21 天窗口
-    const lastWeek = candidates.reduce((m, t) => Math.max(m, t.weeks?.[0] ?? 0), 0);
+    // R5.4：长期按学期铺了 —— 草稿卡说清覆盖口径（「铺到第 N 周」），别再说 21 天窗口。
+    // R5.2 路线 A：每周重复任务的覆盖周从 weeks 区间取（尾周），不是 weeks[0]。
+    const lastWeek = candidates.reduce((m, t) => {
+      const ws = t.weeks ?? [];
+      return Math.max(m, ws.length ? ws[ws.length - 1] : (t.weeks?.[0] ?? 0));
+    }, 0);
+    const expandedBlocks = candidates.reduce((n, t) => n + (t.weeks?.length || 1), 0);
     const spanWeeks = slots.perWeekCount && slots.perWeekCount > 0
-      ? Math.max(1, Math.round(candidates.length / slots.perWeekCount))
+      ? Math.max(1, Math.round(expandedBlocks / slots.perWeekCount))
       : 1;
+    const perWk = slots.perWeekCount && slots.perWeekCount > 0 ? slots.perWeekCount : 0;
     caveats.push(
       lastWeek > 0
-        ? `这是长期安排 —— 按你给的节奏铺到第 ${lastWeek} 周（约 ${spanWeeks} 周），不是只排这几天。`
+        ? perWk > 0
+          ? `这是长期安排 —— 每周 ${perWk} 次，铺到第 ${lastWeek} 周（约 ${spanWeeks} 周），不是只排这几天。`
+          : `这是长期安排 —— 按你给的节奏铺到第 ${lastWeek} 周（约 ${spanWeeks} 周），不是只排这几天。`
         : '这是长期安排 —— 按你给的节奏铺进本学期，不是只排这几天。',
     );
   } else if (!slots.dateTo) {
@@ -577,13 +624,19 @@ export function checkGoalFeasibility(args: {
   //    这个 bug 是浏览器 E2E 实测抓到的（槽位全对、结论却是 infeasible），
   //    单元测试的窗口恰好跨到当前周，所以没暴露 —— 回归用例见
   //    「把关：窗口全在后面的周」。
+  // R5.2（路线 A）：每周重复任务的 `weeks` 是一段区间 —— 干跑按 **weeks 展开**
+  // 逐周跑（同一任务在每一周各算一次），这正是「展开复用 weeks 通道」的另一半：
+  // 引擎侧 construct 逐周展开，干跑侧也必须逐周展开，两边口径才一致。
   const byWeek = new Map<number, UserTask[]>();
+  /** 展开后的「候选块总数」= Σ|weeks|（一次性任务 weeks=[w] 仍是 1 → 与旧口径逐位一致） */
+  const expectedBlocks = candidates.reduce((n, t) => n + (t.weeks?.length || 1), 0);
   for (const t of candidates) {
-    const w = t.weeks?.[0];
-    if (!Number.isFinite(w)) continue;
-    const list = byWeek.get(w as number) ?? [];
-    list.push(t);
-    byWeek.set(w as number, list);
+    for (const w of t.weeks ?? []) {
+      if (!Number.isFinite(w)) continue;
+      const list = byWeek.get(w as number) ?? [];
+      list.push(t);
+      byWeek.set(w as number, list);
+    }
   }
 
   // D4：placed 改按 id 认领（候选 id 内嵌在引擎块 id 的语义键里）——
@@ -614,7 +667,7 @@ export function checkGoalFeasibility(args: {
     // D4：placed 改按 id 认领（候选 id 内嵌在引擎块 id 的语义键里，`w{w}-d{d}-{kind}-custom-{taskId}`）
     // —— 此前按 title 认领，同名块会误认领「别的块替它落了地」。
     for (const b of after.blocks) {
-      if (b.id && candidates.some((t) => b.id.includes(t.id))) placed.push({ week: w, block: b });
+      if (b.id && candidates.some((t) => b.id.endsWith(t.id))) placed.push({ week: w, block: b });
     }
     studyDeltaMin += after.stats.studyMin - before.stats.studyMin;
 
@@ -672,7 +725,7 @@ export function checkGoalFeasibility(args: {
     return {
       ...base,
       kind: 'infeasible',
-      candidateCount: candidates.length,
+      candidateCount: expectedBlocks,
       added,
       studyDeltaMin,
       caveats,
@@ -684,7 +737,7 @@ export function checkGoalFeasibility(args: {
 
   if (hasError) {
     reasons.push('排进去会撞上硬冲突（重叠或转场来不及）—— 得换个时间或换个安排。');
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
+    return { ...base, kind: 'conflict', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   // ── 关四之二：要的量，窗口装得下吗 ─────────────────────────
@@ -692,35 +745,35 @@ export function checkGoalFeasibility(args: {
   // 用户说「一共 2000 小时」时，若只按取样结果排下去，会静默交付「42 小时」——
   // 那是**看起来排上了、其实差得远**，比直接说排不下更糟（core §5.1 第 5 条「诚实」）。
   const wantMin = slots.totalHours != null ? slots.totalHours * 60 : 0;
-  const gotMin = candidates.length * (slots.durationMin ?? DEFAULT_BLOCK_MIN);
+  const gotMin = expectedBlocks * (slots.durationMin ?? DEFAULT_BLOCK_MIN);
   if (wantMin > gotMin) {
     const hours = (m: number) => Math.round((m / 60) * 10) / 10;
     caveats.push(
       `这个窗口最多放得下约 ${hours(gotMin)} 小时，离你说的 ${hours(wantMin)} 小时还差 ${hours(wantMin - gotMin)} 小时。`,
     );
     reasons.push('按现在的窗口和单次时长，目标量放不下 —— 得拉长窗口、加长单次，或降一档目标。');
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
+    return { ...base, kind: 'conflict', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
-  if (placed.length < candidates.length) {
+  if (placed.length < expectedBlocks) {
     // 部分落不下 —— **如实说，不掩盖**（掩盖会让用户以为全排上了）
-    reasons.push(`${candidates.length} 块里有 ${candidates.length - placed.length} 块没找到位置。`);
-    return { ...base, kind: 'conflict', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
+    reasons.push(`${expectedBlocks} 块里有 ${expectedBlocks - placed.length} 块没找到位置。`);
+    return { ...base, kind: 'conflict', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   if (studyDeltaMin < -60) {
     reasons.push(`会挤掉约 ${Math.abs(studyDeltaMin)} 分钟自习。`);
-    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
+    return { ...base, kind: 'tight', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, blockingBlocks, canReduceScope, reasons };
   }
 
   if (hasWarn) {
     for (const a of added.filter((x) => x.level === 'warn').slice(0, 2)) reasons.push(a.sample);
-    return { ...base, kind: 'tight', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
+    return { ...base, kind: 'tight', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
   }
 
   reasons.push('排得下，没有新增冲突。');
   // ok/tight 不带 blockingBlocks —— 排都排上了，「挡路事实」只在真排不下时才有意义
-  return { ...base, kind: 'ok', candidateCount: candidates.length, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
+  return { ...base, kind: 'ok', candidateCount: expectedBlocks, placedCount: placed.length, placedAt, added, studyDeltaMin, caveats, canReduceScope, reasons };
 }
 
 /**
