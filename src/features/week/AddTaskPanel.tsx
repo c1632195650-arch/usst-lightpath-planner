@@ -12,7 +12,13 @@
  * ── 一个刻意的选择：指定了「星期 + 时间」= 固定块 ──────────────
  * `construct` 的判定是：`dayOfWeek != null && startMin != null` → **固定块**
  * （重排时不动，属 hard）；只给时长不给时间 → 浮动块，交给引擎找空档。
- * 这与「用户说几点就是几点」的直觉一致，所以表单里两者都给了。
+ *
+ * ── R批 P0-2（R2.3）· 时间字段一级化 ─────────────────────────
+ * 此前「选了具体日期才渲染时间轮盘」—— 时间是日期的附属品，「让引擎找空档」
+ * 只是没选日期的**残留态**。现在改成两个**并列单选**：
+ *   · 「我来定时间」= 星期 + 时间轮盘（固定块）；
+ *   · 「让引擎找空档」= 引擎自由落位（可选限天）。
+ * 与对话侧的「空闲时间，你来安排」同一哲学：自由是**显式选择**，不是默认。
  */
 import { useState } from 'react';
 import type { BlockKind, DayOfWeek } from '@/types';
@@ -40,6 +46,8 @@ interface Props {
 
 export function AddTaskPanel({ onAdd, weekNo }: Props) {
   const [title, setTitle] = useState('');
+  /** R2.3：时间字段一级化 —— mine = 我来定时间（固定块）；engine = 让引擎找空档 */
+  const [timeMode, setTimeMode] = useState<'mine' | 'engine'>('engine');
   const [day, setDay] = useState<DayOfWeek | ''>('');
   const [start, setStart] = useState('19:00');
   const [duration, setDuration] = useState(60);
@@ -47,7 +55,7 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
   const [place, setPlace] = useState('');
   const [thisWeekOnly, setThisWeekOnly] = useState(true);
 
-  const canSubmit = title.trim().length > 0 && (day === '' || !!start);
+  const canSubmit = title.trim().length > 0 && (timeMode === 'engine' || day !== '');
 
   function submit() {
     if (!canSubmit) return;
@@ -55,17 +63,19 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
       id: makeTaskId(),
       title: title.trim(),
       kind,
-      // 给了星期就顺带给时间 → 固定块；只给星期不给时间也没意义，故二者绑定
-      ...(day !== '' ? { dayOfWeek: day, startMin: toMinutes(start) } : {}),
+      // 「我来定时间」：星期 + 时间 = 固定块（重排不动）；「让引擎找空档」：
+      // 可选限天（只给 dayOfWeek 不给 startMin = 该天内的浮动块），或不限天
+      ...(day !== '' ? { dayOfWeek: day } : {}),
+      ...(timeMode === 'mine' && day !== '' ? { startMin: toMinutes(start) } : {}),
       durationMin: duration,
       ...(place.trim() ? { place: place.trim() } : {}),
       ...(thisWeekOnly ? { weeks: [weekNo] } : {}),
       // 用户自己加的事，优先级高于系统建议（与校历事件同档）
       priority: 80,
-      note: '你自己加的一件事',
+      note: timeMode === 'mine' ? '你自己加的一件事（定了时间）' : '你自己加的一件事（交给引擎找空档）',
     };
     onAdd(task);
-    setTitle(''); setPlace(''); setDay(''); 
+    setTitle(''); setPlace(''); setDay('');
   }
 
   return (
@@ -73,8 +83,32 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
       <div className="flex flex-wrap items-baseline gap-x-2">
         <h3 className="text-[13.5px] font-semibold text-ink">加一件事</h3>
         <span className="text-[11.5px] text-ink-faint">
-          自己安排的事，引擎会照办；不选星期就交给它找空档
+          自己安排的事，引擎会照办；时间你定，或让它找空档
         </span>
+      </div>
+
+      {/* R2.3：两个并列单选 —— 时间由谁定，一级化，不再是选日期的附属品 */}
+      <div className="mt-2 flex items-center gap-2" data-testid="addtask-time-mode">
+        <label className={`flex min-h-8 cursor-pointer items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 text-[12.5px] text-ink transition-colors ${timeMode === 'mine' ? 'border-brand bg-brand/5' : 'border-ink/15'}`}>
+          <input
+            type="radio"
+            name="addtask-time-mode"
+            data-testid="addtask-mode-mine"
+            checked={timeMode === 'mine'}
+            onChange={() => setTimeMode('mine')}
+          />
+          我来定时间
+        </label>
+        <label className={`flex min-h-8 cursor-pointer items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 text-[12.5px] text-ink transition-colors ${timeMode === 'engine' ? 'border-brand bg-brand/5' : 'border-ink/15'}`}>
+          <input
+            type="radio"
+            name="addtask-time-mode"
+            data-testid="addtask-mode-engine"
+            checked={timeMode === 'engine'}
+            onChange={() => setTimeMode('engine')}
+          />
+          让引擎找空档
+        </label>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -84,27 +118,42 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
           placeholder="做什么？（例：做实验报告）"
           className="min-w-[10rem] flex-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-brand"
         />
-        <select
-          value={day}
-          onChange={(e) => setDay(e.target.value === '' ? '' : (Number(e.target.value) as DayOfWeek))}
-          className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink"
-        >
-          <option value="">交给引擎找空档</option>
-          {DAY_OPTIONS.map(({ d, label }) => <option key={d} value={d}>{label}</option>)}
-        </select>
+        {timeMode === 'mine' && (
+          <select
+            value={day}
+            onChange={(e) => setDay(e.target.value === '' ? '' : (Number(e.target.value) as DayOfWeek))}
+            className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink"
+            aria-label="星期"
+          >
+            <option value="">选星期…</option>
+            {DAY_OPTIONS.map(({ d, label }) => <option key={d} value={d}>{label}</option>)}
+          </select>
+        )}
+        {timeMode === 'engine' && (
+          <select
+            value={day}
+            onChange={(e) => setDay(e.target.value === '' ? '' : (Number(e.target.value) as DayOfWeek))}
+            className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink"
+            aria-label="限定星期（可选）"
+          >
+            <option value="">不限哪天</option>
+            {DAY_OPTIONS.map(({ d, label }) => <option key={d} value={d}>{label}</option>)}
+          </select>
+        )}
 
-        {day !== '' && (
+        {timeMode === 'mine' && day !== '' && (
           <>
             {/* T7：滚轮选时间（旁边仍保留手动输入框） */}
             <TimeWheelPicker value={start} onChange={setStart} />
-            <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
-              className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink">
-              {[15, 30, 45, 60, 90, 120, 150, 180].map((m) => (
-                <option key={m} value={m}>{m} 分钟</option>
-              ))}
-            </select>
           </>
         )}
+
+        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+          className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink" aria-label="时长">
+          {[15, 30, 45, 60, 90, 120, 150, 180].map((m) => (
+            <option key={m} value={m}>{m} 分钟</option>
+          ))}
+        </select>
 
         <select value={kind} onChange={(e) => setKind(e.target.value as BlockKind)}
           className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12.5px] text-ink">
@@ -134,7 +183,7 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
       </div>
 
       <p className="mt-1.5 text-[11px] text-ink-faint">
-        选了星期和时间 → 它会被**钉住**，之后重排也不会挪；只填标题 → 引擎自己找空档塞进去。
+        「我来定时间」→ 钉在那一刻，重排也不挪；「让引擎找空档」→ 引擎自己安排（可限天）。
       </p>
     </div>
   );

@@ -301,7 +301,7 @@ export const DIALOG_ACTS: readonly DialogAct[] = [
   'resume_topic', 'new_intent', 'negotiate_block', 'chit_chat',
 ];
 
-export const ASKABLE_SLOTS = ['title', 'when', 'effort', 'target'] as const;
+export const ASKABLE_SLOTS = ['title', 'when', 'effort', 'period', 'target'] as const;
 export const NEGOTIATE_OPTIONS = ['swap_block', 'move_next_week', 'reduce_scope', 'give_time'] as const;
 
 /** LLM 给的 act 参数（服务端 _clean_dialog 已清过一遍，这里再验一层） */

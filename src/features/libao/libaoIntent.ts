@@ -58,11 +58,15 @@ export type GoalIntent =
  */
 export type TimeCertainty = 'exact' | 'window' | 'unknown';
 
-/** 槽位名。`missing` 用它，追问清单也用它 —— 一处定义，两处消费。 */
+/** 槽位名。`missing` 用它，追问清单也用它 —— 一处定义，两处消费。
+ *  `period`（R批 P0-2）是**软追问**：不进 REQUIRED/missingSlots（那是完备性判定，
+ *  动它会波及 golden 与既有判关测试），由执行层在「其余槽位齐了」之后按
+ *  `needsPeriodAsk` 决定问不问 —— 追问顺序因此天然是 频率→时长→时段（R5.3）。 */
 export type SlotKey =
   | 'title'      // 做什么（「数学建模备赛」）
   | 'when'       // 什么时候（起点/区间）
   | 'effort'     // 投入多少（总时长，或「每周 N 次 × 每次 M 分钟」）
+  | 'period'     // 偏好时段（R批 P0-2：早上/上午/中午/下午/晚上/自定义/空闲）
   | 'target';    // 对哪一块动手（换/取消/替换时才需要）
 
 /** 时间表达的结构化形状。**只描述听到什么，不做日期换算** —— 换算在 `resolveWhen`。 */
@@ -92,12 +96,15 @@ export interface WhenHint {
   recurring?: boolean;
 }
 
-/** 时段窗（「只在晚上」）。分钟口径，与引擎一致。 */
+/** 时段窗（「只在晚上」）。分钟口径，与引擎一致。
+ *  `said`（R批 P0-2 · R2.4）：true = 用户原话/按钮里说出来的时段（extractWindow
+ *  产出）；false/缺省 = 引擎或别处代填 —— 草稿卡必须如实标注来源。 */
 export interface TimeWindow {
   fromMin: number;
   toMin: number;
   /** 原话（「晚上」），用于回显 */
   text: string;
+  said?: boolean;
 }
 
 /**
@@ -147,6 +154,9 @@ export interface IntentSlots {
   window?: TimeWindow;
   /** 钟点起止（批次 1）：「晚上6点到8点」→ 1080/1200。加法通道：句中无钟点词 = undefined */
   clock?: ClockHint;
+  /** R批 P0-2：用户**显式授权**「空闲时间，你来安排」—— 不给 window，引擎自由落位。
+   *  把「自由」从默认猜测变成用户的选择结果。 */
+  freeWhen?: boolean;
   /** 是否必做（有交期或用户强调）→ 映射到 `UserTask.essential` */
   essential?: boolean;
   /** 可让步度：越高越不该被别的安排挤掉 */
@@ -318,7 +328,9 @@ const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
   { intent: 'add_deadline', re: /(要比赛|要考|截止|备赛|重要日子)/ },
 ];
 
-/** 时段词 → 分钟窗。与作息口径一致（早 7 点起、夜 23 点止）。 */
+/** 时段词 → 分钟窗。与作息口径一致（早 7 点起、夜 23 点止）。
+ *  R批 P0-2（R2.2）：时段选项的**单一来源** —— 按钮卡文案从这里派生
+ *  （PERIOD_OPTION_TEXTS），禁止第二套时间词表。 */
 const PERIOD_WORDS: Array<{ re: RegExp; fromMin: number; toMin: number; text: string }> = [
   { re: /(早上|早晨|一早)/, fromMin: 7 * 60, toMin: 12 * 60, text: '早上' },
   { re: /(上午)/, fromMin: 8 * 60, toMin: 12 * 60, text: '上午' },
@@ -327,6 +339,12 @@ const PERIOD_WORDS: Array<{ re: RegExp; fromMin: number; toMin: number; text: st
   { re: /(晚上|晚间|夜里|夜晚)/, fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' },
   { re: /(白天)/, fromMin: 8 * 60, toMin: 18 * 60, text: '白天' },
 ];
+
+/** 时段选项文案（R2.2 单一来源）：与 PERIOD_WORDS 逐项同源；「白天」不进按钮卡
+ *  （口语里「白天」多指「不当晚上」，粒度太粗，问句里用不到）。 */
+export const PERIOD_OPTION_TEXTS: readonly string[] = PERIOD_WORDS
+  .map((w) => w.text)
+  .filter((t) => t !== '白天');
 
 /**
  * 标题抽取的停用词 —— 撞到它就**停止向两侧扩**。
@@ -809,17 +827,36 @@ export function extractPlace(q: string): string | undefined {
   return m2 ? m2[1] : undefined;
 }
 
-/** 抽时段窗（「只在晚上」）。 */
+/** 抽时段窗（「只在晚上」）。产出一律标 `said: true` —— 从原话抽出来的就是用户说的
+ *  （R批 P0-2 · R2.4 来源标注的「正」侧；引擎代填的窗不会走这里）。 */
 export function extractWindow(q: string): TimeWindow | undefined {
   const s = q || '';
   for (const w of PERIOD_WORDS) {
-    if (w.re.test(s)) return { fromMin: w.fromMin, toMin: w.toMin, text: w.text };
+    if (w.re.test(s)) return { fromMin: w.fromMin, toMin: w.toMin, text: w.text, said: true };
   }
   const m = /(\d{1,2}):(\d{2})\s*(?:之后|以后|开始)/.exec(s);
   if (m) {
-    return { fromMin: Number(m[1]) * 60 + Number(m[2]), toMin: 23 * 60, text: m[0] };
+    return { fromMin: Number(m[1]) * 60 + Number(m[2]), toMin: 23 * 60, text: m[0], said: true };
   }
   return undefined;
+}
+
+/**
+ * R批 P0-2（R2.1）· 时段软追问判据（纯函数，可单测）。
+ *
+ * CY 走查实录：「所有的排程你都没问具体时间…可以是空闲时间」—— 此前 create
+ * 只要有 when/effort 就直接落位，时段全凭引擎猜。现在其余槽位齐了之后**必问一句**
+ * 偏好时段；用户点了「空闲时间，你来安排」（freeWhen）才等于显式授权自由落位。
+ *
+ * 只判 create：cancel/reschedule/hold 各有自己的时间追问；add_deadline 不落块。
+ * 不进 missingSlots（完备性判定不动）—— 问句顺序因此天然是 频率→时长→时段（R5.3）。
+ */
+export function needsPeriodAsk(s: IntentSlots): boolean {
+  if (s.intent !== 'create') return false;
+  if (s.freeWhen) return false;
+  if (s.window) return false;
+  if (s.clock) return false;
+  return true;
 }
 
 /* ============================================================
@@ -942,8 +979,10 @@ function getLatestPeriodWord(s: string): 'pm' | 'am' | undefined {
  *   ③ 时长推导：双端点齐且用户没给时长/总量 → durationMin = endMin − startMin
  *      （「6点到8点」= 120 分钟 —— 消灭「大概占多久？」重问的钥匙，方案 4.2）。
  * 三步全是空值短路：clock 不存在时一个字段都不碰。
+ * （R批 P0-2 起导出：fillOneSlot 的 period 分支回答时段后也要走同一收尾，
+ *   防两份「交集/推导」口径漂移。）
  */
-function reconcileClock(s: IntentSlots): void {
+export function reconcileClock(s: IntentSlots): void {
   const clock = s.clock;
   if (!clock) return;
   const win = s.window;
@@ -1282,6 +1321,7 @@ const SLOT_QUESTION: Record<SlotKey, string> = {
   title: '你想让我排的是哪件事？（比如「数学建模备赛」「四六级真题」）',
   when: '大概什么时候开始？给个区间也行（比如「九月中旬」），没定的话我按待定处理。',
   effort: '打算投入多少？说总量（「一共 20 小时」）或节奏（「每周 3 次、每次 2 小时」）都行。',
+  period: '想排在什么时段？点下面的按钮，或直接说（如「晚上」「下午3点到5点」）；说「空闲时间」就由我找空档。',
   target: '你要动的是哪一块？说个名字我好找到它。',
 };
 
@@ -1566,6 +1606,35 @@ function fillOneSlot(out: IntentSlots, slot: SlotKey, text: string, today?: stri
       if (out.targetHint || !reply.targetHint) return false;
       out.targetHint = reply.targetHint;
       return true;
+    case 'period': {
+      // R批 P0-2（R2.1）：时段回答三形态 —— 空闲授权 / 时段词 / 自定义钟点。
+      // 窗口与钟点**都收**（「下午3点到5点」既有「下午」又有钟点），
+      // 收尾统一走 reconcileClock（交集 + 歧义注记 + 时长推导）。
+      const t = (text || '').trim();
+      if (!t) return false;
+      let ok = false;
+      if (/空闲|你来安排|你来定|随便|都行|看你/.test(t)) {
+        if (!out.freeWhen) {
+          out.freeWhen = true;
+          out.window = undefined; // 显式授权 = 撤掉任何代填的窗
+          ok = true;
+        }
+      }
+      const win = extractWindow(t);
+      if (win && (!out.window || out.window.said === false)) {
+        out.window = win; // extractWindow 已标 said: true
+        ok = true;
+      }
+      if (clockChannelOn()) {
+        const clock = extractClockRange(t);
+        if (clock && !out.clock) {
+          out.clock = clock;
+          ok = true;
+        }
+      }
+      if (ok) reconcileClock(out);
+      return ok;
+    }
   }
 }
 
@@ -1663,7 +1732,7 @@ export function applyClarifyFragments(
     if (fillOneSlot(out, slot, frag, today, 'answer')) contributed = true;
   }
   // asked 之外的碎片（LLM 归位出的跨槽信息）→ 跨槽收编
-  const EXTRA = ['title', 'when', 'effort', 'target'] as const;
+  const EXTRA = ['title', 'when', 'effort', 'period', 'target'] as const;
   for (const k of EXTRA) {
     if (askedList.includes(k)) continue;
     const frag = fragments[k];
@@ -1986,9 +2055,17 @@ export function describeSlots(s: IntentSlots): string[] {
   );
   if (s.totalHours != null) out.push(`总投入：约 ${s.totalHours} 小时`);
   if (s.perWeekCount != null) out.push(`频率：每周 ${s.perWeekCount} 次`);
-  if (s.durationMin != null) out.push(`单次：${s.durationMin} 分钟`);
+  // R批 P0-2（R2.4）：来源标注 —— 不是用户亲口说的字段必须写明是谁定的。
+  if (s.durationMin != null) {
+    const derivedFromClock = s.clock?.startMin != null && s.clock?.endMin != null
+      && s.durationMin === s.clock.endMin - s.clock.startMin;
+    out.push(derivedFromClock
+      ? `单次：${s.durationMin} 分钟（按你说的${s.clock!.text}推算）`
+      : `单次：${s.durationMin} 分钟`);
+  }
   if (s.place) out.push(`地点：${s.place}`);
-  if (s.window) out.push(`只在：${s.window.text}`);
+  if (s.window) out.push(s.window.said === false ? `只在：${s.window.text}（梨宝推断）` : `只在：${s.window.text}`);
+  if (s.freeWhen) out.push('时段：空闲，由引擎找空档（你选的）');
   if (s.targetHint) out.push(`对象：${s.targetHint}`);
   return out;
 }

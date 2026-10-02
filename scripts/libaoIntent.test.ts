@@ -254,7 +254,8 @@ test('频率：每周N次 / 每天；只写「每周」不算给了频率', () =
 test('地点与时段窗', () => {
   assert.equal(extractPlace('在图书馆备考'), '图书馆');
   assert.equal(extractPlace('去第三教学楼上课'), '第三教学楼');
-  assert.deepEqual(extractWindow('晚上复习'), { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' });
+  // R批 P0-2（R2.4）：extractWindow 产出一律标 said: true（来源标注），断言随字段更新
+  assert.deepEqual(extractWindow('晚上复习'), { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上', said: true });
 });
 
 test('可让步度：有截止 / 强调词 → 标 essential 且优先级更高', () => {

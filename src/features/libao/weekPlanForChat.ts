@@ -41,7 +41,7 @@ import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localized
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
-import { isSingleDayEvent, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
+import { isSingleDayEvent, PERIOD_OPTION_TEXTS, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
 import { classifyGoal, evidenceLine, replacementAffinity, type GoalCategory } from './taxonomy';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
@@ -846,6 +846,15 @@ export function quickOptionsFor(
         ...it,
         hint: i === 0 && evidence ? evidence : catTips[i % catTips.length],
       }));
+    }
+    case 'period': {
+      // R批 P0-2（R2.1/R2.2）：时段按钮卡 —— 一级追问，文案与 PERIOD_WORDS 同源
+      // （PERIOD_OPTION_TEXTS，禁止第二套时间词表）；「自定义」= 在输入框直接打
+      // 钟点（「下午3点到5点」由钟点通道承接）；「空闲时间」= 显式授权引擎自由落位。
+      const items: QuickOption[] = PERIOD_OPTION_TEXTS.map((t) => ({ label: t, value: t }));
+      items.push({ label: '自定义时间', value: '自定义时间' });
+      items.push({ label: '空闲时间，你来安排', value: '空闲时间，你来安排' });
+      return items;
     }
     case 'place':
       return [

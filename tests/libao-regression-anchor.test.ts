@@ -67,7 +67,8 @@ const SCHEDULE: Schedule = {
 test('锚A · 规则层：一小时=单次时长（不再判成总量/不重问占多久）', () => {
   const s = parseIntentSlots('周四晚上出去玩一小时', TODAY);
   assert.equal(s.durationMin, 60);
-  assert.deepEqual(s.window, { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上' });
+  // R批 P0-2（R2.4）：TimeWindow 新增 said 来源字段（原话抽出的 = true），断言随字段更新
+  assert.deepEqual(s.window, { fromMin: 18 * 60, toMin: 23 * 60, text: '晚上', said: true });
   assert.equal(s.when?.weekday, 4);
   assert.equal(s.dateFrom, '2026-09-10');
   // 关键口径：effort / when 都不算缺 —— 时长与时间都不该被追问

@@ -7,7 +7,7 @@ import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objecti
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, crossIntentEscape, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, needsPeriodAsk, parseIntentSlots, parseOptionChoice, termAnchorsFrom, crossIntentEscape, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -1229,6 +1229,23 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         return;
       }
 
+      // ── R2.1（R批 P0-2）：时段必问一级化 ──────────────────────────
+      // 其余槽位齐了、但用户没说过时段也没授权「空闲」→ 先问一句再干跑。
+      // 不进完备性判定（missingSlots 不动）：effort/when 缺时先答那些，
+      // 顺序天然收敛为 频率→时长→时段（R5.3）。「空闲时间」= 显式授权自由落位，
+      // 把「自由」从默认猜测变成用户的选择（R2.1 主旨）。
+      if (slots.missing.length === 0 && needsPeriodAsk(slots)) {
+        setTopic(collectTopic(slots, ['period'])); setMissStreak(0);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `「${slots.title}」记下了 —— 想排在什么时段？`,
+          planPoints: numberedQuestions(questionsForSlots(slots, ['period'])),
+          options: quickOptionsFor('period', slots, { today }),
+        }]);
+        setLoading(false);
+        return;
+      }
+
       // 干跑把关：能不能排，由**引擎**说了算，不由 LLM 的嘴说了算。
       // （不传 weekNo —— 干跑按候选块**真正落在的周**逐周跑，见 checkGoalFeasibility。）
       const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
@@ -1915,6 +1932,16 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // S 批 P2/P5：按提问时记下的 asked 清单做**位置对应**解析，支持分号一句多答。
     // S 批 P1：答非所问**不再静默丢态** —— 保留式追问（missStreak≥2 才作废并说明）。
     if (clarify) {
+      // R2.2（R批 P0-2）：时段「自定义」= 在输入框直接打钟点（「下午3点到5点」
+      // 由钟点通道承接）。点了「自定义时间」按钮 → 有声指引，议题不动。
+      if (clarify.asked.includes('period') && /自定义/.test(q)) {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '好，直接打时间就行 —— 比如「下午3点到5点」「晚上8点」；说「空闲时间」就由我找空档。',
+        }]);
+        setLoading(false);
+        return;
+      }
       let merged = applyClarifyAnswers(q, clarify.slots, clarify.asked, today);
       if (!merged.contributed) {
         // S3：规则没接住 → LLM 语义定位救援（结构化仍在规则层；救援失败静默走

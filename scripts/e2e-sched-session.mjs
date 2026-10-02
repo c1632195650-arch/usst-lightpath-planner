@@ -133,9 +133,12 @@ const run = async () => {  const browser = await chromium.launch();
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'A4 折返后徽章仍在');
 
     await say(page, '十月中旬开始；每周3次、每次2小时');
+    // R批 P0-2（R2.1）：时段必问一级化 —— 结构槽位齐了之后必有一句时段追问，
+    // 「空闲时间，你来安排」= 显式授权引擎自由落位（新动线步骤）。
+    await say(page, '空闲时间，你来安排');
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
-      'A5 分号答案被收进槽位 → 草稿卡出现',
+      'A5 分号答案被收进槽位 → 时段答「空闲」→ 草稿卡出现',
     );
     ok(
       await page.getByText('草稿待确认', { exact: false }).first().isVisible().catch(() => false),
@@ -184,6 +187,7 @@ const run = async () => {  const browser = await chromium.launch();
     const page = await browser.newPage();
     await onboard(page);
     await say(page, '十月中旬开始备赛；每周3次、每次2小时');
+    await say(page, '晚上'); // R批 R2.1：时段必问 → 答时段 → 草稿卡
     await page.getByRole('button', { name: '就这么排' }).first().click().catch(() => {});
     await page.waitForTimeout(600);
     await say(page, '取消备赛'); // 多块同名 → 挑块追问
@@ -247,9 +251,10 @@ const run = async () => {  const browser = await chromium.launch();
     await say(page, SEED);
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'G1 LLM 挂了追问照常（规则兜底）');
     await say(page, '十月中旬开始；每周3次、每次2小时');
+    await say(page, '空闲时间，你来安排'); // R批 R2.1：时段必问（新动线步骤）
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
-      'G2 LLM 挂了分号答案照收 → 草稿卡',
+      'G2 LLM 挂了分号答案照收 → 时段答「空闲」→ 草稿卡',
     );
     await page.close();
   }
@@ -259,6 +264,7 @@ const run = async () => {  const browser = await chromium.launch();
     const page = await browser.newPage();
     await onboard(page);
     await say(page, '周四我要吃大餐；每次2小时');
+    await say(page, '晚上'); // R批 R2.1：时段必问 → 答时段 → 草稿卡
     ok(
       await page.getByText('还没写进日程', { exact: false }).first().isVisible().catch(() => false),
       'H1 草稿卡明示未落盘',

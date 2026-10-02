@@ -161,8 +161,11 @@ const run = async () => {
     await inputBox().fill('把自习挪到周五');
     await inputBox().press('Enter');
     await T(4000);
+    // R批 P0-2 断言漂移申报：候选按钮卡 value 收敛为编号（同名多段消歧）后，
+    // 首轮点击直达改期草稿卡 —— 其文案是「挪后…（还没动手）」而非 create 草稿的
+    // 「我排了一版草稿」。断言按改期草稿口径收紧（锁意图 = 改期草稿卡出现，不变）。
     for (let i = 0; i < 5; i++) {
-      if (await page.getByText(/我排了一版草稿|草稿（还没写进日程）/).first().isVisible().catch(() => false)) break;
+      if (await page.getByText(/我排了一版草稿|草稿（还没写进日程）|还没动手/).first().isVisible().catch(() => false)) break;
       const opt = page.getByTestId('msg-options').last().getByRole('button').first();
       if (await opt.count()) { await opt.click({ timeout: 8000 }); await T(4000); continue; }
       const hint = page.getByRole('button', { name: '切到排程模式并继续' });
@@ -170,7 +173,7 @@ const run = async () => {
       break;
     }
   }
-  ok(await page.getByText(/我排了一版草稿|草稿（还没写进日程）/).first().isVisible().catch(() => false), '⑫ 改期草稿卡出现（挑块按钮卡 → 草稿卡）');
+  ok(await page.getByText(/我排了一版草稿|草稿（还没写进日程）|还没动手/).first().isVisible().catch(() => false), '⑫ 改期草稿卡出现（挑块按钮卡 → 草稿卡）');
 
   // ⑬ 记忆面板 pending 可见
   await page.getByRole('button', { name: /梨宝记住了什么/ }).click().catch(() => {});
