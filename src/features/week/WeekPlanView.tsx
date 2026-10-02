@@ -58,6 +58,9 @@ import { freeGapsOf, snap10, type TimeGap } from './timeScale';
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
+// P1-2（白天批）：作息真源（routineStore）→ 引擎日窗；问卷就寝兜底
+import { dayWindowWithFallback, loadRoutine } from './routineStore';
+import { loadBasicInfo } from '@/lib/identity';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
 import { SlotEditor } from './SlotEditor';
 // ── R3：调课/停课覆盖层 + 时间追问 ────────────────────────────
@@ -1342,6 +1345,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           // P1-1（白天批）：本版提交项 + 上一版快照 → 增量冻结生效
           commits: weekCommits,
           previousCommits: lastCommitsRef.current,
+          // P1-2（白天批）：作息真源组合（作息设置 store → 问卷就寝兜底）——
+          // 「填了就寝时间日程照样排到深夜」的根修。不填 = null → 引擎缺省 07:00/23:00，
+          // 与既往行为逐位一致。读 store 在 effect 内（与「攒着、点重排生效」同口径）。
+          ...(dayWindowWithFallback(loadRoutine(), loadBasicInfo().sleepMin ?? null) ?? {}),
           fromNow: nowMin,
           fromNowDay: nowMin != null ? (todayDow as never) : null,
           // 阶段 A：用户删掉的块。不告诉引擎的话，下一轮构造又会把它排回来 ——

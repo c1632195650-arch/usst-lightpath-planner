@@ -99,6 +99,36 @@ export function routineToDayWindow(
   return { dayStart: minutesToHHMM(wakeMin), dayEnd: minutesToHHMM(sleepMin) };
 }
 
+/**
+ * 组装层的日窗组合：**作息设置（Q1a/Q1b store）是唯一真源**，问卷（BasicInfo.sleepMin）
+ * 只作就寝兜底 —— 2026-10-02 白天批 P1-2。
+ *
+ * 为什么不新建 PlanRequest.sleepMin 契约字段：`dayStart/dayEnd` 本就是正式契约字段
+ * （`model.ts`，construct 消费），再开一个 sleepMin 会制造**第二个就寝真源**
+ * （任务书 P1-2 明令避免）。本函数把两处采集收敛成一个组装结果：
+ *   · 作息设置已采集 → `routineToDayWindow`（起床+就寝都生效）；
+ *   · 作息未采集、问卷填了就寝分钟 → dayEnd=就寝、dayStart 保持缺省 07:00
+ *     （问卷没有起床时间，不猜）；
+ *   · 都没有 → null（引擎走缺省，行为与改造前逐位一致 = golden 零漂移）。
+ *
+ * 退化守卫：问卷就寝 ≤ 07:00（缺省起床）会让 dayEnd ≤ dayStart，引擎排不出任何
+ * 软块 —— 视为坏数据返回 null，不猜纠正值（同 `routineToDayWindow` 的不猜纪律）。
+ */
+export function dayWindowWithFallback(
+  routine: RoutineSettings | null | undefined,
+  basicSleepMin: number | null | undefined,
+): { dayStart: string; dayEnd: string } | null {
+  const viaRoutine = routineToDayWindow(routine);
+  if (viaRoutine) return viaRoutine;
+  if (
+    basicSleepMin != null && Number.isInteger(basicSleepMin)
+    && basicSleepMin > 420 && basicSleepMin <= 1440
+  ) {
+    return { dayStart: '07:00', dayEnd: minutesToHHMM(basicSleepMin) };
+  }
+  return null;
+}
+
 /* ---------- 界面草稿 → 设置（Q1b 采集 UI 用；纯函数，可单测）---------- */
 
 /** `routineFromHHMM` 拒绝的原因（界面据此给**具体**提示，不静默丢弃） */

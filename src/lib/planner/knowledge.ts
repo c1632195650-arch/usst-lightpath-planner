@@ -124,7 +124,8 @@ export function sedentarySafeDurations(durations: readonly number[]): number[] {
  * 等契约侧把 sleepMin 递进来再接（改契约须双方确认，见工作单 §5 备注）。
  */
 export const KNOWLEDGE_PARTIALS: readonly string[] = [
-  '睡眠保底窗口未接线（需 identity.sleepMin 进 PlanRequest 契约）',
+  // 2026-10-02 白天批 P1-2 结项：就寝时间经 dayWindowWithFallback（作息设置真源 →
+  // 问卷 sleepMin 兜底）进 PlanRequest.dayStart/dayEnd 正式契约，引擎零改动消费。
   '每周活动量下限未接线（需 construct 活动块生成策略，150min/周均摊）',
   '模块库（templates.ts）既有自习档位 [45,60,90] 未动（属地文件不在本批授权表）；'
     + '仅策略现场工厂与久坐安全档受 knowledgeWired 控制',

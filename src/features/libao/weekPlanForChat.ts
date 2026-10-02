@@ -96,6 +96,9 @@ export async function planWeekWithTasks(
       // 批 4.3（1A-③）：对话侧同样把完整画像喂进引擎（socialCap 链路）
       persona: profile,
       tasks,
+      // P1-2（白天批）：对话侧与周计划页同一日窗真源（作息设置 → 问卷就寝兜底）——
+      // 否则「梨宝排的」和「周计划排的」对不上（双轨问题的变体）。不填 = 不传 → 缺省。
+      ...(dayWindowWithFallback(loadRoutine(), loadBasicInfo().sleepMin ?? null) ?? {}),
     }),
   );
   return result.plan;
@@ -1007,6 +1010,9 @@ export function proposeReplanOptions(args: {
  * 找不到 / 命中多个 → 返回原样由调用方**追问**，绝不硬猜（core §4）。
  */
 import { addSlot, excludeBlock, makeLayerId, removeTask, upsertMove, type MoveRecord, type UnavailableSlot, type UserPlanLayer } from '@/features/week/userPlanStore';
+// P1-2（白天批）：日窗真源组合（作息设置 → 问卷就寝兜底），与周计划页同源
+import { dayWindowWithFallback, loadRoutine } from '@/features/week/routineStore';
+import { loadBasicInfo } from '@/lib/identity';
 import { dragTo } from '@/lib/planner/ripple';
 
 export type DraftKind = 'create' | 'reschedule' | 'cancel' | 'replace' | 'query';
