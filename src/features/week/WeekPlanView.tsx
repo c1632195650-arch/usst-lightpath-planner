@@ -95,6 +95,13 @@ import type { CorrectionRule } from '@/lib/planner/corrections';
 // 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
 import { blockChip, blockDetail, summarizeIssues } from '@/features/week/weekViewModel';
 import { DetailDrawer } from '@/components/ui/DetailDrawer';
+// R批 Wave3（H1）：日程评估 —— 纯读，plan 一变就重算
+import { digestPlan } from '@/lib/planner/planDigest';
+import { evaluateDigest } from '@/lib/planner/planEval';
+import { PlanEvalPanel } from './PlanEvalPanel';
+
+/** 空计划兜底（引擎异步出结果前用）—— 见下方 evalDigest 的说明。 */
+const EMPTY_PLAN: WeekPlan = { weekNo: 0, blocks: [], stats: { courseMin: 0, studyMin: 0, blankMin: 0, blockCount: 0 }, issues: [] };
 
 interface Props {
   schedule: Schedule;
@@ -726,6 +733,25 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     (dayOfWeek: number) => addDays(weekMonday, dayOfWeek - 1),
     [weekMonday],
   );
+
+  /* ============================================================
+   * R批 Wave3（H1.3）· 日程评估
+   * ------------------------------------------------------------
+   * 评估是**纯读**：`digestPlan(plan)` → `evaluateDigest`，零副作用、零落库。
+   * 所以状态只需要一个「面板是否展开」—— 不缓存评估结果，因为 plan 一变
+   * 就该重算，缓存反而会给出「评估的是上一版日程」的错觉。
+   *
+   * ⚠️ `plan` 在引擎出结果前是 null（引擎是异步 effect）。此时用
+   * **空计划**兜底而不是不渲染：入口本身要在整个挂载期都在（否则它会
+   * 「忽隐忽现」，用户正要展开时它消失了）。空计划的评估结果全是
+   * unknown + 稀疏数据提示，不会给出任何指控。
+   */
+  const [evalOpen, setEvalOpen] = useState(false);
+  const evalDigest = useMemo(
+    () => digestPlan(plan ?? EMPTY_PLAN),
+    [plan],
+  );
+  const evalResult = useMemo(() => evaluateDigest(evalDigest), [evalDigest]);
 
   /**
    * 「此刻」是否落在本周 —— `fromNow` 的前置条件。
@@ -1843,6 +1869,29 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           </details>
         );
       })()}
+
+      {/* R批 Wave3（H1.3）· 日程评估入口与结果 ——
+          放在 issue 聚合条之后、时间轴之前：它属于「这一版日程的整体体检」，
+          紧贴用户刚排完的网格，不用往下翻。
+          **手动触发**而非自动弹：评估会占一屏，自动弹等于打断。 */}
+      <details
+        data-testid="plan-eval-entry"
+        className="panel px-4 py-3"
+        open={evalOpen}
+        onToggle={(e) => setEvalOpen((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer text-[13px] font-medium text-ink">
+          让梨宝评估这版日程
+          <span className="ml-2 text-[11px] font-normal text-ink-faint">
+            对照健康库与方法库，看缺什么、多了什么
+          </span>
+        </summary>
+        {evalOpen && (
+          <div className="mt-3">
+            <PlanEvalPanel digest={evalDigest} evaluation={evalResult} />
+          </div>
+        )}
+      </details>
 
       {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
           E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
