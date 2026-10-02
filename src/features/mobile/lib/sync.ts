@@ -40,12 +40,19 @@ export function weekNoFromTermStart(termStart: string, d: Date): number | null {
   return Math.floor(diff / 7) + 1;
 }
 
-/** "YYYY-MM-DD" → UTC 零点毫秒；解析失败 → null */
+/** "YYYY-MM-DD" → UTC 零点毫秒；解析失败（含 2026-13-40 这类会回卷的假日期）→ null */
 export function parseDate(s: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? '');
   if (!m) return null;
-  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isFinite(t) ? t : null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const dd = Number(m[3]);
+  if (mo < 1 || mo > 12 || dd < 1 || dd > 31) return null;
+  const t = Date.UTC(y, mo - 1, dd);
+  if (!Number.isFinite(t)) return null;
+  // 回卷防护：Date.UTC 会把 2026-02-30 滚成 3 月 2 日 —— 成分对不上就不是真日期
+  const d = new Date(t);
+  return d.getUTCFullYear() === y && d.getUTCMonth() === mo - 1 && d.getUTCDate() === dd ? t : null;
 }
 
 /**
