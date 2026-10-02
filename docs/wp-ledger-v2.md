@@ -454,3 +454,28 @@
 - test:libao 复跑：路由 40/45、内容 **45/45**（分布 hybrid 22/llm 18/grounded 5，177.8s）——与申报一致。
 - 走查 `_/wt_day.mjs` 复跑 **10/0 全过**：①「第10周周五」→ **11.06 正确**（P0-1）②「重排周四」诚实响应（天级重排执行层在位）③晨跑意图+无 perWeek=7 幻觉+学期语义 ✓（P0-2 逃逸实证：「好，先按新说的办——刚才那件事先放下」）④周计划 ‹ › 按钮+切周动作 ✓ ⑤解释面板 ✓。
 - 结论：**白天批验收通过**。BLOCKERS 白天批三条：weekNo 双口径（课表 termStart 为准）合理收口；3B 传递性死代码删除合理；「6.3」待 CY 确认（若=2A 则已结项）。
+
+## §R R 批排程体验整改（2026-10-02 夜，任务书《R批任务书-交zcode-2026-10-02》，zcode 独立执行）
+
+> 基线 `integration-full @ 02ae028`（白天批验收态：tsc 0 / engine 620 / ui 415）。
+> CY 真机走查 10 条问题，9 条「已实现没做到位」+ 1 条新增能力（日程评估引擎）。
+> 两会话协作：批次 P0-2/3/4 + H1 由并行会话先推，R4/R5/R1/R7 与台账由本会话续推。
+
+| 项 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| P0-1 R4 | `e30059d` | 替换链路修复：候选带天（findCancelTargets dayOfWeek 过滤 + 「下周X」换匹配池）→ 两级收窄（pickingDayTopic day 相先问哪一天、segment 相问哪一段）→ 相位纪律（validateDialogAct：picking 只许 pick/discard，new_intent 一票拒）→ 硄定性优先（挑块匹配提到 tryDialogAct 之前）→ 按类目推荐（replacementAffinity/isHealthGoalTitle）；候选按钮 value 编号化（parseOptionChoice 接住，blocked 态同款先例）；isSingleDayEvent 认「下周X」单日；球类词/「替换」动词补入词表 | engine 620→631 / ui 415 / E2E 90/0（R1/R2 新剧本 + L 剧本适配）/ RV×2（删天过滤恰2红、删相位纪律恰1红，sha256 一致还原） |
+| P0-2 R2 | `500832f` | 排程必问时段：needsPeriodAsk 软追问（不进 missingSlots，顺序天然 频率→时长→时段）+ freeWhen「空闲时间，你来安排」显式授权 + PERIOD_OPTION_TEXTS 单一来源 + TimeWindow.said 来源标注（「梨宝推断」必须标）+ AddTaskPanel 时间一级化（我来定时间 / 让引擎找空档 两并列单选） | engine 642 / ui 418 / E2E 动线适配 / RV×2（删三闸恰1红、删 period 按钮卡恰1红） |
+| P0-3 R3 | `d2357f4` | 选项与依据对齐：tips 数组按索引轮换 → 档位查表（tipsByDuration），45/60/90/120 各给该档语义，禁「每周总量」字样混入单次档 | tests/r3-option-hints 156 行 |
+| P0-4 R6 | `21ab610` | 意图补词：GOAL_NOUNS 大扩（自助餐/火锅/聚会/KTV/演出…）+ 动宾模式（吃/去/参加/看+名词）+ 未识别显式化（不再静默 RAG，二选一问句）+ lifeWords 共享词表 | tests/r6-intent-words 165 行 |
+| Wave3 H1 | `c4aadc7` | 日程评估引擎最小闭环：planDigest（TimeBlock[]→DigestFact，每指标带 evidence 块 id，缺项=NO_DATA 非零）+ planEval（五维 good/gap/unknown，unknown 不降级）+ PlanEvalPanel（可解释面板，周计划页手动展开；无综合总分、不自动弹） | tests/h1-plan-eval 510 行 + h1-eval-panel 192 行 |
+| P1-1 R5 | `55dc897` | 长期 vs 单次：isLongTermWish 判据（想养成/这学期/保持…）→ isSingleDayEvent 强制 false（RV-R5a 锚）；长期 effort 追问拆两步（频率→时长，R5.3）；goalToTasks 学期铺开（longTermSpanActive：「从下周开始」是起点不是终点；「截止/之前/到期末」尊重）+ 草稿卡「铺到第 N 周」（R5.4）；detectScope 同词表打通（跨域冻结禁新增 import，两处注释互指）；**R5.2 recurring 写 BLOCKERS 待 CY 裁决（建议路线 A）** | engine 718 / E2E 98/0（R3 剧本 7 断言）/ RV×2（删长期闸恰1红、删学期铺开恰1红） |
+| P1-2 R1 | `a13909f` | 账号与入口可见性：AccountOfflineMenu（offline 也保留账号位 + 重试连接 probeAuth 复用 + 单机模式/数据仅存本机/记忆不与账号同步语义，R1.1/R1.3）+ Welcome「已有账号？去登录」（R1.2）；真机冒烟 4/4 | ui 420 / RV-R1a（删分支恰1红，sha256 一致还原） |
+| P1-3 R7 | `0437574` | 梨宝记忆：MemoryPanel 空态解释（R7.2）+ 长期偏好入记忆三段通道（R7.3：memory.py::add_preference_fact 偏好自动生效可撤销 + /api/memory/facts 扩 kind/key 缺省旧口径 + confirmGoal 长期信号写入、失败静默、写入在落盘后 L4 不变）；**R7.1 user_id 台账归一写 BLOCKERS 待 CY 裁决（建议迁移合并）** | ui 422 / 后端 8 套全绿（test_libao 内容 45/45、路由 40/45 达线）/ add_preference_fact 真跑验证 |
+
+**门禁汇总（批次末实测）**：tsc 0 ｜ engine **718/0** ｜ ui **422/0** ｜ 后端 8 套全绿 ｜ golden 5/5 未动 ｜ gate_overnight 5 门全过（R4 批次点实测）｜ 风格 8/8 ｜ E2E journey 19/0 + sched-session 98/0 ｜ test:libao 内容 45/45 + 路由 40/45。
+
+**断言漂移申报（5 处，锁意图不变）**：①候选按钮接线 `value: t.title` → `pickOptionButtons()`（同名多段标题值无法消歧 → 编号值）；②journey ⑫ 改期草稿断言认「还没动手」口径（编号直达改期卡文案与 create 草稿不同）；③extractWindow 产物新增 `said:true` 字段（deepEqual 两处随字段更新）；④D3 挑块态插话断言扩「重问哪一天」口径（两级收窄后）；⑤libao-interact 源码锁候选按钮计数改 `pickOptionButtons(` 形态。
+
+**BLOCKERS 申报（2 条，红线 7）**：R5.2 recurring 数据结构（路线 A/B 取舍，建议 A）；R7.1 user_id 台账归一（迁移 vs 弃置，建议迁移合并）——均待 CY 拍板，未擅自实现。
+
+**排除项（任务书「暂缓/不做」逐条遵守）**：未引入后端日程版本快照表；未自动改日程（评估只建议 + 采纳按钮走既有草稿流）；未用 LLM 编排程结论；未动 `_integration_full` 之外的三棵树。
