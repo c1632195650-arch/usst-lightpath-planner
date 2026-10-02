@@ -498,6 +498,97 @@ def add_preference_fact(user_id, key, value, source="libao"):
     _merge_into_profile(user_id, row["key"], row["value"])
     return row
 
+# ---------- R7.1（P1-4）· 设备台账 → 账号台账 迁移合并 ----------
+def migrate_user_id(old_id, new_id, strategy="account_wins"):
+    """把设备台账的 facts（+画像）并入账号台账 —— CY 2026-10-03 拍板「迁移合并」。
+
+    **为什么必须做**：`identity.getUserId()` 未登录用随机设备 id、登录后用账号名 ——
+    「先离线用、后登录」时读写指向两个台账，记忆与画像凭空清零（CY 走查实录：
+    「梨宝的记忆」待确认 0 · 已生效 0，看着像坏了）。KV 侧已有
+    `uploadLocalSnapshot` 通道，但 facts/profiles 在**后端 SQLite**，KV 碰不到。
+
+    **冲突策略**（strategy，CY 定稿）：
+      · `account_wins`（默认）—— 同 (kind,key) 账号侧已有一条活记录时，**丢弃**设备侧
+        这条（账号是用户主动登录认领的正本，设备侧多为离线期自动抽取的猜测）。
+      · `device_wins` —— 保留设备侧、丢弃账号侧（离线期信息更新鲜时用）。
+      · `keep_both` —— 两条都留（面板里会看到重复项，不推荐）。
+    无冲突的条目一律搬过去；`rejected` 态不搬（撤销过的东西不该复活）。
+
+    返回 {"moved": n, "skipped": m, "profile_merged": bool, "strategy": s}。
+    """
+    old_id = str(old_id or "").strip()
+    new_id = str(new_id or "").strip()
+    if not old_id or not new_id or old_id == new_id:
+        return {"moved": 0, "skipped": 0, "profile_merged": False, "strategy": strategy}
+    if strategy not in ("account_wins", "device_wins", "keep_both"):
+        strategy = "account_wins"
+    moved = 0
+    skipped = 0
+    c = _conn()
+    # 账号侧已有的活记录（kind,key）集合 —— 冲突判定用。rejected 不算活（撤销过）。
+    acct = set()
+    for row in c.execute(
+            "SELECT kind, key FROM facts WHERE user_id=? AND status IN ('pending','applied')",
+            (new_id,)).fetchall():
+        acct.add((row[0], row[1]))
+    dev = c.execute(
+        "SELECT id, kind, key, status FROM facts WHERE user_id=?", (old_id,)).fetchall()
+    for fid, kind, key, status in dev:
+        # 只搬活记录；rejected（用户撤销过）不带过去，避免"复活"
+        if status not in ("pending", "applied"):
+            skipped += 1
+            continue
+        if strategy == "keep_both":
+            pass
+        elif (kind, key) in acct:
+            # 冲突：account_wins 丢设备侧；device_wins 删账号侧那条旧的再搬
+            if strategy == "device_wins":
+                c.execute(
+                    "UPDATE facts SET user_id=? WHERE user_id=? AND kind=? AND key=? "
+                    "AND status IN ('pending','applied')", (old_id, new_id, kind, key))
+            else:
+                c.execute("UPDATE facts SET status='rejected', decided_at=? WHERE id=?",
+                          (datetime.datetime.now().isoformat(timespec="seconds"), fid))
+                skipped += 1
+                continue
+        c.execute("UPDATE facts SET user_id=? WHERE id=?", (new_id, fid))
+        acct.add((kind, key))
+        moved += 1
+    c.commit()
+    c.close()
+    # 画像合并单独开连接（同 add_preference_fact 的库锁规避）
+    profile_merged = _merge_profiles(old_id, new_id)
+    # 设备台账画像已并入 → 不留着当第二份正本
+    if profile_merged:
+        _conn().execute("DELETE FROM profiles WHERE user_id=?", (old_id,))
+        _conn().commit()
+    return {"moved": moved, "skipped": skipped,
+            "profile_merged": profile_merged, "strategy": strategy}
+
+def _merge_profiles(old_id, new_id):
+    """旧画像并入新画像（字段级补空，不覆盖新画像已有值）。返回是否真的并了。"""
+    c = _conn()
+    r = c.execute("SELECT profile FROM profiles WHERE user_id=?", (old_id,)).fetchone()
+    c.close()
+    if not r or not r[0]:
+        return False
+    try:
+        old = json.loads(r[0])
+    except Exception:
+        return False
+    if not isinstance(old, dict) or not old:
+        return False
+    new = get_profile(new_id) or {}
+    merged = dict(new)
+    changed = False
+    for k, v in old.items():
+        if merged.get(k) in (None, "", [], {}):
+            merged[k] = v
+            changed = True
+    if changed:
+        save_profile(new_id, merged)
+    return changed
+
 # ---------- WP12-H8：日程变动摘要（Node 端 ring buffer → 注入 chat） ----------
 _EVENT_LABEL = {
     "task_added": "新增", "task_removed": "移除",

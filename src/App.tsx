@@ -14,7 +14,7 @@ import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { addTimetableFacts } from '@/lib/api';
 import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist';
 import { loadUserDeadlines } from '@/features/calendar/deadlineStore';
-import { loadBasicInfo, setAuthedUserId, getUserId } from '@/lib/identity';
+import { loadBasicInfo, setAuthedUserId, getUserId, getDeviceUserId } from '@/lib/identity';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -27,7 +27,7 @@ import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { OnboardingSetup } from '@/features/week/OnboardingSetup';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
-import { fetchMe, type AuthStatus } from '@/lib/auth';
+import { fetchMe, migrateMemoryLedger, type AuthStatus } from '@/lib/auth';
 import { AccountMenu, AccountOfflineMenu } from '@/features/auth/AccountMenu';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { PersonaLab } from '@/lab/PersonaLab';
@@ -286,8 +286,18 @@ export default function App() {
       <LoginPage
         onLoggedIn={(u) => {
           setAuth({ status: 'logged-in', username: u });
+          // R7.1（P1-4）：离线期的设备台账 → 账号台账过户（CY 拍板「迁移合并」）。
+          // ⚠️ 顺序要紧：**先取设备 id，再注入账号身份** —— setAuthedUserId 之后
+          // getUserId 已经是账号名，设备台账就无处可寻了。异步搬梨宝记忆；
+          // 失败静默 —— 迁移是尽力而为，绝不能挡住进入应用。
+          const deviceId = getDeviceUserId();
           // 接线 A：登录成功即注入真账号身份（等 fetchMe 的下一次探测来不及）
           setAuthedUserId(u);
+          if (deviceId) {
+            void migrateMemoryLedger(deviceId, u).then((r) => {
+              if (r.ok && r.moved > 0) console.info('[R7.1] 梨宝记忆已并入账号', r);
+            });
+          }
         }}
       />
     );

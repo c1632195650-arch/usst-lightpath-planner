@@ -1196,6 +1196,36 @@ def api_add_fact(body: MemoryFactReq):
         return {"ok": False, "fact": None}
 
 
+class MemoryMigrateReq(BaseModel):
+    """R7.1（P1-4）：设备台账 → 账号台账 迁移合并。
+    old_id = 离线期的设备 user_id（identity.getUserId() 的随机分支）；
+    new_id = 登录后的真账号；strategy = CY 定稿的冲突策略（默认账号优先）。"""
+    model_config = ConfigDict(extra="forbid")
+    old_id: str = Field(min_length=1, max_length=80)
+    new_id: str = Field(min_length=1, max_length=80)
+    strategy: str = "account_wins"
+
+
+@app.post("/api/memory/migrate")
+def api_migrate_memory(body: MemoryMigrateReq):
+    """把设备台账的梨宝记忆（facts + 画像）并入账号台账。
+
+    为什么必须有：KV 侧 `uploadLocalSnapshot` 搬的是 localStorage 云快照，而梨宝记忆
+    落在**后端 SQLite**（facts/profiles 表，按 user_id 分键），KV 通道碰不到 ——
+    「先离线用、后登录」时记忆面板读账号键、设备键的记录成了孤儿，用户看到的是「记忆清零」。
+    """
+    if body.old_id == body.new_id:
+        return {"ok": True, "moved": 0, "skipped": 0,
+                "profile_merged": False, "strategy": body.strategy}
+    try:
+        r = memory.migrate_user_id(body.old_id, body.new_id, strategy=body.strategy)
+        return {"ok": True, **r}
+    except Exception as e:
+        print("[memory] 台账迁移失败：", e)
+        return {"ok": False, "moved": 0, "skipped": 0,
+                "profile_merged": False, "strategy": body.strategy}
+
+
 @app.post("/api/memory/facts/{fact_id}/confirm")
 def api_confirm_fact(fact_id: int):
     r = memory.confirm_fact(fact_id)

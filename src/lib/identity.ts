@@ -98,6 +98,27 @@ export function isAuthedIdentity(): boolean {
   return authedUsername !== null;
 }
 
+/**
+ * R7.1（P1-4）· 本机**设备台账 id**（离线期随机生成的那个），不管当前是否已登录。
+ *
+ * 存在的理由：登录后 `getUserId()` 立刻换成账号名，之前用设备 id 攒下的梨宝记忆
+ * （后端 facts 表按 user_id 分键）就成了孤儿 —— 面板显示 0/0，看着像坏了。
+ * CY 2026-10-03拍板「迁移合并」：登录成功后拿这个 id 去后端做一次台账过户。
+ *
+ * 读不到 / 已被登录态覆盖成同一个值时返回 null（调用方跳过迁移，不是错误）。
+ */
+export function getDeviceUserId(): string | null {
+  try {
+    const saved = readRaw(USER_KEY);
+    // 已是账号名（登录后 readRaw 也会被 adoptAccount 改写）→ 没有独立设备台账
+    if (!saved) return null;
+    if (authedUsername && saved === authedUsername) return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
 export function getUserId(): string {
   // 登录态：真账号优先 —— 梨宝记忆、课表事实回写都挂到账号上，换浏览器不断链
   if (authedUsername) return authedUsername;

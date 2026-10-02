@@ -129,3 +129,57 @@ export async function uploadLocalSnapshot(): Promise<number> {
   }
   return uploaded;
 }
+
+/* ------------------------------------------------------------------
+ * R7.1（P1-4）· 梨宝记忆台账过户（CY 2026-10-03 拍板「迁移合并」）
+ * ------------------------------------------------------------------
+ * 为什么 KV 快照不够：上面的 uploadLocalSnapshot 搬的是 localStorage 云快照，
+ * 而梨宝记忆落在**后端 SQLite 的 facts / profiles 表**（按 user_id 分键）——
+ * KV 通道根本碰不到。「先离线用、后登录」时，设备 id 攒下的记忆就成了孤儿，
+ * 面板显示 0/0（CY 走查实录：看起来像坏了）。
+ *
+ * 冲突策略默认 `account_wins`：同一条 key 账号侧已有活记录时保留账号侧（账号是
+ * 用户主动登录认领的正本，设备侧多为离线期自动抽取的猜测）。
+ */
+export type MigrateStrategy = 'account_wins' | 'device_wins' | 'keep_both';
+
+export interface MigrateMemoryResult {
+  ok: boolean;
+  /** 实际过户的条数 */
+  moved: number;
+  /** 因冲突或已撤销而跳过的条数 */
+  skipped: number;
+  /** 设备侧画像是否已并入账号画像 */
+  profileMerged: boolean;
+  strategy: MigrateStrategy;
+}
+
+/** 把设备台账的梨宝记忆并入账号台账。失败/离线返回 ok:false（由调用方静默降级）。 */
+export async function migrateMemoryLedger(
+  oldId: string,
+  newId: string,
+  strategy: MigrateStrategy = 'account_wins',
+): Promise<MigrateMemoryResult> {
+  const fallback: MigrateMemoryResult = {
+    ok: false, moved: 0, skipped: 0, profileMerged: false, strategy,
+  };
+  if (!oldId || !newId || oldId === newId) return { ...fallback, ok: true };
+  try {
+    const res = await fetch('/api/memory/migrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_id: oldId, new_id: newId, strategy }),
+    });
+    if (!res.ok) return fallback;
+    const data = (await res.json()) as Partial<MigrateMemoryResult>;
+    return {
+      ok: data.ok === true,
+      moved: data.moved ?? 0,
+      skipped: data.skipped ?? 0,
+      profileMerged: data.profileMerged === true,
+      strategy: data.strategy ?? strategy,
+    };
+  } catch {
+    return fallback; // 服务不可达 → 静默：迁移是尽力而为，不该挡住登录
+  }
+}
