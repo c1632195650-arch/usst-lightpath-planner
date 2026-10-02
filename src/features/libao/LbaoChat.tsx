@@ -1994,7 +1994,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           </div>
         )}
 
-        {schedMode === 'collect' && (
+        {/* P1-3 修正（白天批）：徽章在全部活跃相位渲染 —— E 批把 schedMode 扩成
+            collect/draft/blocked 三投影后，这里若仍判 === collect，draft/blocked
+            相位的徽章会整体消失（D3『徽章保留但换说法』被回归；e2e-sched-session
+            A6 实测）。idle 才无徽章。 */}
+        {schedMode !== 'idle' && (
           <div
             data-testid="sched-badge"
             className="mb-3 flex items-center gap-2 rounded-xl border border-brand/25 bg-brand/5 px-3 py-2 text-xs leading-5 text-ink-soft"

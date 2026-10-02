@@ -149,25 +149,28 @@ const run = async () => {
     console.log('  -（本页无可删软块，跳过留白块断言）');
   }
 
-  // ⑫ 梨宝改期草稿卡
+  // ⑫ 梨宝改期草稿卡（白天批按新动线重写）：
+  // 问答模式 → D0 模式提示卡（切到排程并继续）→ 挑块按钮卡 → … → 草稿卡。
+  // 交互升级后追问带按钮卡且轮数不定 → 用『循环应答』：有选项点第一项，直到草稿卡出现。
   await page.getByRole('button', { name: '梨宝', exact: true }).click();
   await T(800);
-  const lbaoInput = page.getByPlaceholder('问梨宝');
-  await lbaoInput.fill('把自习挪到周五');
-  await lbaoInput.press('Enter');
-  await T(4000);
-  // 多命中 → 梨宝追问「挪哪个？」（V2-1）→ 从候选 planPoints 提取第一个块名回复 → 草稿卡
-  const picking = await page.getByText(/对上好几块，挪哪个/).first().isVisible().catch(() => false);
-  if (picking) {
-    const lastMsg = await page.locator('main >> text=/（周/').last().textContent().catch(() => '') ?? '';
-    const m = lastMsg.match(/(.+?)（周/);
-    if (m) {
-      await lbaoInput.fill(m[1].trim());
-      await lbaoInput.press('Enter');
-      await T(4000);
+  {
+    const inputBox = () => page.getByPlaceholder(/问梨宝|排程模式|排程中/).first();
+    await page.screenshot({ path: '_e2e_12_entry.png' });
+    console.log('    [dbg⑫] url =', await page.url(), '| inputs =', await page.locator('input, textarea').count());
+    await inputBox().fill('把自习挪到周五');
+    await inputBox().press('Enter');
+    await T(4000);
+    for (let i = 0; i < 5; i++) {
+      if (await page.getByText(/我排了一版草稿|草稿（还没写进日程）/).first().isVisible().catch(() => false)) break;
+      const opt = page.getByTestId('msg-options').last().getByRole('button').first();
+      if (await opt.count()) { await opt.click({ timeout: 8000 }); await T(4000); continue; }
+      const hint = page.getByRole('button', { name: '切到排程模式并继续' });
+      if (await hint.count()) { await hint.first().click(); await T(4000); continue; }
+      break;
     }
   }
-  ok(await page.getByText(/还没动手|草稿/).first().isVisible().catch(() => false), '⑫ 改期草稿卡出现（多命中经 V2-1 挑块接续）');
+  ok(await page.getByText(/我排了一版草稿|草稿（还没写进日程）/).first().isVisible().catch(() => false), '⑫ 改期草稿卡出现（挑块按钮卡 → 草稿卡）');
 
   // ⑬ 记忆面板 pending 可见
   await page.getByRole('button', { name: /梨宝记住了什么/ }).click().catch(() => {});
@@ -183,16 +186,25 @@ const run = async () => {
   await page.getByRole('button', { name: '梨宝', exact: true }).click();
   await T(1200);
   // F5 恢复期间 loading 可能未就绪（send 静默 no-op）→ 带重试发送
+  // 输入框 placeholder 随模式变化（问答=问梨宝 / 排程=排程模式…）→ 每轮重新解析
+  const schedInput = () => page.getByPlaceholder(/问梨宝|排程模式|排程中|草稿待确认/).first();
   for (let i = 0; i < 3; i++) {
-    await lbaoInput.fill('周三下午别排东西');
-    await lbaoInput.press('Enter');
+    await schedInput().fill('周三下午别排东西');
+    await schedInput().press('Enter');
     await T(3500);
     if (await page.getByRole('button', { name: '就这么排' }).count()) break;
     if (await page.getByText(/对上好几块|哪段时间/).count()) {
-      await lbaoInput.fill('周三下午');
-      await lbaoInput.press('Enter');
+      await schedInput().fill('周三下午');
+      await schedInput().press('Enter');
       await T(3500);
       break;
+    }
+    // P1-4 动线（白天批）：问答模式下「别排」会出 D0 模式提示卡 ——
+    // 点「切到排程模式并继续」= 该卡的设计语义（切模式 + 原句重发进排程流）。
+    const modeHint = page.getByRole('button', { name: '切到排程模式并继续' });
+    if (await modeHint.count()) {
+      await modeHint.first().click();
+      await T(4000);
     }
   }
   let holdOk = false;

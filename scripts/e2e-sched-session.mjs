@@ -46,11 +46,12 @@ async function onboard(page) {
   await page.getByRole('button', { name: /下一步/ }).click();
   await T(500);
 
-  // 问卷自动作答：点可选项直到结果页
-  // ⚠️ 选项点击后有 advancing 过渡（全部按钮短暂 disabled）——此时不能去点「下一步」，
-  //    否则 locator 会挂着等它 enabled 卡死 30s（首次走查实测抓到）。
-  for (let i = 0; i < 80; i++) {
+  // 问卷自动作答（与 e2e-journey 同步的版本）：目标偏好组用「保存并完成测评/跳过」收口；
+  // 选项点击后有 advancing 过渡（按钮短暂 disabled）——此时不能点「下一步」，否则卡死。
+  for (let i = 0; i < 60; i++) {
     if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    const finish = page.getByRole('button', { name: /跳过（之后可在目标设置里补）|保存并完成测评/ }).first();
+    if (await finish.count()) { await finish.click(); await page.waitForTimeout(420); continue; }
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click().catch(() => {}); await page.waitForTimeout(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();
@@ -60,6 +61,11 @@ async function onboard(page) {
     } else {
       await page.waitForTimeout(300);
     }
+  }
+  // 兴趣追问弹窗（画像完成后一次性）若弹出，先跳过 —— 不然会挡住「进入」按钮
+  if (await page.getByRole('dialog', { name: '兴趣追问' }).isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: /跳过/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
   }
   ok(await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false), '引导：画像结果页可达');
 
@@ -77,7 +83,7 @@ async function onboard(page) {
  *  placeholder 在 collect 态会换成「排程中 ——」文案（S2 的 UI 信号之一）；
  *  D0 起排程模式（非 collect）也有专属 placeholder，三个都要认。 */
 async function say(page, text) {
-  await page.getByPlaceholder(/问梨宝|排程中|排程模式/).fill(text);
+  await page.getByPlaceholder(/问梨宝|排程中|排程模式|草稿待确认|梨宝在等你选/).fill(text);
   await page.getByRole('button', { name: '发送' }).click();
   await page.waitForFunction(
     () => !document.body.innerText.includes('掐指一算'),
@@ -405,6 +411,8 @@ const D_SCENARIOS = async (browser) => {
     await page.waitForTimeout(1200);
     await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
     await page.waitForTimeout(600);
+    console.log('    [dbgD] url =', await page.url(), '| has-input =', await page.getByPlaceholder(/问梨宝|排程中|排程模式|草稿待确认/).count(), '| badge =', await page.locator('[data-testid=sched-badge]').count());
+    await page.screenshot({ path: '_e2e_D_debug.png' });
 
     await say(page, '把操场跑步替换掉');
     ok(

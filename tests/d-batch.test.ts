@@ -312,3 +312,12 @@ test('终验修复: WeekPlanView 挂载/重排时同步跨页 undo 深度（↩ 
   assert.match(wv, /setUndoDepth\(undoDepth\(\)\);\n\s+const onReplanDepth = \(\) => setUndoDepth\(undoDepth\(\)\);/,
     '挂载 + 重排广播双路同步在位');
 });
+
+test('P1-3 源码锁: sched-badge 在全部活跃相位渲染（draft/blocked 不再丢失）', () => {
+  // 反向验证：徽章条件回退成 schedMode === 'collect' → 本用例红。
+  // 回归实录：E 批把 schedMode 扩成 collect/draft/blocked 三投影后，徽章条件
+  // 没跟上 → draft/blocked 相位徽章整体消失（e2e-sched-session A6 抓到）。
+  const src = readFileSync(fileURLToPath(new URL('../src/features/libao/LbaoChat.tsx', import.meta.url)), 'utf8');
+  assert.match(src, /schedMode !== 'idle' && \(/, '徽章应覆盖全部活跃相位');
+  assert.ok(!/schedMode === 'collect' && \(\s*\n\s*<div\n\s*data-testid="sched-badge"/.test(src), '不得回退成仅 collect 渲染');
+});
