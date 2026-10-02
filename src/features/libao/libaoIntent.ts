@@ -226,6 +226,9 @@ export const GOAL_NOUNS = [
   // 组织/事务补充 + 习惯目标（批 1.1，金标 i02/i29/i30）：「学生会」让 title 能
   // 扩出「学生会面试」；晨跑/健身族是习惯陈述句（「隔天去一次健身房」）的目标名词
   '学生会', '开题报告', '晨跑', '跑步', '健身', '健身房', '背单词', '晨读',
+  // R批 P0-1/P0-4（2026-10-02）：运动球类是高频排程目标（「把X替换成打篮球」
+  // 离线规则链也要能过 looksLikeAction 的 hasGoal 闸 —— R4 E2E 依赖）
+  '篮球', '足球', '羽毛球', '乒乓球', '游泳',
 ];
 
 /**
@@ -240,6 +243,10 @@ const ACTION_VERBS = [
   // WP9 收口（2026-09-27 真机 W5 验收抓到）：改期/取消语族的动词不在词表 →
   // detectIntent 认得 reschedule，但 looksLikeAction 拦下 → 整句漏判成 RAG。
   '挪', '换到', '改到', '调到', '取消',
+  // R批 P0-1（2026-10-02）：「把X替换成Y」的『替换』不在动词表 → 离线规则链
+  // hasVerb 判否 → 整句漏成 RAG（E2E 实录）。补入后 TITLE_STOP 同步吃到它 ——
+  // 「替换成打篮球」的标题右扩会在『替换』处停住，抽到干净的「篮球」。
+  '替换',
   // 完成语族（批 1.1，金标 i25）：「期末周之前把实验报告写完」——
   // 「写完」本身就是要排的事，且不在标题词里（TITLE_STOP 同步拦截）。
   '写完', '做完', '弄完',
@@ -1240,9 +1247,12 @@ export function isSingleDayEvent(s: IntentSlots): boolean {
   const w = s.when;
   if (!w) return false;
   if (w.kind === 'exact') return true;
-  // 没传 today 的语义层：明天/大后天、这周内的星期几
+  // 没传 today 的语义层：明天/大后天、以及任何「周X」形态（含「下周二」——
+  // resolveWhen 对 relative+weekday 一律落**单日 exact**，单日豁免必须同口径；
+  // R批 P0-1 实录：「把下周二的饭后消食替换成打篮球」被误判成多日诉求 →
+  // 替换目标已锁定还要追问「占多久」（relativeWeeks===0 的旧口径漏了下周X）。
   if (w.kind === 'relative' && w.relativeDays != null) return true;
-  if (w.kind === 'relative' && w.relativeWeeks === 0 && w.weekday != null) return true;
+  if (w.kind === 'relative' && w.weekday != null) return true;
   return false;
 }
 

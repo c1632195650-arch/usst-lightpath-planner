@@ -89,6 +89,33 @@ export function classifyGoal(title: string): GoalCategory {
   return 'generic';
 }
 
+/* ============================================================
+ * R4.5（R批任务书 P0-1）· 健康类亲和度（替换目标的「按类目推荐」）
+ * ============================================================
+ * 「把饭后消食替换成打篮球」—— 新目标是健康类时，候选（被替换对象）里
+ * **健康类块排前面**：拿学习块去换运动块，大概率不是用户想要的交换。
+ * 「饭后消食 / 散步」这类健康习惯词不在 TAXONOMY 关键词里（放进去会污染
+ * classifyGoal → categoryMinutesOfWeek 把消食算进有氧分钟数），所以单独
+ * 列一个**只读的**健康词表，供亲和度排序用，不参与类目归类。
+ */
+const HEALTH_WORDS = ['消食', '散步', '锻炼', '晨跑', '夜跑', '运动', '健身', '拉伸'];
+
+/** 标题是否健康类（sport 两类，或健康习惯词命中）。 */
+export function isHealthGoalTitle(title: string): boolean {
+  const cat = classifyGoal(title);
+  if (cat === 'sport-aerobic' || cat === 'sport-strength') return true;
+  return HEALTH_WORDS.some((w) => (title || '').includes(w));
+}
+
+/** 替换候选亲和度：同类 2 > 双方都健康 1 > 无关 0。纯函数，排序用。 */
+export function replacementAffinity(goalTitle: string, candTitle: string): 0 | 1 | 2 {
+  const g = classifyGoal(goalTitle);
+  const c = classifyGoal(candTitle);
+  if (g !== 'generic' && g === c) return 2;
+  if (isHealthGoalTitle(goalTitle) && isHealthGoalTitle(candTitle)) return 1;
+  return 0;
+}
+
 /** 依据行可拿到的个性化输入（本轮最轻量的两个，方案 6.3） */
 export interface EvidenceCtx {
   /** 本周该类目已排分钟数（categoryMinutesOfWeek 的统计） */

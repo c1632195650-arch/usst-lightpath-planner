@@ -30,6 +30,7 @@ import {
   collectTopic,
   draftTopic,
   modeFromV2,
+  pickingDayTopic,
   pickingTopic,
   sanitizeTopic,
   serializeDialogState,
@@ -52,6 +53,7 @@ import {
   quickOptionsFor,
   replanOptionButtons,
   categoryMinutesOfWeek,
+  dayOfWeekFromReply,
   findCancelTargets,
   findMoveTargets,
   goalToTasks,
@@ -810,19 +812,60 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
    *  「新句子抽出的槽位」与「追问接续补齐的槽位」共用这一条通路 ——
    *  两口各写一份必然漂移（同 checkGoalFeasibility 是唯一完备性判定的道理）。 */
   /** 把目标块算出来（cancel / reschedule / replace 都要对着真实日程匹配）。
-   *  引擎不可用就退化为只匹配用户待办 —— 诚实降级，不崩。 */
-  const blocksForMatching = async (today: string): Promise<TimeBlock[]> => {
+   *  引擎不可用就退化为只匹配用户待办 —— 诚实降级，不崩。
+   *  R4.1（R批 P0-1）：可选 weekNo —— 原句点了「下周X」就排那一周来匹配
+   *  （引擎块 id 自带 w{week} 前缀，excluded 语义周自洽；缺省仍排当前周，行为不变）。 */
+  const blocksForMatching = async (today: string, weekNo?: number): Promise<TimeBlock[]> => {
     try {
-      const weekNo = currentWeekNo(schedule.termStart, today);
-      const plan = await planWeekForChat(schedule, profile, weekNo);
+      const wk = weekNo ?? currentWeekNo(schedule.termStart, today);
+      const plan = await planWeekForChat(schedule, profile, wk);
       return plan?.blocks ?? [];
     } catch {
       return [];
     }
   };
 
+  /** R4.1：替换/取消匹配的定位参数 —— 原句点了天就按天过滤候选；点了「下周X」
+   *  就把匹配池换到那一周（同一周内「这周二的X」和「下周二的X」必须可区分）。 */
+  const matchContextFor = (slots: IntentSlots, today: string): { dayFilter?: number; weekNo: number } => {
+    const wd = slots.when?.weekday
+      ?? (slots.dateFrom ? (() => { const w = weekdayOf(slots.dateFrom); return w === 0 ? 7 : w; })() : undefined);
+    let weekNo = currentWeekNo(schedule.termStart, today);
+    if (slots.dateFrom) {
+      const w = currentWeekNo(schedule.termStart, slots.dateFrom);
+      if (Number.isFinite(w) && w >= 1 && w <= schedule.totalWeeks) weekNo = w;
+    }
+    return { ...(wd != null ? { dayFilter: wd } : {}), weekNo };
+  };
+
+  /** R4.2 两级收窄 · 第一级「哪一天」：候选跨多天且原句没点天时，先问天（一天一个按钮）。
+   *  CY 原话口径：「先问想目标时间嘛；或者简单的早中晚也可以」。 */
+  const askPickDay = (kind: 'cancel' | 'reschedule' | 'replace', slots: IntentSlots, q: string, targets: CancelTarget[]) => {
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    const days = [...new Set(targets.map((t) => t.dayOfWeek).filter((d): d is number => d != null))].sort((a, b) => a - b);
+    setTopic(pickingDayTopic(kind, slots, targets)); setMissStreak(0);
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: `「${q}」对上好几件事 —— 先说想动哪一天的？`,
+      planPoints: days.map((d) => {
+        const one = targets.filter((t) => t.dayOfWeek === d)
+          .map((t) => t.hint.replace(/^周.(\([^)]*\))?\s*/, ''));
+        return `周${WD[d - 1]} × ${one.length}：${one.join('；')}`;
+      }),
+      options: days.map((d) => ({ label: `周${WD[d - 1]}`, value: `周${WD[d - 1]}`, hint: `${targets.filter((t) => t.dayOfWeek === d).length} 处` })),
+    }]);
+    setLoading(false);
+  };
+
+  /** R4.2：挑块候选按钮卡 —— 同名多段用标题当 value 无法消歧（点「饭后消食」
+   *  还是全中），value 一律走**编号**：send 侧 parseOptionChoice 确定性接住
+   *  （与 blocked 态编号兜底同一先例），自由输入「第2个 / 2」同样可达。 */
+  const pickOptionButtons = (list: CancelTarget[]) =>
+    list.slice(0, 5).map((t, i) => ({ label: `${i + 1}. ${t.title}`, value: String(i + 1), hint: t.hint }));
+
   /** WP9·cancel 执行器：按名匹配（先待办后日程 activity/study 块）。
-   *  找不到说清楚；命中多个走追问通道；唯一命中才出确认卡（还没动手）。 */
+   *  找不到说清楚；命中多个走追问通道；唯一命中才出确认卡（还没动手）。
+   *  R4.1：原句点了天（「下周二的X」）→ 候选按天过滤 + 匹配池换到那一周。 */
   const runCancel = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
@@ -831,10 +874,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
-    const blocks = await blocksForMatching(today);
+    const mctx = matchContextFor(slots, today);
+    const blocks = await blocksForMatching(today, mctx.weekNo);
     const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
-      termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
-    });
+      termStart: schedule.termStart, weekNo: mctx.weekNo,
+    }, mctx.dayFilter != null ? { dayOfWeek: mctx.dayFilter } : undefined);
     if (targets.length === 0) {
       setTopic(null);
       setMessages((current) => [...current, {
@@ -846,6 +890,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     if (targets.length > 1) {
+      // R4.2：原句没点天且候选跨多天 → 先问「哪一天」，别让用户在一串日子里挑
+      if (mctx.dayFilter == null && new Set(targets.map((t) => t.dayOfWeek)).size > 1) {
+        askPickDay('cancel', slots, q, targets);
+        return;
+      }
       // V2-1：候选挂进 picking —— 下一句回复按名匹配，不再依赖 applyClarifyAnswer 认 target
       setTopic(null);
       setTopic(pickingTopic('cancel', slots, targets)); setMissStreak(0);
@@ -853,7 +902,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，你要取消哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
-        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
+        options: pickOptionButtons(targets),
       }]);
       setLoading(false);
       return;
@@ -993,7 +1042,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几块，挪哪个？`,
         planPoints: targets.slice(0, 5).map((b) => `${b.title}（周${b.dayOfWeek} ${b.startMin}–${b.endMin}）`),
-        options: targets.slice(0, 5).map((b) => ({ label: b.title, value: b.title, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` })),
+        options: pickOptionButtons(targets.map((b) => ({ blockId: b.id, title: b.title, origin: 'plan' as const, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` }))),
       }]);
       setLoading(false);
       return;
@@ -1055,7 +1104,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     setLoading(false);
   };
 
-  /** WP9·replace 执行器：先 cancel 后 create，两步一次确认、一次快照。 */
+  /** WP9·replace 执行器：先 cancel 后 create，两步一次确认、一次快照。
+   *  R4.1：原句点了天 → 天过滤 + 匹配池换到那一周；R4.5：候选按新目标类目排序
+   *  （健康类目标优先列健康类候选 —— 拿学习块换运动块大概率不是用户要的交换）。 */
   const runReplace = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
@@ -1064,14 +1115,23 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
-    const blocks = await blocksForMatching(today);
+    const mctx = matchContextFor(slots, today);
+    const blocks = await blocksForMatching(today, mctx.weekNo);
     const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
-      termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
+      termStart: schedule.termStart, weekNo: mctx.weekNo,
+    }, {
+      ...(mctx.dayFilter != null ? { dayOfWeek: mctx.dayFilter } : {}),
+      preferTitle: slots.title,
     });
     if (targets.length !== 1) {
       // 0 个：没有可替换的既有块 → 走普通 create 通路
       if (targets.length === 0) {
         await runGoalSlots({ ...slots, intent: 'create' }, today);
+        return;
+      }
+      // R4.2：原句没点天且候选跨多天 → 先问「哪一天」（两级收窄第一级）
+      if (mctx.dayFilter == null && new Set(targets.map((t) => t.dayOfWeek)).size > 1) {
+        askPickDay('replace', slots, q, targets);
         return;
       }
       // D3（B② 根治）：多候选改道 picking（带日期 hint 的候选挂进议题）——
@@ -1081,7 +1141,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，替换哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
-        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
+        options: pickOptionButtons(targets),
       }]);
       setLoading(false);
       return;
@@ -1102,11 +1162,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   };
 
   /** D3（B②）：replace 候选已定 → 取消该目标 + 新任务草稿，两步一次确认。
-   *  从 runReplace（唯一命中）与 pick_candidate 执行器两处进入。 */
+   *  从 runReplace（唯一命中）与 pick_candidate 执行器两处进入。
+   *  R4.4：入口重算 missing —— 会话槽位可能带着旧缺口的陈旧数组（探针实录）。 */
   const runReplaceWithTarget = async (slots: IntentSlots, target: CancelTarget, today: string) => {
-    const verdict = checkGoalFeasibility({ slots, schedule, profile, today });
+    const effSlots: IntentSlots = { ...slots, missing: missingSlots(slots) };
+    const verdict = checkGoalFeasibility({ slots: effSlots, schedule, profile, today });
     if (verdict.kind !== 'ok' && verdict.kind !== 'tight') {
-      markBlocked(slots, 'conflict', verdict);
+      markBlocked(effSlots, 'conflict', verdict);
       setMessages((current) => [...current, {
         role: 'lbao',
         text: '新的安排排不进去：',
@@ -1116,11 +1178,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setLoading(false);
       return;
     }
-    const tasks = goalToTasks(slots, schedule, today);
+    const tasks = goalToTasks(effSlots, schedule, today);
     const weeks = [...new Set(tasks.map((t) => t.weeks?.[0]).filter((w): w is number => Number.isFinite(w)))].sort((a, b) => a - b);
     const key = (pendingSeq.current += 1);
-    setPending((p) => ({ ...p, [key]: { kind: 'replace', title: slots.title, tasks, weeks, cancelTarget: target } }));
-    markDraft(key, slots); // D3：草稿卡挂 topic{draft}
+    setPending((p) => ({ ...p, [key]: { kind: 'replace', title: effSlots.title, tasks, weeks, cancelTarget: target } }));
+    markDraft(key, effSlots); // D3：草稿卡挂 topic{draft}
     setMessages((current) => [...current, {
       role: 'lbao',
       text: '一次替换，两步并作一步（还没动手）：',
@@ -1440,12 +1502,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         if (hits.length === 1) option = cands.find((o) => o.target === hits[0]);
       }
       if (!option) {
-        // 诚实重列，不硬猜
+        // 诚实重列，不硬猜（按钮 value = 编号，与规则层编号兜底互通）
         setMessages((current) => [...current, {
           role: 'lbao',
           text: '没对上唯一一个，候选是这些：',
           planPoints: cands.map((o) => `${o.origin === 'user' ? '待办' : '日程'}：${o.title}（${o.hint}）`),
-          options: cands.slice(0, 5).map((o) => ({ label: o.title, value: o.title, hint: o.hint })),
+          options: pickOptionButtons(cands.map((o) => o.target)),
         }]);
         setLoading(false);
         return;
@@ -1743,38 +1805,108 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
     }
 
+    // ── R4.4（R批 P0-1）· 挑块相位确定性优先 ──────────────────────────────────
+    // 候选回复**先过确定性匹配**，再轮到 LLM（原先顺序相反 —— LLM 在 picking 相
+    // 把候选回复「饭后消食」裁成 new_intent → 落 runGoalSlots 缺时长 → 重问
+    // 「大概占多久？」，真机实录）。R4.3 相位纪律在 validateDialogAct 双保险：
+    // 即使走到 LLM，picking 相也只许 pick_candidate / discard_topic。
+    if (clarifyPicking) {
+      const kind = clarifyPicking.kind;
+      const pickSlots = clarifyPicking.slots;
+      const cands = clarifyPicking.candidates;
+      const WD = ['一', '二', '三', '四', '五', '六', '日'];
+      const withDay = (day: number): IntentSlots => ({
+        ...pickSlots,
+        when: {
+          ...(pickSlots.when ?? { text: `周${WD[day - 1]}`, kind: 'relative' as const }),
+          text: pickSlots.when?.text ?? `周${WD[day - 1]}`,
+          kind: pickSlots.when?.kind ?? 'relative',
+          weekday: day,
+          relativeWeeks: pickSlots.when?.relativeWeeks ?? 0,
+        },
+      });
+      const executeTarget = async (target: CancelTarget, effSlots: IntentSlots) => {
+        // R4.2：两级收窄改写过 when（withDay）→ missing 必须重算 —— checkGoalFeasibility
+        // 关一直读 slots.missing，吃进初始解析的陈旧缺口会把「已答全」误判成追问（探针实录）。
+        const clean: IntentSlots = { ...effSlots, missing: missingSlots(effSlots) };
+        setTopic(null);
+        if (kind === 'cancel') await runCancelWithTarget(clean, target);
+        else if (kind === 'replace') await runReplaceWithTarget(clean, target, today);
+        else await runRescheduleWithTarget(clean, today, target);
+      };
+      const relist = (list: CancelTarget[], text: string) => {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text,
+          planPoints: list.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+          options: pickOptionButtons(list),
+        }]);
+        setLoading(false);
+      };
+
+      // R4.2 第一级 · day 相：候选跨多天且原句没点天 → 先收「哪一天」
+      // （答天词、报名字、报编号，都接得住）
+      if (topic?.pickStage === 'day') {
+        // 编号直达：候选卡 value 是编号（parseOptionChoice 与 blocked 态同一先例）
+        const poolPick = parseOptionChoice(q, cands.length);
+        if (poolPick != null) { await executeTarget(cands[poolPick - 1], pickSlots); return; }
+        const day = dayOfWeekFromReply(q);
+        if (day != null) {
+          const byDay = cands.filter((c) => c.dayOfWeek === day);
+          if (byDay.length === 1) { await executeTarget(byDay[0], withDay(day)); return; }
+          if (byDay.length > 1) {
+            // 天已收窄、该天还有多段 → 落 segment 相问「哪一段」
+            setTopic(pickingTopic(kind, withDay(day), byDay)); setMissStreak(0);
+            relist(byDay, `周${WD[day - 1]}那一天有好几段 —— 换掉哪一段？`);
+            return;
+          }
+        }
+        // 不是天词（或该天没有候选）→ 试按名匹配；再不行重问「哪一天」
+        const named = matchCandidate(q, cands);
+        if (named.length === 1) { await executeTarget(named[0], pickSlots); return; }
+        askPickDay(kind, pickSlots, q, cands);
+        return;
+      }
+
+      // 第二级 · segment 相（含引入前的老挑块）：编号直达 → 天词收窄 → 按名匹配
+      const segPick = parseOptionChoice(q, cands.length);
+      if (segPick != null) { await executeTarget(cands[segPick - 1], pickSlots); return; }
+      const day = dayOfWeekFromReply(q);
+      if (day != null && cands.some((c) => c.dayOfWeek === day)) {
+        const byDay = cands.filter((c) => c.dayOfWeek === day);
+        if (byDay.length === 1) { await executeTarget(byDay[0], withDay(day)); return; }
+        const inDay = matchCandidate(q, byDay);
+        if (inDay.length === 1) { await executeTarget(inDay[0], withDay(day)); return; }
+        setTopic(pickingTopic(kind, withDay(day), byDay)); setMissStreak(0);
+        relist(byDay, `周${WD[day - 1]}有好几段 —— 再说具体点：`);
+        return;
+      }
+      const hits = matchCandidate(q, clarifyPicking.candidates);
+      if (hits.length === 1) {
+        await executeTarget(hits[0], pickSlots);
+        return;
+      }
+      if (hits.length > 1) {
+        // 多命中 → 诚实重列，不硬猜（保留 V2-1 原口径）
+        relist(hits, '这几条还挑不出唯一一个，再说具体点：');
+        return;
+      }
+      // 0 命中：给 LLM 一次机会（「明天的那个」这类指代要靠候选 hint 里的日期解）；
+      // R4.3 相位纪律保证它在这里只许挑块或放弃，不可能把候选回复拐去排新事项。
+      if (DIALOG_ENABLED && activeMode === 'sched' && online !== false) {
+        const handled = await tryDialogAct(q, today, history);
+        if (handled) return;
+      }
+      relist(clarifyPicking.candidates, `没找到「${q}」。候选是这些：`);
+      return;
+    }
+
     // ── D3 · 对话管理器主干：排程模式 + 后端在线 → 每轮恰一次 dialog 裁决 ──
     // act 接管本轮（含 chit_chat，议题保留）；端点挂/超时/校验拒 → 原样落回
     // 下面的规则链路（S/T 批产出全保留为 fallback，离线可用性不变）。
     if (DIALOG_ENABLED && activeMode === 'sched' && online !== false) {
       const handled = await tryDialogAct(q, today, history);
       if (handled) return;
-    }
-
-    // ── V2-1：多目标挑块接续 —— 上一条在等「挪哪个/取消哪个」→ 这句按名匹配候选 ──
-    if (clarifyPicking) {
-      const hits = matchCandidate(q, clarifyPicking.candidates);
-      if (hits.length === 1) {
-        const target = hits[0];
-        const { kind, slots } = clarifyPicking;
-        setTopic(null);
-        if (kind === 'cancel') await runCancelWithTarget(slots, target);
-        else if (kind === 'replace') await runReplaceWithTarget(slots, target, today);
-        else await runRescheduleWithTarget(slots, today, target);
-        return;
-      }
-      // 未命中 / 多命中 → 诚实重列，不硬猜
-      const list = (hits.length > 0 ? hits : clarifyPicking.candidates).slice(0, 5)
-        .map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`);
-      setMessages((current) => [...current, {
-        role: 'lbao',
-        text: hits.length === 0 ? `没找到「${q}」。候选是这些：` : '这几条还挑不出唯一一个，再说具体点：',
-        planPoints: list,
-        options: (hits.length > 0 ? hits : clarifyPicking.candidates).slice(0, 5)
-          .map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
-      }]);
-      setLoading(false);
-      return;
     }
 
     // ── 追问接续：上一条梨宝消息在等答案 → 这句先当「回应」解析 ──

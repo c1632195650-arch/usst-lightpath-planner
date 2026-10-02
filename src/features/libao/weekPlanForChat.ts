@@ -42,7 +42,7 @@ import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
 import { isSingleDayEvent, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
-import { classifyGoal, evidenceLine, type GoalCategory } from './taxonomy';
+import { classifyGoal, evidenceLine, replacementAffinity, type GoalCategory } from './taxonomy';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
 function calendarOf(schedule: Schedule) {
@@ -1023,6 +1023,9 @@ export interface CancelTarget {
   title: string;
   origin: 'user' | 'plan';
   hint: string;      // 给用户看的位置线索
+  /** R4.1（R批任务书）：块所在的天（1-7）—— 候选按天过滤 / 两级收窄（先问哪天）都要用；
+   *  user 层无天（不限天任务）为 undefined。 */
+  dayOfWeek?: number;
 }
 
 const normTitle = (s: string): string => (s || '').replace(/\s+/g, '');
@@ -1042,6 +1045,14 @@ export function findCancelTargets(
    * 此前 hint 只有「周X HH:MM」，「明天」结构上不可命中，只能反复追问。
    */
   weekInfo?: { termStart: string; weekNo: number },
+  /**
+   * R4.1/R4.5（R批任务书 P0-1）：
+   *  · `dayOfWeek` —— 原句里解析出的天约束（「下周二的」）参与过滤，只留该天的块。
+   *    此前「下周二的饭后消食」会把周一/周二同名块全列成候选（真机实录 5 条候选）；
+   *  · `preferTitle` —— 新目标的标题：候选按 `replacementAffinity` 排序
+   *    （同类 2 > 双健康 1 > 无关 0，健康目标优先换掉健康块，R4.5）。
+   */
+  opts?: { dayOfWeek?: number; preferTitle?: string },
 ): CancelTarget[] {
   const needle = normTitle(query);
   if (!needle) return [];
@@ -1054,11 +1065,16 @@ export function findCancelTargets(
   for (const t of userTasks) {
     const title = normTitle(t.title);
     if (title.includes(needle) || needle.includes(title)) {
+      // R4.1：原句点了天 → 只留该天的候选（不限天的 user 任务没有 dayOfWeek，同样被滤掉 ——
+      // 「下周二的X」约束下，一个「不限天」的任务没法证明它在下周二）
+      if (opts?.dayOfWeek != null && t.dayOfWeek != null && t.dayOfWeek !== opts.dayOfWeek) continue;
+      if (opts?.dayOfWeek != null && t.dayOfWeek == null) continue;
       const d = t.dayOfWeek ? md(t.dayOfWeek) : null;
       out.push({
         taskId: t.id,
         title: t.title,
         origin: 'user',
+        ...(t.dayOfWeek != null ? { dayOfWeek: t.dayOfWeek } : {}),
         // D3：WEEKDAY_CN 自带「周」前缀（且不再走 dayOfWeek-1 的错位下标）
         hint: `${t.dayOfWeek ? `${WEEKDAY_CN[t.dayOfWeek % 7]}${d ? `(${d})` : ''}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
       });
@@ -1071,16 +1087,41 @@ export function findCancelTargets(
     if (b.id.includes('-user-') && out.some((c) => c.taskId && b.id.endsWith(`-user-${c.taskId}`))) continue;
     const title = normTitle(b.title);
     if (title.includes(needle) || needle.includes(title)) {
+      // R4.1：同上 —— 原句点了天，非该天的引擎块不进候选
+      if (opts?.dayOfWeek != null && b.dayOfWeek !== opts.dayOfWeek) continue;
       const d = md(b.dayOfWeek);
       out.push({
         blockId: b.id,
         title: b.title,
         origin: 'plan',
+        dayOfWeek: b.dayOfWeek,
         hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}${d ? `(${d})` : ''} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
       });
     }
   }
+  // R4.5：按新目标的类目亲和度排序（同类 2 > 双健康 1 > 无关 0；稳定排序 ——
+  // 同亲和度保持「先待办后日程」的原顺序）。cancel 语义没有「新目标」可言，
+  // preferTitle 不传时不排，行为与引入前逐位一致。
+  if (opts?.preferTitle != null) {
+    const want = opts.preferTitle;
+    return out
+      .map((c, i) => ({ c, i, a: replacementAffinity(want, c.title) }))
+      .sort((x, y) => y.a - x.a || x.i - y.i)
+      .map((x) => x.c);
+  }
   return out;
+}
+
+/**
+ * R4.2（R批任务书 P0-1）· 从挑块回复里抽「哪一天」（1-7），抽不到 = null。
+ * 「先问想目标时间嘛；或者简单的早中晚也可以」（CY 原话）—— 两级收窄的第一级
+ * 就靠它把「周二」这类回答变成天过滤器。认 周X / 星期X / 礼拜X / 周X天。
+ */
+export function dayOfWeekFromReply(reply: string): number | null {
+  const m = /[周星期礼拜]([一二三四五六日天])/.exec(reply || '');
+  if (!m) return null;
+  const WD: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
+  return WD[m[1]] ?? null;
 }
 
 /** 取消落层：user → removeTask；引擎块 → excluded（重排后也不回来）。纯函数。 */

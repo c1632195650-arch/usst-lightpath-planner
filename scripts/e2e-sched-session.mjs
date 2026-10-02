@@ -192,10 +192,11 @@ const run = async () => {  const browser = await chromium.launch();
       'D1 多命中 → 挑块追问（不硬猜）',
     );
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'D2 挑块态仍在会话中');
-    await say(page, '图书馆几点开门'); // 挑块态下的无关句 → V2-1 诚实重列候选（不掉 RAG）
+    await say(page, '图书馆几点开门'); // 挑块态下的无关句 → 诚实重问/重列（不掉 RAG）
     ok(
-      await page.getByText('候选是这些', { exact: false }).first().isVisible().catch(() => false),
-      'D3 挑块态插话诚实重列候选（不掉 RAG）',
+      await page.getByText('候选是这些', { exact: false })
+        .or(page.getByText('想动哪一天', { exact: false })).first().isVisible().catch(() => false),
+      'D3 挑块态插话诚实重列/重问哪一天（不掉 RAG；R4.2 两级收窄后口径 = 重问哪一天）',
     );
     await say(page, '退出排程');
     ok(await page.getByText('好，先不排了', { exact: false }).first().isVisible().catch(() => false), 'D4 挑块态可退出');
@@ -343,6 +344,19 @@ function tomorrowInfo() {
   return { iso, dow, weekNo, dowCN: DOW_CN[t.getDay()], md: iso.slice(5).replace('-', '.') };
 }
 
+/** 「下周二」的实际日期与周次 —— 与规则层 resolveWhen(relativeWeeks=1 + weekday=2)
+ *  同一口径：下周的周一 + 1（周一说「下周二」= 8 天后，不是明天）。 */
+function nextTuesdayInfo() {
+  const t = new Date();
+  const dow = t.getDay() === 0 ? 7 : t.getDay();
+  const add = ((8 - dow) % 7) || 7; // 距下周周一的天数（周一当天算 7）
+  const d = new Date(t);
+  d.setDate(d.getDate() + add + 1);
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const weekNo = Math.floor((d - new Date(`${TERM_START}T00:00:00`)) / (7 * 864e5)) + 1;
+  return { iso, dow: 2, weekNo, md: iso.slice(5).replace('-', '.') };
+}
+
 /** 预置用户待办（layer.tasks）：操场跑步固定在明天傍晚 —— 替换/取消的真实目标 */
 async function seedUserPlan(page, tasks) {
   await page.evaluate((list) => {
@@ -430,17 +444,17 @@ const D_SCENARIOS = async (browser) => {
     await page.close();
   }
 
-  // ── 剧本 L（B② idx 消歧）：replace 两候选 →「明天的那个」1 轮命中出草稿卡 ──
+  // ── 剧本 L（B② idx 消歧 → R批 R4.2 升级）：replace 两候选 → 先问「哪一天」→ 点天出草稿卡 ──
+  // （断言漂移申报 2026-10-02：R4.2 两级收窄后，「替换哪个」的平铺候选升级为
+  //   先问哪一天；「明天的那个」的 LLM idx 消歧让位给确定性的天按钮通路 ——
+  //   mock 的 when patch 同步摘除，天约束不再由 LLM 注入。锁意图 = 1 轮命中出草稿，不变。）
   {
     const page = await browser.newPage();
     const tm = tomorrowInfo();
     await page.route('**/api/health', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, llm: true, model: 'mock' }) }));
     await page.route('**/api/plan/understand', mockDialogLLM((body) => {
       if (body.q.includes('操场跑步替换')) {
-        return { ok: true, act: 'new_intent', args: { intent: 'replace', patch: { title: '出去玩', durationMin: 60, targetHint: '操场跑步', when_text: '明天', relativeDays: 1 } }, reply_note: '', confidence: 0.9 };
-      }
-      if (body.q.includes('明天的那个')) {
-        return { ok: true, act: 'pick_candidate', args: { candidate_idx: 0 }, reply_note: '', confidence: 0.9 };
+        return { ok: true, act: 'new_intent', args: { intent: 'replace', patch: { title: '出去玩', durationMin: 60, targetHint: '操场跑步' } }, reply_note: '', confidence: 0.9 };
       }
       return null;
     }));
@@ -457,17 +471,123 @@ const D_SCENARIOS = async (browser) => {
 
     await say(page, '把操场跑步替换掉');
     ok(
-      await page.getByText('替换哪个', { exact: false }).first().isVisible().catch(() => false),
-      'L1 两候选 → 挑块追问（候选带日期）',
+      await page.getByText('对上好几件事', { exact: false }).first().isVisible().catch(() => false),
+      'L1 两候选跨两天 → R4.2 先问「哪一天」（候选挂全量池）',
     );
-    await say(page, '明天的那个');
+    // 点「明天」那一天的按钮 —— 两级收窄第一级（按钮 value = 可解析原话，走同一 send 通路）
+    const dayLabel = `周${'一二三四五六日'[tm.dow - 1]}`;
+    await page.locator('[data-testid="msg-options"]').last()
+      .getByRole('button', { name: new RegExp(`^${dayLabel}`) }).click();
+    await page.waitForTimeout(900);
+    // 收窄到该天后：唯一 → 直接草稿；多条同名段 → 再点一段（两级收窄的正常路径）
+    for (let i = 0; i < 3; i++) {
+      if (await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false)) break;
+      const hasSeg = await page.locator('[data-testid="msg-options"]').last().locator('button').count();
+      if (!hasSeg) break;
+      await page.locator('[data-testid="msg-options"]').last().locator('button').first().click();
+      await page.waitForTimeout(900);
+    }
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
-      'L2 「明天的那个」1 轮命中 → 草稿卡（无第二次替换哪个）',
+      `L2 点「${dayLabel}」(+段位) → 出草稿卡（无重复追问）`,
     );
     ok(
-      !(await page.getByText('替换哪个', { exact: false }).nth(1).isVisible().catch(() => false)),
-      'L3 没有重复追问',
+      !(await page.getByText('占多久', { exact: false }).first().isVisible().catch(() => false)),
+      'L3 不把候选回复当新事项重问时长（R4.4 根因封死）',
+    );
+    await page.close();
+  }
+
+  // ── 剧本 R1（R批 P0-1 · R4.1）：「下周二的X」候选只含周二 —— 命中唯一直接出草稿 ──
+  {
+    const page = await browser.newPage();
+    const tue = nextTuesdayInfo();
+    await page.route('**/api/plan/understand', (route) => route.abort()); // 纯规则链路口径
+    await onboard(page);
+    const mkXiaoshi = (id, dow) => ({
+      id, title: '饭后消食', emoji: '🚶', kind: 'activity', category: 'custom',
+      dayOfWeek: dow, durationMin: 30, weeks: [tue.weekNo],
+    });
+    // 种下周一 + 下周二两件同名「饭后消食」—— 修复前周一的也会被列进候选（真机实录 5 条）
+    await seedUserPlan(page, [mkXiaoshi('u-xs-mon', 1), mkXiaoshi('u-xs-tue', 2)]);
+    await page.reload();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '把下周二的饭后消食替换成打篮球；每次60分钟');
+    ok(
+      await page.getByText('替换哪个', { exact: false }).first().isVisible().catch(() => false),
+      'R1-1 命中周二多条同名段 → 段位挑选（原句已点天 → 不再问「哪一天」）',
+    );
+    // 候选（按钮 hint）必须全部落在周二 —— 修复前周一/周二的同名块混在一起（真机实录 5 条）
+    const r1Hints = await page.locator('[data-testid="msg-options"]').last().locator('button').allInnerTexts();
+    ok(
+      r1Hints.length > 0 && r1Hints.every((t) => t.includes('周二')),
+      `R1-2 候选只含周二：${JSON.stringify(r1Hints)}`,
+    );
+    ok(
+      !r1Hints.some((t) => t.includes('周一')),
+      'R1-3 周一的同名块不再混进候选（R4.1 天维度过滤）',
+    );
+    await page.locator('[data-testid="msg-options"]').last().locator('button').first().click();
+    await page.waitForTimeout(900);
+    ok(
+      await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
+      'R1-4 段位点选 → 直接出替换草稿卡',
+    );
+    ok(
+      await page.getByText('取消：饭后消食（周二', { exact: false }).first().isVisible().catch(() => false),
+      'R1-5 草稿卡取消目标在周二',
+    );
+    ok(
+      !(await page.getByText('占多久', { exact: false }).first().isVisible().catch(() => false)),
+      'R1-6 不把候选回复当新事项重问时长（R4.3/R4.4）',
+    );
+    ok(
+      !(await page.getByText('想动哪一天', { exact: false }).first().isVisible().catch(() => false)),
+      'R1-7 原句已点天 → 不再反问「哪一天」（段位挑选不算反问天）',
+    );
+    await page.close();
+  }
+
+  // ── 剧本 R2（R批 P0-1 · R4.2）：候选跨多天 → 先问「哪一天」→ 点天 → 段位 → 草稿 ──
+  {
+    const page = await browser.newPage();
+    const tm = tomorrowInfo();
+    await page.route('**/api/plan/understand', (route) => route.abort());
+    await onboard(page);
+    const curWeek = tm.weekNo; // 种子只用于「多天同名候选」，周次不敏感
+    await seedUserPlan(page, [1, 2, 3].map((d) => ({
+      id: `u-xs-${d}`, title: '饭后消食', emoji: '🚶', kind: 'activity', category: 'custom',
+      dayOfWeek: d, durationMin: 30, weeks: [curWeek],
+    })));
+    await page.reload();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    await say(page, '把饭后消食替换成打篮球；每次60分钟');
+    ok(
+      await page.getByText('对上好几件事', { exact: false }).first().isVisible().catch(() => false),
+      'R2-1 三天同名候选 → 先问「哪一天」（CY 口径：先问想目标时间）',
+    );
+    ok(
+      await page.locator('[data-testid="msg-options"]').last().getByRole('button', { name: /周二/ }).isVisible().catch(() => false),
+      'R2-2 一天一个按钮（周一/周二/周三）',
+    );
+    await page.locator('[data-testid="msg-options"]').last().getByRole('button', { name: /周二/ }).click();
+    await page.waitForTimeout(900);
+    const r2Hints = await page.locator('[data-testid="msg-options"]').last().locator('button').allInnerTexts();
+    ok(
+      r2Hints.length > 0 && r2Hints.every((t) => t.includes('周二')),
+      `R2-3 收窄后段位候选全在周二：${JSON.stringify(r2Hints)}`,
+    );
+    await page.locator('[data-testid="msg-options"]').last().locator('button').first().click();
+    await page.waitForTimeout(900);
+    ok(
+      await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
+      'R2-4 段位点选 → 直接出草稿（不再问时长）',
     );
     await page.close();
   }

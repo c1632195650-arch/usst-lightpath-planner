@@ -66,6 +66,15 @@ export interface DialogTopic {
   /** picking 相：候选清单（防编造的锚 —— LLM 只许引用这里的 idx） */
   candidates?: PickOption[];
   pickKind?: 'cancel' | 'reschedule' | 'replace';
+  /**
+   * R4.2（R批任务书 P0-1）· 两级收窄相位：
+   *  · `'day'`     —— 候选跨多天且原句没点天：先问「哪一天」（一天一个按钮），
+   *                   candidates 挂**全量池**；
+   *  · `'segment'` —— 天已定（原句点了天，或用户答了天）：问「哪一段」，candidates
+   *                   挂该天的候选（即引入前的普通 picking 形态）；
+   *  · 缺省        —— 引入前的老挑块（单级，等价 segment）。可选字段：旧快照无此键照常读。
+   */
+  pickStage?: 'day' | 'segment';
   /** draft 相：确认卡在 pending 里的键（确认执行走 confirmGoal） */
   draftKey?: number;
   /** blocked 相：挡路的事实 */
@@ -125,7 +134,34 @@ export function pickingTopic(
     ...baseTopic(slots, now),
     phase: 'picking',
     pickKind: kind,
+    pickStage: 'segment',
     candidates: candidates.slice(0, 5).map((t, i) => ({
+      idx: i,
+      title: t.title,
+      origin: t.origin,
+      hint: t.hint,
+      target: t,
+    })),
+  };
+}
+
+/**
+ * R4.2 · 挑块「哪一天」相：候选跨多天且原句没点天时，先收窄到天再问段。
+ * candidates 挂**全量池**（不裁 5 —— 天按钮要从全池数天数；LLM 序列化层
+ * serializeTopic 自有 5 条上限与 4KB 体积闸，不会因此膨胀）。
+ */
+export function pickingDayTopic(
+  kind: 'cancel' | 'reschedule' | 'replace',
+  slots: IntentSlots,
+  pool: CancelTarget[],
+  now = Date.now(),
+): DialogTopic {
+  return {
+    ...baseTopic(slots, now),
+    phase: 'picking',
+    pickKind: kind,
+    pickStage: 'day',
+    candidates: pool.map((t, i) => ({
       idx: i,
       title: t.title,
       origin: t.origin,
@@ -297,6 +333,12 @@ export function validateDialogAct(
 ): boolean {
   if (typeof act !== 'string' || !(DIALOG_ACTS as readonly string[]).includes(act)) return false;
   const t = state.topic;
+  // R4.3（R批任务书 P0-1）· 相位纪律：挑块相只许「挑」或「放弃」——
+  // 禁止 new_intent / ask_slot / chit_chat 接管。根因实录：picking 相里
+  // LLM 把候选回复「饭后消食」裁成 new_intent → runGoalSlots 缺时长 →
+  // 把候选回复当全新事项重问「大概占多久？」。confirm_draft 在 picking 本就
+  // 无草稿可确认（下方 case 会拒），这里在**相位级**一票拒掉，双保险。
+  if (t?.phase === 'picking' && act !== 'pick_candidate' && act !== 'discard_topic') return false;
   switch (act as DialogAct) {
     case 'ask_slot':
       return t != null && !!args.slot && (ASKABLE_SLOTS as readonly string[]).includes(args.slot);

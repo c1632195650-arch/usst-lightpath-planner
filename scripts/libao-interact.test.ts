@@ -189,6 +189,11 @@ test('源码锁 · 按钮卡渲染 + send(value) + 追问/候选六处接线', (
   assert.ok(src.includes('都不合适？直接打字告诉我就行'), '必须保留自由输入的引导（自定义空间）');
   const wiringCount = (src.match(/quickOptionsFor\(/g) ?? []).length;
   assert.ok(wiringCount >= 5, `追问快捷项应接到 ≥5 处（4 处追问 + 1 处 import），实际 ${wiringCount}`);
-  const candCount = (src.match(/value: t\.title|value: o\.title|value: b\.title/g) ?? []).length;
-  assert.ok(candCount >= 5, `候选按钮应接到 ≥5 处（cancel/reschedule/replace/两处重列），实际 ${candCount}`);
+  // 断言漂移申报（R批 P0-1，2026-10-02）：候选按钮卡的 value 从 `value: t.title`
+  // 收敛为 `pickOptionButtons()` —— 同名多段用标题当值无法消歧（点「饭后消食」
+  // 还是全中），改为编号值 + parseOptionChoice 确定性接住（blocked 态同款先例）。
+  // 锁意图 = 候选按钮 ≥5 处接线，调用形态更新：cancel/replace/reschedule/
+  // LLM 重列/规则重列 5 处调用（定义行是赋值形态，不计入本正则）。
+  const candCount = (src.match(/pickOptionButtons\(/g) ?? []).length;
+  assert.ok(candCount >= 5, `候选按钮应接到 ≥5 处（5 处调用），实际 ${candCount}`);
 });
