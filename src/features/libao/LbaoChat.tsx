@@ -172,6 +172,15 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
   if (p.durationMin != null) patch.durationMin = p.durationMin;
   if (p.totalHours != null) patch.totalHours = p.totalHours;
   if (p.place) patch.place = p.place;
+  // 批次 1（交互升级方案 4.1）：端点抽到的钟点起止 → IntentSlots.clock。
+  // 时长推导不在端点做 —— clock → durationMin 由 mergeLlmPrimary 的 reconcileClock 统一算。
+  if (p.startMin != null || p.endMin != null) {
+    patch.clock = {
+      ...(p.startMin != null ? { startMin: p.startMin } : {}),
+      ...(p.endMin != null ? { endMin: p.endMin } : {}),
+      text: p.window_text ?? p.when_text ?? '钟点',
+    };
+  }
   if (p.targetHint) patch.targetHint = p.targetHint;
   return patch;
 }

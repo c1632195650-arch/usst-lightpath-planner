@@ -291,6 +291,10 @@ export interface PlanSlotPatch {
   totalHours?: number;
   place?: string;
   window_text?: string;
+  /** 钟点起止（批次 1 · 4.1）：「6点到8点」= startMin 1080 / endMin 1200；
+   *  单端点（「打到8点」）只给 endMin。前端拼成 IntentSlots.clock。 */
+  startMin?: number;
+  endMin?: number;
   targetHint?: string;
 }
 

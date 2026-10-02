@@ -328,6 +328,13 @@ export function goalToTasks(
   // ⑤ 生成任务。id **只与「目标 + 周次 + 星期」有关，不含时间** ——
   //    语义键含时间会让引擎把同一块认成「删一个 + 新增一个」（见 `userPlanStore` 的 id 纪律）。
   const slug = slugOf(slots.title);
+  // 批次 1（交互升级方案 4.4）：用户点名的钟点收窄引擎放置窗 —— 零引擎侧改动，
+  // 仍走既有 `notBeforeMin`/`notAfterMin` 通道（D4 已为 window 接好）。clock 优先
+  // 于 window（「晚上6点到8点」不该被放宽回整个晚上）；单端点缺哪端就回退哪端
+  // 的 window 口径，再缺回默认（09:00 起）。**仍不给 `startMin` 硬锁定** ——
+  // 「软偏好、引擎可挪」的哲学不变，草稿卡会如实展示实际排到的时段。
+  const goalNotBefore = slots.clock?.startMin ?? slots.window?.fromMin ?? GOAL_EARLIEST_MIN;
+  const goalNotAfter = slots.clock?.endMin ?? slots.window?.toMin;
   for (const idx of [...picked].sort((a, b) => a - b)) {
     const iso = days[idx];
     const wk = currentWeekNo(schedule.termStart, iso);
@@ -348,9 +355,10 @@ export function goalToTasks(
       ...(slots.place ? { place: slots.place } : {}),
       priority: slots.priorityHint,
       ...(slots.essential ? { essential: true } : {}),
-      notBeforeMin: slots.window?.fromMin ?? GOAL_EARLIEST_MIN,
-      // D4：窗口上界不再丢 —— 「晚上」= 23:00 前结束，引擎放置受 notAfterMin 约束
-      ...(slots.window ? { notAfterMin: slots.window.toMin } : {}),
+      notBeforeMin: goalNotBefore,
+      // D4：窗口上界不再丢 —— 「晚上」= 23:00 前结束，引擎放置受 notAfterMin 约束；
+      // 批次 1：clock 有 endMin 时优先（用户点名的钟点上界）
+      ...(goalNotAfter != null ? { notAfterMin: goalNotAfter } : {}),
       // D4：用户点名块豁免活动预算与每日上限 —— 「出去玩 1 小时」不再被静默挤掉
       budgetExempt: true,
       note: pacingOn
@@ -514,6 +522,14 @@ export function checkGoalFeasibility(args: {
   }
   if (!slots.place) {
     caveats.push('没给地点 —— 转场时间按同校区估算，等你说地点我再校准。');
+  }
+  // 批次 1（交互升级方案 4.1）：钟点通道的口径说明进草稿卡 —— 歧义不许装作听懂，
+  // 矛盾改判（clock 赢）也要说出口，用户才有机会纠正。
+  if (slots.clock?.ambig) {
+    caveats.push(`「${slots.clock.text}」没说上下午 —— 我先按上午的钟点理解，不对的话告诉我。`);
+  }
+  if (slots.clock?.conflicted) {
+    caveats.push(`你给的钟点与「${slots.clock.conflicted}」不一致 —— 按你说的钟点排。`);
   }
 
   // ── 关三：干跑对比（**按候选块真正落在的周**逐周跑）─────────

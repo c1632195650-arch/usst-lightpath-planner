@@ -90,12 +90,17 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - totalHours: 总投入（小时）（必须带总量词才记：「一共20小时」=20；裸「10小时」不得记这里）
 - place: 地点（如「图书馆」）
 - window_text: 时段窗原话（如「晚上」「下午」「18点之后」）
+- startMin / endMin: 钟点起止（分钟数 0-1440）。「6点到8点」= startMin 1080 / endMin 1200；
+  「晚上6点左右」= startMin 1080；「打到8点」= endMin 1200。用户给了钟点就不必再问时长
+  （时长=endMin-startMin，前端自动推导）
 - targetHint: 要动的既有事项名（改期/取消/替换的对象）"""
 
 _SYSTEM_BASE = (
     "你是日程排程助手「梨宝」的理解层。用户的话可能是要安排日程，也可能只是闲聊或提问。"
     + _SLOT_SPEC
     + "\n规则：你是**第一理解层**，独立判断这句话的意思；规则层（关键词/正则）先跑过一遍，"
+    "用户可能一句话把时间+时长说全（如「周六晚上6点到8点我要打球」→ startMin 1080 / endMin 1200，"
+    "时长自动=120分钟），多信息自然句式即可，不必分号隔开。"
     "但它的词表不可能穷尽口语 —— 它的输出仅供参考，可能不全也可能抽错，你可以给出它没抽到"
     "或需要修正的槽位。禁止编造用户没说的内容；不确定就必须给低 confidence（<0.5）；只输出 JSON，不要输出别的。"
 )
@@ -206,6 +211,12 @@ def _clean_patch(patch):
     n = _num(patch.get("weekNo"))
     if n is not None and 1 <= n <= 30:
         out["weekNo"] = int(n)
+    n = _num(patch.get("startMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["startMin"] = int(n)
+    n = _num(patch.get("endMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["endMin"] = int(n)
     n = _num(patch.get("perWeekCount"))
     if n is not None and 1 <= n <= 7:
         out["perWeekCount"] = int(n)

@@ -101,6 +101,24 @@ export interface TimeWindow {
 }
 
 /**
+ * 钟点起止（交互升级方案批次 1 · 4.1）：「晚上6点到8点」→ 1080/1200。
+ *
+ * 与 `TimeWindow`（时段窗，粗粒度）互补：clock 是用户**点名**的时刻。
+ * 单端点形态（「打到8点」）只填一端；`ambig` = 有钟点原子没带时段语境
+ * （「6点」）→ 按上午口径落，界面必须如实说明，不许装作听懂了。
+ */
+export interface ClockHint {
+  startMin?: number;
+  endMin?: number;
+  /** 原话片段（容词「大概/左右」剥除后的干净形态），用于回显 */
+  text: string;
+  /** 24 小时歧义：某端点没带「上午/下午/晚上」语境 */
+  ambig?: boolean;
+  /** 与时段窗矛盾（钟点在窗外）→ 记录被让位的 window 原话，草稿卡如实说明「按钟点排」 */
+  conflicted?: string;
+}
+
+/**
  * 解析产物：结构化槽位 + **自报缺口** + 歧义点。
  *
  * `missing` 由解析器自己给出，而不是让调用方去猜「哪个字段为空算缺」——
@@ -127,6 +145,8 @@ export interface IntentSlots {
   place?: string;
   /** 时段窗（「晚上」→ 18:00–23:00） */
   window?: TimeWindow;
+  /** 钟点起止（批次 1）：「晚上6点到8点」→ 1080/1200。加法通道：句中无钟点词 = undefined */
+  clock?: ClockHint;
   /** 是否必做（有交期或用户强调）→ 映射到 `UserTask.essential` */
   essential?: boolean;
   /** 可让步度：越高越不该被别的安排挤掉 */
@@ -759,6 +779,11 @@ export function extractEffort(q: string): { totalHours?: number; durationMin?: n
 /** 抽频率（每周几次）。「每周」但没给次数 → `undefined`，由上层追问。 */
 export function extractFrequency(q: string): number | undefined {
   const s = q || '';
+  // 批次 1 互斥（方案 4.3）：「每天两小时」是**时长节奏**不是频率承诺 ——
+  // 「每天」后面**紧跟**时长单位（可隔一个数字/「个」）→ 不算频率，否则草稿
+  // 会幻觉出「频率：每周 7 次」。注意必须**紧邻**：「每天晚上背半小时」隔着
+  // 「晚上背」→ 不拦（金标 i14「每天晚上…=7」口径）。
+  if (/(每天|每日|天天)\s*(?:[0-9.]+|[一二两三四五六七八九十]+)?\s*(?:个)?\s*(?:小时|分钟|h(?![a-zA-Z0-9]))/.test(s)) return undefined;
   if (/每天|每日|天天/.test(s)) return 7;
   if (/(隔天|每两天|每2天)/.test(s)) return 4; // 近似：一周约 3–4 次，取 4
   const m = /每(?:周|星期|礼拜)\s*([一二三四五六七八九十\d]{1,3})\s*次/.exec(s);
@@ -788,6 +813,153 @@ export function extractWindow(q: string): TimeWindow | undefined {
     return { fromMin: Number(m[1]) * 60 + Number(m[2]), toMin: 23 * 60, text: m[0] };
   }
   return undefined;
+}
+
+/* ============================================================
+ * 批次 1（交互升级方案 4.1-4.2）· 钟点时刻通道
+ * ============================================================
+ * 真机问题：「周六晚上大概6点左右；大概打到8点」→ 仍重问「大概占多久？」
+ * —— WhenHint 只有日粒度，唯一认识钟点的 spanDurationMin 只折时长不产起止。
+ *
+ * **加法通道**：句中没有钟点词 → 本函数返回 undefined → clock 不产出 →
+ * 后续所有代码路径与引入前逐位一致（方案 §〇.2 原则 1）。
+ */
+
+/** 批次 1 逃生门：`LIBAO_CLOCK=0`/`'false'` → 钟点通道整体关闭（回批次 0 行为）。
+ *  读法沿用 G 批三开关惯例：Node 读 `process.env`，Vite 读 `import.meta.env.VITE_*`；
+ *  每次调用都读（不在 import 期定死），测试可在用例内翻开关再复原。 */
+export function clockChannelOn(): boolean {
+  const off = (v: string | undefined) => v === '0' || v === 'false';
+  let v: string | undefined;
+  try {
+    v = typeof process !== 'undefined'
+      ? (process as unknown as { env?: Record<string, string | undefined> }).env?.LIBAO_CLOCK
+      : undefined;
+  } catch {
+    v = undefined;
+  }
+  if (v == null) {
+    try {
+      v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_LIBAO_CLOCK;
+    } catch {
+      v = undefined;
+    }
+  }
+  return !off(v);
+}
+
+/** 钟点原子：「6点」「六点半」「6点30分」。**必须带「点」** —— 纯数字（「每周3次」）不是钟点。 */
+const CLOCK_ATOM_RE = /(\d{1,2}|[一二两三四五六七八九十]{1,2})\s*点(?:\s*半|(\d{1,2}|[一二三四五]{1,2})\s*分)?/g;
+/** 区间连接词：「到|至|—|~」与动结式「打到/玩到/学到/弄到/干到」（动结式后端标记为 end）。 */
+const CLOCK_RANGE_RE = /^\s*(?:到|至|[~～－—-]{1,2})\s*$/;
+const CLOCK_VERB_TO_RE = /(?:打|玩|学|弄|干|忙|搞)到\s*$/;
+
+/**
+ * 中文钟点 → 起止分钟。产**起止**不产时长（时长在 parseIntentSlots 由区间推导）。
+ *
+ * · 语境提升：「下午3点」→ 15:00；回看原子前 ≤6 字取**最近**的时段词
+ *   （「早上10点到晚上8点」两端各自归位）；
+ * · 无语境（「6点」）→ 按上午口径落并标 `ambig`，由调用方向用户如实说明；
+ * · 容词「大概/大约/左右/前后」剥除后再解析（原话回显用剥后形态，见 ClockHint.text）。
+ */
+export function extractClockRange(q: string): ClockHint | undefined {
+  const s = (q || '').replace(/大概|大约|左右|前后/g, '');
+  if (!/点/.test(s)) return undefined;
+
+  type Atom = { start: number; end: number; min: number; ambig: boolean };
+  const atoms: Atom[] = [];
+  for (const m of s.matchAll(CLOCK_ATOM_RE)) {
+    const hour = /^\d+$/.test(m[1]) ? Number(m[1]) : cnToInt(m[1]);
+    if (hour == null || hour < 0 || hour > 24) continue;
+    const minutes = m[0].includes('半') ? 30 : m[2] != null ? (/^\d+$/.test(m[2]) ? Number(m[2]) : cnToInt(m[2]) ?? 0) : 0;
+    // 语境：取原子**前面**最近的时段词（全文回看，不限窗）。口语里离钟点最近
+    // 的时段词几乎总是它的语境 ——「晚上6点；打到8点」的「8点」要继承「晚上」
+    // 才能落到 20:00（窄窗回看会跨过前一个原子把语境弄丢，真机实录）。
+    const prefix = s.slice(0, m.index ?? 0);
+    const period = getLatestPeriodWord(prefix);
+    let min = hour * 60 + minutes;
+    if (period === 'pm' && hour <= 11) min += 12 * 60;
+    // 无语境：1-11 点可能是 13-23 点 → 按上午口径落并标注，由调用方如实说明
+    const ambig = period == null && hour >= 1 && hour <= 11;
+    atoms.push({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, min, ambig });
+  }
+  if (atoms.length === 0) return undefined;
+
+  // 成对：两原子之间只隔区间连接词，或后一原子紧跟动结式「X到」
+  for (let i = 0; i + 1 < atoms.length; i++) {
+    const between = s.slice(atoms[i].end, atoms[i + 1].start);
+    if (CLOCK_RANGE_RE.test(between) || CLOCK_VERB_TO_RE.test(between)) {
+      return {
+        startMin: atoms[i].min,
+        endMin: atoms[i + 1].min,
+        text: s.slice(atoms[i].start, atoms[i + 1].end),
+        ...(atoms[i].ambig || atoms[i + 1].ambig ? { ambig: true } : {}),
+      };
+    }
+  }
+
+  // 单端点：紧跟动结式「X到」→ 只有 end（「打到8点」）；否则只有 start（「晚上6点」）
+  const last = atoms[atoms.length - 1];
+  const before = s.slice(Math.max(0, last.start - 4), last.start);
+  const verbTo = CLOCK_VERB_TO_RE.exec(before)?.[0];
+  if (verbTo) {
+    return {
+      endMin: last.min,
+      text: verbTo + s.slice(last.start, last.end),
+      ...(last.ambig ? { ambig: true } : {}),
+    };
+  }
+  return {
+    startMin: last.min,
+    text: s.slice(last.start, last.end),
+    ...(last.ambig ? { ambig: true } : {}),
+  };
+}
+
+/** 时段词回看：返回 'pm'（下午/晚上族）| 'am'（上午/早上/中午族）| undefined。 */
+function getLatestPeriodWord(s: string): 'pm' | 'am' | undefined {
+  const PM = /(晚上|晚间|夜里|夜晚|傍晚|下午)/;
+  const AM = /(早上|早晨|上午|中午)/;
+  const pm = PM.exec(s);
+  const am = AM.exec(s);
+  if (pm && (!am || pm.index > am.index)) return 'pm';
+  if (am) return 'am';
+  return undefined;
+}
+
+/**
+ * clock 落位（parseIntentSlots 与 mergeLlmPrimary 共用的收尾三步，批次 1）：
+ *   ① clock 与 window 并存取**交集**；交集为空（钟点在时段窗外）→ 以 clock 为准、
+ *      window 让位，并如实注记（不静默改口径）；
+ *   ② 24 小时歧义注记（`ambig`）；
+ *   ③ 时长推导：双端点齐且用户没给时长/总量 → durationMin = endMin − startMin
+ *      （「6点到8点」= 120 分钟 —— 消灭「大概占多久？」重问的钥匙，方案 4.2）。
+ * 三步全是空值短路：clock 不存在时一个字段都不碰。
+ */
+function reconcileClock(s: IntentSlots): void {
+  const clock = s.clock;
+  if (!clock) return;
+  const win = s.window;
+  if (clock.startMin != null && clock.endMin != null && win) {
+    if (clock.startMin >= win.toMin || clock.endMin <= win.fromMin) {
+      s.window = undefined;
+      s.clock = { ...clock, conflicted: win.text };
+      s.unclear.push(`你说的${clock.text}与「${win.text}」对不上 —— 按你说的钟点排。`);
+    } else {
+      s.clock = {
+        ...clock,
+        startMin: Math.max(clock.startMin, win.fromMin),
+        endMin: Math.min(clock.endMin, win.toMin),
+      };
+    }
+  }
+  if (s.clock?.ambig) {
+    s.unclear.push(`「${s.clock.text}」没说上下午 —— 我先按上午的钟点理解，不对的话告诉我。`);
+  }
+  if (s.clock?.startMin != null && s.clock.endMin != null
+    && s.durationMin == null && s.totalHours == null) {
+    s.durationMin = s.clock.endMin - s.clock.startMin;
+  }
 }
 
 /** 抽「对哪一块动手」（换时间 / 取消用）。 */
@@ -1538,6 +1710,12 @@ export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTe
   const win = extractWindow(raw);
   if (win) s.window = win;
 
+  // 批次 1：钟点通道（加法）。逃生门 LIBAO_CLOCK=0 → 整体跳过，回引入前行为。
+  if (clockChannelOn()) {
+    const clock = extractClockRange(raw);
+    if (clock) s.clock = clock;
+  }
+
   const target = extractTarget(raw);
   if (target) s.targetHint = target;
 
@@ -1548,6 +1726,9 @@ export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTe
   const pri = extractPriority(raw);
   if (pri.essential) s.essential = true;
   s.priorityHint = pri.priorityHint;
+
+  // 批次 1 收尾三步（交集/歧义注记/时长推导）—— clock 不存在时全部空短路
+  reconcileClock(s);
 
   if (today) {
     const r = resolveWhen(when, today, whenOpts);
@@ -1611,6 +1792,7 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
   fill('totalHours');
   fill('place');
   fill('window');
+  fill('clock');
   fill('targetHint');
 
   if (out.intent === 'create' && llm.intent && llm.intent !== 'create') out.intent = llm.intent;
@@ -1680,7 +1862,13 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
   if (patch.totalHours != null) out.totalHours = patch.totalHours;
   if (patch.place) out.place = patch.place;
   if (patch.window) out.window = patch.window;
+  // 批次 1：clock 走 fill-if-empty —— 规则层从原话抽到的钟点是确定性正则产物，
+  // 不被 LLM 转写覆盖；LLM 只兜规则抓不到的形态（「晚上六点左右」之外的说法）。
+  if (patch.clock && !out.clock) out.clock = patch.clock;
   if (patch.targetHint) out.targetHint = patch.targetHint;
+
+  // 批次 1 收尾三步（交集/歧义注记/时长推导）—— patch 里的钟点同样吃推导
+  reconcileClock(out);
 
   out.missing = missingSlots(out);
   return out;
