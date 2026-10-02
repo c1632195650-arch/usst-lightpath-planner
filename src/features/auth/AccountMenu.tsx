@@ -12,6 +12,66 @@ import { useState } from 'react';
 import { deleteAccount, logout } from '@/lib/auth';
 import { clearLocalCache, clearLocalOwner } from '@/lib/persistence';
 
+/**
+ * R批 P1-2（R1.1/R1.3）· offline 态账号占位入口
+ * ============================================================
+ * AccountMenu 早已存在，但挂载条件是「已登录」—— serve.py 未启动时
+ * fetchMe() 返回 offline（设计为「跳过登录照常运行」），菜单就不渲染，
+ * 用户以为「右上没有账号菜单」（CY 走查实录）。这类「功能做了但用户
+ * 以为没做」必须消除：offline 也保留账号位，点开说清单机模式语义
+ * （数据仅存本机、记忆不与账号同步），并给「重试连接」。
+ */
+export function AccountOfflineMenu({ onRetry }: { onRetry: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const retry = () => {
+    setRetrying(true);
+    try {
+      onRetry();
+    } finally {
+      // 探测是异步的：这里只恢复按钮文案，连接结果由 App 的账号门状态呈现
+      setTimeout(() => setRetrying(false), 1500);
+    }
+  };
+
+  return (
+    <div className="relative" data-testid="account-offline">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-9 items-center gap-2 rounded-xl border border-ink/10 bg-white px-3 text-sm font-medium text-ink-soft transition-colors hover:bg-paper"
+        title="账号服务未连接"
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-xs" aria-hidden>⛽</span>
+        <span className="max-w-[9rem] truncate">未连接账号服务</span>
+        <span aria-hidden className="text-[10px] text-ink-faint">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-30 w-64 rounded-xl border border-ink/10 bg-white p-3 shadow-lg"
+        >
+          <p className="text-[12px] leading-5 text-ink-soft">
+            当前是<b className="text-ink">单机模式</b>：数据仅保存在本机，梨宝的记忆与画像
+            <b className="text-ink">不与账号同步</b>。启动本地服务后即可登录并同步。
+          </p>
+          <button
+            onClick={retry}
+            data-testid="account-retry"
+            disabled={retrying}
+            role="menuitem"
+            className="mt-2 w-full rounded-lg bg-ink px-3 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-50"
+          >
+            {retrying ? '重试中…' : '重试连接'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   username: string;
   /** 退出成功后回调（App 会切到登录页） */

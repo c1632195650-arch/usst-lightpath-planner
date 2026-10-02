@@ -3,9 +3,12 @@ import { Logo120 } from '@/components/Logo120';
 interface Props {
   onStart: () => void;
   onSkip: () => void;
+  /** R批 P1-2（R1.2）：「已有账号？去登录」点击 —— 重试探测账号服务；
+   *  服务在线且未登录 → 登录页出现，离线则保持引导流不动。 */
+  onRetryAuth?: () => void;
 }
 
-export function Welcome({ onStart, onSkip }: Props) {
+export function Welcome({ onStart, onSkip, onRetryAuth }: Props) {
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 sm:py-8">
       {/* 暖色重点面只停留在首屏上半区，避免整页被深红压暗。 */}
@@ -59,6 +62,20 @@ export function Welcome({ onStart, onSkip }: Props) {
               <button onClick={onSkip} className="button-secondary flex-1">先浏览应用</button>
             </div>
             <p className="mt-4 text-xs leading-5 text-ink-faint">画像可以随时重做；暂时跳过也不影响浏览校历与课表。</p>
+            {/* R批 P1-2（R1.2）：账号入口在引导页也可见 —— 引导态没有顶栏，
+                「已有账号」的人在欢迎页找不到登录口（CY 走查实录）。 */}
+            <p className="mt-2 text-xs leading-5 text-ink-faint">
+              已有账号？
+              <button
+                type="button"
+                data-testid="welcome-login-hint"
+                onClick={onRetryAuth}
+                className="font-medium text-brand underline underline-offset-2"
+              >
+                去登录
+              </button>
+              （账号服务未连接时点击会重试探测；单机模式数据仅存本机）
+            </p>
           </section>
         </div>
       </div>

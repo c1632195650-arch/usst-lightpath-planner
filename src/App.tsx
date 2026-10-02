@@ -1,5 +1,5 @@
 import { readRaw, writeRaw } from '@/lib/persistence';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { AnswerEntry, AppState, Schedule } from '@/types';
 import { MOCK_SCHEDULE, normalizeLifeMode } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
@@ -28,7 +28,7 @@ import { OnboardingSetup } from '@/features/week/OnboardingSetup';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 import { fetchMe, type AuthStatus } from '@/lib/auth';
-import { AccountMenu } from '@/features/auth/AccountMenu';
+import { AccountMenu, AccountOfflineMenu } from '@/features/auth/AccountMenu';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { PersonaLab } from '@/lab/PersonaLab';
 
@@ -98,7 +98,10 @@ export default function App() {
     status: 'checking',
     username: null,
   });
-  useEffect(() => {
+  /** R批 P1-2（R1.1）：探测一次「我是谁」。抽成回调供 offline 占位菜单的
+   *  「重试连接」复用 —— 重试不翻 checking 全屏（那会把界面闪成加载页），
+   *  连接结果直接由账号门状态呈现：登录 → 主应用，未登录 → 登录页。 */
+  const probeAuth = useCallback(() => {
     void fetchMe().then((a) => {
       setAuth(a);
       // 接线 A（2026-10-01）：登录态身份注入 —— user_id = 真账号；
@@ -106,6 +109,9 @@ export default function App() {
       setAuthedUserId(a.status === 'logged-in' ? a.username : null);
     });
   }, []);
+  useEffect(() => {
+    probeAuth();
+  }, [probeAuth]);
 
   useEffect(() => {
     const onHash = () => setRoute(readRoute());
@@ -292,6 +298,8 @@ export default function App() {
       <Welcome
         onStart={() => setView('basicinfo')}
         onSkip={enterMain}
+        // R批 P1-2（R1.2）：引导页给「已有账号？去登录」—— 点击重试探测账号服务
+        onRetryAuth={probeAuth}
       />
     );
   }
@@ -377,6 +385,11 @@ export default function App() {
             ))}
             </div>
           </nav>
+          {auth.status === 'offline' && (
+            // R批 P1-2（R1.1/R1.3）：offline 也保留账号位 —— 点开有单机模式说明 + 重试连接。
+            // 「功能做了但用户以为没做」的观感必须消除（CY 走查：右上没有账号菜单）。
+            <AccountOfflineMenu onRetry={probeAuth} />
+          )}
           {auth.status === 'logged-in' && auth.username && (
             <AccountMenu
               username={auth.username}
