@@ -479,3 +479,35 @@
 **BLOCKERS 申报（2 条，红线 7）**：R5.2 recurring 数据结构（路线 A/B 取舍，建议 A）；R7.1 user_id 台账归一（迁移 vs 弃置，建议迁移合并）——均待 CY 拍板，未擅自实现。
 
 **排除项（任务书「暂缓/不做」逐条遵守）**：未引入后端日程版本快照表；未自动改日程（评估只建议 + 采纳按钮走既有草稿流）；未用 LLM 编排程结论；未动 `_integration_full` 之外的三棵树。
+
+### §R·验收与裁决（2026-10-03 01:30 起，MOSS 独立复验+ 接续实现）
+
+**CY 裁决**：R7.1 = **迁移合并**（BLOCKERS 方案 A）；R5.2 = 待定（见下方裁决建议）。
+
+**zcode 三批验收结论：通过**（MOSS 独立复跑，不采信自述数字）。
+
+| 项 | commit | 复验方式 | 结果 |
+|---|---|---|---|
+| R5.1/5.3/5.4 | `55dc897` | 门禁逐位复跑 + **变异反向验证×2** | tsс 0 / engine 718/ ui 418 逐位一致；RV-R5a 删长期闸**恰 1 红**、RV-R5b 删学期铺开**恰 1 红**，md5 一致还原 |
+| R1.1-1.3 | `a13909f` | 源码锁 + 变异 | 变异摘offline 账号位 → R1.1/R1.3 **恰 1 红**，md5 一致还原 |
+| R7.2/7.3 | `0437574` | **真机HTTP 探针 10 项**（源码锁不够） | 全过：偏好直落 applied / 同值去重 / 脏 key 拒 / 空后缀 key 拒 / objective 仍走 pending（旧口径未回归）/ 撤销转rejected / 删除通道 |
+
+**⚠️ 抓到一处真实环境缺陷（已修）**：验收时发现 8001/8002 两个活后端都在跑**旧代码** —— `MemoryFactReq` 的 `kind`/`key` 字段根本不存在，前端 `addPreferenceFact` 一律被 pydantic 422拒。**zcode 的「后端 8 套全绿」不构成反证**：`test_memory_facts.py` 是**进程内直测 memory 模块**，不经 FastAPI 路由层，pydantic 模型坏了它照样绿。已按红线重启后端（发现裸 `python` 无 fastapi，须用 `~/.workbuddy/binaries/python/envs/default`），重打 HTTP 才验出真实行为。**教训：凡改 `server/app.py` 的契约，必须真打 HTTP，进程内单测不算数。**
+
+**变异验证的两个自欺陷阱（本轮实测踩到，已记纪律）**：
+1. **改名式变异无效**：把 `getDeviceUserId` 改成 `getDeviceUserId_DISABLED`，断言正则 `export function getDeviceUserId` 仍匹配 → 假绿。必须真改语义（改成 `deviceIdProbe`）才红。
+2. **并行跑变异 = 交叉污染**：两条变异命令并行执行时互相看到对方的文件改动，一条变异让两条测试都红。**串行跑，且每次 md5 校验还原。**
+3. **用错函数导致假绿**：`reject_fact` 只吃 `pending`，撤销 `applied` 的偏好要用 `undo_fact` —— 测试里用错函数会静默返回 None，用例变成永远绿。
+
+**R7.1 实现（P1-4，commit `d96267c`，已推 origin）**：
+- `memory.migrate_user_id(old,new,strategy)` —— facts 过户 + 三策略（`account_wins` 默认 / `device_wins` / `keep_both`）；`rejected` 不搬（撤销过的不复活）；`old==new`/空 id 一律 no-op（防手滑洗库）
+- `memory._merge_profiles` —— 画像**字段级补空**，账号侧已有值不覆盖；合并后删设备侧画像
+- `POST /api/memory/migrate` —— pydantic 参数闸（缺参 422）
+- `identity.getDeviceUserId()` —— 登录态下也能单独取设备台账；与账号同名时返回 null
+- `auth.migrateMemoryLedger()` —— **失败静默**（迁移尽力而为，不挡登录）
+- `App.tsx` 接线 —— ⚠️**顺序要紧：先取设备 id 再 `setAuthedUserId`**（之后 `getUserId` 已是账号名，设备台账无处可寻；源码锁钉住这个顺序）
+- **关键认知**：KV 侧 `uploadLocalSnapshot` 搬的是 localStorage 云快照，梨宝记忆落在**后端 SQLite**（facts/profiles 按 user_id 分键）—— KV 通道根本碰不到，本批**不是重复劳动**。
+- 测试：`scripts/test_r71_migrate.py` 10 条（**`--reverse` 换no-op → 7 条红**，证明真在守「迁移发生」）；`scripts/r71-migrate.test.ts` 2 条源码锁（ui 422→424）；HTTP 端点探针 10/10。变异 ×3 各恰 1 红。
+- 门禁：tsc 0 / engine 718/0 / ui 424/0 / test_memory_facts 15/0。
+
+**R5.2 裁决建议（仍未拍板）**：**建议路线 A**，但理由与zcode 申报的不同——实读契约后发现 `UserTask.weeks` **已经**能表达「每周重复」（空/未给 = 全学期，`[5,6,7,8]` = 只这四周），「独立表」在 localStorage KV 下没有额外语义收益，而 B 要动`storageRegistry` schema 版本 + 全部消费方。A 只需在 `UserTask` 加可选 `recurring?: { weekday; untilWeek }`，展开逻辑复用现有 weeks 通道，旧数据零迁移。**待 CY 一并拍板第二问：重复块在重排（ripple）里的锁定语义 —— 每周独立可挪 vs 全部周联动。**
