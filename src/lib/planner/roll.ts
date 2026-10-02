@@ -153,7 +153,13 @@ export function dayCapacityFactors(
   // `loadByDow` 长度 8、下标 1..7 有效（0 位占位，见 types.ts 注释）
   const byDow = rolling.loadByDow ?? [];
   const planned = [1, 2, 3, 4, 5, 6, 7].map((d) => byDow[d] ?? 0);
-  const { load, source } = mergeLoad(planned, actualByDow);
+  const merged = mergeLoad(planned, actualByDow);
+  // 防御性钳到 7 天（2026-10-02 白天批）：actualByDow 的调用方口径是「下标 0 = 周一、
+  // 共 7 项」（WeekPlanView / behaviorLog），但历史测试数据出现过 8 位（复制了
+  // loadByDow 的 0 位占位格式）。mergeLoad 取两者较长者 → days 会长出第 8 天，
+  // loadDecisions 恒 7 项的契约被打破。此处收口，多余下标一律忽略。
+  const load = merged.load.slice(0, 7);
+  const source = merged.source;
 
   // 统计口径：**只用「真的有负荷」的天**参与均值。
   // 若把 0 也算进去（周末没课就拉低均值），「工作日偏高」会被系统性放大成

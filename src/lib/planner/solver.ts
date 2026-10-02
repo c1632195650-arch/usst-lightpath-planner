@@ -335,7 +335,15 @@ function normalize(req: PlanRequest, ctx: ConstructCtx): NormalizedInput {
 /** 求解一份周计划（构造 + 改进 + 解释 + 诊断）。确定性，除 `elapsedMs`。 */
 export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult {
   const t0 = performance.now();
-  const n = normalize(req, ctx);
+  // P1-1（白天批 2026-10-02）：req.actualLoadByDow 映射进 ConstructCtx ——
+  // 此前 UI 一路传到 req，但 planWeek 调 solveWeek 用默认空 ctx，construct.ts
+  // 读的 ctx.actualLoadByDow 恒 undefined → 跨周自适应从未见过实际执行。
+  // 调用方显式给的 ctx 字段优先（不改变既有注入语义）。
+  const effectiveCtx: ConstructCtx = {
+    ...ctx,
+    actualLoadByDow: ctx.actualLoadByDow ?? req.actualLoadByDow ?? undefined,
+  };
+  const n = normalize(req, effectiveCtx);
   const { weights, config } = n;
 
   // `PlanRequest` 的可选字段允许 `null`（调用方（UI）手里常常是 `X | null`）。
@@ -372,7 +380,7 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
       : { ...defaultSoftLocks, ...(req.lockLevels ?? {}) };
 
   // ③ 构造（必然可行）
-  const built = construct(n.req, ctx);
+  const built = construct(n.req, effectiveCtx);
   let plan0 = built.plan;  if (n.cycle) {
     plan0.issues.push({
       level: 'error',

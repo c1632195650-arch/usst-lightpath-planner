@@ -462,6 +462,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 而这里的语义本就是「记住上一次算出来的东西给下一次用」，是 ref 的经典用法。
    */
   const lastPlanRef = useRef<WeekPlan | null>(null);
+  /** P1-1：上一版排程使用的提交项快照（与 lastPlanRef 同拍更新，供增量脏区域） */
+  const lastCommitsRef = useRef<import('@/lib/planner/model').Commit[] | null>(null);
   /**
    * 「从此刻开始排」开关（P2-T2.3）。
    *
@@ -1260,6 +1262,17 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             note: `课程作业 —— 预计 ${a.estimatedMin} 分钟（你自己填的）`,
           })),
         ];
+        // P1-1（白天批 2026-10-02）：同一份作业同时以 **Commit** 形状进引擎 ——
+        // `commits`（本版）与 `previousCommits`（上一版快照）配对后，增量重排的
+        // 脏区域才能按「交期/时长变化涉及的天」收敛，实现「大改后没被点名的天不动」。
+        // 缺省（无作业）= 空数组 → dirtyRegion 退化为全量，行为与既往一致。
+        const weekCommits: import('@/lib/planner/model').Commit[] = assignmentsOfWeek(assignments, weekNo)
+          .map((a) => ({
+            id: a.id,
+            title: `${a.courseTitle} 作业`,
+            kind: 'study' as const,
+            effortMin: a.estimatedMin,
+          }));
         // ── P2：把「动态能力」的三组输入接进来 ────────────────────────
         //   · rolling / actualLoadByDow → 跨周疲劳（T2.2）
         //   · previousPlan              → 增量重排的脏区域基准（T2.1）
@@ -1326,6 +1339,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           actualLoadByDow: actualLoad,
           // 增量重排的「上一版」= 本次之前算出来的那一版
           previousPlan: lastPlanRef.current,
+          // P1-1（白天批）：本版提交项 + 上一版快照 → 增量冻结生效
+          commits: weekCommits,
+          previousCommits: lastCommitsRef.current,
           fromNow: nowMin,
           fromNowDay: nowMin != null ? (todayDow as never) : null,
           // 阶段 A：用户删掉的块。不告诉引擎的话，下一轮构造又会把它排回来 ——
@@ -1389,6 +1405,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             uncovered: result.transferUncovered ?? [],
           });
           lastPlanRef.current = result.plan;
+          lastCommitsRef.current = weekCommits; // P1-1：提交项快照与计划同拍更新
           // ── 补上 P1 留下的断链：把本次产物写回持久化状态 ──────────
           // 原先 `result.nextRolling` 产出来了却**没有任何地方接收** →
           // `planState.rolling` 永远是 null，跨周疲劳既传不下去也用不上。

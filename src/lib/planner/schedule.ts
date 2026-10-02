@@ -83,6 +83,9 @@ export interface BuildWeekPlanInput {
   previousPlan?: WeekPlan | null;
   /** 上一版的提交项快照（供增量重排识别交期变化） */
   previousCommits?: Commit[] | null;
+  /** 本版提交项（§4.2）。与 previousCommits 配对传入 → 增量冻结按差异生效；
+   *  缺省 = 空数组（P1 兼容层：走 tasks 通道，增量退化为全量，行为不变）。 */
+  commits?: Commit[] | null;
   /** 「从现在开始排」的分钟数（自当日 00:00 起的绝对分钟） */
   fromNow?: number | null;
   /** 与 `fromNow` 配套的星期几（1 = 周一） */
@@ -101,7 +104,7 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     schedule: input.schedule,
     weekNo: input.weekNo,
     policy: input.policy,
-    commits: [], // 旧入口没有提交项（P1 兼容层：走 tasks）
+    commits: input.commits ?? [], // P1-1（白天批）：不传 = 空数组，与旧行为逐位一致
     scenarios: input.scenarios ?? null,
     ...(input.persona != null ? { persona: input.persona } : {}),
     tasks: input.tasks ?? [],
