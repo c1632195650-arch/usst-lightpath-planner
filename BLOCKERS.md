@@ -41,3 +41,12 @@
 - [2026-10-02 白天批·留痕] 「第10周周五」正确日期 = **11-06**（任务书口径，termStart 2026-08-31 的 MOCK_SCHEDULE）✓ 走查实测确认；TERM_CALENDAR['2026-2027-1'].termStart = 09-07（教务权威）对应 11-13——两口径都对，weekNo 换算以**用户课表的 termStart** 为准（生产 LbaoChat whenOpts 传 schedule.termStart）。此前探针误报 11-13 系探针未传 whenOpts，已修。
 - [2026-10-02 白天批·BLOCKER→待 CY] 「6.3 页面按钮」无法定位（台账/核查文档/设计规范均无此编号）；若指 2A 切周按钮则已含于 P1-3（f30ba39 ‹ › 按钮 + aria-label 完整）——请 CY 确认或视为已结项。
 - [2026-10-02 白天批·偏差申报] P1-3·3B 前提修正：任务书称 MealPlaceSetting「全仓无 import」，本树实况 = AdjustDrawer（自身未被挂载的拆解件）引用 → 传递性死代码成立后按合法删除执行（连带摘除 AdjustDrawer『指定食堂』tab）；setMealPlace no-op 存根与其测试保留。
+
+# 双树收敛（2026-10-02 下午，CY 拍板「三条都做」）· 结项
+
+- [2026-10-02 下午·双树收敛结项] **双树并行终止** —— `integration-full` 定为**唯一主线**（工作树 `_integration_full`）；`beta-v2` 自今日起**冻结为只读对照树**（冻结点 `d1fbb9e` / tag `beta-v2-frozen-20261002` / 已推 origin），不再接受新提交。
+  - **处置链**：① 10:45 merge `108f169` 已把 beta-v2 尖端并入主线（24 提交，含交互升级批次0-3）；② 11:23 之后产生的 `4ad2893`「首问 needs_clarification 快捷项 options」缺口 **已移植主线**（commit **`da47526`**，含 `tests/v2.test.ts` 源码锁 + RV 恰 1 红）；③ 独立门禁 **tsc 0 / engine 620 / ui 415** 全绿。
+  - **备份**：`origin/beta-v2` 已由 `8503831` 同步至 **`d1fbb9e`**（28 提交不再仅存本地）。
+  - **已排除**：`cc7f618` / `d1fbb9e` 两条 docs 提交（台账留痕类，不涉产品代码）不再搬运；`922ac85` 的全相位守卫已被主线 P1-3/P0-2 等价覆盖（`schedMode !== 'idle'` 两树均 2 处），`data-testid="libao-input"` 亦无需移植（主线 `e2e-sched-session.mjs` 用 placeholder 正则定位）。
+  - **历史阻塞项处置**：本清单上方 [2026-10-01 G 批]「beta-v2 与 origin/dev 无共同祖先」阻塞点 **随本次收敛失效**（主线已改 `integration-full`，不再走 `dev` 合并路径）；[2026-10-02 交互升级方案] 待决项①「双树真机验收」已由 zcode 完成（七剧本 live 19/0 + 离线 E2E 77/0）。
+  - **口令**：此后新开发**只在 `_integration_full` 内进行**；`_work_dev` 仅供查历史对照，不再写入。

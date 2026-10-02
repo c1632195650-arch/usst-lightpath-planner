@@ -125,6 +125,8 @@ dev       ← 日常集成分支，两人都往这合
 feat/xxx  ← 各自的功能分支（feat/week、feat/data、feat/libao ...）
 ```
 
+> 🟢 **2026-10-02 收敛声明 —— 当前唯一主线 = `integration-full`**：RAY 退出后本仓转为 CY 单人推进。`beta-v2` 自今日起冻结为**只读对照树**（冻结点 `d1fbb9e`，tag `beta-v2-frozen-20261002`，已推 origin），不再接受新提交；一切新开发只落 **`integration-full`**（工作树 `D:\WORKBUDDY DATA\学术部\_integration_full`）。`dev` / `main` 属历史远端分支，当前不作为交付入口。**双树并行终止**：此后不再出现「某改动只在 beta-v2」的情形。
+
 > ⚠️ **栈式 PR 的合并顺序**：`feat/events-and-diversity`（#3）与 `feat/weather`（#5）在**内容上叠在** `feat/planner-v2-p0`（#2）之上。
 > 合并必须按 **#2 → #3 → #4 → #5** 的顺序；先合后置的会把前置内容一并带进来，让前置 PR 变空。
 
@@ -257,6 +259,12 @@ node scripts/gate_overnight.mjs
 > **2026-09-21 更新**：三树合流已由人工在白天完成（commit `7e2c649`），另两棵树的
 > 独有资产已并入 `_work_dev`，两棵树**保持原样未被改动**。此后 `_work_dev` 是唯一
 > 开发树；再有跨树同步需求，仍按本节的规矩人工做，不许自动合流。
+
+> 🟢 **2026-10-02 更新（双树收敛）**：唯一开发树已由 `_work_dev`（beta-v2）**迁移到
+> `_integration_full`（integration-full）**；`beta-v2` 同日冻结为只读对照树（冻结点
+> `d1fbb9e` / tag `beta-v2-frozen-20261002`）。此后只允许在 `_integration_full` 内工作，
+> `_work_dev` 仅供查历史对照、不再写入。本节「不许自动合流」的纪律继续有效——若真有
+> 跨树同步需求，仍须白天人工做。
 
 **无人值守期间只允许在 `_work_dev` 内部工作。** 可以在 `_work_dev` 里 `git init` + 全量快照提交（这是保险，不是合并），但**绝对不许**把另外两棵树的文件自动搬进来，也不许自动解决差异。合流必须白天人工做，因为一次错误的自动合并会**静默丢掉工作**。
 
