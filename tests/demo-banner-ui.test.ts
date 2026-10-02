@@ -21,5 +21,7 @@ test('demo 课表时渲染横幅（条件 + testid + 文案）', () => {
 
 test('横幅有一键跳转导入页的动作', () => {
   assert.match(app, /data-testid="demo-schedule-goto-import"/);
-  assert.match(app, /setMainTab\('import'\)/);
+  // 2026-10-02 融合申报：锁原为 setMainTab('import')（beta-v2 壳的导航 API）；
+  // 本壳（Ray hash 路由）的等价 API 是 goTab('import')——锁意图「一键跳转导入」不变。
+  assert.match(app, /goTab\('import'\)/);
 });
