@@ -36,3 +36,8 @@
 - [2026-10-01 G 批·新增] 阻塞点：四处 PARTIALS 接线（睡眠保底窗口需 identity.sleepMin 进 PlanRequest；每周活动量下限；三餐消费 mealWalkBudgetMin；画像变更受影响天集合接 localizedReplan）均属跨人契约扩展（BuildWeekPlanInput→toPlanRequest→PlanRequest 三处，RAY 名下 model.ts/schedule.ts）｜已排除：AGENTS.md 红线 6「契约字段增删必须双方确认」，单方不擅动｜需要人决定：CY 与 B（RAY）协商后立项（建议并入后续批次，E 批未接线登记同步结转）。
 - [2026-10-01 G 批·新增] 阻塞点：本地 beta-v2（含 D/E/G 批 42+ 提交）与 origin/dev **无共同祖先**（unrelated histories；beta-v2 根=`5546be9` 三树快照，dev 根=`e387fb6` 脚手架，dev 另有 150 条独有提交），合并需 `--allow-unrelated-histories` 且逐段人工核对｜已排除：机器自动合流在两线根提交不同的情况下会静默丢工作，AGENTS.md §8.6 同款纪律适用｜需要人决定：CY+RAY 白天人工评审合并策略（建议先由人比对两侧文件地图再定 merge/rebase/手工搬运，不设时限）。
 - [2026-10-02 交互升级方案·批次0-3结项] 梨宝排程交互智能化优化方案（docs/libao-sched-interaction-upgrade-plan-2026-10-02.md）批次 0-3 全部落地：批次0 回归锚 `50ca123` / 批次1 钟点通道+时长推导+频率互斥 `e4705be` / 批次2 按钮卡+反馈精简 `d20ccb1` / 批次3 类目推荐+选项扩容 `1d1982f`；每批 gate 全绿（engine 480 / ui 413 / tsc 0）、离线评测 F1=1.0 零漂移、新断言全部反向验证（先红后绿）｜已排除：本地已完成全部离线验证｜需要人决定：① 双树（5173/5174）真机剧本验收（方案 §七 新旧 7 条）需起服务+浏览器，白天人工过；② e2e 77 断言需离线 vite 实例，夜间不起服务未跑；③ 台账（wp-ledger-v2）与 progress-status 批次登记留给白天人工做；④ 方案 5.3 的「频率语义→持续到什么时候」追问链未接（需扩 DialogTopic 追问槽位，建议登记后续批次）
+
+# 白天批（2026-10-02，白天队列 zcode 执行）· 走查与裁决注记
+- [2026-10-02 白天批·留痕] 「第10周周五」正确日期 = **11-06**（任务书口径，termStart 2026-08-31 的 MOCK_SCHEDULE）✓ 走查实测确认；TERM_CALENDAR['2026-2027-1'].termStart = 09-07（教务权威）对应 11-13——两口径都对，weekNo 换算以**用户课表的 termStart** 为准（生产 LbaoChat whenOpts 传 schedule.termStart）。此前探针误报 11-13 系探针未传 whenOpts，已修。
+- [2026-10-02 白天批·BLOCKER→待 CY] 「6.3 页面按钮」无法定位（台账/核查文档/设计规范均无此编号）；若指 2A 切周按钮则已含于 P1-3（f30ba39 ‹ › 按钮 + aria-label 完整）——请 CY 确认或视为已结项。
+- [2026-10-02 白天批·偏差申报] P1-3·3B 前提修正：任务书称 MealPlaceSetting「全仓无 import」，本树实况 = AdjustDrawer（自身未被挂载的拆解件）引用 → 传递性死代码成立后按合法删除执行（连带摘除 AdjustDrawer『指定食堂』tab）；setMealPlace no-op 存根与其测试保留。
