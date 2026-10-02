@@ -1168,20 +1168,31 @@ def api_list_facts(user_id: str = "anon", status: str = ""):
         return {"facts": []}
 
 class MemoryFactReq(BaseModel):
-    """WP12-H7：课表回写等系统侧事实（前端生成纯统计摘要，无坐标）。"""
+    """WP12-H7：课表回写等系统侧事实（前端生成纯统计摘要，无坐标）。
+    R批 P1-3（R7.3）：kind=preference 时走偏好通道（自动生效可撤销），
+    key 必须以 preferences. 开头（_merge_into_profile 按前缀分流）；
+    缺省 kind=objective 维持旧口径（课表摘要 → pending）。"""
     model_config = ConfigDict(extra="forbid")
     user_id: str = "anon"
     content: str = Field(min_length=1, max_length=300)
+    kind: str = "objective"
+    key: str = Field(default="", max_length=80)
 
 
 @app.post("/api/memory/facts")
 def api_add_fact(body: MemoryFactReq):
-    """课表事实回写：只落 pending（add_pending_fact 状态机闸门），MemoryPanel 可拒。"""
+    """事实回写。objective（缺省）= 课表摘要只落 pending（状态机闸门，MemoryPanel 可拒）；
+    preference（R7.3）= 排程长期偏好，自动生效、可撤销，key 限 preferences. 前缀。"""
     try:
+        if body.kind == "preference":
+            if not body.key.startswith("preferences.") or len(body.key) <= len("preferences."):
+                return {"ok": False, "fact": None}
+            fact = memory.add_preference_fact(body.user_id, body.key, body.content, source="libao")
+            return {"ok": fact is not None, "fact": fact}
         fact = memory.add_pending_fact(body.user_id, "objective.timetable_summary", body.content, source="timetable")
         return {"ok": fact is not None, "fact": fact}
     except Exception as e:
-        print("[memory] 课表事实回写失败：", e)
+        print("[memory] 事实回写失败：", e)
         return {"ok": False, "fact": None}
 
 

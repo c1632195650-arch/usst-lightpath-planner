@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
-import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, addPreferenceFact, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
 import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objectiveKeyToField } from '@/lib/identity';
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
@@ -130,6 +130,9 @@ interface PendingGoal {
   holdSlot?: UnavailableSlot;
   /** 批 3 day_replan：确认后逐块 upsertMove 的保位钉（其余天保持原样的落盘形态） */
   dayReplan?: { pins: MoveRecord[]; days: number[] };
+  /** R批 P1-3（R7.3）：create 草稿携带原始槽位 —— 确认落盘时把**长期偏好**
+   *  （每周N次 / 每周X）写入梨宝记忆（preference 类，自动生效可撤销）。 */
+  slots?: IntentSlots;
 }
 
 /** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
@@ -755,6 +758,23 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         text: `好，「${g.title}」写进${weeksLabel(g.weeks)}的日程了，共 ${g.tasks.length} 个块。去周计划看全貌；排得不合适可以撤销（↩），也可以直接跟我说改。`,
         goWeek: true,
       }]);
+      // R批 P1-3（R7.3）：长期偏好入记忆 —— 只在用户给了明确长期信号
+      // （每周N次 / 每周X）时记，一次性的不进记忆。preference 类自动生效、
+      // 记忆面板可撤销；服务未连接时静默（排程本体不受影响）。
+      {
+        const s = g.slots;
+        if (s && (s.perWeekCount != null || s.when?.recurring)) {
+          const WD7 = ['一', '二', '三', '四', '五', '六', '日'];
+          const freq = s.when?.recurring && s.when.weekday != null
+            ? `每周${WD7[s.when.weekday - 1]}`
+            : s.perWeekCount != null ? `每周${s.perWeekCount}次` : '';
+          const dur = s.durationMin != null ? `每次${s.durationMin}分钟` : '';
+          if (freq) {
+            void addPreferenceFact(identity.userId, g.title, [freq, dur].filter(Boolean).join(' · '))
+              .catch(() => { /* 记忆服务未连接：静默降级 */ });
+          }
+        }
+      }
       track('plan_result', { ok: true, ms: 0, n: g.tasks.length });
     } catch {
       track('degrade', { id: 'goal-save-error' });
@@ -1289,6 +1309,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           title: slots.title,
           tasks: goalTasks,
           weeks,
+          slots,
         } }));
         markDraft(key, slots); // D3：草稿卡挂 topic{draft}
         // 批次 3（6.3）：带依据的推荐 —— 类目命中有权威口径时补一行（≤1 行），

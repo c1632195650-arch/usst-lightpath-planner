@@ -199,6 +199,24 @@ export function lbaoChat(
   });
 }
 
+/**
+ * R批 P1-3（R7.3）：排程产出的长期偏好入记忆 —— preference 类，服务端
+ * **自动生效**（applied）并入画像，用户可在记忆面板撤销/删除。
+ * key 由服务端限 `preferences.` 前缀；失败由调用方静默（排程本体不受影响）。
+ */
+export function addPreferenceFact(
+  userId: string,
+  title: string,
+  value: string,
+): Promise<{ ok: boolean; fact: unknown | null }> {
+  return post<{ ok: boolean; fact: unknown | null }>('/api/memory/facts', {
+    user_id: userId || 'anon',
+    kind: 'preference',
+    key: `preferences.${title}`.slice(0, 80),
+    content: value.slice(0, 300),
+  });
+}
+
 /** WP12-C2：课表事实回写 —— 纯统计摘要，无任何坐标（数据红线）；失败由调用方静默。 */
 export async function addTimetableFacts(
   schedule: { courses?: Array<{ slots?: Array<{ startPeriod?: number }> }> },

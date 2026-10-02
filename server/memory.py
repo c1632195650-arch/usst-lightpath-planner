@@ -471,6 +471,33 @@ def add_pending_fact(user_id, key, value, source="timetable"):
     c.close()
     return row
 
+def add_preference_fact(user_id, key, value, source="libao"):
+    """R批 P1-3（R7.3）：排程产出的长期偏好（如「每周三打球」）——preference 类。
+
+    与 add_pending_fact（客观事实必须 pending 等确认）**刻意相反**：偏好类
+    **自动生效**（applied）并入画像 —— 这是 propose_facts 的 preference 分支
+    既有口径（core §4：身份/客观信息要用户点头，偏好类可自动生效但随时可撤销）。
+    记忆面板可撤销（undo → rejected）/ 删除；同值去重（_has_live_fact）防重复确认刷卡。
+    """
+    if not user_id or not key or not value:
+        return None
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    c = _conn()
+    if _has_live_fact(c, user_id, key, value):
+        c.close()
+        return None
+    cur = c.execute(
+        "INSERT INTO facts(user_id, kind, key, value, status, source, created_at) "
+        "VALUES(?,?,?,?,?,?,?)",
+        (user_id, "preference", key, str(value)[:200], "applied", str(source)[:40], now))
+    c.commit()
+    row = {"id": cur.lastrowid, "kind": "preference", "key": key,
+           "value": str(value)[:200], "status": "applied"}
+    c.close()
+    # 画像合并放在 facts 连接关闭之后 —— 嵌套开连接会撞 SQLite 的库锁（同 propose_facts）
+    _merge_into_profile(user_id, row["key"], row["value"])
+    return row
+
 # ---------- WP12-H8：日程变动摘要（Node 端 ring buffer → 注入 chat） ----------
 _EVENT_LABEL = {
     "task_added": "新增", "task_removed": "移除",

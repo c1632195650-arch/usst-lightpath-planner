@@ -99,7 +99,11 @@ export function MemoryPanel({ open, userId, onClose }: Props) {
         <section className="mt-4">
           <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-faint">待你确认（{pending.length}）</h3>
           {pending.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-faint">暂时没有需要你拍板的。梨宝听到你的年级、学院、专业时，会先问过你再记。</p>
+            // R批 P1-3（R7.2）：空态要解释「为什么是 0」—— 不解释看起来就像坏了
+            <p className="mt-2 text-sm text-ink-faint">
+              还没有待确认的记忆。你在对话里说过的<b className="text-ink-soft">年级 / 学院 / 专业</b>会先来问过你，
+              导入课表的<b className="text-ink-soft">总结</b>也会出现在这里等你点头。
+            </p>
           ) : (
             <ul className="mt-2 space-y-2">
               {pending.map((f) => (
@@ -121,7 +125,11 @@ export function MemoryPanel({ open, userId, onClose }: Props) {
         <section className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-faint">已生效（{applied.length}）</h3>
           {applied.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-faint">还没有已生效的记忆。</p>
+            // R批 P1-3（R7.2/R7.3）：空态解释 + 告知长期偏好也会进这里
+            <p className="mt-2 text-sm text-ink-faint">
+              还没有已生效的记忆。你确认过的身份信息、导入的课表，以及排程里的
+              <b className="text-ink-soft">长期偏好</b>（比如「每周三打球」）都会出现在这里 —— 可撤销、可删除。
+            </p>
           ) : (
             <ul className="mt-2 space-y-2">
               {applied.map((f) => (
