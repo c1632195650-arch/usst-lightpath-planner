@@ -38,5 +38,16 @@ export default defineConfig({
       },
     },
   },
-  build: { outDir: 'dist', sourcemap: false },
+  // 光溯移动端（2026-10-03）：m.html 独立入口 —— index.html 主流程零改动，
+  // 多页 input 只加一行，主站构建产物不受影响（方案 §7.1）。
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        mobile: 'm.html',
+      },
+    },
+  },
 });

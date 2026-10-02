@@ -26,11 +26,13 @@ app = FastAPI()
 app.include_router(account.router)
 c = TestClient(app)
 
-# ---------- 1) 注册成功 ----------
+# ---------- 1) 注册成功（响应含 icsToken —— F6 订阅链素材） ----------
 r = c.post("/api/auth/register", json={"username": "宝子1", "password": "probe123"})
 assert r.status_code == 200, r.text
 uid1, tok1 = r.json()["userId"], r.json()["token"]
-print("register:", r.json())
+ics1 = r.json().get("icsToken")
+assert isinstance(ics1, str) and len(ics1) >= 20, "注册响应必须带 icsToken（F6 复制订链用）"
+print("register:", {k: v for k, v in r.json().items() if k != "token"})
 
 # ---------- 2) 反向：重名（含大小写不敏感）→ 409 ----------
 r = c.post("/api/auth/register", json={"username": "宝子1", "password": "probe456"})
@@ -53,6 +55,7 @@ assert r.status_code == 422, "未知字段应 422：" + r.text
 # ---------- 4) 登录：对/错 ----------
 r = c.post("/api/auth/login", json={"username": "宝子1", "password": "probe123"})
 assert r.status_code == 200 and r.json()["userId"] == uid1, r.text
+assert r.json().get("icsToken") == ics1, "登录响应的 icsToken 应与注册时一致"
 r = c.post("/api/auth/login", json={"username": "宝子1", "password": "wrong!!"})
 assert r.status_code == 401 and r.json()["error"] == "bad_credentials", r.text
 r = c.post("/api/auth/login", json={"username": "不存在的宝", "password": "probe123"})

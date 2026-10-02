@@ -20,12 +20,17 @@
     —— 这是程序行为，不是手工编辑 data/ 二进制（约束文档 §2.1 白纸黑字的例外）。
 
 端点（签名表 mobile-impl-plan §6.4）：
-  POST /api/auth/register  {username, password} → {userId, token} | 400/409
-  POST /api/auth/login     {username, password} → {userId, token} | 401
+  POST /api/auth/register  {username, password} → {userId, token, icsToken} | 400/409
+  POST /api/auth/login     {username, password} → {userId, token, icsToken} | 401
 
 ⚠️ 错误一律直接回 `JSONResponse({"error": "<code>"})`，**不走 HTTPException**：
 app.py 的全局 handler 会把 400 重写成 422（schemathesis 契约修复那批，别动它），
 而移动端契约要求 400/401/409 + `{"error": code}`，所以这里用 JSONResponse 精确控形。
+
+📌 响应里多带一个 `icsToken`（不在方案 §6.4 的原表里，2026-10-03 夜间增补并申报）：
+F6 页内「复制订阅链接」需要它 —— 客户端不拿到 ics_token 就拼不出
+/api/sync/plan.ics?token= 链接，而日历 App 又填不了 Bearer 头。
+ics_token 本就不敏感于密码（泄露可重置），随登录下发是同一信任面。
 """
 import datetime as _dt
 import hashlib
@@ -192,7 +197,7 @@ def api_auth_register(body: AuthReq):
         return _err(409, "username_taken")
     finally:
         c.close()
-    return {"userId": user_id, "token": issue_token(user_id)}
+    return {"userId": user_id, "token": issue_token(user_id), "icsToken": ics_token}
 
 
 @router.post("/api/auth/login")
@@ -210,4 +215,9 @@ def api_auth_login(body: AuthReq):
         return _err(401, "bad_credentials")
     if not secrets.compare_digest(_hash_password(body.password, row[1]), row[2]):
         return _err(401, "bad_credentials")
-    return {"userId": int(row[0]), "token": issue_token(int(row[0]))}
+    c2 = _conn()
+    try:
+        got = c2.execute("SELECT ics_token FROM users WHERE id=?", (int(row[0]),)).fetchone()
+    finally:
+        c2.close()
+    return {"userId": int(row[0]), "token": issue_token(int(row[0])), "icsToken": got[0] if got else None}

@@ -76,6 +76,12 @@ export interface MoveRecord {
    *   · `ripple` 被顺延带出来的 → soft（引擎后续还可以再调）
    */
   source: 'drag' | 'edit' | 'ripple';
+  /**
+   * 光溯移动端（2026-10-03）：完成勾选。
+   * 仅追加的可选字段 —— 无此字段 = 未完成（读取处向后兼容，normalize 宽松校验
+   * 不剥它：移动端 EditSheet 勾选后随 moves 一起云同步，方案 §7.3）。
+   */
+  done?: boolean;
 }
 
 /**
