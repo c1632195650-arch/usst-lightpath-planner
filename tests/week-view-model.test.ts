@@ -163,7 +163,9 @@ test('E5 零依赖闸门: 详情抽屉用原生 dialog，未引入任何组件�
 
 test('E4 源码锁: BlockCard 走渲染模型，散文式转场行已下线；时间轴有视觉重心与量测锚', () => {
   const wv = src('/src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /import \{ blockChip, blockDetail \} from '@\/features\/week\/weekViewModel'/, '模型已接线');
+  // 【锁随实现演进，2026-10-02 申报】批 6.1 在同一 import 里追加了 summarizeIssues
+  // （规范 §3.2 聚合条接线）—— 锁放宽为可选尾项，三条模型接线断言保持原样。
+  assert.match(wv, /import \{ blockChip, blockDetail(, summarizeIssues)? \} from '@\/features\/week\/weekViewModel'/, '模型已接线');
   assert.match(wv, /const chip = blockChip\(block\)/, '卡片用 chip');
   assert.ok(!wv.includes('🚶 {t.fromPlace}'), '旧的散文式转场行必须下线');
   assert.match(wv, /data-testid="week-timeline"/, '时间轴量测锚在位');

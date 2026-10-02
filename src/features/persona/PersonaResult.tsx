@@ -3,6 +3,7 @@ import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
 import { Radar } from '@/components/Radar';
+import { explainProfile } from '@/lib/planner/profilePrefs';
 import { makeEpithet, pickBlurb } from './personaCopy';
 
 interface Props {
@@ -199,6 +200,35 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
             ))}
           </dl>
         </section>
+
+        {/* 批 5（7A）：画像 → 排程的逐元素解释。L3 口径（week-view-design §5）：
+            任何画像驱动的偏好呈现必须带「这是我猜的，可改」—— 不替用户拍板 */}
+        {profile && (() => {
+          const items = explainProfile(profile, profile.scenarios ?? null);
+          return (
+            <details data-testid="profile-explain-panel" className="panel mt-6 px-5 py-4 sm:px-7">
+              <summary className="cursor-pointer text-[15px] font-semibold text-ink">
+                这会如何影响你的排程
+                <span className="ml-2 text-[11px] font-normal text-ink-faint">点开展开</span>
+              </summary>
+              {items.length === 0 ? (
+                <p className="mt-3 text-sm leading-6 text-ink-soft">
+                  目前画像里没有命中会改变排程的强偏好 —— 正常排程已按人群底线进行。
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {items.map((it, i) => (
+                    <li key={i} className="text-[12px] leading-5 text-ink-soft">
+                      <span className="font-medium text-ink">{it.element}</span>
+                      （{it.value}）：{it.effect}
+                      <span className="ml-1 text-ink-faint">—— 这是我猜的，可在周计划里改</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          );
+        })()}
       </div>
     </div>
   );

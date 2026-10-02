@@ -27,6 +27,9 @@ function rulePatch(slots) {
   return {
     title: slots.title || undefined,
     when_text: slots.when?.text,
+    weekday: slots.when?.weekday,
+    weekNo: slots.when?.weekNo,
+    relativeMonths: slots.when?.relativeMonths,
     targetHint: slots.targetHint,
     perWeekCount: slots.perWeekCount,
     durationMin: slots.durationMin,

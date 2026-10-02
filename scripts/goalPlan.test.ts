@@ -177,9 +177,19 @@ test('展开：只给总量 → 块数 = 总量 / 单次时长（向上取整）
   assert.equal(tasks.length, 9); // 540 / 60
   assert.ok(tasks.every((t) => t.durationMin === 60));
 
-  // 没给单次时长 → 用默认块长，而不是把总量塞成一个大块
+  // 没给单次时长 → 不把总量塞成一个大块（本断言的本意）。
+  // 【断言随规格演进，2026-10-02 申报】批 2 给「总量 + 截止 + 无显式块长」的目标
+  // 启用 60/90/120 后程阶梯（docs/overnight-plan-2026-10-02.md 批 2）——
+  // 「不塞大块」的本意由「单块 ≤120」继续守住，均匀 90 的旧期望随之翻转。
   const dflt = goalToTasks(slotsOf({ ...WIN, totalHours: 6 }), SCHEDULE, TODAY);
-  assert.ok(dflt.every((t) => t.durationMin === DEFAULT_BLOCK_MIN));
+  assert.ok(
+    dflt.every((t) => t.durationMin === 60 || t.durationMin === 90 || t.durationMin === 120),
+    `阶梯块长 60/90/120，实际 ${dflt.map((t) => t.durationMin).join('/')}`,
+  );
+  assert.ok(
+    dflt.some((t) => t.durationMin === 60) && dflt.some((t) => t.durationMin === 120),
+    '有截止窗口应呈现「前松后紧」的冲刺形态',
+  );
 });
 
 test('展开：用户点名了星期 → 只落在那一天', () => {

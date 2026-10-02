@@ -80,8 +80,12 @@ export interface WhenHint {
   relativeDays?: number;
   /** 相对周偏移：下周 = 1、这周 = 0 */
   relativeWeeks?: number;
+  /** 相对月锚（批 1.3）：本月 = 0、下月 = 1、下下月 = 2；与 decade（旬）正交 ——「下月底」 */
+  relativeMonths?: number;
   /** 星期几（1=周一…7=周日），配合 `relativeWeeks` 表示「下周三」 */
   weekday?: number;
+  /** 学期周次（批 1.2）：「第10周」= 10；配合 weekday 表示「第10周周五」。换算需 termStart。 */
+  weekNo?: number;
   /** 用户明说「时间没定」。与「没提到时间」是两回事 —— 前者要标注，后者要追问。 */
   unspecified?: boolean;
   /** 「每周三」这类循环约定 —— 不是某一天，不享受单日事件的投入豁免（hasEffort）。 */
@@ -94,6 +98,24 @@ export interface TimeWindow {
   toMin: number;
   /** 原话（「晚上」），用于回显 */
   text: string;
+}
+
+/**
+ * 钟点起止（交互升级方案批次 1 · 4.1）：「晚上6点到8点」→ 1080/1200。
+ *
+ * 与 `TimeWindow`（时段窗，粗粒度）互补：clock 是用户**点名**的时刻。
+ * 单端点形态（「打到8点」）只填一端；`ambig` = 有钟点原子没带时段语境
+ * （「6点」）→ 按上午口径落，界面必须如实说明，不许装作听懂了。
+ */
+export interface ClockHint {
+  startMin?: number;
+  endMin?: number;
+  /** 原话片段（容词「大概/左右」剥除后的干净形态），用于回显 */
+  text: string;
+  /** 24 小时歧义：某端点没带「上午/下午/晚上」语境 */
+  ambig?: boolean;
+  /** 与时段窗矛盾（钟点在窗外）→ 记录被让位的 window 原话，草稿卡如实说明「按钟点排」 */
+  conflicted?: string;
 }
 
 /**
@@ -123,12 +145,17 @@ export interface IntentSlots {
   place?: string;
   /** 时段窗（「晚上」→ 18:00–23:00） */
   window?: TimeWindow;
+  /** 钟点起止（批次 1）：「晚上6点到8点」→ 1080/1200。加法通道：句中无钟点词 = undefined */
+  clock?: ClockHint;
   /** 是否必做（有交期或用户强调）→ 映射到 `UserTask.essential` */
   essential?: boolean;
   /** 可让步度：越高越不该被别的安排挤掉 */
   priorityHint: number;
   /** 「把高数复习挪到周四」→ 高数复习 */
   targetHint?: string;
+  /** 单日重排的目标天（批 3，5A-②）：「重排周四」→ [4]。与 targetHint 互斥路由：
+   *  有块名 = 单块挪动；只有天 = 整日重排（执行层分流） */
+  replanDays?: number[];
   /** 自报缺口 —— 追问清单直接由它生成 */
   missing: SlotKey[];
   /** 有歧义但**不阻塞**的点，随草稿一起说明 */
@@ -196,6 +223,9 @@ export const GOAL_NOUNS = [
   // 事务性事件（2026-09-27 CY 真机三连翻车：「我明天有一个学生会面试」——
   // 「面试」不在词表 → 标题抽空 → 要么掉进 RAG 聊天，要么被当成泛泛一周建议）
   '面试', '答辩', '宣讲', '讲座', '体检', '例会', '班会', '团建',
+  // 组织/事务补充 + 习惯目标（批 1.1，金标 i02/i29/i30）：「学生会」让 title 能
+  // 扩出「学生会面试」；晨跑/健身族是习惯陈述句（「隔天去一次健身房」）的目标名词
+  '学生会', '开题报告', '晨跑', '跑步', '健身', '健身房', '背单词', '晨读',
 ];
 
 /**
@@ -210,6 +240,9 @@ const ACTION_VERBS = [
   // WP9 收口（2026-09-27 真机 W5 验收抓到）：改期/取消语族的动词不在词表 →
   // detectIntent 认得 reschedule，但 looksLikeAction 拦下 → 整句漏判成 RAG。
   '挪', '换到', '改到', '调到', '取消',
+  // 完成语族（批 1.1，金标 i25）：「期末周之前把实验报告写完」——
+  // 「写完」本身就是要排的事，且不在标题词里（TITLE_STOP 同步拦截）。
+  '写完', '做完', '弄完',
 ];
 
 /** 第一人称意愿 —— 命中即视为「要动日程」（用户已经在表达自己的事） */
@@ -240,6 +273,17 @@ const ADVICE_MARK = ['怎么', '如何', '怎样', '咋', '值不值得', '要�
 const ASK_OPINION = /(要不要|该不该|是不是应该|需不需要|是否要|是否应该|值不值得|值得吗|好不好)/;
 
 /**
+ * 疑问词守卫（批 1.1）：陈述句兜底只认「无疑问词」的句子 —— 问句一律留给 RAG。
+ * 金标 b03「今天校园里有什么讲座」、b06「学校有什么社团」都是
+ * 「时间词 + 目标名词」的问句形态，没有这道守卫就会被新兜底误拽进排程。
+ */
+const QUESTIONISH_RE = /(什么时候|何时|几号|几点|哪|多少|几个|什么|怎么|如何|怎样|咋|吗)/;
+
+/** 频率约定词（批 1.1）：「隔天去一次健身房」这类习惯陈述的判据之一；
+ *  批 1.5 起兼作 mergeLlmPrimary 的 perWeek 证据词（「每周3次」也是频率证据） */
+const FREQ_RE = /(每天|每日|天天|隔天|每两天|每周|每星期|每礼拜|每[一二三四五六七八九十\d]+\s*次)/;
+
+/**
  * 与 `LbaoChat.tsx::isRecommendIntent` **逐字一致**的既有口径。
  * 保留它是为了满足纪律④：新入口必须是老行为的超集。
  */
@@ -260,7 +304,7 @@ const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
   // 不是「取消某块」；cancel 的「别排」让位给 hold（台账申报）。
   { intent: 'hold', re: /(别排|不要排|留出来|空出来|这段时间有空|没空)/ },
   { intent: 'cancel', re: /(取消|删掉|不去了|不参加了|退掉|不要了)/ },
-  { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到)/ },
+  { intent: 'reschedule', re: /(挪到|挪一下|移到|改到|换个时间|换到|推迟|提前|调到|重排|重新排)/ },
   { intent: 'replace', re: /(替换|顶掉|改成|换成|取代)/ },
   { intent: 'query', re: /(忙不忙|排得开|来不来得及|有没有空|有空吗|装得下|排得下)/ },
   // WP11：重要日。**放最后** —— 「取消备赛」「把备赛挪到周五」得先被既有意图接住
@@ -293,6 +337,10 @@ const TITLE_STOP: string[] = [
   '的', '了', '着', '过', '把', '在', '和', '与', '跟', '为', '给', '到', '从',
   '我', '你', '他', '她', '它', '们', '这', '那', '是', '有', '要', '想', '能', '会',
   '请', '帮', '就', '还', '也', '都', '很', '最', '再', '又',
+  '交',
+  // 批 1.1（金标 title 对齐）：时段词不是目标的一部分（「周五晚上班级聚餐」→ 聚餐）；
+  // 「次」不是（「去一次健身房」→ 健身房）；完成词族与「完」不是（「实验报告写完」→ 实验报告）
+  '早上', '早晨', '上午', '中午', '下午', '晚上', '晚间', '次', '写完', '做完', '弄完', '完',
 ];
 
 /** 中文数字 → 整数（覆盖 一~十二，够用于月份/次数） */
@@ -370,11 +418,24 @@ export function looksLikeAction(q: string): boolean {
 
   if (SELF_INTENT.some((t) => s.includes(t))) return true;
 
+  // 批 1.1（金标 i02/i29）：「我周五下午要在学生会面试」「我每天要晨跑」——
+  // 意愿词被时间词隔开，连续匹配抓不到。放宽为「我 + ≤6 个非标点字符 + 意愿词」，
+  // 但间隔里不许含疑问/建议词（「我什么时候要交作业」是问句，得留给下面的 PURE_FACT）。
+  const selfGap = /我([^，。！？,.；;?？!！\s]{1,6}?)(要|想|打算|准备)/.exec(s);
+  if (selfGap && !PURE_FACT.some((t) => selfGap[1].includes(t))
+    && !ADVICE_MARK.some((t) => selfGap[1].includes(t))) return true;
+
   if (LEGACY_RECOMMEND.test(s)) return true;
   if (LEGACY_RECOMMEND_DAY.test(s) && LEGACY_RECOMMEND_ACT.test(s)) return true;
 
   if (PURE_FACT.some((t) => s.includes(t))) return false;
   if (ADVICE_MARK.some((t) => s.includes(t))) return false;
+
+  // 批 1.1（金标 i21）：「我这周忙不忙」是 query 意图的排程语境 —— detectIntent
+  // 早就认得，快筛却把它拦成 RAG。放在 ADVICE 之后：「忙不忙是怎么算的」这类
+  // 求解释的句子已在上一步被拦，走不到这里。（「有没有空」与 PURE_FACT 的
+  // 「有没有」相抵，维持现状不在此放行。）
+  if (/(忙不忙|排得开|来不来得及|排得下|装得下)/.test(s)) return true;
 
   // WP11：重要日/截止类诉求 —— 说的是「有件带截止日的事」。
   // 刻意放在 ADVICE 门**之后**：「怎么备赛」是求方法，不该被拽进来。
@@ -385,9 +446,20 @@ export function looksLikeAction(q: string): boolean {
   // 触发词与 INTENT_PATTERNS 的 hold 条目同源（别排/不要排/留出来/空出来/这段时间有空/没空）。
   if (/(别排|不要排|留出来|空出来|这段时间有空|没空)/.test(s)) return true;
 
+  // 批 3：显式重排诉求 —— 「重排周四」没有目标名词（对象是「那天」本身），
+  // 词表扫不出，必须显式放行。
+  if (/(重新?排|重排)/.test(s)) return true;
+
   const hasGoal = GOAL_NOUNS.some((n) => s.includes(n));
   const hasVerb = ACTION_VERBS.some((v) => s.includes(v));
   if (hasGoal && hasVerb) return true;
+
+  // 批 1.1（金标 i23/i29/i30）：习惯/日程**陈述句**兜底 —— 目标名词 +（频率约定
+  // 或具体时间表达）+ 无疑问词。「周五晚上班级聚餐」「隔天去一次健身房」没有
+  // 「我要」也没有动作动词，但说话人分明在交代日程素材。疑问词守卫是硬前提：
+  // b03「今天校园里有什么讲座」同属「时间 + 名词」，必须留在 RAG。
+  if (hasGoal && !QUESTIONISH_RE.test(s)
+    && (FREQ_RE.test(s) || extractConcreteWhen(s) != null)) return true;
 
   // 陈述句兜底（2026-09-27 CY 真机翻车）：「我明天有一个学生会面试」——
   // 说话人在**交代日程素材**，却没有动作动词也没有「我要」字面，
@@ -449,6 +521,10 @@ export function deadlineProposal(slots: IntentSlots): DeadlineProposal | { needD
 /** 能拼进标题的字符（中文、字母、数字） */
 const TITLE_CHAR = /^[\u4e00-\u9fffA-Za-z0-9]+$/;
 
+/** 学期词作**时间锚**的形态（批 1.4）：后面紧跟「之前/以前/前」——
+ *  此时它是修饰语不是目标（「期末考试前我要把高数复习完」要排的是高数复习） */
+const TERM_ANCHOR_USAGE = /(期末考试周?|期末周?|期中考试周?|期中|开学|学期末|考试周)(之前|以前|前)/;
+
 /**
  * 抽目标名。
  *
@@ -460,7 +536,14 @@ const TITLE_CHAR = /^[\u4e00-\u9fffA-Za-z0-9]+$/;
  *   3. 抽不到 → 空串。**这是有意的**：宁可追问，也不拿半个动词当目标。
  */
 export function extractTitle(q: string): string {
-  const s = q || '';
+  let s = q || '';
+
+  // 批 1.4：学期词作时间锚不参与 title —— 等长占位掩码保住 indexOf 的位置映射，
+  // 左右扩展撞到占位符（非 TITLE_CHAR）自然停。
+  const anchor = TERM_ANCHOR_USAGE.exec(s);
+  if (anchor) {
+    s = s.slice(0, anchor.index) + '○'.repeat(anchor[0].length) + s.slice(anchor.index + anchor[0].length);
+  }
 
   let best = '';
   let at = -1;
@@ -522,6 +605,18 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
     if (month) return { text: dec[0], kind: 'window', month, decade };
   }
 
+  // 相对月锚（批 1.3）：「下月底 / 月初 / 月中 / 下下个月初」。必须在「只有月」
+  // 之前拦；负向环视挡住「12月底」这类数字月份（那是明确月份不是相对锚）。
+  // 「周末」没有「月」字，不受影响。
+  const relMonth = /(?<![一二三四五六七八九十\d年])(下下|下|这|本)?个?月(上旬|中旬|下旬|底|末|初|中)/.exec(s);
+  if (relMonth) {
+    const rm = relMonth[1] === '下下' ? 2 : relMonth[1] === '下' ? 1 : 0;
+    const decade = relMonth[2] === '上旬' || relMonth[2] === '初' ? 'early'
+      : relMonth[2] === '中旬' || relMonth[2] === '中' ? 'middle'
+      : 'late';
+    return { text: relMonth[0], kind: 'window', relativeMonths: rm, decade };
+  }
+
   // 只有月
   const mo = /([一二三四五六七八九十\d]{1,2})月/.exec(s);
   if (mo) {
@@ -536,6 +631,22 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
     return { text: relDay[1], kind: 'relative', relativeDays: off };
   }
 
+  // 第 N 周（可带周X）—— 教务口径的学期周次（批 1.2）。必须在裸「周X」之前拦：
+  // 否则「第10周周五」会被当成最近的周五（探针实录：→ 错 4 周）。
+  const wk = /第\s*(\d{1,2}|[一二三四五六七八九十]{1,3})\s*周(?:\s*(周[一二三四五六日天]|星期[一二三四五六日天]))?/.exec(s);
+  if (wk) {
+    const n = /^\d+$/.test(wk[1]) ? Number(wk[1]) : cnToInt(wk[1]);
+    if (n != null && n >= 1 && n <= 30) {
+      const wdIn = wk[2] ? WD_NUM[wk[2].slice(1)] : undefined;
+      return {
+        text: wk[0],
+        kind: wdIn != null ? 'exact' : 'window',
+        weekNo: n,
+        ...(wdIn != null ? { weekday: wdIn } : {}),
+      };
+    }
+  }
+
   // 相对周 + 星期
   const relWeek = /(下周|下星期|这周|本周|这星期|本星期)/.exec(s);
   const wd = /(周[一二三四五六日天]|星期[一二三四五六日天])/.exec(s);
@@ -547,8 +658,18 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
   }
   if (relWeek) {
     const isNext = relWeek[1].startsWith('下');
+    // 「下周一一起」里 wd 的「周一」与周词的「周」重叠 —— 文本取合并跨度，
+    // 别拼出「下周周一」这种碎片（批 1.1，金标 i29 when_text 对齐）。
+    let text = relWeek[0];
+    if (wd) {
+      const wStart = wd.index ?? 0;
+      const wEnd = wStart + wd[0].length;
+      const rEnd = relWeek.index + relWeek[0].length;
+      if (wStart <= rEnd && wEnd >= rEnd - 1) text = s.slice(relWeek.index, wEnd);
+      else text = relWeek[0] + wd[0];
+    }
     return {
-      text: relWeek[0] + (wd ? wd[0] : ''),
+      text,
       kind: 'relative',
       relativeWeeks: isNext ? 1 : 0,
       weekday: wdNum,
@@ -557,8 +678,9 @@ function extractConcreteWhen(s: string): WhenHint | undefined {
   if (wd && wdNum != null) return { text: wd[0], kind: 'relative', relativeWeeks: 0, weekday: wdNum };
   if (/周末/.test(s)) return { text: '周末', kind: 'relative', relativeWeeks: 0, weekday: 6 };
 
-  // 学期词 —— 要靠校历换算，本层只记原话
-  const term = /(期末|期中考试|开学|学期末|寒假|暑假|毕业前)/.exec(s);
+  // 学期词 —— 有校历锚点时由 resolveWhen 落地；本层记**完整原话**（含「之前/前」，
+  // 批 1.4：语义在 resolveWhen 分流）。「期中」裸词补入（原先只认「期中考试」）。
+  const term = /(期末考试周?|期末周?|期中考试周?|期中|开学|学期末|结课|考试周|寒假|暑假|毕业前)(之前|以前|前)?/.exec(s);
   if (term) return { text: term[0], kind: 'window' };
 
   return undefined;
@@ -657,6 +779,11 @@ export function extractEffort(q: string): { totalHours?: number; durationMin?: n
 /** 抽频率（每周几次）。「每周」但没给次数 → `undefined`，由上层追问。 */
 export function extractFrequency(q: string): number | undefined {
   const s = q || '';
+  // 批次 1 互斥（方案 4.3）：「每天两小时」是**时长节奏**不是频率承诺 ——
+  // 「每天」后面**紧跟**时长单位（可隔一个数字/「个」）→ 不算频率，否则草稿
+  // 会幻觉出「频率：每周 7 次」。注意必须**紧邻**：「每天晚上背半小时」隔着
+  // 「晚上背」→ 不拦（金标 i14「每天晚上…=7」口径）。
+  if (/(每天|每日|天天)\s*(?:[0-9.]+|[一二两三四五六七八九十]+)?\s*(?:个)?\s*(?:小时|分钟|h(?![a-zA-Z0-9]))/.test(s)) return undefined;
   if (/每天|每日|天天/.test(s)) return 7;
   if (/(隔天|每两天|每2天)/.test(s)) return 4; // 近似：一周约 3–4 次，取 4
   const m = /每(?:周|星期|礼拜)\s*([一二三四五六七八九十\d]{1,3})\s*次/.exec(s);
@@ -666,8 +793,13 @@ export function extractFrequency(q: string): number | undefined {
 
 /** 抽地点。只认「在/去/到 + X楼/馆/厅/室/中心/食堂」这种可判定的形态。 */
 export function extractPlace(q: string): string | undefined {
-  const m = /(?:在|去|到|往|前往)\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(q || '');
-  return m ? m[1] : undefined;
+  const s = q || '';
+  // 「在」优先（批 1.1，金标 i15）：「两点到四点在图书馆自习」里「到」是时间
+  // 连词，先试「在 X」再退「去/到/往」，避免吃进「四点在图书馆」这种碎片。
+  const m = /在\s*([\u4e00-\u9fff]{1,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场|场|舍|房))/.exec(s);
+  if (m) return m[1];
+  const m2 = /(?:去|到|往|前往)\s*([\u4e00-\u9fff]{1,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场|场|舍|房))/.exec(s);
+  return m2 ? m2[1] : undefined;
 }
 
 /** 抽时段窗（「只在晚上」）。 */
@@ -683,6 +815,153 @@ export function extractWindow(q: string): TimeWindow | undefined {
   return undefined;
 }
 
+/* ============================================================
+ * 批次 1（交互升级方案 4.1-4.2）· 钟点时刻通道
+ * ============================================================
+ * 真机问题：「周六晚上大概6点左右；大概打到8点」→ 仍重问「大概占多久？」
+ * —— WhenHint 只有日粒度，唯一认识钟点的 spanDurationMin 只折时长不产起止。
+ *
+ * **加法通道**：句中没有钟点词 → 本函数返回 undefined → clock 不产出 →
+ * 后续所有代码路径与引入前逐位一致（方案 §〇.2 原则 1）。
+ */
+
+/** 批次 1 逃生门：`LIBAO_CLOCK=0`/`'false'` → 钟点通道整体关闭（回批次 0 行为）。
+ *  读法沿用 G 批三开关惯例：Node 读 `process.env`，Vite 读 `import.meta.env.VITE_*`；
+ *  每次调用都读（不在 import 期定死），测试可在用例内翻开关再复原。 */
+export function clockChannelOn(): boolean {
+  const off = (v: string | undefined) => v === '0' || v === 'false';
+  let v: string | undefined;
+  try {
+    v = typeof process !== 'undefined'
+      ? (process as unknown as { env?: Record<string, string | undefined> }).env?.LIBAO_CLOCK
+      : undefined;
+  } catch {
+    v = undefined;
+  }
+  if (v == null) {
+    try {
+      v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_LIBAO_CLOCK;
+    } catch {
+      v = undefined;
+    }
+  }
+  return !off(v);
+}
+
+/** 钟点原子：「6点」「六点半」「6点30分」。**必须带「点」** —— 纯数字（「每周3次」）不是钟点。 */
+const CLOCK_ATOM_RE = /(\d{1,2}|[一二两三四五六七八九十]{1,2})\s*点(?:\s*半|(\d{1,2}|[一二三四五]{1,2})\s*分)?/g;
+/** 区间连接词：「到|至|—|~」与动结式「打到/玩到/学到/弄到/干到」（动结式后端标记为 end）。 */
+const CLOCK_RANGE_RE = /^\s*(?:到|至|[~～－—-]{1,2})\s*$/;
+const CLOCK_VERB_TO_RE = /(?:打|玩|学|弄|干|忙|搞)到\s*$/;
+
+/**
+ * 中文钟点 → 起止分钟。产**起止**不产时长（时长在 parseIntentSlots 由区间推导）。
+ *
+ * · 语境提升：「下午3点」→ 15:00；回看原子前 ≤6 字取**最近**的时段词
+ *   （「早上10点到晚上8点」两端各自归位）；
+ * · 无语境（「6点」）→ 按上午口径落并标 `ambig`，由调用方向用户如实说明；
+ * · 容词「大概/大约/左右/前后」剥除后再解析（原话回显用剥后形态，见 ClockHint.text）。
+ */
+export function extractClockRange(q: string): ClockHint | undefined {
+  const s = (q || '').replace(/大概|大约|左右|前后/g, '');
+  if (!/点/.test(s)) return undefined;
+
+  type Atom = { start: number; end: number; min: number; ambig: boolean };
+  const atoms: Atom[] = [];
+  for (const m of s.matchAll(CLOCK_ATOM_RE)) {
+    const hour = /^\d+$/.test(m[1]) ? Number(m[1]) : cnToInt(m[1]);
+    if (hour == null || hour < 0 || hour > 24) continue;
+    const minutes = m[0].includes('半') ? 30 : m[2] != null ? (/^\d+$/.test(m[2]) ? Number(m[2]) : cnToInt(m[2]) ?? 0) : 0;
+    // 语境：取原子**前面**最近的时段词（全文回看，不限窗）。口语里离钟点最近
+    // 的时段词几乎总是它的语境 ——「晚上6点；打到8点」的「8点」要继承「晚上」
+    // 才能落到 20:00（窄窗回看会跨过前一个原子把语境弄丢，真机实录）。
+    const prefix = s.slice(0, m.index ?? 0);
+    const period = getLatestPeriodWord(prefix);
+    let min = hour * 60 + minutes;
+    if (period === 'pm' && hour <= 11) min += 12 * 60;
+    // 无语境：1-11 点可能是 13-23 点 → 按上午口径落并标注，由调用方如实说明
+    const ambig = period == null && hour >= 1 && hour <= 11;
+    atoms.push({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, min, ambig });
+  }
+  if (atoms.length === 0) return undefined;
+
+  // 成对：两原子之间只隔区间连接词，或后一原子紧跟动结式「X到」
+  for (let i = 0; i + 1 < atoms.length; i++) {
+    const between = s.slice(atoms[i].end, atoms[i + 1].start);
+    if (CLOCK_RANGE_RE.test(between) || CLOCK_VERB_TO_RE.test(between)) {
+      return {
+        startMin: atoms[i].min,
+        endMin: atoms[i + 1].min,
+        text: s.slice(atoms[i].start, atoms[i + 1].end),
+        ...(atoms[i].ambig || atoms[i + 1].ambig ? { ambig: true } : {}),
+      };
+    }
+  }
+
+  // 单端点：紧跟动结式「X到」→ 只有 end（「打到8点」）；否则只有 start（「晚上6点」）
+  const last = atoms[atoms.length - 1];
+  const before = s.slice(Math.max(0, last.start - 4), last.start);
+  const verbTo = CLOCK_VERB_TO_RE.exec(before)?.[0];
+  if (verbTo) {
+    return {
+      endMin: last.min,
+      text: verbTo + s.slice(last.start, last.end),
+      ...(last.ambig ? { ambig: true } : {}),
+    };
+  }
+  return {
+    startMin: last.min,
+    text: s.slice(last.start, last.end),
+    ...(last.ambig ? { ambig: true } : {}),
+  };
+}
+
+/** 时段词回看：返回 'pm'（下午/晚上族）| 'am'（上午/早上/中午族）| undefined。 */
+function getLatestPeriodWord(s: string): 'pm' | 'am' | undefined {
+  const PM = /(晚上|晚间|夜里|夜晚|傍晚|下午)/;
+  const AM = /(早上|早晨|上午|中午)/;
+  const pm = PM.exec(s);
+  const am = AM.exec(s);
+  if (pm && (!am || pm.index > am.index)) return 'pm';
+  if (am) return 'am';
+  return undefined;
+}
+
+/**
+ * clock 落位（parseIntentSlots 与 mergeLlmPrimary 共用的收尾三步，批次 1）：
+ *   ① clock 与 window 并存取**交集**；交集为空（钟点在时段窗外）→ 以 clock 为准、
+ *      window 让位，并如实注记（不静默改口径）；
+ *   ② 24 小时歧义注记（`ambig`）；
+ *   ③ 时长推导：双端点齐且用户没给时长/总量 → durationMin = endMin − startMin
+ *      （「6点到8点」= 120 分钟 —— 消灭「大概占多久？」重问的钥匙，方案 4.2）。
+ * 三步全是空值短路：clock 不存在时一个字段都不碰。
+ */
+function reconcileClock(s: IntentSlots): void {
+  const clock = s.clock;
+  if (!clock) return;
+  const win = s.window;
+  if (clock.startMin != null && clock.endMin != null && win) {
+    if (clock.startMin >= win.toMin || clock.endMin <= win.fromMin) {
+      s.window = undefined;
+      s.clock = { ...clock, conflicted: win.text };
+      s.unclear.push(`你说的${clock.text}与「${win.text}」对不上 —— 按你说的钟点排。`);
+    } else {
+      s.clock = {
+        ...clock,
+        startMin: Math.max(clock.startMin, win.fromMin),
+        endMin: Math.min(clock.endMin, win.toMin),
+      };
+    }
+  }
+  if (s.clock?.ambig) {
+    s.unclear.push(`「${s.clock.text}」没说上下午 —— 我先按上午的钟点理解，不对的话告诉我。`);
+  }
+  if (s.clock?.startMin != null && s.clock.endMin != null
+    && s.durationMin == null && s.totalHours == null) {
+    s.durationMin = s.clock.endMin - s.clock.startMin;
+  }
+}
+
 /** 抽「对哪一块动手」（换时间 / 取消用）。 */
 export function extractTarget(q: string): string | undefined {
   const s = q || '';
@@ -691,6 +970,36 @@ export function extractTarget(q: string): string | undefined {
   const m2 = /(?:取消|删掉|退掉)\s*([\u4e00-\u9fffA-Za-z0-9]{2,16})/.exec(s);
   if (m2) return m2[1];
   return undefined;
+}
+
+/**
+ * 抽单日重排的目标天（批 3，5A-②）：「重排周四」「重新排一下这周五」「把周三
+ * 重新排一版」。动词在前/在后两种语序都认；没点名天 = undefined（走老路径问对象）。
+ */
+export function extractReplanDays(q: string): number[] | undefined {
+  const s = q || '';
+  const days: number[] = [];
+  // 动词在前：「重排(一下)周四」「只重排这周五」「重新排周三和周四」——
+  // 动词后取一个短窗口（截断在标点），窗口内全局收集星期词（捕获组 + 重复
+  // 只留最后一次，不能直接用带 + 的单正则）。
+  const leadVerb = /(?:重新?排|重排)(?:一?下|一版|一遍)?/.exec(s);
+  if (leadVerb) {
+    const restStart = leadVerb.index + leadVerb[0].length;
+    const window = s.slice(restStart, restStart + 12).split(/[，。！？,.!?；;、]/)[0];
+    for (const m of window.matchAll(/(?:这|本|下)?周([一二三四五六日天])/g)) {
+      const d = WD_NUM[m[1]];
+      if (d && !days.includes(d)) days.push(d);
+    }
+  }
+  // 动词在后：「把周四重新排一版」「把周五重排一下」
+  if (days.length === 0) {
+    const tail = /(?:把|将)?\s*(?:这|本|下)?周([一二三四五六日天])[^，。！？？]{0,4}(?:重新?排|重排)/.exec(s);
+    if (tail) {
+      const d = WD_NUM[tail[1]];
+      if (d) days.push(d);
+    }
+  }
+  return days.length > 0 ? days : undefined;
 }
 
 /** 抽是否「必做」+ 可让步度。有明确截止或强调词 → 更不该被挤掉。 */
@@ -711,6 +1020,55 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+/**
+ * 日期换算的学期锚点（批 1.2/1.4）：weekNo 换算要 termStart；「期中/期末」这类
+ * 学期词要校历日期。由调用方（LbaoChat，手里有 schedule 与 TERM_CALENDAR）构造，
+ * 本层保持纯函数 —— 不 import 校历、不读时钟。
+ */
+export interface ResolveTermOpts {
+  /** 学期第一周周一（ISO）—— weekNo 换算的锚点 */
+  termStart?: string;
+  /** 校历锚点（ISO）—— 学期词落地用（1.4） */
+  term?: {
+    midterm?: string;
+    finalsFrom?: string;
+    finalsTo?: string;
+  };
+}
+
+/** 校历条目的结构化最小接口（与 constants/term.ts 的 TermCalendar 天然兼容） */
+export interface TermCalendarLike {
+  termStart: string;
+  phases?: Array<{ name: string; fromWeek: number; toWeek: number; kind: string }>;
+}
+
+function addDaysISO(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return isoOf(d);
+}
+
+/**
+ * 校历 → 学期词锚点（批 1.4）。
+ * 期中 = 理论教学**中点周**的周一（校历没有「期中」相位，取 round((from+to)/2)——
+ * 2026-2027-1：round((3+18)/2)=11 → 与 DEADLINES 的「期中考试周」日期互证）；
+ * 期末 = 第一个 exam 相位的 [周一, 周日]。缺相位就缺锚点，不编。
+ */
+export function termAnchorsFrom(entry: TermCalendarLike | undefined): ResolveTermOpts['term'] {
+  if (!entry) return undefined;
+  const theory = entry.phases?.find((p) => p.kind === 'theory');
+  const exam = entry.phases?.find((p) => p.kind === 'exam');
+  const out: NonNullable<ResolveTermOpts['term']> = {};
+  if (theory) {
+    out.midterm = addDaysISO(entry.termStart, 7 * (Math.round((theory.fromWeek + theory.toWeek) / 2) - 1));
+  }
+  if (exam) {
+    out.finalsFrom = addDaysISO(entry.termStart, 7 * (exam.fromWeek - 1));
+    out.finalsTo = addDaysISO(entry.termStart, 7 * (exam.toWeek - 1) + 6);
+  }
+  return out.midterm || out.finalsFrom ? out : undefined;
+}
+
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -727,6 +1085,7 @@ function isoOf(d: Date): string {
 export function resolveWhen(
   hint: WhenHint | undefined,
   today: string,
+  opts?: ResolveTermOpts,
 ): { from?: string; to?: string; certainty: TimeCertainty } {
   if (!hint) return { certainty: 'unknown' };
   if (hint.kind === 'vague') return { certainty: 'unknown' };
@@ -734,13 +1093,54 @@ export function resolveWhen(
   const base = new Date(`${today}T00:00:00`);
   if (Number.isNaN(base.getTime())) return { certainty: 'unknown' };
 
+  // 学期周次（批 1.2）：「第N周(周X)?」= 学期绝对坐标，必须在 month/relative
+  // 分支之前处理。没有 termStart 就**不换算**（不编日期），降级为 window。
+  if (hint.weekNo != null) {
+    const ts = opts?.termStart;
+    const tsDate = ts ? new Date(`${ts}T00:00:00`) : null;
+    if (!tsDate || Number.isNaN(tsDate.getTime())) return { certainty: 'window' };
+    const monday = new Date(tsDate);
+    monday.setDate(tsDate.getDate() + 7 * (hint.weekNo - 1));
+    if (hint.weekday != null) {
+      const one = new Date(monday);
+      one.setDate(monday.getDate() + (hint.weekday - 1));
+      const iso = isoOf(one);
+      return { from: iso, to: iso, certainty: 'exact' };
+    }
+    const sun = new Date(monday);
+    sun.setDate(monday.getDate() + 6);
+    return { from: isoOf(monday), to: isoOf(sun), certainty: 'window' };
+  }
+
   if (hint.kind === 'exact' && hint.month && hint.day) {
-    // 没写年份 → 取「不早于今天太久」的最近一次（3 月问「九月中旬」= 今年 9 月）
+    // 没写年份 → 取下一次发生（批 1.3：**整日早于今天 → 滚年**。旧 90 天规则会把
+    // 「10 月说九月中旬」留在已过去的 9 月，铺块落进过去 = 用户看到一块灰色回忆）
     let year = base.getFullYear();
     const mk = (y: number) => new Date(y, hint.month! - 1, hint.day!);
-    if (mk(year).getTime() < base.getTime() - 90 * 864e5) year += 1;
+    if (mk(year).getTime() < base.getTime()) year += 1;
     const iso = isoOf(mk(year));
     return { from: iso, to: iso, certainty: 'exact' };
+  }
+
+  // 相对月锚（批 1.3）：本月/下月/下下月 + 旬窗。旬窗用**真实月末**（11 月 30、
+  // 12 月 31），不是旧代码的 28 截断 —— 「下月底」排到 28 号等于偷走两三天。
+  if (hint.relativeMonths != null) {
+    let year = base.getFullYear();
+    let m0 = base.getMonth() + hint.relativeMonths;
+    while (m0 > 11) {
+      m0 -= 12;
+      year += 1;
+    }
+    const monthLen = new Date(year, m0 + 1, 0).getDate();
+    const span: [number, number] =
+      hint.decade === 'early' ? [1, 10] :
+      hint.decade === 'middle' ? [11, 20] :
+      hint.decade === 'late' ? [21, monthLen] : [1, 28];
+    return {
+      from: isoOf(new Date(year, m0, span[0])),
+      to: isoOf(new Date(year, m0, span[1])),
+      certainty: 'window',
+    };
   }
 
   if (hint.month) {
@@ -749,7 +1149,9 @@ export function resolveWhen(
       hint.decade === 'early' ? [1, 10] :
       hint.decade === 'middle' ? [11, 20] :
       hint.decade === 'late' ? [21, 28] : [1, 28];
-    if (new Date(year, hint.month - 1, span[0]).getTime() < base.getTime() - 90 * 864e5) year += 1;
+    // 批 1.3：滚年条件从「早于今天 90 天」改为「**整个窗口**早于今天」——
+    // 窗口还含着今天（10 月说「10月」）就不滚。
+    if (new Date(year, hint.month - 1, span[1]).getTime() < base.getTime()) year += 1;
     return {
       from: isoOf(new Date(year, hint.month - 1, span[0])),
       to: isoOf(new Date(year, hint.month - 1, span[1])),
@@ -782,6 +1184,29 @@ export function resolveWhen(
     }
   }
 
+  // 学期词（批 1.4）：有校历锚点 → 落到真实窗口；没有 → 维持 window（不编日期）。
+  // 「…之前/前」= 目标窗口止于锚点前一日（「期末考试前把高数复习完」要的是
+  // [今天, 考试周前] 的复习窗，不是考试周里那一块）；裸学期词 = 锚点本身
+  // （「期中考试」是重要日，落当天；「期末」是考试周整段）。
+  if (opts?.term && /(期中|期末|考试周|学期末|结课)/.test(hint.text)) {
+    const t = opts.term;
+    const isBefore = /(之前|以前|前)$/.test(hint.text);
+    if (/期中/.test(hint.text) && t.midterm) {
+      if (isBefore) {
+        const to = addDaysISO(t.midterm, -1);
+        return { from: isoOf(base), to: to >= isoOf(base) ? to : undefined, certainty: 'window' };
+      }
+      return { from: t.midterm, to: t.midterm, certainty: 'window' };
+    }
+    if (/(期末|考试周|学期末|结课)/.test(hint.text) && t.finalsFrom && t.finalsTo) {
+      if (isBefore) {
+        const to = addDaysISO(t.finalsFrom, -1);
+        return { from: isoOf(base), to: to >= isoOf(base) ? to : undefined, certainty: 'window' };
+      }
+      return { from: t.finalsFrom, to: t.finalsTo, certainty: 'window' };
+    }
+  }
+
   // 学期词 / 只有原话 → 交给上层用校历换算
   return { certainty: 'window' };
 }
@@ -808,7 +1233,7 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
  * 「周四吃大餐」「明天体检 1 小时」vs「备赛 20 小时」「每周 3 次」是两类诉求。
  * ⚠️ `recurring`（每周三）不算单日 —— 循环约定没有「一共占多久」的天然上限。
  */
-function isSingleDayEvent(s: IntentSlots): boolean {
+export function isSingleDayEvent(s: IntentSlots): boolean {
   if (s.when?.recurring) return false;
   // 解析过日期（传了 today）：起止同一天 = 单日
   if (s.dateFrom && s.dateTo && s.dateFrom === s.dateTo) return true;
@@ -1262,7 +1687,7 @@ function emptySlots(raw: string): IntentSlots {
  *
  * @param today 给了才做日期换算（`dateFrom` / `dateTo`）；不给则只保留语义。
  */
-export function parseIntentSlots(q: string, today?: string): IntentSlots {
+export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTermOpts): IntentSlots {
   const raw = (q || '').trim();
   const s = emptySlots(raw);
 
@@ -1285,15 +1710,28 @@ export function parseIntentSlots(q: string, today?: string): IntentSlots {
   const win = extractWindow(raw);
   if (win) s.window = win;
 
+  // 批次 1：钟点通道（加法）。逃生门 LIBAO_CLOCK=0 → 整体跳过，回引入前行为。
+  if (clockChannelOn()) {
+    const clock = extractClockRange(raw);
+    if (clock) s.clock = clock;
+  }
+
   const target = extractTarget(raw);
   if (target) s.targetHint = target;
+
+  // 批 3：单日重排的目标天（与 targetHint 分属两条路由，互不覆盖）
+  const replanDays = extractReplanDays(raw);
+  if (replanDays) s.replanDays = replanDays;
 
   const pri = extractPriority(raw);
   if (pri.essential) s.essential = true;
   s.priorityHint = pri.priorityHint;
 
+  // 批次 1 收尾三步（交集/歧义注记/时长推导）—— clock 不存在时全部空短路
+  reconcileClock(s);
+
   if (today) {
-    const r = resolveWhen(when, today);
+    const r = resolveWhen(when, today, whenOpts);
     if (r.from) s.dateFrom = r.from;
     if (r.to) s.dateTo = r.to;
     s.certainty = r.certainty;
@@ -1313,6 +1751,10 @@ export function parseIntentSlots(q: string, today?: string): IntentSlots {
   }
   if (s.when && (s.when.kind === 'window' || s.when.kind === 'vague') && !s.dateFrom) {
     s.unclear.push('这个时间要靠校历才能落到具体哪一周，我先按当前周往后排。');
+  }
+  // 批 1.2：「第N周」没换算出来（调用方没给 termStart）→ 如实说，不编日期
+  if (s.when?.weekNo != null && !s.dateFrom) {
+    s.unclear.push('「第N周」要知道学期第一天才能落到具体日期 —— 导入课表后我就能对上。');
   }
   if (s.perWeekCount == null && s.totalHours != null) {
     s.unclear.push('没给每周几次 —— 我按「总量摊到窗口内」来排。');
@@ -1350,6 +1792,7 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
   fill('totalHours');
   fill('place');
   fill('window');
+  fill('clock');
   fill('targetHint');
 
   if (out.intent === 'create' && llm.intent && llm.intent !== 'create') out.intent = llm.intent;
@@ -1367,25 +1810,31 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
  * 结构化数字（month/day/relativeDays/…），日期换算走 `resolveWhen`，
  * 防止 LLM 直接编 ISO 日期。
  */
-export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> | null, today?: string): IntentSlots {
+export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> | null, today?: string, whenOpts?: ResolveTermOpts): IntentSlots {
   if (!patch) return rule;
   const out: IntentSlots = { ...rule };
 
   if (patch.title) out.title = patch.title;
   if (patch.when) {
+    // 批 1.2：weekNo 越界（规约 1–30）→ 从 patch 里剥掉，同 patch 其余字段保留
+    let pw: WhenHint = patch.when;
+    if (pw.weekNo != null && (!Number.isFinite(pw.weekNo) || pw.weekNo < 1 || pw.weekNo > 30)) {
+      const { weekNo: _drop, ...rest } = pw;
+      pw = rest as WhenHint;
+    }
     // 强化计划 D（2026-10-02）· 劣质覆盖防护：patch 只有**一句原话**（window 型、
     // 无任何结构化字段）而规则层已有结构化 when（点名了星期/相对天数/日期）时，
     // 不整体覆盖 —— 否则「下周一开始」会被 LLM 的劣质转写抹掉（真机实录：
     // 用户答了时间，梨宝反问「大概什么时候开始」= 答非所问）。
-    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; month?: number | null; day?: number | null; kind?: string } | null) =>
+    const structured = (w?: { weekday?: number | null; relativeDays?: number | null; relativeWeeks?: number | null; relativeMonths?: number | null; month?: number | null; day?: number | null; weekNo?: number | null; kind?: string } | null) =>
       !!w && (w.weekday != null || w.relativeDays != null || w.relativeWeeks != null
-        || w.month != null || w.day != null || w.kind === 'exact');
-    const patchIsBareWindow = !structured(patch.when) && patch.when.kind === 'window' && !!patch.when.text;
+        || w.relativeMonths != null || w.month != null || w.day != null || w.weekNo != null || w.kind === 'exact');
+    const patchIsBareWindow = !structured(pw) && pw.kind === 'window' && !!pw.text;
     const ruleHasStructure = structured(out.when);
     if (!(patchIsBareWindow && ruleHasStructure)) {
-      out.when = patch.when;
+      out.when = pw;
       if (today) {
-        const r = resolveWhen(patch.when, today);
+        const r = resolveWhen(pw, today, whenOpts);
         out.dateFrom = r.from;
         out.dateTo = r.to;
         out.certainty = r.certainty;
@@ -1394,17 +1843,32 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
         out.dateTo = patch.dateTo;
         out.certainty = patch.certainty ?? out.certainty;
       }
-      if (patch.when.unspecified) out.certainty = 'unknown';
+      if (pw.unspecified) out.certainty = 'unknown';
     }
   }
   if (!patch.when && patch.dateFrom) out.dateFrom = patch.dateFrom;
   if (!patch.when && patch.dateTo) out.dateTo = patch.dateTo;
-  if (patch.perWeekCount != null) out.perWeekCount = patch.perWeekCount;
+  if (patch.perWeekCount != null) {
+    // 批 1.5 幻觉防护：LLM 会从「养成晨跑的习惯」脑补出每天一次（探针实录：
+    // 21 天 × 每天 = 21 块，静默压缩「一学期」意图）。只在**规则层已有**或
+    // **原话真有频率词**时采纳；拒了要如实标注，不静默。
+    if (rule.perWeekCount != null || FREQ_RE.test(rule.raw || '')) {
+      out.perWeekCount = patch.perWeekCount;
+    } else if (!out.unclear.includes('没听到明确的频率，「每周几次」我先不按猜的算 —— 想固定节奏的话补一句（比如「每周三次」）。')) {
+      out.unclear.push('没听到明确的频率，「每周几次」我先不按猜的算 —— 想固定节奏的话补一句（比如「每周三次」）。');
+    }
+  }
   if (patch.durationMin != null) out.durationMin = patch.durationMin;
   if (patch.totalHours != null) out.totalHours = patch.totalHours;
   if (patch.place) out.place = patch.place;
   if (patch.window) out.window = patch.window;
+  // 批次 1：clock 走 fill-if-empty —— 规则层从原话抽到的钟点是确定性正则产物，
+  // 不被 LLM 转写覆盖；LLM 只兜规则抓不到的形态（「晚上六点左右」之外的说法）。
+  if (patch.clock && !out.clock) out.clock = patch.clock;
   if (patch.targetHint) out.targetHint = patch.targetHint;
+
+  // 批次 1 收尾三步（交集/歧义注记/时长推导）—— patch 里的钟点同样吃推导
+  reconcileClock(out);
 
   out.missing = missingSlots(out);
   return out;
@@ -1420,9 +1884,9 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
  */
 export async function parseGoalIntent(
   q: string,
-  opts: { today?: string; llm?: LlmExtractor; llmJudge?: LlmJudge; history?: string[] } = {},
+  opts: { today?: string; llm?: LlmExtractor; llmJudge?: LlmJudge; history?: string[]; whenOpts?: ResolveTermOpts } = {},
 ): Promise<ParseOutcome> {
-  const ruleSlots = parseIntentSlots(q, opts.today);
+  const ruleSlots = parseIntentSlots(q, opts.today, opts.whenOpts);
 
   // ── T 批换向：LLM 先看一眼（CY 2026-09-27 晚拍板「不能每次都靠找关键词」）──
   if (opts.llmJudge) {
@@ -1430,7 +1894,7 @@ export async function parseGoalIntent(
       const verdict = await opts.llmJudge(q, ruleSlots, opts.history);
       if (verdict) {
         if (verdict.action) {
-          let slots = mergeLlmPrimary(ruleSlots, verdict.patch ?? null, opts.today);
+          let slots = mergeLlmPrimary(ruleSlots, verdict.patch ?? null, opts.today, opts.whenOpts);
           if (verdict.intent) slots = { ...slots, intent: verdict.intent };
           // WP9 同族：改/取消/替换的目标块名在 targetHint —— send 门要 title
           if (!slots.title && slots.targetHint

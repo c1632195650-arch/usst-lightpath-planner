@@ -81,19 +81,26 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - month / day: 明确说到几月几日时给数字（month 1-12, day 1-31）
 - relativeDays: 相对天数（今天=0 明天=1 后天=2 大后天=3）
 - relativeWeeks: 相对周数（这周=0 下周=1）
+- relativeMonths: 相对月锚（本月=0 下月=1 下下月=2；「下月底」= 1 + when_text 照抄）
 - weekday: 星期几（周一=1 … 周日=7）
+- weekNo: 学期周次（「第10周」=10；「第10周周五」= weekNo 10 + weekday 5）
 - perWeekCount: 每周几次（「每天」=7；「隔天/每两天」≈每周3-4次，按 4 记）
 - durationMin: 单次时长（分钟）（「每次2小时」=120；「6点到7点」这种回答时长的说法=60；
   **裸时长优先归单次**：「出去玩一小时」「排90分钟」=60/90 —— 只有带「一共/总共/要花/投入」才是总投入）
 - totalHours: 总投入（小时）（必须带总量词才记：「一共20小时」=20；裸「10小时」不得记这里）
 - place: 地点（如「图书馆」）
 - window_text: 时段窗原话（如「晚上」「下午」「18点之后」）
+- startMin / endMin: 钟点起止（分钟数 0-1440）。「6点到8点」= startMin 1080 / endMin 1200；
+  「晚上6点左右」= startMin 1080；「打到8点」= endMin 1200。用户给了钟点就不必再问时长
+  （时长=endMin-startMin，前端自动推导）
 - targetHint: 要动的既有事项名（改期/取消/替换的对象）"""
 
 _SYSTEM_BASE = (
     "你是日程排程助手「梨宝」的理解层。用户的话可能是要安排日程，也可能只是闲聊或提问。"
     + _SLOT_SPEC
     + "\n规则：你是**第一理解层**，独立判断这句话的意思；规则层（关键词/正则）先跑过一遍，"
+    "用户可能一句话把时间+时长说全（如「周六晚上6点到8点我要打球」→ startMin 1080 / endMin 1200，"
+    "时长自动=120分钟），多信息自然句式即可，不必分号隔开。"
     "但它的词表不可能穷尽口语 —— 它的输出仅供参考，可能不全也可能抽错，你可以给出它没抽到"
     "或需要修正的槽位。禁止编造用户没说的内容；不确定就必须给低 confidence（<0.5）；只输出 JSON，不要输出别的。"
 )
@@ -195,9 +202,21 @@ def _clean_patch(patch):
     n = _num(patch.get("relativeWeeks"))
     if n is not None and 0 <= n <= 12:
         out["relativeWeeks"] = int(n)
+    n = _num(patch.get("relativeMonths"))
+    if n is not None and 0 <= n <= 24:
+        out["relativeMonths"] = int(n)
     n = _num(patch.get("weekday"))
     if n is not None and 1 <= n <= 7:
         out["weekday"] = int(n)
+    n = _num(patch.get("weekNo"))
+    if n is not None and 1 <= n <= 30:
+        out["weekNo"] = int(n)
+    n = _num(patch.get("startMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["startMin"] = int(n)
+    n = _num(patch.get("endMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["endMin"] = int(n)
     n = _num(patch.get("perWeekCount"))
     if n is not None and 1 <= n <= 7:
         out["perWeekCount"] = int(n)

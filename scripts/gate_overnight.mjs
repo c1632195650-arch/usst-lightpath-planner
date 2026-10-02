@@ -6,12 +6,12 @@
  *   /goal 的自动校验只认「实据」（命令输出 / 测试结果），不认计划和听起来像结论的回复。
  *   把四条判据压成一条命令，agent 每轮收尾跑一次即可自证，早上 CY 也只需跑同一条命令。
  *
- * 判据（基线为 2026-09-21 实测值，只增不减）：
+ * 判据（基线为 2026-10-02 实测值 458/321，只增不减）：
  *   1. tsc --noEmit         → 必须 0 错误
- *   2. npm run test:engine  → fail=0 且 pass ≥ 312
- *   3. npm run test:ui      → fail=0 且 pass ≥ 219
- *   4. 禁区文件             → src/features/week/、src/lib/planner/、src/lib/persona.ts、
- *                            src/components/ 下不得有任何改动（协作红线：这些是队友 RAY 的文件）
+ *   2. npm run test:engine  → fail=0 且 pass ≥ 458
+ *   3. npm run test:ui      → fail=0 且 pass ≥ 321
+ *   4. 禁区文件             → 名单已清空（2026-10-02 起单人负责，原 RAY 禁区条款作废，见 AGENTS.md §二/8.1）；
+ *                             机制保留：日后需要重新圈禁区时往 FORBIDDEN 里加回即可
  *   5. 风格规范漂移         → scripts/check_style_drift.py（E10）：梨宝语言规范入库后，
  *                            app.py 人格注释 / direct.py 模板引用必须与规范同步（2026-09-21 加入）
  *
@@ -22,14 +22,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 
-const BASELINE = { engine: 312, ui: 219 };
+// 2026-10-02：单人负责，原 RAY 禁区条款作废（AGENTS.md §二/8.1）→ 名单清空。
+// 机制保留：需要重新圈禁区时在此加回目录前缀即可。
+const BASELINE = { engine: 458, ui: 321 };
 
-const FORBIDDEN = [
-  'src/features/week/',
-  'src/lib/planner/',
-  'src/lib/persona.ts',
-  'src/components/',
-];
+const FORBIDDEN = [];
 
 function run(line) {
   const r = spawnSync(line, {

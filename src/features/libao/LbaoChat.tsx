@@ -3,10 +3,11 @@ import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
-import { applyObjectiveFact, basicInfoContext, getUserId, objectiveKeyToField } from '@/lib/identity';
+import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objectiveKeyToField } from '@/lib/identity';
+import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -17,6 +18,8 @@ import {
   shouldExpireSession,
   type SchedMode,
 } from '@/features/libao/schedSession';
+import { TERM_CALENDAR } from '@/constants/term';
+import { toHHmm } from '@/constants/time';
 import {
   SNAPSHOT_V3_KEY,
   SNAPSHOT_V2_KEY,
@@ -46,12 +49,16 @@ import {
   applyCancel,
   checkGoalFeasibility,
   describeVerdict,
+  quickOptionsFor,
+  replanOptionButtons,
+  categoryMinutesOfWeek,
   findCancelTargets,
   findMoveTargets,
   goalToTasks,
   planReschedule,
   planWeekForChat,
   planWeekWithTasks,
+  replanDaysForChat,
   summarizeWeekPlan,
   holdSlotFrom,
   holdToUnavailableSlot,
@@ -62,7 +69,7 @@ import {
   type ReplanOption,
   type ReschedulePreview,
 } from '@/features/libao/weekPlanForChat';
-import type { UnavailableSlot } from '@/features/week/userPlanStore';
+import type { MoveRecord, UnavailableSlot } from '@/features/week/userPlanStore';
 import { addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
@@ -100,12 +107,15 @@ interface Msg {
   applied?: MemoryFact[];
   /** 后端 messages 自增 id —— 只在从 history 恢复的行上存在（跨会话恢复 E8 的去重依据） */
   mid?: number;
+  /** 批次 2（交互升级方案 5.1）：快捷选项按钮卡 —— 能按钮不打字，自由输入框永远在下方。
+   *  点击 = send(value)：value 是规则层解析得动的原话（编号兜底 parseOptionChoice 双保险）。 */
+  options?: Array<{ label: string; value: string; hint?: string }>;
 }
 
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
  *  WP9：kind 区分执行器（确认时走不同落层通道），缺省 create 兼容旧草稿。 */
 interface PendingGoal {
-  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold';
+  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold' | 'day_replan';
   title: string;
   tasks: UserTask[];
   /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
@@ -116,6 +126,8 @@ interface PendingGoal {
   movePreview?: ReschedulePreview;
   /** V2-2 hold：确认后 addSlot 的不可时段（一次性，只作用于当前周） */
   holdSlot?: UnavailableSlot;
+  /** 批 3 day_replan：确认后逐块 upsertMove 的保位钉（其余天保持原样的落盘形态） */
+  dayReplan?: { pins: MoveRecord[]; days: number[] };
 }
 
 /** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
@@ -148,10 +160,10 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
   if (!p) return patch;
   if (p.title) patch.title = p.title;
   if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
-    || p.relativeWeeks != null || p.weekday != null) {
+    || p.relativeWeeks != null || p.weekday != null || p.weekNo != null) {
     patch.when = {
       text: p.when_text ?? '',
-      kind: (p.month != null || p.day != null) ? 'exact'
+      kind: (p.month != null || p.day != null || (p.weekNo != null && p.weekday != null)) ? 'exact'
         : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
         : 'window',
     };
@@ -159,12 +171,23 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
     if (p.day != null) patch.when.day = p.day;
     if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
     if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
+    if (p.relativeMonths != null) patch.when.relativeMonths = p.relativeMonths;
     if (p.weekday != null) patch.when.weekday = p.weekday;
+    if (p.weekNo != null) patch.when.weekNo = p.weekNo;
   }
   if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
   if (p.durationMin != null) patch.durationMin = p.durationMin;
   if (p.totalHours != null) patch.totalHours = p.totalHours;
   if (p.place) patch.place = p.place;
+  // 批次 1（交互升级方案 4.1）：端点抽到的钟点起止 → IntentSlots.clock。
+  // 时长推导不在端点做 —— clock → durationMin 由 mergeLlmPrimary 的 reconcileClock 统一算。
+  if (p.startMin != null || p.endMin != null) {
+    patch.clock = {
+      ...(p.startMin != null ? { startMin: p.startMin } : {}),
+      ...(p.endMin != null ? { endMin: p.endMin } : {}),
+      text: p.window_text ?? p.when_text ?? '钟点',
+    };
+  }
   if (p.targetHint) patch.targetHint = p.targetHint;
   return patch;
 }
@@ -344,6 +367,17 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const pendingTasksKey = useMemo(
     () => Object.values(pending).map((g) => g.tasks.map((t) => t.id).join(',')).join('|'),
     [pending],
+  );
+  /** 批 1.2/1.4：weekNo 与学期词的日期换算锚点 —— schedule.termStart（及校历）
+   *  传进理解层，让「第10周周五」「期末之前」落到真实日期；缺课表时理解层安全降级。 */
+  const termEntry = useMemo(() => {
+    const list = Object.values(TERM_CALENDAR);
+    // 校历是学期起点的权威：先按课表 termStart 对条目，对不上就取唯一收录的学年
+    return list.find((t) => t.termStart === schedule?.termStart) ?? list[0];
+  }, [schedule?.termStart]);
+  const whenOpts = useMemo(
+    () => ({ termStart: schedule?.termStart, term: termAnchorsFrom(termEntry) }),
+    [schedule?.termStart, termEntry],
   );
   useEffect(() => {
     let alive = true;
@@ -631,6 +665,39 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
 
+    // ── 批 3·day_replan：确认 → 逐块 upsertMove 落层（source='edit' hard，
+    //    「其余天保持原样」是用户确认过的约束）──
+    if (g.kind === 'day_replan' && g.dayReplan) {
+      const dr = g.dayReplan;
+      try {
+        const layer = loadUserPlan();
+        pushUndoSnapshot(layer);
+        const moves = dr.pins.reduce((acc, m) => upsertMove(acc, m), layer.moves);
+        const nextLayer = { ...layer, moves };
+        saveUserPlan(nextLayer);
+        pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
+        bumpPlanVersion();
+        window.dispatchEvent(new CustomEvent('usst:replan'));
+        setTopic(null);
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `好，周${dr.days.map((d) => ['一', '二', '三', '四', '五', '六', '日'][d - 1]).join('、周')}重新排好了，其余天保持原样。不合适按 ↩ 撤销。`,
+          goWeek: true,
+        }]);
+      } catch {
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '落盘的时候出了点小状况，没写成。可以再说一遍。',
+        }]);
+      }
+      return;
+    }
+
     // ── WP9·replace：取消 + 新增两步一次快照（一次确认）──
     if (g.kind === 'replace' && g.cancelTarget && g.tasks.length > 0) {
       const target = g.cancelTarget;
@@ -786,6 +853,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，你要取消哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -831,7 +899,70 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   /** WP9·reschedule 执行器：定位块 → dragTo 同一条合规校验 → 涟漪预览 → 确认落层。
    *  找不到/多个/没说挪到哪天 → 一律追问，不硬猜。 */
+  /** 批 3（5A-②）：「只重排周X」—— 整周照算 + 定点融合 + 非目标天 pin 保位。
+   *  previousPlan 用侧栏现行计划：没有它就兑现不了「其余天原样」，如实拒绝。 */
+  const runDayReplan = async (slots: IntentSlots, today: string) => {
+    const days = [...new Set(slots.replanDays ?? [])].sort((a, b) => a - b);
+    const WD = ['', '一', '二', '三', '四', '五', '六', '日'];
+    const weekNo = currentWeekNo(schedule.termStart, today);
+    if (!previewPlan || previewPlan.weekNo !== weekNo) {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: '还没拿到本周的现行安排 —— 先去周计划页看一眼再来说「重排周X」，我才守得住「其余天不动」。',
+        goWeek: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const pendingTasks = Object.values(pending).flatMap((g) => g.tasks);
+    const layerTasks = loadUserPlan()
+      .tasks
+      .filter((t) => (t.weeks ?? []).includes(weekNo))
+      .filter((t) => !pendingTasks.some((p) => p.id === t.id));
+    const result = await replanDaysForChat({
+      schedule, profile, weekNo,
+      tasks: [...layerTasks, ...pendingTasks],
+      days, previousPlan: previewPlan,
+    });
+    if (!result) {
+      setMessages((current) => [...current, { role: 'lbao', text: '这周排不了 —— 先看看课表的学期范围对不对？' }]);
+      setLoading(false);
+      return;
+    }
+    if (result.changedDays.length === 0) {
+      setMessages((current) => [...current, {
+        role: 'lbao',
+        text: `重排了一圈 —— 周${days.map((d) => WD[d]).join('、周')}现在的安排已经没什么可优化的，就不动了。`,
+      }]);
+      setLoading(false);
+      return;
+    }
+    const key = (pendingSeq.current += 1);
+    setPending((p) => ({
+      ...p,
+      [key]: { kind: 'day_replan', title: `周${days.map((d) => WD[d]).join('、周')}`, tasks: [], weeks: [weekNo], dayReplan: { pins: result.pins, days } },
+    }));
+    markDraft(key, slots);
+    const targetBlocks = result.plan.blocks.filter((b) => days.includes(b.dayOfWeek));
+    setMessages((current) => [...current, {
+      role: 'lbao',
+      text: `把周${days.map((d) => WD[d]).join('、周')}重新排了一版（还没动手），其余 ${7 - days.length} 天保持原样：`,
+      planPoints: [
+        ...targetBlocks.filter((b) => b.kind !== 'blank').slice(0, 5)
+          .map((b) => `周${b.dayOfWeek} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)} ${b.title}`),
+        result.pins.length > 0 ? `其余天被动过的 ${result.pins.length} 个块会钉回原位` : '其余天没有被波及',
+      ],
+      goalAsk: key,
+    }]);
+    setLoading(false);
+  };
+
   const runReschedule = async (slots: IntentSlots, today: string) => {
+    // 批 3 歧义路由：点名了天、没点名块 → 整日重排；有块名 → 老的单块挪动
+    if ((slots.replanDays?.length ?? 0) > 0 && !slots.targetHint) {
+      await runDayReplan(slots, today);
+      return;
+    }
     const q = (slots.targetHint || slots.title || '').trim();
     if (!q) {
       setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, ['target'])); setMissStreak(0);
@@ -862,6 +993,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几块，挪哪个？`,
         planPoints: targets.slice(0, 5).map((b) => `${b.title}（周${b.dayOfWeek} ${b.startMin}–${b.endMin}）`),
+        options: targets.slice(0, 5).map((b) => ({ label: b.title, value: b.title, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` })),
       }]);
       setLoading(false);
       return;
@@ -949,6 +1081,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，替换哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -1071,12 +1204,19 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           weeks,
         } }));
         markDraft(key, slots); // D3：草稿卡挂 topic{draft}
+        // 批次 3（6.3）：带依据的推荐 —— 类目命中有权威口径时补一行（≤1 行），
+        // 个性化输入 = 本周已排量（previewPlan 统计）+ 用户自报运动频率。
+        const cat = classifyGoal(slots.title);
+        const evidence = evidenceLine(cat, {
+          ...(previewPlan ? { weekMinutes: categoryMinutesOfWeek(previewPlan, cat) } : {}),
+          ...(loadBasicInfo().exercisePerWeek != null ? { exercisePerWeek: loadBasicInfo().exercisePerWeek } : {}),
+        });
         setMessages((current) => [...current, {
           role: 'lbao',
           text: verdict.kind === 'ok'
             ? `「${slots.title}」我排了一版草稿（还没写进日程）：`
             : `「${slots.title}」排得下，但会紧一点。草稿在这（还没写进日程）：`,
-          planPoints: lines,
+          planPoints: [...lines, ...(evidence ? [evidence] : [])],
           goalAsk: key,
           goWeek: true,
         }]);
@@ -1106,11 +1246,11 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           : `「${slots.title}」我排不进去：`,
         planPoints: [
           ...lines,
-          ...(options.length > 0
-            ? ['好在有几条**真排得上**的路（回编号就行，如「1」）：'
-              + options.map((o, i) => `${i + 1}. ${o.label}`).join('；')]
-            : []),
+          ...(options.length >= 3 ? [`给你 ${options.length} 条**真排得上**的路（点选或回编号都行）：`]
+            : options.length > 0 ? [`可选的路有限（${options.length} 条，都是干跑过的）：`]
+              : []),
         ],
+        ...(options.length > 0 ? { options: replanOptionButtons(options) } : {}),
         goWeek: true,
       }]);
     } catch {
@@ -1245,10 +1385,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       // ask_slot(when) 时，用户这句话里的槽位（本地规则解析 + LLM patch）必须
       // 先并进现有槽位；目标槽位已经补上就不再重复问（真机实录：答了
       // 「下周一开始；一共10小时」仍被反问 when = 答非所问）。
-      const local = parseIntentSlots(ctx.q, ctx.today);
-      const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
+      const local = parseIntentSlots(ctx.q, ctx.today, whenOpts);
+      const withLocal = mergeLlmPrimary(t.slots, local, ctx.today, whenOpts);
       const llmPatch = mapUnderstandPatch(args.patch);
-      const merged0 = mergeLlmPrimary(withLocal, llmPatch, ctx.today);
+      const merged0 = mergeLlmPrimary(withLocal, llmPatch, ctx.today, whenOpts);
       const merged: IntentSlots = { ...merged0, intent: t.intent };
       merged.missing = missingSlots(merged);
       if (!merged.missing.includes(slot)) {
@@ -1263,6 +1403,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '记下了 —— 还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;
@@ -1274,6 +1415,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: '好，那我还得问一句：',
         planPoints: numberedQuestions(questionsForSlots(slots, [slot])),
+        options: quickOptionsFor(slot, slots, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
       }]);
       setLoading(false);
     },
@@ -1295,6 +1437,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '没对上唯一一个，候选是这些：',
           planPoints: cands.map((o) => `${o.origin === 'user' ? '待办' : '日程'}：${o.title}（${o.hint}）`),
+          options: cands.slice(0, 5).map((o) => ({ label: o.title, value: o.title, hint: o.hint })),
         }]);
         setLoading(false);
         return;
@@ -1357,7 +1500,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       // 确定性规则：**回答里说不出新目标名**（没有 title）且不是明确的动作词，
       // 就按原意图续答 —— 用户在答题，不是在开新话题。
       if (t && t.phase === 'collect' && intent !== t.intent) {
-        const fresh = parseIntentSlots(ctx.q, ctx.today);
+        const fresh = parseIntentSlots(ctx.q, ctx.today, whenOpts);
         const looksLikeAction = /\b(取消|替换|改时间|挪|推迟|提前)\b/.test(ctx.q);
         if (!fresh.title && !looksLikeAction) {
           intent = t.intent;
@@ -1370,9 +1513,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         // 强化计划 D（2026-10-02）：**双层并入** —— LLM patch 有时丢槽位
         // （真机实录：scene=intent 重试只带回 when、丢了 totalHours），先把
         // 回答的**本地规则解析**并进基线，再让 LLM patch 作主覆盖。
-        const local = parseIntentSlots(ctx.q, ctx.today);
-        const withLocal = mergeLlmPrimary(t.slots, local, ctx.today);
-        const merged = mergeLlmPrimary(withLocal, patch, ctx.today);
+        const local = parseIntentSlots(ctx.q, ctx.today, whenOpts);
+        const withLocal = mergeLlmPrimary(t.slots, local, ctx.today, whenOpts);
+        const merged = mergeLlmPrimary(withLocal, patch, ctx.today, whenOpts);
         merged.intent = intent;
         merged.missing = missingSlots(merged);
         if (merged.missing.length === 0) {
@@ -1385,6 +1528,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;
@@ -1392,7 +1536,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 「把 X 替换掉」隐含「用刚才想排的事替换」（B① 议题续用）：
       // 替换诉求没带新事的投入信息、而刚才有一件没排成的 → 用它的槽位当新事
-      let merged = mergeLlmPrimary(parseIntentSlots(ctx.q, ctx.today), patch, ctx.today);
+      let merged = mergeLlmPrimary(parseIntentSlots(ctx.q, ctx.today, whenOpts), patch, ctx.today, whenOpts);
       merged.intent = intent;
       if (intent === 'replace' && t?.priorFailed
         && merged.durationMin == null && merged.totalHours == null && merged.perWeekCount == null) {
@@ -1588,6 +1732,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: hits.length === 0 ? `没找到「${q}」。候选是这些：` : '这几条还挑不出唯一一个，再说具体点：',
         planPoints: list,
+        options: (hits.length > 0 ? hits : clarifyPicking.candidates).slice(0, 5)
+          .map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -1617,6 +1763,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             role: 'lbao',
             text: '还差一点：',
             planPoints: numberedQuestions(questionsForSlots(merged.slots, nextAsked)),
+            options: quickOptionsFor(nextAsked[0], merged.slots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
           }]);
           setLoading(false);
           return;
@@ -1629,7 +1776,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
       // 状态机出口④前哨：完全无关 —— 先给**新动作句**一次打断机会（以新句为准）。
       // 打断是有声的：回应里说明旧追问作废，不让用户猜自己上一轮的回答去哪了。
-      const interrupt = await parseGoalIntent(q, { today, llmJudge, history });
+      const interrupt = await parseGoalIntent(q, { today, llmJudge, history, whenOpts });
       if (interrupt.action) {
         setTopic(null);
         setMessages((current) => [...current, {
@@ -1652,6 +1799,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: HOLD_ON_PREFIX,
           planPoints: numberedQuestions(questionsForSlots(clarify.slots, clarify.asked)),
+          options: quickOptionsFor(clarify.asked[0], clarify.slots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
         }]);
         setLoading(false);
         return;
@@ -1665,7 +1813,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     // runHold 永远到不了。放行 hold：when 槽位由 runHold 自己追问补齐。
     // S4 E2E 抓到同族缺口：add_deadline 也常无 title（「我要考驾照」——「驾照」
     // 不在目标词表），deadlineProposal 有「重要日子」缺省标题，同样放行。
-    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline')) {
+    if (outcome.action && (outcome.slots.title || outcome.slots.intent === 'hold' || outcome.slots.intent === 'add_deadline'
+      || (outcome.slots.replanDays?.length ?? 0) > 0)) {
       // D0 双模式：问答模式听到排程意图 → 出切换提示，**不静默改道**。
       // 「揣测用意直接排」是议题断层的来源；用户点「继续」才切排程模式并原句重发。
       if (activeMode === 'chat') {
@@ -1879,6 +2028,25 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                 )}
 
                 {/* 目标草稿卡：确认前不写任何状态 —— 执行权在用户手里 */}
+                {/* 批次 2（交互升级方案 5.1）：快捷选项按钮卡 —— 能按钮不打字。
+                    点击 = send(value)（value 为可解析原话，编号兜底双保险）；
+                    自由输入框永远在下方，「都不合适」的路径由它承接。 */}
+                {message.options && message.options.length > 0 && (
+                  <div className="flex flex-col gap-1.5 pl-1" data-testid="msg-options">
+                    {message.options.map((o, i) => (
+                      <button
+                        key={i}
+                        onClick={() => void send(o.value)}
+                        className="rounded-xl border border-ink/15 px-3 py-2 text-left text-xs text-ink transition-colors hover:border-brand/40 hover:bg-brand/5"
+                      >
+                        <span>{o.label}</span>
+                        {o.hint ? <span className="mt-0.5 block text-[11px] text-ink-faint">{o.hint}</span> : null}
+                      </button>
+                    ))}
+                    <span className="pl-1 text-[11px] text-ink-faint">都不合适？直接打字告诉我就行</span>
+                  </div>
+                )}
+
                 {message.goalAsk != null && pending[message.goalAsk] && (
                   <div className="flex gap-2 pl-1">
                     <button onClick={() => confirmGoal(message.goalAsk!)} className="button-primary px-3 py-2 text-xs">

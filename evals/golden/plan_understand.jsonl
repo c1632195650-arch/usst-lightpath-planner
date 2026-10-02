@@ -98,3 +98,8 @@
 {"id":"d38","scene":"dialog","q":"第一个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"自习","targetHint":"自习"},"asked":[],"pick_kind":"cancel","candidates":[]},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
 {"id":"d39","scene":"dialog","q":"对，就按你说的排","state":{"topic":null,"missStreak":0},"expect":{"act":"ask_slot","slot":"title"},"negative":true}
 {"id":"d40","scene":"dialog","q":"嗯…让我再想想","state":{"topic":{"phase":"draft","intent":"create","slots":{"title":"出去玩","when_text":"明天晚上","durationMin":60},"asked":[],"draft_key":3},"missStreak":0},"expect":{"act":"ask_slot","slot":"when"},"negative":true}
+{"id":"i31","scene":"intent","q":"第10周周五交开题报告","expect":{"action":true,"intent":"create","slots":{"title":"开题报告","when_text":"第10周周五","weekNo":10,"weekday":5}}}
+{"id":"i32","scene":"intent","q":"第3周周一交实验报告","expect":{"action":true,"intent":"create","slots":{"title":"实验报告","when_text":"第3周周一","weekNo":3,"weekday":1}}}
+{"id":"i33","scene":"intent","q":"把实验报告挪到第15周周四","expect":{"action":true,"intent":"reschedule","slots":{"targetHint":"实验报告","when_text":"第15周周四","weekNo":15,"weekday":4}}}
+{"id":"i34","scene":"intent","q":"论文答辩在下月底，帮我规划一下准备","expect":{"action":true,"intent":"create","slots":{"title":"论文","when_text":"下月底","relativeMonths":1}}}
+{"id":"i35","scene":"intent","q":"月底前完成毕设开题","expect":{"action":true,"intent":"create","slots":{"title":"毕设","when_text":"月底","relativeMonths":0}}}

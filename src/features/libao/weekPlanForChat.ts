@@ -37,10 +37,12 @@ import { planWeek } from '@/lib/planner/planWeek';
 import { planWeekV2 } from '@/lib/planner/index';
 import type { UserTask } from '@/lib/planner/templates';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
+import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localizedReplan';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
-import { topQuestions, type IntentSlots } from './libaoIntent';
+import { isSingleDayEvent, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
+import { classifyGoal, evidenceLine, type GoalCategory } from './taxonomy';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
 function calendarOf(schedule: Schedule) {
@@ -91,10 +93,80 @@ export async function planWeekWithTasks(
       weekNo,
       policy: phase.policy,
       scenarios: profile?.scenarios ?? null,
+      // 批 4.3（1A-③）：对话侧同样把完整画像喂进引擎（socialCap 链路）
+      persona: profile,
       tasks,
     }),
   );
   return result.plan;
+}
+
+/* ============================================================
+ * 二·五、单日重排（批 3，5A-②）：「只重排周X，其余天原样」
+ * ========================================================== */
+
+/**
+ * 非目标天保位（纯函数）：`changedDays` 之外的天 = 用户点名要保留的。
+ * next 相对 prev 在这些天**位移/消失**的块 → hard move 钉回 prev 的位置；
+ * next 在这些天**新增**的块不用 pin —— 融合层（localizedPlan）直接沿用 prev
+ * 的天，用户看不见它。目标天的块不 pin —— 那是重排的对象本身。
+ *
+ * source 用 'edit'（hard）：「其余天保持原样」是用户确认过的约束，下次重排也不许动。
+ */
+export function dayReplanPins(prev: WeekPlan, next: WeekPlan, changedDays: number[]): MoveRecord[] {
+  const want = new Set(changedDays);
+  const nextById = new Map(next.blocks.map((b) => [b.id, b]));
+  const pins: MoveRecord[] = [];
+  for (const b of prev.blocks) {
+    if (want.has(b.dayOfWeek)) continue;
+    const nb = nextById.get(b.id);
+    if (nb && nb.dayOfWeek === b.dayOfWeek && nb.startMin === b.startMin && nb.endMin === b.endMin) continue;
+    pins.push({
+      weekNo: next.weekNo,
+      blockId: b.id,
+      dayOfWeek: b.dayOfWeek,
+      startMin: b.startMin,
+      endMin: b.endMin,
+      ...(b.place ? { place: b.place } : {}),
+      ...(b.room ? { room: b.room } : {}),
+      source: 'edit',
+    });
+  }
+  return pins;
+}
+
+export interface DayReplanResult {
+  /** 融合后的计划：目标天用新排，其余天沿用上一版 */
+  plan: WeekPlan;
+  /** 落盘用：非目标天被引擎挪动的块 → hard pin 钉回原位 */
+  pins: MoveRecord[];
+  /** 目标天里引擎**真的改动**了的天（空 = 没什么可优化） */
+  changedDays: number[];
+}
+
+/**
+ * 「只重排某几天」的对话侧入口。引擎整周照算（必须看全局才知道目标天是紧是松），
+ * 排完用 R6.1 定点融合：目标天用新版、其余天保留上一版 —— 用户审稿成本从七天
+ * 降回一天。previousPlan 缺失时返回「整周新版 + 空 pins」的**降级结果**，调用方
+ * （执行层）必须拒绝它：没有上一版就兑现不了「其余天原样」的承诺。
+ */
+export async function replanDaysForChat(args: {
+  schedule: Schedule;
+  profile: PersonaProfile | null;
+  weekNo: number;
+  tasks: UserTask[];
+  days: number[];
+  previousPlan: WeekPlan | null;
+}): Promise<DayReplanResult | null> {
+  if (args.days.length === 0) return null;
+  const next = await planWeekWithTasks(args.schedule, args.profile, args.weekNo, args.tasks);
+  if (!next) return null;
+  const fused = localizedPlan(args.previousPlan, next, args.days);
+  const actualChanged = args.previousPlan
+    ? diffPlanDays(args.previousPlan, next).filter((d) => args.days.includes(d))
+    : args.days;
+  const pins = args.previousPlan ? dayReplanPins(args.previousPlan, next, args.days) : [];
+  return { plan: fused.plan, pins, changedDays: actualChanged };
 }
 
 /**
@@ -233,6 +305,20 @@ export function goalToTasks(
     nBlocks = 1;
   }
 
+  // 批 2（6C）：有截止目标的后程加长 —— 均匀取样下按窗口三分位给块长阶梯
+  // （60/90/120）：距截止越近块越长，呈现「冲刺」形态（探针实录：30h 备考
+  // 十周的均匀摊平和三天冲刺一个样，不像备考）。只在「给了总量 + 有截止 +
+  // 没显式给单次时长 + 块数 ≥3」时启用 —— 习惯目标和用户 explicit 的块长不动。
+  const pacingOn = slots.totalHours != null && slots.totalHours > 0
+    && slots.dateTo != null && slots.durationMin == null && nBlocks >= 3;
+  const blockLenFor = (dayIdx: number): number => {
+    if (!pacingOn) return blockMin;
+    const third = days.length / 3;
+    if (dayIdx < third) return 60;
+    if (dayIdx < third * 2) return 90;
+    return 120;
+  };
+
   // ④ 窗口内均匀取样 + 同一天去重（与 `expandDeadlines` 逐行同构）
   const picked = new Set<number>();
   for (let i = 0; i < nBlocks; i++) {
@@ -243,6 +329,13 @@ export function goalToTasks(
   // ⑤ 生成任务。id **只与「目标 + 周次 + 星期」有关，不含时间** ——
   //    语义键含时间会让引擎把同一块认成「删一个 + 新增一个」（见 `userPlanStore` 的 id 纪律）。
   const slug = slugOf(slots.title);
+  // 批次 1（交互升级方案 4.4）：用户点名的钟点收窄引擎放置窗 —— 零引擎侧改动，
+  // 仍走既有 `notBeforeMin`/`notAfterMin` 通道（D4 已为 window 接好）。clock 优先
+  // 于 window（「晚上6点到8点」不该被放宽回整个晚上）；单端点缺哪端就回退哪端
+  // 的 window 口径，再缺回默认（09:00 起）。**仍不给 `startMin` 硬锁定** ——
+  // 「软偏好、引擎可挪」的哲学不变，草稿卡会如实展示实际排到的时段。
+  const goalNotBefore = slots.clock?.startMin ?? slots.window?.fromMin ?? GOAL_EARLIEST_MIN;
+  const goalNotAfter = slots.clock?.endMin ?? slots.window?.toMin;
   for (const idx of [...picked].sort((a, b) => a - b)) {
     const iso = days[idx];
     const wk = currentWeekNo(schedule.termStart, iso);
@@ -259,16 +352,19 @@ export function goalToTasks(
       // ⚠️ 刻意**不给 `startMin`**：给了就成了 hard 锁定的固定块，引擎再也动不了它，
       //    而用户说的是「安排一下」，不是「钉死在这一刻」。时段偏好靠 `notBeforeMin` 表达。
       weeks: [wk],
-      durationMin: blockMin,
+      durationMin: blockLenFor(idx),
       ...(slots.place ? { place: slots.place } : {}),
       priority: slots.priorityHint,
       ...(slots.essential ? { essential: true } : {}),
-      notBeforeMin: slots.window?.fromMin ?? GOAL_EARLIEST_MIN,
-      // D4：窗口上界不再丢 —— 「晚上」= 23:00 前结束，引擎放置受 notAfterMin 约束
-      ...(slots.window ? { notAfterMin: slots.window.toMin } : {}),
+      notBeforeMin: goalNotBefore,
+      // D4：窗口上界不再丢 —— 「晚上」= 23:00 前结束，引擎放置受 notAfterMin 约束；
+      // 批次 1：clock 有 endMin 时优先（用户点名的钟点上界）
+      ...(goalNotAfter != null ? { notAfterMin: goalNotAfter } : {}),
       // D4：用户点名块豁免活动预算与每日上限 —— 「出去玩 1 小时」不再被静默挤掉
       budgetExempt: true,
-      note: noteForGoal(slots),
+      note: pacingOn
+        ? `${noteForGoal(slots)}｜临近截止的块已按 60/90/120 分钟阶梯加长`
+        : noteForGoal(slots),
     });
   }
   return out;
@@ -325,6 +421,9 @@ export interface BlockingBlockInfo {
   title: string;
   hint: string;
   blockId?: string;
+  /** 批次 2（交互升级方案 5.4）：与目标块时段窗的重叠分钟数 —— 反馈精简按它
+   *  排序取「最相关」的 top1-2，其余并入「另有 N 处时段被占」。 */
+  overlapMin?: number;
 }
 
 /** 问题归并键：`code` 优先。中文 `message` 会变（含动态数字），拿它当键会让 diff 失真。 */
@@ -428,6 +527,14 @@ export function checkGoalFeasibility(args: {
   if (!slots.place) {
     caveats.push('没给地点 —— 转场时间按同校区估算，等你说地点我再校准。');
   }
+  // 批次 1（交互升级方案 4.1）：钟点通道的口径说明进草稿卡 —— 歧义不许装作听懂，
+  // 矛盾改判（clock 赢）也要说出口，用户才有机会纠正。
+  if (slots.clock?.ambig) {
+    caveats.push(`「${slots.clock.text}」没说上下午 —— 我先按上午的钟点理解，不对的话告诉我。`);
+  }
+  if (slots.clock?.conflicted) {
+    caveats.push(`你给的钟点与「${slots.clock.conflicted}」不一致 —— 按你说的钟点排。`);
+  }
 
   // ── 关三：干跑对比（**按候选块真正落在的周**逐周跑）─────────
   // 🔴 这里曾只在「当前周」跑一遍 —— 而目标窗口往往在后面几周，
@@ -480,16 +587,20 @@ export function checkGoalFeasibility(args: {
     // 就是「挡路的」。LLM 协商话术只许引用这些事实，不许硬编码「①②③」。
     for (const b of before.blocks) {
       if (b.kind !== 'activity' && b.kind !== 'study') continue;
-      const hit = wkTasks.some((t) =>
+      const hit = wkTasks.find((t) =>
         (t.dayOfWeek == null || t.dayOfWeek === b.dayOfWeek)
         && (t.notBeforeMin ?? 0) < b.endMin && b.startMin < (t.notAfterMin ?? 24 * 60));
       if (!hit) continue;
+      // 批次 2：重叠分钟数 —— 反馈精简的「最相关」排序依据
+      const overlapMin = Math.max(0,
+        Math.min(hit.notAfterMin ?? 24 * 60, b.endMin) - Math.max(hit.notBeforeMin ?? 0, b.startMin));
       const monday = addDays(schedule.termStart, (w - 1) * 7);
       const md = addDays(monday, b.dayOfWeek - 1).slice(5).replace('-', '.');
       const info: BlockingBlockInfo = {
         title: b.title,
         hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}(${md}) ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
         blockId: b.id,
+        overlapMin,
       };
       if (!blockingAcc.some((x) => x.hint === info.hint && x.title === info.title)) blockingAcc.push(info);
     }
@@ -578,19 +689,49 @@ export function checkGoalFeasibility(args: {
 }
 
 /**
+ * 批次 2（交互升级方案 5.4）· 类型标签：冲突反馈每条带「卡在哪一类」的标签。
+ * 按语义关键词映射（issue 的中文 sample 本来就带这些词），不引入新数据依赖。
+ */
+export function tagLine(line: string): string {
+  const body = line.replace(/^·\s*/, '');
+  if (/放不下|装得下|挤掉|挤占|容量|目标量/.test(body)) return `· 📦 量放不下：${body}`;
+  if (/撞|重叠|已有「/.test(body)) return `· ⏰ 时间撞：${body}`;
+  if (/转场|步行|来不及/.test(body)) return `· 🚶 转场不够：${body}`;
+  if (/时段|窗口|晚上|下午|早上|中午/.test(body)) return `· 🪟 时段窗卡住：${body}`;
+  return line;
+}
+
+/**
  * 草稿卡的文案（**只陈述事实 + 给选项，不替用户拍板** —— core §4 的 L3/L4 边界）。
  *
- * 特别注意 `conflict` / `infeasible` 两支：它们输出的是**选项与后果**，
- * 不是「你应该……」。这是「懂分寸」在产品文案上的落点。
+ * 批次 2 反馈精简（交互升级方案 5.4）：
+ *   · 总行数 ≤6 —— 口径说明合并成一行；conflict/infeasible 不再平铺落点
+ *     （版面让给卡点与选项，落点在重排后的草稿卡里如实展示）；
+ *   · 挡路块按与目标块的重叠时长排序取 top2，其余并入「另有 N 处时段被占」；
+ *   · 每条卡点带类型标签（tagLine）。
  */
 export function describeVerdict(v: GoalVerdict): string[] {
   const out: string[] = [];
-  for (const c of v.caveats) out.push(`· ${c}`);
-  for (const p of v.placedAt) out.push(`· 排到：${p}`);
-  for (const r of v.reasons) out.push(`· ${r}`);
-  // D4（B③）：有挡路事实就**列事实** ——「周一(9.28) 17:55–18:55 已有操场跑步」。
-  // 协商话术基于引擎扫出的事实，不再让用户猜「到底什么挡路」。
-  for (const b of v.blockingBlocks ?? []) out.push(`· ${b.hint} 已有「${b.title}」`);
+  const blocked = v.kind === 'conflict' || v.kind === 'infeasible';
+
+  // 口径说明合并成一行（默认窗口/没地点/待定/钟点歧义 共用一条）
+  if (v.caveats.length > 0) out.push(`· ${v.caveats.slice(0, 3).join('；')}`);
+
+  // 落点：排上了才谈落点（ok/tight）；blocked 的版面让给卡点与选项
+  if (!blocked && v.placedAt.length > 0) {
+    for (const p of v.placedAt.slice(0, 2)) out.push(`· 排到：${p}`);
+    const rest = v.placedAt.length - 2;
+    if (rest > 0) out.push(`· 另有 ${rest} 块排在后面的周`);
+  }
+
+  // 理由：blocked 只说最相关的一条，其余进选项的 hint
+  for (const r of v.reasons.slice(0, blocked ? 1 : 2)) out.push(tagLine(`· ${r}`));
+
+  // 挡路事实：按重叠度取 top2 + 一行汇总
+  const blocks = [...(v.blockingBlocks ?? [])].sort((a, b) => (b.overlapMin ?? 0) - (a.overlapMin ?? 0));
+  for (const b of blocks.slice(0, 2)) out.push(`· ⏰ 时间撞：${b.hint} 已有「${b.title}」`);
+  const restBlocks = blocks.length - 2;
+  if (restBlocks > 0) out.push(`· 另有 ${restBlocks} 处时段被占`);
 
   if (v.kind === 'needs_clarification') {
     for (const q of v.questions) out.push(`· ${q}`);
@@ -613,6 +754,116 @@ export function describeVerdict(v: GoalVerdict): string[] {
     }
   }
   return out;
+}
+
+/**
+ * 批次 3（交互升级方案 6.2）· 本周类目分钟统计。
+ * 照 `summarizeWeekPlan` 的读侧范式：不改锁死的 types.ts、不给 TimeBlock 加字段
+ * —— 分类只是读侧视图（kind + title 关键词 → taxonomy）。
+ */
+export function categoryMinutesOfWeek(plan: WeekPlan, cat: GoalCategory): number {
+  let total = 0;
+  for (const b of plan.blocks) {
+    if (b.kind !== 'activity' && b.kind !== 'study') continue;
+    if (classifyGoal(b.title) === cat) total += b.endMin - b.startMin;
+  }
+  return total;
+}
+
+/* ============================================================
+ * 批次 2（交互升级方案 5.1-5.3）· 快捷选项（能按钮不打字）
+ * ============================================================
+ * 每个追问都配 2-4 个快捷项 + 永远保留自由输入（「其他」路径 = 输入框本体）。
+ * **value 必须是规则层解析得动的原话** —— 按钮点击 = send(value)，
+ * 走既有解析与编号兜底，双保险；这里用测试锁死「value 可解析」的互通性。
+ */
+export interface QuickOption {
+  /** 按钮上的人话 */
+  label: string;
+  /** 点击后作为用户消息发出的文本（必须可被 parseIntentSlots / parseOptionChoice 解析） */
+  value: string;
+  /** 次行小字（干跑事实 / 依据），可缺省 */
+  hint?: string;
+}
+
+/**
+ * 追问快捷项生成器（纯函数）。
+ * · when：按今天日期给「还没过去的」说法 —— 周日不推「这周六」；
+ * · effort：单日事件给单次时长档位，长期诉求给频率档位（口径见 5.3）；
+ * · place：高频校园点（value 带「在」以喂 extractPlace）。
+ * 批次 3 叠加类目/依据后在此扩 hint。
+ */
+export function quickOptionsFor(
+  slot: SlotKey | 'place',
+  slots: IntentSlots,
+  opts?: { today?: string; plan?: WeekPlan | null; exercisePerWeek?: number },
+): QuickOption[] {
+  switch (slot) {
+    case 'when': {
+      const out: QuickOption[] = [
+        { label: '今天晚上', value: '今天晚上' },
+        { label: '明天下午', value: '明天下午' },
+        { label: '明天晚上', value: '明天晚上' },
+      ];
+      // weekdayOf：0=周日。周六已过（周日）→ 推下周六
+      const dow = opts?.today ? weekdayOf(opts.today) : undefined;
+      out.push(dow != null && dow >= 1 && dow <= 6
+        ? { label: '这周六晚上', value: '这周六晚上' }
+        : { label: '下周六晚上', value: '下周六晚上' });
+      return out;
+    }
+    case 'effort': {
+      // 批次 3（6.3/6.4）：按钮卡次行小字 = 时长概念锚（tips 轮换）；
+      // 推荐档（第二项）的次行给**带来源的依据行**（健康库/方法库 + 本周已排量）。
+      const cat = classifyGoal(slots.title);
+      const tips = cat === 'generic' ? TAXONOMY_TIPS_FALLBACK : null;
+      const catTips = tips ?? TAXONOMY_TIPS(cat);
+      const evidence = evidenceLine(cat, {
+        ...(opts?.plan ? { weekMinutes: categoryMinutesOfWeek(opts.plan, cat) } : {}),
+        ...(opts?.exercisePerWeek != null ? { exercisePerWeek: opts.exercisePerWeek } : {}),
+      });
+      if (isSingleDayEvent(slots)) {
+        const items = [
+          { label: '45 分钟', value: '45分钟' },
+          { label: '60 分钟', value: '60分钟' },
+          { label: '90 分钟', value: '90分钟' },
+          { label: '2 小时', value: '2小时' },
+        ];
+        return items.map((it, i) => ({
+          ...it,
+          hint: i === 1 && evidence ? evidence : catTips[i % catTips.length],
+        }));
+      }
+      const items = [
+        { label: '每周 1-2 次', value: '每周2次' },
+        { label: '每周 3-4 次', value: '每周4次' },
+        { label: '每天 30 分钟', value: '每天都来，每次30分钟' },
+      ];
+      return items.map((it, i) => ({
+        ...it,
+        hint: i === 0 && evidence ? evidence : catTips[i % catTips.length],
+      }));
+    }
+    case 'place':
+      return [
+        { label: '图书馆', value: '在图书馆' },
+        { label: '操场', value: '在操场' },
+        { label: '体育馆', value: '在体育馆' },
+        { label: '空教室', value: '在空教室' },
+      ];
+    default:
+      return [];
+  }
+}
+
+import { TAXONOMY } from './taxonomy';
+const TAXONOMY_TIPS = (cat: GoalCategory): string[] => TAXONOMY[cat].tips;
+const TAXONOMY_TIPS_FALLBACK: string[] = ['说个大概时长就行，我按你的日历找空档'];
+
+/** blocked 编号方案 → 按钮卡。value 用「方案N」—— parseOptionChoice 确定性接住，
+ *  不经 LLM（强化计划 D 的兜底通道原样复用）。 */
+export function replanOptionButtons(options: ReadonlyArray<{ label: string }>): QuickOption[] {
+  return options.map((o, i) => ({ label: o.label, value: `方案${i + 1}`, hint: '引擎干跑过，真排得上' }));
 }
 
 /* ============================================================
@@ -696,7 +947,51 @@ export function proposeReplanOptions(args: {
     }
   }
 
-  return options.slice(0, 3);
+  // ⑤ 换空档（批次 3 · 6.5）：从明天起扫 14 天，把窗口收成单日干跑 ——
+  // 真排得上的前 2 天各出一条，label 直接用干跑落点（改到周X HH:MM–HH:MM）。
+  // **每个候选都过干跑闸**：排不上的日子一个都不许出现（不编「排好了」）。
+  if (slots.dateFrom) {
+    const moveOptions: ReplanOption[] = [];
+    for (let off = 1; off <= 14 && moveOptions.length < 2; off++) {
+      const day = addDays(slots.dateFrom, off);
+      // 「换个日子」= 放开星期钉（when.weekday/recurring），时段窗/钟点照旧收窄 ——
+      // 否则候选日永远撞同一根钉（探针实录：周一晚上被占，扫 14 天全是周一）。
+      const s: IntentSlots = { ...slots, when: undefined, dateFrom: day, dateTo: day, missing: [] };
+      if (!feasible(s)) continue;
+      const v = checkGoalFeasibility({
+        slots: { ...s, missing: [] }, schedule, profile, today,
+        ...(tasks?.length ? { tasks } : {}),
+      });
+      const at = v.placedAt[0] ?? '';
+      const dowCn = WEEKDAY_CN[isoToDayOfWeek(day) % 7];
+      moveOptions.push({
+        id: `move_to:${day}`,
+        label: `改到${dowCn}${at ? ` ${at.split(' ').slice(1).join(' ')}` : ''}`.trim(),
+        slots: s,
+      });
+    }
+    options.push(...moveOptions);
+  }
+
+  // ⑥ 拆分（批次 3 · 6.5）：单次减半 + 频率翻倍（纯总量诉求则只减单次 ——
+  // goalToTasks 会按更短的块长摊出更多块）。单次 <60 分钟没有拆的意义；
+  // 单日事件没法「分两天」；循环约定（每周一）随翻倍放开星期钉。
+  if (slots.durationMin != null && slots.durationMin >= 60 && !isSingleDayEvent(slots)) {
+    const half = Math.max(30, Math.floor(slots.durationMin / 2));
+    const s: IntentSlots = {
+      ...slots,
+      durationMin: half,
+      ...(slots.perWeekCount != null ? { perWeekCount: Math.min(14, slots.perWeekCount * 2) } : {}),
+      ...(slots.when?.recurring ? { when: undefined } : {}),
+      missing: [],
+    };
+    if (feasible(s)) {
+      const per = slots.perWeekCount != null ? `× 每次 ${half} 分钟` : '';
+      options.push({ id: 'split', label: `拆成两天排${per}`, slots: s });
+    }
+  }
+
+  return options.slice(0, 4);
 }
 
 /* ============================================================

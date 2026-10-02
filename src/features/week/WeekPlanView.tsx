@@ -90,7 +90,7 @@ import type { TaskDraft } from '@/features/feedback/planIntent';
 import type { CorrectionRule } from '@/lib/planner/corrections';
 // E 批 E4（2026-09-28）：块卡片的**渲染模型**（L0 减字 / 通勤徽章 / 来源与内情分层）。
 // 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
-import { blockChip, blockDetail } from '@/features/week/weekViewModel';
+import { blockChip, blockDetail, summarizeIssues } from '@/features/week/weekViewModel';
 import { DetailDrawer } from '@/components/ui/DetailDrawer';
 
 interface Props {
@@ -109,6 +109,9 @@ interface Props {
   lifeMode: string | null;
   /** H2：打开模式问询窗口（App 持有对话框状态）；缺省不显示入口 */
   onOpenModeSetup?: () => void;
+  /** 批 4.1（2A）：切上一周/下一周（±1）。不传 = 不渲染按钮（老调用点零改动）。
+   *  键盘 ←/→ 切周早已存在（App 全局 keydown），本字段只负责**可见性**。 */
+  onShiftWeek?: (d: number) => void;
 }
 
 const KIND_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -438,7 +441,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -732,6 +735,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     const d = weekdayOf(todayISO()); // 0 = 周日
     return (d === 0 ? 7 : d) as number;
   }, [isCurrentWeek]);
+
+  /** 批 6.1：列头具体日期 —— 学期第 N 周星期 d 的 ISO（再压成 M/D 展示） */
+  const dayISO = (day: number): string => addDays(schedule.termStart, (weekNo - 1) * 7 + (day - 1));
+  const dayShort = (day: number): string => dayISO(day).slice(5).replace('-', '/');
 
   /**
    * 实际负荷（按星期几）—— 喂给引擎的 `actualLoadByDow`（P2-T2.2）。
@@ -1288,6 +1295,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // R3：喂的是**派生后的课表**（已应用调课/停课），原始 `schedule` 不受影响
             schedule: effectiveSchedule, weekNo, policy: phase.policy,
             scenarios: persona?.scenarios ?? null,
+            // 批 4.3（1A-③）：完整画像进引擎 —— socialCap 与画像块级偏好的入口
+            persona,
             tasks,
           }),
           // 锁的两半都要传：
@@ -1463,7 +1472,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       {/* 阶段头：现在处于什么阶段、策略是什么、为什么 */}
       <div className="panel px-4 py-3.5 sm:px-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
+          <span className="flex items-center gap-1.5">
+            {onShiftWeek && (
+              <button
+                type="button"
+                data-testid="weekplan-prev-week"
+                aria-label="上一周"
+                onClick={() => onShiftWeek(-1)}
+                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                ‹
+              </button>
+            )}
+            <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
+            {onShiftWeek && (
+              <button
+                type="button"
+                data-testid="weekplan-next-week"
+                aria-label="下一周"
+                onClick={() => onShiftWeek(1)}
+                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                ›
+              </button>
+            )}
+          </span>
+          {onShiftWeek && <span className="text-[11px] text-ink-faint">键盘 ←/→ 也可切周</span>}
           <span className="text-[12px] text-ink-soft">
             每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
             留白 {Math.round(phase.policy.blankRatio * 100)}% ·
@@ -1721,6 +1755,23 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       )}
 
+      {/* 批 6.1（规范 §3.2 欠账）：引擎 issue 明细收进顶部聚合条，点开展开 ——
+          周网格默认屏上不再出现 issue 长句（明细仍可在本条内看全） */}
+      {(() => {
+        const s = summarizeIssues(plan.issues);
+        if (!s.headline) return null;
+        return (
+          <details data-testid="issue-summary-bar" className="panel px-4 py-2.5 text-[12px]">
+            <summary className={`cursor-pointer font-medium ${s.errorCount > 0 ? 'text-red-700' : 'text-ink-soft'}`}>
+              {s.headline}
+            </summary>
+            <ul className="mt-2 space-y-1 text-ink-soft">
+              {s.details.map((d, i) => <li key={i}>· {d}</li>)}
+            </ul>
+          </details>
+        );
+      })()}
+
       {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
           E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
           让「时间轴是主角、其他都是注脚」（docs/week-view-design.md §2.1）。
@@ -1778,7 +1829,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           return (
             <div
               key={day}
-              className="panel p-3"
+              className={`panel p-3 ${day === todayDow ? 'ring-2 ring-brand/40' : ''}`}
+              data-today={day === todayDow ? '1' : undefined}
               onDragLeave={(e) => {
                 // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
                 if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
@@ -1798,7 +1850,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
               }}
             >
               <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[13px] font-semibold text-ink">{name}</span>
+                <span className="text-[13px] font-semibold text-ink">
+                  {name}
+                  {/* 批 6.1：列头补具体日期 —— 「周X」对不上「第几号」，跨周核对全靠它 */}
+                  <span className="ml-1 text-[11px] font-normal text-ink-faint">{dayShort(day)}</span>
+                </span>
                 <span className="inline-flex items-center gap-2">
                   {study > 0 && <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>}
                   <SaturationBar

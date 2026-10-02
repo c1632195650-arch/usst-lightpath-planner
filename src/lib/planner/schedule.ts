@@ -47,6 +47,12 @@ export interface BuildWeekPlanInput {
   policy: PhasePolicy;
   /** 画像场景字段 —— 决定运动 / 夜宵等模块是否参与 */
   scenarios?: ScenarioFields | null;
+  /**
+   * 完整画像（批 4.3，1A-③）：引擎读它算 socialCap（SOC≥70 → 每天 2 次社交）
+   * 与块级偏好；此前 `BuildWeekPlanInput` 没有这个字段可传 → 画像两条通路静默失灵。
+   * 不传 = 旧行为（construct 里 `req.persona ?? null` 兜底）。
+   */
+  persona?: import('@/types').PersonaProfile | null;
   /** 用户自定义模块 */
   tasks?: UserTask[];
   /** 模块库，默认 DEFAULT_TEMPLATES */
@@ -97,6 +103,7 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     policy: input.policy,
     commits: [], // 旧入口没有提交项（P1 兼容层：走 tasks）
     scenarios: input.scenarios ?? null,
+    ...(input.persona != null ? { persona: input.persona } : {}),
     tasks: input.tasks ?? [],
     transfer: input.transfer,
     homeBase: input.homeBase ?? null,

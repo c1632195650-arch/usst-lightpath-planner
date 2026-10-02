@@ -233,11 +233,15 @@ test('投入：裸时长归单次，不归总量 —— 「出去玩一小时」
   assert.equal(extractEffort('备赛要花20小时').durationMin, undefined, '总量词在场不得同时落单次');
 });
 
-test('投入：中文数字要能一路走到「缺口清零」—— 别在追问环节掉链子', () => {
+test('投入：中文数字要能一路走到「缺口清零」—— 别在追问环节掉链子（批次1互斥申报）', () => {
   const s = parseIntentSlots('这周我要准备英语六级，每天两小时', TODAY);
-  assert.ok(!s.missing.includes('effort'), '时长已经说了，却仍把 effort 记成缺口');
+  // 旧断言 perWeekCount=7 且缺口清零，已随批次 1 互斥翻转并申报（交互升级方案 2026-10-02）：
+  // 「每天+时长单位」按方案是节奏描述不是频率承诺 —— durationMin=120 照旧收下，
+  // perWeekCount 不再产出；effort 是否还缺由 missingSlots 统一判定（本句是周窗不是单日，
+  // 单次时长不豁免 → 回到追问路径，比幻觉「每周 7 次」的假听懂诚实）。
   assert.equal(s.durationMin, 120);
-  assert.equal(s.perWeekCount, 7);
+  assert.equal(s.perWeekCount, undefined);
+  assert.ok(s.missing.includes('effort'), '周窗+单次时长不豁免 effort（诚实追问优于幻觉频率）');
 });
 
 test('频率：每周N次 / 每天；只写「每周」不算给了频率', () => {
@@ -608,12 +612,15 @@ test('S1 批量应答：分号一句答完两问，双槽齐清（CY 诉求的�
   assert.ok(r.slots.when, 'when 没被第 1 段补上');
 });
 
-test('S1 批量应答：「周五下午；每天两小时」—— when 认星期、effort 认节奏', () => {
+test('S1 批量应答：「周五下午；每天两小时」—— when 认星期、effort 认时长（批次1互斥翻转）', () => {
   const r = applyClarifyAnswers('周五下午；每天两小时', DOUBLE_SEED, DOUBLE_ASKED, TODAY);
   assert.equal(r.contributed, true);
   assert.deepEqual(r.slots.missing, []);
   assert.equal(r.slots.when?.weekday, 5, '第 1 段「周五下午」没被收进 when');
-  assert.equal(r.slots.perWeekCount, 7);
+  // 旧断言 perWeekCount=7 已随批次 1 互斥翻转并申报（交互升级方案 2026-10-02）：
+  // 「每天+时长单位」是节奏描述不是频率承诺，幻觉出「频率：每周 7 次」正是本轮要修的
+  // 真机问题 #2 —— durationMin=120 照旧，perWeekCount 不再产出。
+  assert.equal(r.slots.perWeekCount, undefined);
   assert.equal(r.slots.durationMin, 120);
 });
 
