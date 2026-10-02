@@ -41,7 +41,7 @@ import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localized
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
-import { topQuestions, type IntentSlots } from './libaoIntent';
+import { isSingleDayEvent, topQuestions, type IntentSlots, type SlotKey } from './libaoIntent';
 
 /** 学期阶段策略来自校历常量。按 `termStart` 反查比写死学年 key 更扛得住换学期。 */
 function calendarOf(schedule: Schedule) {
@@ -420,6 +420,9 @@ export interface BlockingBlockInfo {
   title: string;
   hint: string;
   blockId?: string;
+  /** 批次 2（交互升级方案 5.4）：与目标块时段窗的重叠分钟数 —— 反馈精简按它
+   *  排序取「最相关」的 top1-2，其余并入「另有 N 处时段被占」。 */
+  overlapMin?: number;
 }
 
 /** 问题归并键：`code` 优先。中文 `message` 会变（含动态数字），拿它当键会让 diff 失真。 */
@@ -583,16 +586,20 @@ export function checkGoalFeasibility(args: {
     // 就是「挡路的」。LLM 协商话术只许引用这些事实，不许硬编码「①②③」。
     for (const b of before.blocks) {
       if (b.kind !== 'activity' && b.kind !== 'study') continue;
-      const hit = wkTasks.some((t) =>
+      const hit = wkTasks.find((t) =>
         (t.dayOfWeek == null || t.dayOfWeek === b.dayOfWeek)
         && (t.notBeforeMin ?? 0) < b.endMin && b.startMin < (t.notAfterMin ?? 24 * 60));
       if (!hit) continue;
+      // 批次 2：重叠分钟数 —— 反馈精简的「最相关」排序依据
+      const overlapMin = Math.max(0,
+        Math.min(hit.notAfterMin ?? 24 * 60, b.endMin) - Math.max(hit.notBeforeMin ?? 0, b.startMin));
       const monday = addDays(schedule.termStart, (w - 1) * 7);
       const md = addDays(monday, b.dayOfWeek - 1).slice(5).replace('-', '.');
       const info: BlockingBlockInfo = {
         title: b.title,
         hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}(${md}) ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
         blockId: b.id,
+        overlapMin,
       };
       if (!blockingAcc.some((x) => x.hint === info.hint && x.title === info.title)) blockingAcc.push(info);
     }
@@ -681,19 +688,49 @@ export function checkGoalFeasibility(args: {
 }
 
 /**
+ * 批次 2（交互升级方案 5.4）· 类型标签：冲突反馈每条带「卡在哪一类」的标签。
+ * 按语义关键词映射（issue 的中文 sample 本来就带这些词），不引入新数据依赖。
+ */
+export function tagLine(line: string): string {
+  const body = line.replace(/^·\s*/, '');
+  if (/放不下|装得下|挤掉|挤占|容量|目标量/.test(body)) return `· 📦 量放不下：${body}`;
+  if (/撞|重叠|已有「/.test(body)) return `· ⏰ 时间撞：${body}`;
+  if (/转场|步行|来不及/.test(body)) return `· 🚶 转场不够：${body}`;
+  if (/时段|窗口|晚上|下午|早上|中午/.test(body)) return `· 🪟 时段窗卡住：${body}`;
+  return line;
+}
+
+/**
  * 草稿卡的文案（**只陈述事实 + 给选项，不替用户拍板** —— core §4 的 L3/L4 边界）。
  *
- * 特别注意 `conflict` / `infeasible` 两支：它们输出的是**选项与后果**，
- * 不是「你应该……」。这是「懂分寸」在产品文案上的落点。
+ * 批次 2 反馈精简（交互升级方案 5.4）：
+ *   · 总行数 ≤6 —— 口径说明合并成一行；conflict/infeasible 不再平铺落点
+ *     （版面让给卡点与选项，落点在重排后的草稿卡里如实展示）；
+ *   · 挡路块按与目标块的重叠时长排序取 top2，其余并入「另有 N 处时段被占」；
+ *   · 每条卡点带类型标签（tagLine）。
  */
 export function describeVerdict(v: GoalVerdict): string[] {
   const out: string[] = [];
-  for (const c of v.caveats) out.push(`· ${c}`);
-  for (const p of v.placedAt) out.push(`· 排到：${p}`);
-  for (const r of v.reasons) out.push(`· ${r}`);
-  // D4（B③）：有挡路事实就**列事实** ——「周一(9.28) 17:55–18:55 已有操场跑步」。
-  // 协商话术基于引擎扫出的事实，不再让用户猜「到底什么挡路」。
-  for (const b of v.blockingBlocks ?? []) out.push(`· ${b.hint} 已有「${b.title}」`);
+  const blocked = v.kind === 'conflict' || v.kind === 'infeasible';
+
+  // 口径说明合并成一行（默认窗口/没地点/待定/钟点歧义 共用一条）
+  if (v.caveats.length > 0) out.push(`· ${v.caveats.slice(0, 3).join('；')}`);
+
+  // 落点：排上了才谈落点（ok/tight）；blocked 的版面让给卡点与选项
+  if (!blocked && v.placedAt.length > 0) {
+    for (const p of v.placedAt.slice(0, 2)) out.push(`· 排到：${p}`);
+    const rest = v.placedAt.length - 2;
+    if (rest > 0) out.push(`· 另有 ${rest} 块排在后面的周`);
+  }
+
+  // 理由：blocked 只说最相关的一条，其余进选项的 hint
+  for (const r of v.reasons.slice(0, blocked ? 1 : 2)) out.push(tagLine(`· ${r}`));
+
+  // 挡路事实：按重叠度取 top2 + 一行汇总
+  const blocks = [...(v.blockingBlocks ?? [])].sort((a, b) => (b.overlapMin ?? 0) - (a.overlapMin ?? 0));
+  for (const b of blocks.slice(0, 2)) out.push(`· ⏰ 时间撞：${b.hint} 已有「${b.title}」`);
+  const restBlocks = blocks.length - 2;
+  if (restBlocks > 0) out.push(`· 另有 ${restBlocks} 处时段被占`);
 
   if (v.kind === 'needs_clarification') {
     for (const q of v.questions) out.push(`· ${q}`);
@@ -716,6 +753,81 @@ export function describeVerdict(v: GoalVerdict): string[] {
     }
   }
   return out;
+}
+
+/* ============================================================
+ * 批次 2（交互升级方案 5.1-5.3）· 快捷选项（能按钮不打字）
+ * ============================================================
+ * 每个追问都配 2-4 个快捷项 + 永远保留自由输入（「其他」路径 = 输入框本体）。
+ * **value 必须是规则层解析得动的原话** —— 按钮点击 = send(value)，
+ * 走既有解析与编号兜底，双保险；这里用测试锁死「value 可解析」的互通性。
+ */
+export interface QuickOption {
+  /** 按钮上的人话 */
+  label: string;
+  /** 点击后作为用户消息发出的文本（必须可被 parseIntentSlots / parseOptionChoice 解析） */
+  value: string;
+  /** 次行小字（干跑事实 / 依据），可缺省 */
+  hint?: string;
+}
+
+/**
+ * 追问快捷项生成器（纯函数）。
+ * · when：按今天日期给「还没过去的」说法 —— 周日不推「这周六」；
+ * · effort：单日事件给单次时长档位，长期诉求给频率档位（口径见 5.3）；
+ * · place：高频校园点（value 带「在」以喂 extractPlace）。
+ * 批次 3 叠加类目/依据后在此扩 hint。
+ */
+export function quickOptionsFor(
+  slot: SlotKey | 'place',
+  slots: IntentSlots,
+  opts?: { today?: string },
+): QuickOption[] {
+  switch (slot) {
+    case 'when': {
+      const out: QuickOption[] = [
+        { label: '今天晚上', value: '今天晚上' },
+        { label: '明天下午', value: '明天下午' },
+        { label: '明天晚上', value: '明天晚上' },
+      ];
+      // weekdayOf：0=周日。周六已过（周日）→ 推下周六
+      const dow = opts?.today ? weekdayOf(opts.today) : undefined;
+      out.push(dow != null && dow >= 1 && dow <= 6
+        ? { label: '这周六晚上', value: '这周六晚上' }
+        : { label: '下周六晚上', value: '下周六晚上' });
+      return out;
+    }
+    case 'effort': {
+      if (isSingleDayEvent(slots)) {
+        return [
+          { label: '45 分钟', value: '45分钟' },
+          { label: '60 分钟', value: '60分钟' },
+          { label: '90 分钟', value: '90分钟' },
+          { label: '2 小时', value: '2小时' },
+        ];
+      }
+      return [
+        { label: '每周 1-2 次', value: '每周2次' },
+        { label: '每周 3-4 次', value: '每周4次' },
+        { label: '每天 30 分钟', value: '每天都来，每次30分钟' },
+      ];
+    }
+    case 'place':
+      return [
+        { label: '图书馆', value: '在图书馆' },
+        { label: '操场', value: '在操场' },
+        { label: '体育馆', value: '在体育馆' },
+        { label: '空教室', value: '在空教室' },
+      ];
+    default:
+      return [];
+  }
+}
+
+/** blocked 编号方案 → 按钮卡。value 用「方案N」—— parseOptionChoice 确定性接住，
+ *  不经 LLM（强化计划 D 的兜底通道原样复用）。 */
+export function replanOptionButtons(options: ReadonlyArray<{ label: string }>): QuickOption[] {
+  return options.map((o, i) => ({ label: o.label, value: `方案${i + 1}`, hint: '引擎干跑过，真排得上' }));
 }
 
 /* ============================================================

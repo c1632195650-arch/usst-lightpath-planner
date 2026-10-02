@@ -796,9 +796,9 @@ export function extractPlace(q: string): string | undefined {
   const s = q || '';
   // 「在」优先（批 1.1，金标 i15）：「两点到四点在图书馆自习」里「到」是时间
   // 连词，先试「在 X」再退「去/到/往」，避免吃进「四点在图书馆」这种碎片。
-  const m = /在\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(s);
+  const m = /在\s*([\u4e00-\u9fff]{1,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场|场|舍|房))/.exec(s);
   if (m) return m[1];
-  const m2 = /(?:去|到|往|前往)\s*([\u4e00-\u9fff]{2,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场))/.exec(s);
+  const m2 = /(?:去|到|往|前往)\s*([\u4e00-\u9fff]{1,14}?(?:楼|馆|厅|室|中心|食堂|苑|广场|场|舍|房))/.exec(s);
   return m2 ? m2[1] : undefined;
 }
 
@@ -1233,7 +1233,7 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
  * 「周四吃大餐」「明天体检 1 小时」vs「备赛 20 小时」「每周 3 次」是两类诉求。
  * ⚠️ `recurring`（每周三）不算单日 —— 循环约定没有「一共占多久」的天然上限。
  */
-function isSingleDayEvent(s: IntentSlots): boolean {
+export function isSingleDayEvent(s: IntentSlots): boolean {
   if (s.when?.recurring) return false;
   // 解析过日期（传了 today）：起止同一天 = 单日
   if (s.dateFrom && s.dateTo && s.dateFrom === s.dateTo) return true;

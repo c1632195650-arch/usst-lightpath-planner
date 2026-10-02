@@ -48,6 +48,8 @@ import {
   applyCancel,
   checkGoalFeasibility,
   describeVerdict,
+  quickOptionsFor,
+  replanOptionButtons,
   findCancelTargets,
   findMoveTargets,
   goalToTasks,
@@ -103,6 +105,9 @@ interface Msg {
   applied?: MemoryFact[];
   /** 后端 messages 自增 id —— 只在从 history 恢复的行上存在（跨会话恢复 E8 的去重依据） */
   mid?: number;
+  /** 批次 2（交互升级方案 5.1）：快捷选项按钮卡 —— 能按钮不打字，自由输入框永远在下方。
+   *  点击 = send(value)：value 是规则层解析得动的原话（编号兜底 parseOptionChoice 双保险）。 */
+  options?: Array<{ label: string; value: string; hint?: string }>;
 }
 
 /** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
@@ -846,6 +851,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，你要取消哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -985,6 +991,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几块，挪哪个？`,
         planPoints: targets.slice(0, 5).map((b) => `${b.title}（周${b.dayOfWeek} ${b.startMin}–${b.endMin}）`),
+        options: targets.slice(0, 5).map((b) => ({ label: b.title, value: b.title, hint: `周${b.dayOfWeek} ${b.startMin}–${b.endMin}` })),
       }]);
       setLoading(false);
       return;
@@ -1072,6 +1079,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `「${q}」对上好几件事，替换哪个？`,
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
+        options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -1229,11 +1237,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           : `「${slots.title}」我排不进去：`,
         planPoints: [
           ...lines,
-          ...(options.length > 0
-            ? ['好在有几条**真排得上**的路（回编号就行，如「1」）：'
-              + options.map((o, i) => `${i + 1}. ${o.label}`).join('；')]
-            : []),
+          ...(options.length > 0 ? [`给你 ${options.length} 条**真排得上**的路（点选或回编号都行）：`] : []),
         ],
+        ...(options.length > 0 ? { options: replanOptionButtons(options) } : {}),
         goWeek: true,
       }]);
     } catch {
@@ -1386,6 +1392,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '记下了 —— 还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today }),
         }]);
         setLoading(false);
         return;
@@ -1397,6 +1404,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: '好，那我还得问一句：',
         planPoints: numberedQuestions(questionsForSlots(slots, [slot])),
+        options: quickOptionsFor(slot, slots, { today: ctx.today }),
       }]);
       setLoading(false);
     },
@@ -1418,6 +1426,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '没对上唯一一个，候选是这些：',
           planPoints: cands.map((o) => `${o.origin === 'user' ? '待办' : '日程'}：${o.title}（${o.hint}）`),
+          options: cands.slice(0, 5).map((o) => ({ label: o.title, value: o.title, hint: o.hint })),
         }]);
         setLoading(false);
         return;
@@ -1508,6 +1517,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '还差一点：',
           planPoints: numberedQuestions(questionsForSlots(merged, pairs.map((p) => p.slot))),
+          options: quickOptionsFor(pairs[0].slot, merged, { today: ctx.today }),
         }]);
         setLoading(false);
         return;
@@ -1711,6 +1721,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: hits.length === 0 ? `没找到「${q}」。候选是这些：` : '这几条还挑不出唯一一个，再说具体点：',
         planPoints: list,
+        options: (hits.length > 0 ? hits : clarifyPicking.candidates).slice(0, 5)
+          .map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
       setLoading(false);
       return;
@@ -1740,6 +1752,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             role: 'lbao',
             text: '还差一点：',
             planPoints: numberedQuestions(questionsForSlots(merged.slots, nextAsked)),
+            options: quickOptionsFor(nextAsked[0], merged.slots, { today }),
           }]);
           setLoading(false);
           return;
@@ -1775,6 +1788,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: HOLD_ON_PREFIX,
           planPoints: numberedQuestions(questionsForSlots(clarify.slots, clarify.asked)),
+          options: quickOptionsFor(clarify.asked[0], clarify.slots, { today }),
         }]);
         setLoading(false);
         return;
@@ -2003,6 +2017,25 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                 )}
 
                 {/* 目标草稿卡：确认前不写任何状态 —— 执行权在用户手里 */}
+                {/* 批次 2（交互升级方案 5.1）：快捷选项按钮卡 —— 能按钮不打字。
+                    点击 = send(value)（value 为可解析原话，编号兜底双保险）；
+                    自由输入框永远在下方，「都不合适」的路径由它承接。 */}
+                {message.options && message.options.length > 0 && (
+                  <div className="flex flex-col gap-1.5 pl-1" data-testid="msg-options">
+                    {message.options.map((o, i) => (
+                      <button
+                        key={i}
+                        onClick={() => void send(o.value)}
+                        className="rounded-xl border border-ink/15 px-3 py-2 text-left text-xs text-ink transition-colors hover:border-brand/40 hover:bg-brand/5"
+                      >
+                        <span>{o.label}</span>
+                        {o.hint ? <span className="mt-0.5 block text-[11px] text-ink-faint">{o.hint}</span> : null}
+                      </button>
+                    ))}
+                    <span className="pl-1 text-[11px] text-ink-faint">都不合适？直接打字告诉我就行</span>
+                  </div>
+                )}
+
                 {message.goalAsk != null && pending[message.goalAsk] && (
                   <div className="flex gap-2 pl-1">
                     <button onClick={() => confirmGoal(message.goalAsk!)} className="button-primary px-3 py-2 text-xs">
