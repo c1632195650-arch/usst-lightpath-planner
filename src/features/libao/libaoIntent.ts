@@ -1831,7 +1831,17 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
         || w.relativeMonths != null || w.month != null || w.day != null || w.weekNo != null || w.kind === 'exact');
     const patchIsBareWindow = !structured(pw) && pw.kind === 'window' && !!pw.text;
     const ruleHasStructure = structured(out.when);
-    if (!(patchIsBareWindow && ruleHasStructure)) {
+    // P0-1（白天批 2026-10-02）· 周锚保留守卫：规则层已把「第N周周X」解析成
+    // weekNo 锚（exact），LLM patch 却只给了**相对猜测**（relativeWeeks/relativeDays，
+    // 无 weekNo/月日）——真机实录：LLM 把「第10周周五」幻觉成 relativeWeeks=10
+    // （→ 12-11，错 5 周）或 relativeWeeks=0（→ 当天），整体覆盖规则层正解。
+    // 周锚是更精确的口径：只有 patch 给出**更具体的日历日期**（month/day/weekNo）
+    // 才允许覆盖；相对猜测一律让位。
+    const patchHasCalendarDate = pw.month != null || pw.day != null || pw.weekNo != null;
+    const ruleWeekAnchored = out.when?.weekNo != null && out.when.kind === 'exact';
+    const patchIsRelativeGuess = !patchHasCalendarDate
+      && (pw.relativeWeeks != null || pw.relativeDays != null || pw.kind === 'relative');
+    if (!(patchIsBareWindow && ruleHasStructure) && !(patchIsRelativeGuess && ruleWeekAnchored)) {
       out.when = pw;
       if (today) {
         const r = resolveWhen(pw, today, whenOpts);

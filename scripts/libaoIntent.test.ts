@@ -846,3 +846,34 @@ test('协商编号：blocked 态的「1 / ① / 方案2 / 第三个」必须接�
   assert.equal(parseOptionChoice('四六级什么时候报名', 3), null);
   assert.equal(parseOptionChoice('帮我排个每周三次每次一小时的实验报告', 3), null);
 });
+
+test('P0-1 周锚保留守卫：LLM 相对猜测不得覆盖规则层的 weekNo 正解', () => {
+  // 反向验证锚：删 mergeLlmPrimary 的 patchIsRelativeGuess 守卫 → 本用例红。
+  // 真机实录（2026-10-02 探针）：「第10周周五」规则层解析出 weekNo=10（exact），
+  // LLM patch 幻觉成 relativeWeeks=10 → 晚 5 周；另一次 relativeWeeks=0 → 当天。
+  const opts = { termStart: '2026-09-07' };
+  const rule = parseIntentSlots('第10周周五要交开题报告', '2026-10-02', opts);
+  assert.equal(rule.when?.weekNo, 10, '夹具：规则层应解析出 weekNo=10');
+  assert.equal(rule.dateFrom, '2026-11-13', '夹具：termStart 09-07 下第10周周五 = 11-13');
+
+  // LLM 幻觉 A：relativeWeeks=10（把「第10周」理解成「10 周后」）
+  const mergedA = mergeLlmPrimary(rule, {
+    title: '开题报告',
+    when: { text: '第10周周五', kind: 'relative', relativeWeeks: 10, weekday: 5 },
+  } as never, '2026-10-02', opts);
+  assert.equal(mergedA.dateFrom, '2026-11-13', '相对猜测不得覆盖周锚（A）');
+
+  // LLM 幻觉 B：relativeWeeks=0（「就是这周五」）
+  const mergedB = mergeLlmPrimary(rule, {
+    title: '开题报告',
+    when: { text: '第10周周五', kind: 'relative', relativeWeeks: 0, weekday: 5 },
+  } as never, '2026-10-02', opts);
+  assert.equal(mergedB.dateFrom, '2026-11-13', '相对猜测不得覆盖周锚（B）');
+
+  // 更具体的日历日期仍然赢（守卫不许挡真信息）：LLM 给了 month/day
+  const mergedC = mergeLlmPrimary(rule, {
+    title: '开题报告',
+    when: { text: '11月6日', kind: 'exact', month: 11, day: 6 },
+  } as never, '2026-10-02', opts);
+  assert.equal(mergedC.dateFrom, '2026-11-06', 'month/day 日历日期应覆盖周锚（更具体者赢）');
+});
