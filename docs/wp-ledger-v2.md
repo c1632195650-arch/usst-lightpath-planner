@@ -424,3 +424,27 @@
   4. 周计划切周按钮：❌ 周计划子页无可见 ‹ ›（课表子页有，键盘 ←/→ App 级存在）——2A 未做。
   5. 画像页解释面板：❌ 未实现（仍是笼统句）——7A 未做。
 - **白天批次队列（CY 2026-10-02 拍板，RAY 退出后由 CY/MOSS 推进，跨人契约约束解除）**：previousCommits 语义（1A-②）、sleepMin 进引擎（1C）、4B 视图切换、8A 首启导入步、6.3 页面按钮（待 CY 澄清具体所指）、§3 截图指认（CY 亲自认领）。
+
+## §DAY 白天批次 · 白天队列 + 走查缺口（2026-10-02，任务书《白天批次任务书-交zcode-2026-10-02》，zcode 独立执行）
+
+> 基线 `integration-full @ c0d2a2f`（CY 验收登记）。夜间批（beta-v2 交互升级批次 0-3 / 6A 解析修复 / 2A / 7A / 8B / 5A 单日重排 / persona 透传，`50ca123..a202d50`）经 merge `并` 入本线；以下为本批增量。
+
+| 项 | commit | 内容 |
+|---|---|---|
+| 并入 | merge | 夜间批并入（冲突仅 App.tsx 8B 横幅 × hash 路由，取横幅本体适配 goTab） |
+| 引擎回归修复 | 822…→ 见 fix(planner) | **用户点名块预放（construct 6.2c）**：Ray 餐段内联 digest 把 300min 值班块挤到静默丢弃（taxonomy 扩容测试实录）→ budgetExempt 软块改在三餐前落位；golden 语料无用户任务 → 零漂移；反向验证（删预放恰红 → sha256 一致还原） |
+| 横幅锁 | fix(test) | 8B 跳转锁适配本壳 goTab（意图不变，申报） |
+| P1-1 | `fa15d29` | actualLoadByDow 进 ConstructCtx（planWeek 空 ctx 断链）+ commits/previousCommits 双传（WeekPlanView assignments→Commit 映射 + 快照 ref 同拍）+ roll.actual 超长钳 7（T2.2 边界）；测试 p11-plumbing 2 条（①降档+未命中天不变 ②改期冻结+真挪动），反向验证=删映射恰红 |
+| P1-2 | `e8e6cb5` | 就寝进引擎——**同一真源**取舍：不新增 sleepMin 契约字段，`dayWindowWithFallback`（作息设置 store 真源 → 问卷 sleepMin 兜底 → 双无 null）组装进既有 dayStart/dayEnd 正式契约；WeekPlanView + weekPlanForChat（梨宝同源防双轨）双接线；PARTIALS 睡眠条目结项；测试 p12 3 条（三分支/引擎跨线/缺省逐位一致），反向验证=删兜底恰红 |
+| P0-1 收口 | `64c3a65` | 周锚保留守卫：LLM 相对猜测（relativeWeeks 幻觉，探针实录 12-11/当天两形态）不得覆盖规则层 weekNo 正解；month/day 更具体者仍赢；探针脚本修正（补 whenOpts，此前 期中/期末/weekNo 误报系探针陈旧）；测试+反向验证恰红 |
+| P0-2 | `8437cf8` | crossIntentEscape 纯函数（意图族三分跨族才逃逸 + 反回声守卫）+ send 接线（弃旧议题按新意图重开）+ 退出词扩全相位；测试 +3 |
+| P1-3 | `f74296e` | 3B 删 MealPlaceSetting（任务书前提修正：AdjustDrawer 传递性死代码，BLOCKERS 申报）+ 4B 日/周档位（dayFocus 列过滤 + ‹ › 切天；wp7 E5 类名锁三档化并申报） |
+| 徽章回归修正 | `1209f5f` | **sched-badge 全相位**：E 批 schedMode 三投影后徽章条件未跟上 → draft/blocked 徽章整体消失（D3 回归，A6 实测）→ 条件改 `!== 'idle'`；源码锁入 d-batch |
+| E2E 按新动线 | `1209f5f` | e2e-journey **19/0**（⑫/V2-2 重写：D0 提示卡处理 + 挑块 msg-options 按钮卡 + 循环应答；⑫ 断言收紧去假通过）；e2e-sched-session **77/0**（引导同步 journey；say() 正则补草稿/blocked 两态占位符） |
+| 走查复跑 | `2ac5a18` | `_/wt_day.mjs`（DoD 五场景硬断言版）**10/0**：① 第10周周五=**11-06** 硬断言（termStart 08-31 用户课表口径，任务书期望实测确认；09-07 权威校历口径 11-13 两说并存，换算以用户课表为准）② 天级重排 ③ perWeek=7 幻觉绝迹+学期语义 ④ 切周按钮+周次变化 ⑤ 画像解释面板 |
+
+**门禁汇总**：tsc 0 ｜ engine 619/0 ｜ ui 415/0 ｜ p0-check 26 ✓ ｜ golden 5/5（引擎套件内，全绿未动）｜ 风格 8/8 ｜ test:libao 内容 **45/45** + 路由 40/45（≥40 达标，报告 docs/test-report-libao.md）｜ journey 19/0 ｜ sched-session 77/0 ｜ 走查 10/0。
+
+**变异体反向验证**（红线 5）：construct 预放 / P1-1 映射 / P1-2 兜底 / P0-1 周锚守卫 / 徽章条件 五处，全部「删实现→恰红→sha256 一致还原→回绿」。
+
+**BLOCKERS/留痕**：①「6.3 页面按钮」编号无法定位，若指 2A 已含于 P1-3，待 CY 确认；② 3B 前提修正（AdjustDrawer 传递性死代码）已申报；③ weekNo 双口径（08-31 MOCK vs 09-07 教务）裁决注记——机制正确、以用户课表为准；④ 「频率语义→持续到什么时候」追问链仍未接线（夜间批遗留，登记后续批次）。
