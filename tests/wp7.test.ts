@@ -70,7 +70,10 @@ test('WP7·E5 源码: 网格类名绑定 editMode（浏览 7 列一行 / 编辑�
   // 反向：把网格类名写死回旧版 → 本用例红
   const src = SRC();
   assert.match(src, /editMode\s*\?\s*'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'\s*:\s*'overflow-x-auto'/);
-  assert.match(src, /editMode \? 'contents' : 'grid grid-cols-7 min-w-\[1120px\] gap-3'/);
+  // 2026-10-02 白天批申报（P1-3·4B）：内层网格新增日视图档位分支 ——
+  // dayFocus 时单列铺满，周视图类名原样保留。锁意图「浏览 7 列 / 编辑四档」不变，
+  // 只是把三档（编辑/日/周）的类名绑定一起锁住。
+  assert.match(src, /editMode\s*\?\s*'contents'\s*:\s*dayFocus\s*\?\s*'grid grid-cols-1 gap-3'\s*:\s*'grid grid-cols-7 min-w-\[1120px\] gap-3'/);
 });
 
 test('WP7·E5 源码: 面板区被 editMode 包裹（浏览态零渲染）', () => {

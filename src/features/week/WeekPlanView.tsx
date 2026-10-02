@@ -526,6 +526,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
   };
 
+  /** P1-3·4B（白天批 2026-10-02）：日/周视图档位。null = 周视图（默认，行为不变）；
+   *  1..7 = 只看那一天的纵向时间轴（复用同一条列渲染管线）。页内交互态，不持久化。 */
+  const [dayFocus, setDayFocus] = useState<DayOfWeek | null>(null);
+
   // V2-2：梨宝「这段时间别排」确认后广播的重排请求 —— 收到就手动触发一次重排
   useEffect(() => {
     const onReplan = () => setReplanToken((v) => v + 1);
@@ -1522,6 +1526,50 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             )}
           </span>
           {onShiftWeek && <span className="text-[11px] text-ink-faint">键盘 ←/→ 也可切周</span>}
+          {/* P1-3·4B：日/周视图档位 —— 默认周；日模式复用同一条列渲染管线 */}
+          <span className="ml-auto flex items-center gap-1" role="group" aria-label="视图档位">
+            <button
+              type="button"
+              data-testid="weekplan-view-week"
+              aria-pressed={dayFocus == null}
+              onClick={() => setDayFocus(null)}
+              className={`rounded-lg px-2.5 py-1 text-[12px] leading-none ring-1 transition-colors ${dayFocus == null ? 'bg-ink text-white ring-ink' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
+            >
+              周
+            </button>
+            <button
+              type="button"
+              data-testid="weekplan-view-day"
+              aria-pressed={dayFocus != null}
+              onClick={() => setDayFocus((v) => (v ?? todayDow ?? 1) as DayOfWeek)}
+              className={`rounded-lg px-2.5 py-1 text-[12px] leading-none ring-1 transition-colors ${dayFocus != null ? 'bg-ink text-white ring-ink' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
+            >
+              日
+            </button>
+            {dayFocus != null && (
+              <>
+                <button
+                  type="button"
+                  data-testid="weekplan-prev-day"
+                  aria-label="上一天"
+                  onClick={() => setDayFocus(((v) => ((v ?? 1) === 1 ? 7 : (v ?? 1) - 1)) as (v: DayOfWeek | null) => DayOfWeek)}
+                  className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                >
+                  ‹
+                </button>
+                <span className="text-[13px] font-medium text-ink">{DAY_LABELS[(dayFocus ?? 1) - 1]}</span>
+                <button
+                  type="button"
+                  data-testid="weekplan-next-day"
+                  aria-label="下一天"
+                  onClick={() => setDayFocus(((v) => ((v ?? 1) === 7 ? 1 : (v ?? 1) + 1)) as (v: DayOfWeek | null) => DayOfWeek)}
+                  className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                >
+                  ›
+                </button>
+              </>
+            )}
+          </span>
           <span className="text-[12px] text-ink-soft">
             每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
             留白 {Math.round(phase.policy.blankRatio * 100)}% ·
@@ -1810,10 +1858,16 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         <div
           data-testid="week-timeline"
           style={{ minHeight: 'calc(100vh - 280px)' }}
-          className={editMode ? 'contents' : 'grid grid-cols-7 min-w-[1120px] gap-3'}
+          className={editMode
+            ? 'contents'
+            : dayFocus
+              ? 'grid grid-cols-1 gap-3'
+              : 'grid grid-cols-7 min-w-[1120px] gap-3'}
         >
         {DAY_LABELS.map((name, idx) => {
           const day = idx + 1;
+          // P1-3·4B：日视图档位 —— 只渲染聚焦那天（同一条列渲染管线，零复制）
+          if (dayFocus != null && day !== dayFocus) return null;
           const baseBlocks = (shownPlan ?? plan).blocks
             .filter((b) => b.dayOfWeek === day)
             .sort((a, b) => a.startMin - b.startMin);

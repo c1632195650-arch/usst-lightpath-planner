@@ -5,7 +5,6 @@
  *   ① 加一件事（AddTaskPanel）—— 往这一周加自己的事（2026-09-28 从工具面板竖排栈并入）；
  *   ② 调课/停课（CourseOverrideEditor）—— 只本周 + 询问窗口，原始课表永不改；
  *   ③ 不可时段（SlotEditor）；
- *   ④ 指定食堂（MealPlaceSetting）；
  *   ⑤ 偏好校正清单（LearnedPreferencesPanel）。
  *
  * ── 开合为什么由父组件持有 ────────────────────────────────────
@@ -28,17 +27,15 @@ import type { UserTask } from '@/lib/planner/templates';
 import { AddTaskPanel } from './AddTaskPanel';
 import { CourseOverrideEditor } from './CourseOverrideEditor';
 import { SlotEditor } from './SlotEditor';
-import { MealPlaceSetting } from './MealPlaceSetting';
 import { LearnedPreferencesPanel } from '@/features/feedback/LearnedPreferencesPanel';
 import type { UserPlanLayer } from './userPlanStore';
 
-type DrawerTab = 'addtask' | 'overrides' | 'slots' | 'meals' | 'prefs';
+type DrawerTab = 'addtask' | 'overrides' | 'slots' | 'prefs';
 
 const TABS: Array<{ id: DrawerTab; label: string }> = [
   { id: 'addtask', label: '加一件事' },
   { id: 'overrides', label: '调课/停课' },
   { id: 'slots', label: '不可时段' },
-  { id: 'meals', label: '指定食堂' },
   { id: 'prefs', label: '偏好校正' },
 ];
 
@@ -149,9 +146,6 @@ export function AdjustDrawer({
               onChange={(next) => updateLayer((prev) => ({ ...prev, slots: next }))}
             />
           )}
-          {tab === 'meals' && (
-            <MealPlaceSetting value={layer.mealPlaces} onChange={handleMealPlacesChangeInternal} />
-          )}
           {tab === 'prefs' && (
             <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
           )}
@@ -160,7 +154,4 @@ export function AdjustDrawer({
     </div>
   );
 
-  function handleMealPlacesChangeInternal(next: import('./userPlanStore').MealPlaces) {
-    updateLayer((prev) => ({ ...prev, mealPlaces: next }));
-  }
 }
