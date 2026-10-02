@@ -451,4 +451,4 @@
 ### 5. 待 CY 决定
 
 - 方案 §5.3「频率语义→持续到什么时候」追问链**未接**（需扩 DialogTopic 追问槽位）——交付方已在 BLOCKERS 如实登记，建议并入后续批次。
-- beta-v2 累计 **45 commit 未推远端**；与 origin/dev 仍 unrelated histories（见 §G/BLOCKERS）。
+- beta-v2 本地领先 origin/beta-v2（`8503831`）**27 commit** 未推远端（本轮终验后）；与 origin/dev 仍 unrelated histories（见 §G/BLOCKERS）。
