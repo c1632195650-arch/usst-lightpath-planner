@@ -1,0 +1,11 @@
+# 光溯移动端 M0 服务端依赖（2026-10-03 本地 workbuddy venv 实测版本锁定）
+# 部署：python3 -m venv /opt/usst/venv && /opt/usst/venv/bin/pip install -r requirements.txt
+# fastembed 首次检索需要 bge-small-zh-v1.5 模型缓存 —— 部署时随模型缓存一并同步（见方案 §9.3 增补）
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+starlette==1.6.0
+jieba==0.42.1
+fastembed==0.8.0
+requests==2.34.2
+httpx==0.28.1

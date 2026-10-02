@@ -82,3 +82,8 @@ data/*.bak-*
 # Playwright 产物（视觉基线快照 e2e/**-snapshots 进仓库，运行产物不进）
 test-results/
 playwright-report/
+
+# 光溯移动端 M0：账号/同步库 —— 服务进程运行时自动生成（约束文档 §2.1 唯一白名单例外），不进仓库
+data/libao_account.db
+data/libao_account.db-wal
+data/libao_account.db-shm

@@ -60,6 +60,11 @@ import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand�
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 app.include_router(plan_dialog.router)
+# 光溯移动端 M0（2026-10-03）：账号/令牌 + 云同步/ICS/版本 —— 各一个 APIRouter，其余零改动
+from account import router as _account_router  # noqa: E402
+from sync import router as _sync_router  # noqa: E402
+app.include_router(_account_router)
+app.include_router(_sync_router)
 
 # CORS 白名单：默认本机前端；演示/局域网真机测试时用环境变量临时放开
 # 例：LIBAO_CORS_ORIGINS=http://localhost:5173,http://192.168.1.100:5173
