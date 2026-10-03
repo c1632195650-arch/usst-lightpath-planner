@@ -52,6 +52,7 @@
 | **校园资讯数据资产：520 主条目（515 篇可全文检索）+ 1873 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
 | 数据工程流水线（采集/抓全文/清洗/去重/建索引，五步可单独重跑） | `scripts/*.py` | ✅ 齐全 |
 | 测试/验收体系（engine 458+ / ui 319+ / golden 快照 / RV 源码锁 / E2E 77 断言 / 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与纪律） |
+| **移动端线（安卓 APK + 云同步）**：账号/同步/ICS 服务端、移动今日页（m.html）、Capacitor 壳与签名 APK、网页端云同步钩子（开关默认关） | `server/account.py`、`server/sync.py`、`m.html`、`src/features/mobile/`、`mobile/` | ✅ M1-M5 落地（2026-10-03），公网可用；**入口与操作手册见 `docs/mobile-line-alignment-2026-10-03.md`**，真机走查待做 |
 
 ### 数据资产说明（重要）
 
@@ -172,6 +173,7 @@ python server/app.py                          # 后端 → http://127.0.0.1:8000
 | ~~`docs/PRD.md`~~ / ~~`docs/roadmap.md`~~ / ~~`docs/product-vision.md`~~ / ~~`docs/project-intro.md`~~ | **已归档**，定位口径作废 | 仅查历史 |
 | `docs/features.md` / `docs/engine-plan.md` / `docs/prompts.md` | 模块契约 / 引擎计划 / 提示词库 | 写具体模块前 |
 | `docs/week-view-design.md` | 周视图设计规范（视觉重心 / L0-L1-L2 分层 / 动效与令牌约束，可验收） | 改周视图呈现层前必读（E 批起生效） |
+| `docs/mobile-line-alignment-2026-10-03.md` | **移动端线对齐入口**：决策基线 / 现状快照 / 操作手册 / 环境坑 / 下一步（上游：mobile-tech-options 调研、mobile-impl-plan 技术契约、overnight-guardrails 纪律、overnight-log 证据） | **碰移动端前必读** |
 
 ---
 
