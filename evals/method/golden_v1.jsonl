@@ -48,3 +48,79 @@
 {"id": "m-out-06", "category": "out_of_kb", "q": "快递在哪取", "expect": {"reject": true}}
 {"id": "m-out-07", "category": "out_of_kb", "q": "食堂哪个窗口好吃", "expect": {"reject": true}}
 {"id": "m-out-08", "category": "out_of_kb", "q": "附近有什么奶茶店好喝", "expect": {"reject": true}}
+{"id": "m-adv-11", "category": "adversarial", "kind": "pseudo_reject", "q": "有没有21天养成自律的速成习惯法", "expect": {"reject": true}}
+{"id": "m-adv-12", "category": "adversarial", "kind": "pseudo_reject", "q": "听说超级记忆术能让记忆力翻倍是真的吗", "expect": {"reject": true}}
+{"id": "m-adv-13", "category": "adversarial", "kind": "pseudo_reject", "q": "补充葡萄糖能不能提高意志力让人更专注", "expect": {"reject": true}}
+{"id": "m-adv-14", "category": "adversarial", "kind": "pseudo_reject", "q": "创造力训练法能快速提升我的创造力吗", "expect": {"reject": true}}
+{"id": "m-adv-15", "category": "adversarial", "kind": "pseudo_reject", "q": "是不是两餐之间最适合做重要决策", "expect": {"reject": true}}
+{"id": "m-normal-31", "category": "normal", "q": "养成一个习惯到底要多久才算成功", "expect": {"any_of": ["habit-formation-times", "habit-formation-loop"]}}
+{"id": "m-normal-32", "category": "normal", "q": "习惯是靠固定时间重复才会自动吗", "expect": {"any_of": ["habit-cue-routine-reward", "habit-context-stability"]}}
+{"id": "m-normal-33", "category": "normal", "q": "怎么把新习惯挂在已有习惯后面", "expect": {"any_of": ["habit-stacking-anchor", "cue-reliability-check"]}}
+{"id": "m-normal-34", "category": "normal", "q": "习惯漏了一天要不要从头开始", "expect": {"any_of": ["habit-missing-one-day", "habit-relapse-protocol"]}}
+{"id": "m-normal-35", "category": "normal", "q": "怎么减少开始一件事的阻力", "expect": {"any_of": ["friction-reduction", "micro-habit-start", "task-ambiguity-fog"]}}
+{"id": "m-normal-36", "category": "normal", "q": "每天要打卡记录习惯吗", "expect": {"any_of": ["habit-tracking-minimal", "habit-measure-consistency"]}}
+{"id": "m-normal-37", "category": "normal", "q": "怎么让进度看起来有盼头", "expect": {"any_of": ["habit-goal-gradient-progress", "goal-gradient-endowed-progress"]}}
+{"id": "m-normal-38", "category": "normal", "q": "习惯养成了为什么还是会忘做", "expect": {"any_of": ["habit-cue-based-vs-decision", "habit-strength-vs-effort", "habit-instigation-vs-execution"]}}
+{"id": "m-normal-39", "category": "normal", "q": "怎么把一个大目标拆成几步", "expect": {"any_of": ["goal-discrete-milestone", "goal-time-horizon", "goal-first-action-rehearsal"]}}
+{"id": "m-normal-40", "category": "normal", "q": "WOOP 是什么，怎么用", "expect": {"any_of": ["woop-mental-contrasting", "implementation-intentions", "implementation-cue-spec"]}}
+{"id": "m-normal-41", "category": "normal", "q": "总是只想象成功却不行动，怎么办", "expect": {"any_of": ["positive-visualisation-backfire"]}}
+{"id": "m-normal-42", "category": "normal", "q": "目标做完了动力就消失", "expect": {"any_of": ["habit-maintenance-after-success", "post-reward-reset"]}}
+{"id": "m-normal-43", "category": "normal", "q": "SMART 目标法好不好用", "expect": {"any_of": ["goal-smart-critique"]}}
+{"id": "m-normal-44", "category": "normal", "q": "该不该给自己设放弃条件", "expect": {"any_of": ["goal-kill-criteria", "review-and-adjust-goal"]}}
+{"id": "m-normal-45", "category": "normal", "q": "已经投入很多了还要继续吗", "expect": {"any_of": ["sunk-cost-ignore-past", "escalation-of-commitment", "goal-kill-criteria"]}}
+{"id": "m-normal-46", "category": "normal", "q": "目标总是半途而废怎么复盘", "expect": {"any_of": ["retrospective-review-cadence", "review-and-adjust-goal"]}}
+{"id": "m-normal-47", "category": "normal", "q": "完全没有动力怎么开始", "expect": {"any_of": ["activation-before-motivation", "two-minute-start", "procrastination-mood-repair"]}}
+{"id": "m-normal-48", "category": "normal", "q": "任务一多就不知道从哪下手", "expect": {"any_of": ["task-ambiguity-fog", "task-timeline-friction"]}}
+{"id": "m-normal-49", "category": "normal", "q": "怎么把想做的事和该做的事绑一起", "expect": {"any_of": ["temptation-bundling"]}}
+{"id": "m-normal-50", "category": "normal", "q": "能量低的日子还能坚持吗", "expect": {"any_of": ["minimum-action-floor", "energy-not-time-task-match"]}}
+{"id": "m-normal-51", "category": "normal", "q": "总是被手机打断怎么减少切换", "expect": {"any_of": ["attention-residue", "interrupt-batch-handling", "attention-single-task"]}}
+{"id": "m-normal-52", "category": "normal", "q": "拖延之后自责然后更不想做", "expect": {"any_of": ["self-forgiveness-cycle-break", "self-criticism-harms-execution"]}}
+{"id": "m-normal-53", "category": "normal", "q": "怎么用押金逼自己做事", "expect": {"any_of": ["commitment-device-contract", "commitment-contract-stake"]}}
+{"id": "m-normal-54", "category": "normal", "q": "重要决定应该什么时候做", "expect": {"any_of": ["working-memory-cognitive-load-dt", "decision-fatigue-contested"]}}
+{"id": "m-normal-55", "category": "normal", "q": "想克服干扰先做最难的吗", "expect": {"any_of": ["cold-calls-priming", "goal-subgoal-shaping"]}}
+{"id": "m-normal-56", "category": "normal", "q": "意志力是有限资源吗", "expect": {"any_of": ["ego-depletion-contested", "wills-power-model-avoid"]}}
+{"id": "m-normal-57", "category": "normal", "q": "自控力差是不是做不成事", "expect": {"any_of": ["self-control-heterogeneity", "habit-measure-consistency"]}}
+{"id": "m-normal-58", "category": "normal", "q": "为什么总是选眼前的快乐", "expect": {"any_of": ["present-bias", "delay-discounting", "temptation-bundling"]}}
+{"id": "m-normal-59", "category": "normal", "q": "想抵抗诱惑有哪些办法", "expect": {"any_of": ["temptation-self-control-strategy", "present-bias"]}}
+{"id": "m-normal-60", "category": "normal", "q": "压着情绪不表达有代价吗", "expect": {"any_of": ["suppression-vs-reappraisal"]}}
+{"id": "m-normal-61", "category": "normal", "q": "别人越催我越不想做", "expect": {"any_of": ["reactance-resistance", "social-accountability", "temptation-self-control-strategy"]}}
+{"id": "m-normal-62", "category": "normal", "q": "意志力能练出来吗", "expect": {"any_of": ["inhibitory-control-develop", "induction-vs-deduction", "wills-power-model-avoid", "ego-depletion-contested"]}}
+{"id": "m-normal-63", "category": "normal", "q": "考前焦虑怎么缓解", "expect": {"any_of": ["test-anxiety-intervention", "stress-reappraisal"]}}
+{"id": "m-normal-64", "category": "normal", "q": "考试紧张是不是越紧越好", "expect": {"any_of": ["stress-performance-inverse", "test-anxiety-intervention"]}}
+{"id": "m-normal-65", "category": "normal", "q": "完美主义让我做不完东西", "expect": {"any_of": ["perfectionism-procrastination", "procrastination-task-types"]}}
+{"id": "m-normal-66", "category": "normal", "q": "情绪很低落时怎么动起来", "expect": {"any_of": ["behavioural-activation-first-step", "activation-before-motivation"]}}
+{"id": "m-normal-67", "category": "normal", "q": "计划被打乱后怎么恢复", "expect": {"any_of": ["resilience-recovery", "habit-relapse-protocol"]}}
+{"id": "m-normal-68", "category": "normal", "q": "分心能缓解情绪吗", "expect": {"any_of": ["distress-tolerance-distraction", "emotion-regulation-flexibility"]}}
+{"id": "m-normal-69", "category": "normal", "q": "一直烦躁想反复想同一件事", "expect": {"any_of": ["anger-rumination", "emotion-behaviour-chain"]}}
+{"id": "m-normal-70", "category": "normal", "q": "做事总是半途而废，问题出在哪", "expect": {"any_of": ["habit-two-week-regression", "procrastination-mood-repair", "habit-stack-overload"]}}
+{"id": "m-normal-71", "category": "normal", "q": "目标应该定多长时间", "expect": {"any_of": ["goal-time-horizon", "woop-mental-contrasting"]}}
+{"id": "m-edge-31", "category": "edge", "q": "总是坚持不下来怎么办", "expect": {"any_of": ["habit-relapse-protocol", "habit-missing-one-day", "habit-two-week-regression"]}}
+{"id": "m-edge-32", "category": "edge", "q": "想改掉拖延但没什么毅力", "expect": {"any_of": ["procrastination-mood-repair", "task-aversion-reduction"]}}
+{"id": "m-edge-33", "category": "edge", "q": "学不进去，一学习就烦", "expect": {"any_of": ["task-aversion-reduction", "procrastination-mood-repair"]}}
+{"id": "m-edge-34", "category": "edge", "q": "每天都要用到意志力是不是不好", "expect": {"any_of": ["ego-depletion-contested", "wills-power-model-avoid"]}}
+{"id": "m-edge-35", "category": "edge", "q": "任务完成了就不想再做下一个", "expect": {"any_of": ["habit-maintenance-after-success", "post-reward-reset", "goal-subgoal-shaping", "goal-gradient-endowed-progress"]}}
+{"id": "m-edge-36", "category": "edge", "q": "计划做得很满却执行不下去", "expect": {"any_of": ["planning-fallacy", "goal-smart-critique"]}}
+{"id": "m-edge-37", "category": "edge", "q": "怎么快速调整心态去学习", "expect": {"any_of": ["stress-reappraisal", "emotion-avoidance-urge-surf", "emotion-regulation-flexibility", "suppression-vs-reappraisal"]}}
+{"id": "m-edge-38", "category": "edge", "q": "总是错过截止日期", "expect": {"any_of": ["implementation-cue-spec", "planning-fallacy", "procrastination-mood-repair", "implementation-intentions"]}}
+{"id": "m-edge-39", "category": "edge", "q": "想改掉熬夜但睡不下来", "expect": {"any_of": ["habit-context-stability", "habit-cue-routine-reward", "sleep-memory-consolidation", "circadian-chronotype"]}}
+{"id": "m-edge-40", "category": "edge", "q": "记性不好是不是该多用记忆软件", "expect": {"any_of": ["spaced-repetition-tool", "retrieval-practice"]}}
+{"id": "m-edge-41", "category": "edge", "q": "习惯和目标该怎么配合", "expect": {"any_of": ["goal-discrete-milestone", "habit-measure-consistency", "habit-strength-vs-effort", "goal-time-horizon", "environment-design"]}}
+{"id": "m-edge-42", "category": "edge", "q": "有事必须做完但状态很差", "expect": {"any_of": ["minimum-action-floor", "two-minute-start", "cold-calls-priming"]}}
+{"id": "m-edge-43", "category": "edge", "q": "努力很久没效果要不要放弃", "expect": {"any_of": ["goal-kill-criteria", "escalation-of-commitment", "review-and-adjust-goal", "sunk-cost-ignore-past"]}}
+{"id": "m-edge-44", "category": "edge", "q": "别人给的建议我听了但做不到", "expect": {"any_of": ["reactance-resistance", "implement-if-then-obstacle", "mental-counterfactual-failure", "implementation-cue-spec"]}}
+{"id": "m-edge-45", "category": "edge", "q": "考完试之后情绪很低", "expect": {"any_of": ["exam-stress-recovery-window", "resilience-recovery"]}}
+{"id": "m-edge-46", "category": "edge", "q": "总是想改很多个习惯", "expect": {"any_of": ["habit-stack-overload", "habit-two-week-regression"]}}
+{"id": "m-edge-47", "category": "edge", "q": "做事很有干劲但坚持不久", "expect": {"any_of": ["habit-context-stability", "goal-subgoal-shaping", "habit-formation-loop", "habit-measure-consistency"]}}
+{"id": "m-edge-48", "category": "edge", "q": "焦虑到睡不着怎么办", "expect": {"any_of": ["test-anxiety-intervention", "stress-performance-inverse", "when-to-seek-help"]}}
+{"id": "m-edge-49", "category": "edge", "q": "制定的目标老是不改", "expect": {"any_of": ["review-and-adjust-goal", "goal-kill-criteria"]}}
+{"id": "m-edge-50", "category": "edge", "q": "脑子转不动什么都学不进去", "expect": {"any_of": ["working-memory-cognitive-load-dt", "cognitive-load-theory", "working-memory-limit"]}}
+{"id": "m-out-31", "category": "out_of_kb", "q": "怎么申请学校的国家奖学金", "expect": {"reject": true}}
+{"id": "m-out-32", "category": "out_of_kb", "q": "明天天气怎么样，要不要带伞", "expect": {"reject": true}}
+{"id": "m-out-33", "category": "out_of_kb", "q": "考研数学大纲具体考哪几章", "expect": {"reject": true}}
+{"id": "m-out-34", "category": "out_of_kb", "q": "我该买哪一款笔记本电脑", "expect": {"reject": true}}
+{"id": "m-out-35", "category": "out_of_kb", "q": "帮我写一段 Python 代码", "expect": {"reject": true}}
+{"id": "m-out-36", "category": "out_of_kb", "q": "英语四级多少分及格", "expect": {"reject": true}}
+{"id": "m-out-37", "category": "out_of_kb", "q": "帮我安排明天和导师见面", "expect": {"reject": true}}
+{"id": "m-out-38", "category": "out_of_kb", "q": "我该吃什么补铁", "expect": {"reject": true}}
+{"id": "m-out-39", "category": "out_of_kb", "q": "今天中午食堂有什么菜", "expect": {"reject": true}}
+{"id": "m-out-40", "category": "out_of_kb", "q": "我的绩点是 4.0 还是 4.1", "expect": {"reject": true}}

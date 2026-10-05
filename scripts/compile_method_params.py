@@ -54,6 +54,64 @@ MAPPING = {
     "mcmDecideTopicByHour":  ("mcm-3day-timeline", "decideTopicByHour"),
     "mcmWritingBlockHours":  ("mcm-3day-timeline", "writingBlockHours"),
     "mcmSleepMinHours":      ("mcm-3day-timeline", "sleepMinHours"),
+
+    # ---- v2 扩域（2026-10-06）：习惯 / 目标 / 执行力三块 ----
+    # ⚠️ **故意没有 willpower 块**：自控肌力（ego depletion）已进入复制危机
+    #   （Vohs 2021 36实验室 N=3531 确认性 d=0.06 不显著），按任务书红线 8，
+    #   contested 条目**不得编译成硬参数**。诱惑捆绑等可观察行为参数放在
+    #   execution 块里，不设独立的「意志力」语义块。
+    #   详见 docs/method-kb-plan-v2.md §6 与 §3 C-1。
+
+    # 习惯养成块
+    "habitMinCueDays":       ("habit-formation-loop", "minCueDays"),
+    "habitTrackingWindowDays": ("habit-formation-times", "trackingWindowDays"),
+    "habitReviewIntervalDays": ("habit-formation-times", "reviewIntervalDays"),
+    "habitOneCuePerHabit":   ("habit-cue-routine-reward", "oneCuePerHabit"),
+    "habitAnchorRequired":   ("habit-stacking-anchor", "anchorRequired"),
+    "habitMissGracePerWeek": ("habit-missing-one-day", "missGracePerWeek"),
+    "habitRelapseResumeHours": ("habit-relapse-protocol", "relapseResumeHours"),
+    "habitNoJudgeBeforeDays": ("habit-two-week-regression", "noJudgeBeforeDays"),
+    "habitConsistencyWindowDays": ("habit-measure-consistency", "consistencyWindowDays"),
+    "habitAnchorCheckDays":  ("cue-reliability-check", "anchorCheckDays"),
+    "habitStableContextRequired": ("habit-context-stability", "stableContextRequired"),
+
+    # 目标达成块
+    "goalMilestoneMax":      ("goal-discrete-milestone", "milestoneMax"),
+    "goalCheckInIntervalDays": ("goal-discrete-milestone", "checkInIntervalDays"),
+    "goalWishHorizonDays":   ("goal-time-horizon", "wishHorizonDays"),
+    "goalWishHorizonMinDays": ("goal-time-horizon", "wishHorizonMinDays"),
+    "goalReviewIntervalDays": ("review-and-adjust-goal", "reviewIntervalDays"),
+    "goalAllowDirectionChange": ("review-and-adjust-goal", "allowDirectionChange"),
+    "goalKillCriteriaCount": ("goal-kill-criteria", "killCriteriaCount"),
+    "goalKillRequireObjective": ("goal-kill-criteria", "requireObjective"),
+    "goalIgnorePriorInvestment": ("sunk-cost-ignore-past", "ignorePriorInvestment"),
+    "goalShowRemaining":     ("goal-gradient-endowed-progress", "showRemaining"),
+    "goalNextMilestoneOnSuccess": ("post-reward-reset", "planNextMilestoneOnSuccess"),
+    "goalPlanningBufferRatio": ("planning-fallacy", "bufferRatio"),
+
+    # 执行力块
+    "execTwoMinuteThreshold": ("two-minute-start", "twoMinuteThreshold"),
+    "execMinActionFloorMin": ("minimum-action-floor", "minActionFloorMin"),
+    "execFallbackDefined":   ("minimum-action-floor", "fallbackDefined"),
+    "execBufferRatio":       ("task-timeline-friction", "bufferRatio"),
+    "execBatchMin":          ("interrupt-batch-handling", "batchMin"),
+    "execObserveDays":       ("energy-not-time-task-match", "observeDays"),
+    "execFirstActionStartMin": ("goal-first-action-rehearsal", "firstActionStartMin"),
+    "execIfThenMax":         ("implement-if-then-obstacle", "ifThenMax"),
+    "execRequireInnerObstacle": ("implement-if-then-obstacle", "requireInnerObstacle"),
+    "execBundlingSteps":     ("temptation-bundling", "bundlingSteps"),
+    "execBundlingRestrictAccess": ("temptation-bundling", "restrictAccess"),
+    "execTaskTypeCount":     ("procrastination-task-types", "taskTypeCount"),
+    "execFrictionStepsMax":  ("friction-reduction", "frictionStepsMax"),
+    "execForgetgivenessForgives": ("self-forgiveness-cycle-break", "forgivenessForgives"),
+    "execNameEmotionFirst":  ("procrastination-mood-repair", "nameEmotionFirst"),
+    "execReduceAversion":    ("task-aversion-reduction", "reduceAversion"),
+
+    # WOOP / 心理对照（含**期望调节**的正确用法）
+    "woopSteps":             ("woop-mental-contrasting", "woopSteps"),
+    "woopOutcomeImagerySec": ("woop-mental-contrasting", "outcomeImagerySec"),
+    "woopWishMaxWords":      ("woop-mental-contrasting", "wishMaxWords"),
+    "woopRequireObstacle":   ("positive-visualisation-backfire", "requireObstacle"),
 }
 
 # 每个键的期望类型（编译期校验，防止数据写错类型仍被编译进去）
@@ -68,7 +126,44 @@ TYPE_OF = {
     "examErrorTaxonomy": list, "habitExpectDays": int,
     "mcmTotalHours": int, "mcmDecideTopicByHour": int,
     "mcmWritingBlockHours": int, "mcmSleepMinHours": int,
+
+    # ---- v2扩域类型声明 ----
+    # 布尔型在下面用 bool 统一处理（`want is bool` 分支）。
+    "habitOneCuePerHabit": bool, "habitAnchorRequired": bool,
+    "habitStableContextRequired": bool,
+    "habitMinCueDays": int, "habitTrackingWindowDays": int,
+    "habitReviewIntervalDays": int, "habitMissGracePerWeek": int,
+    "habitRelapseResumeHours": int, "habitNoJudgeBeforeDays": int,
+    "habitConsistencyWindowDays": int, "habitAnchorCheckDays": int,
+
+    "goalMilestoneMax": int, "goalCheckInIntervalDays": int,
+    "goalWishHorizonDays": int, "goalWishHorizonMinDays": int,
+    "goalReviewIntervalDays": int, "goalAllowDirectionChange": bool,
+    "goalKillCriteriaCount": int, "goalKillRequireObjective": bool,
+    "goalIgnorePriorInvestment": bool, "goalShowRemaining": bool,
+    "goalNextMilestoneOnSuccess": bool, "goalPlanningBufferRatio": float,
+
+    "execTwoMinuteThreshold": int, "execMinActionFloorMin": int,
+    "execFallbackDefined": bool, "execBufferRatio": float,
+    "execBatchMin": int, "execObserveDays": int,
+    "execFirstActionStartMin": int, "execIfThenMax": int,
+    "execRequireInnerObstacle": bool, "execBundlingSteps": int,
+    "execBundlingRestrictAccess": bool, "execTaskTypeCount": int,
+    "execFrictionStepsMax": int, "execForgetgivenessForgives": bool,
+    "execNameEmotionFirst": bool, "execReduceAversion": bool,
+
+    "woopSteps": int, "woopOutcomeImagerySec": int,
+    "woopWishMaxWords": int, "woopRequireObstacle": bool,
 }
+
+# 🔴 v2 新增红线：contested 条目**禁止**编译成引擎硬参数。
+# 理由（CY 红线8 / 任务书 P1-2）：争议条目不得只取一方结论包装成确定事实。
+# 本库最典型的例子是 ego-depletion-contested（自控肌力，复制危机）——
+# 若它被编译成参数，引擎会据此排程，等于把「未获预注册复制的机制」
+# 变成产品行为。故这里在**编译期**直接拦住，而不是靠 code review 自觉。
+# ⚠️ 注意：本块只拦 status == "contested"，不拦 evidence_tier 低（D 级仍可编译，
+#    因为「番茄钟属从业者方法」是明确的诚实标注，不是不确定）。
+FORBIDDEN_STATUS = {"contested"}
 
 
 def _params(conn, slug):
@@ -91,11 +186,28 @@ def compile_params():
             raise SystemExit(f"[compile] 条目 {slug} 缺参数键 {pkey}（不允许静默缺省）")
         if status == "deprecated":
             raise SystemExit(f"[compile] 条目 {slug} 已 deprecated，不得编译进引擎")
+        if status in FORBIDDEN_STATUS:
+            raise SystemExit(
+                f"[compile] 条目 {slug} 为 {status}，**不得编译成引擎硬参数**"
+                f"（红线：争议条目不得只取一方结论包装成确定事实）"
+            )
         val = params[pkey]
         want = TYPE_OF[key]
-        if want is int and not isinstance(val, int):
-            raise SystemExit(f"[compile] {key} 期望 int，得到 {type(val).__name__}")
-        if want is list and not isinstance(val, list):
+        # ⚠️ 顺序很重要：bool 是 int 的子类，所以必须先判 int 排除 bool，
+        #    否则 `True` 会被当成合法的 int 静默通过（值1），编译出错误参数。
+        if want is bool:
+            if not isinstance(val, bool):
+                raise SystemExit(f"[compile] {key} 期望 bool，得到 {type(val).__name__}")
+        elif want is int:
+            if isinstance(val, bool) or not isinstance(val, int):
+                raise SystemExit(
+                    f"[compile] {key} 期望 int，得到 {type(val).__name__}"
+                    + ("（bool 是 int 子类，需显式转成0/1）" if isinstance(val, bool) else "")
+                )
+        elif want is float:
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise SystemExit(f"[compile] {key} 期望 float，得到 {type(val).__name__}")
+        elif want is list and not isinstance(val, list):
             raise SystemExit(f"[compile] {key} 期望 list，得到 {type(val).__name__}")
         blocks[key] = val
         provenance[key] = {"slug": slug, "param": pkey, "tier": tier}

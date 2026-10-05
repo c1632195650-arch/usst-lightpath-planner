@@ -46,7 +46,12 @@ LAST_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_last_run.j
 GATES = {
     "recall@5": 0.90,
     "mrr": 0.60,
-    "adversarial_acc": 0.90,
+    # 🔴 v2（2026-10-06）收紧为1.0 零容忍：伪科学守门是产品红线
+    #   （不给伪科学背书），「基本拦住了」不是可接受状态。
+    #   另一个理由：对抗样本只有 11 条，删掉 1 个黑名单词只掉 1/11 = 0.909，
+    #   在 0.90 门禁下**仍然通过** —— 阈值宽到能掩盖任何单点失效。
+    #   这是 2026-10-06 反向验证实测到的真实假覆盖，不是假想风险。
+    "adversarial_acc": 1.0,
     "rejection_acc": 0.85,
 }
 
@@ -68,9 +73,28 @@ def is_rejected(hits):
     return float(hits[0].get("raw_vec", 0.0)) < method_rag.METHOD_RAW_LOW
 
 
+def is_pseudo_blocked(q):
+    """伪科学迷思是否**被词卫兵拦下**（即检索层主动拒答，而非靠阈值兜住）。
+
+    🔴 为什么要单独判（2026-10-06 反向验证抓到的真缺口）：
+    `pseudo_reject` 类金标原本只验「最终拒答了」。实测把 `莫扎特` 从
+    PSEUDO_PATTERNS 删掉后，该金标**依然通过** —— 因为扩展库后
+    top1 恰好是 growth-mindset(raw=0.4992)，低于 LOW=0.54 仍被判拒答。
+    → **阈值把黑名单的失效掩盖了**，属典型假覆盖：守门形同虚设且永不报警。
+    本函数让「伪科学必须由黑名单主动拦下」成为可测判据，
+    删任一黑名单词都会立刻让对应金标变红。
+    """
+    return method_rag.is_pseudoscience(q)
+
+
 def run_all(items, dump=False):
     hi_expected = [it for it in items if it["expect"].get("any_of")]
-    rej_expected = [it for it in items if it["expect"].get("reject")]
+    # 🔴 pseudo_reject 单独考核（见 is_pseudo_blocked 注释），不混进普通拒答统计，
+    #    否则同一批样本被两套口径重复计数，且会掩盖词卫兵失效。
+    rej_expected = [it for it in items
+                    if it["expect"].get("reject")
+                    and not (it["category"] == "adversarial"
+                             and it.get("kind") == "pseudo_reject")]
 
     hits5, misses, rrs = 0, [], []
     fails = []
@@ -115,14 +139,29 @@ def run_all(items, dump=False):
         "rejection_acc": round(rej_ok / n_rej, 4) if n_rej else 1.0,
     }
     adv = [it for it in items if it["category"] == "adversarial"]
+    # 🔴 pseudo_reject（伪科学迷思）单独统计：必须由词卫兵主动拦下才算通过。
+    #    这类样本**不再**混进 rejection_acc 的普通拒答统计里 ——
+    #    否则「阈值恰好兜住」会被算成通过（2026-10-06 反向验证实证的假覆盖）。
+    pseudo = [it for it in adv if it.get("kind") == "pseudo_reject"]
+    out_of_kb = [it for it in items if it["category"] == "out_of_kb"]
+    if pseudo:
+        pseudo_ok = sum(1 for it in pseudo if is_pseudo_blocked(it["q"]))
+        metrics["pseudo_block_acc"] = round(pseudo_ok / len(pseudo), 4)
+        metrics["n_pseudo"] = len(pseudo)
+        for it in pseudo:
+            if not is_pseudo_blocked(it["q"]):
+                fails.append({
+                    "id": it["id"], "q": it["q"],
+                    "want": "pseudo_blocked（必须由词卫兵拦下）",
+                    "got": "黑名单未命中 —— 该伪科学词可能已被删除或未收录",
+                })
     if adv:
-        adv_ids_hit = {it["id"] for it in hi_expected}
-        adv_rej_total = sum(1 for it in adv if it["id"] not in adv_ids_hit)
-        adv_rej_ok = adv_rej_total - sum(1 for f in rej_fails if f["id"].startswith("m-adv"))
-        adv_hit_total = sum(1 for it in adv if it["id"] in adv_ids_hit)
+        adv_hit_total = sum(1 for it in adv
+                            if it["id"] in {h["id"] for h in hi_expected})
         adv_hit_ok = adv_hit_total - sum(1 for mid in misses if mid.startswith("m-adv"))
-        metrics["adversarial_acc"] = round(
-            (adv_rej_ok + adv_hit_ok) / len(adv), 4)
+        # adversarial_acc 现在**只考核 pseudo_block**：trap_hit 类的召回
+        # 已由 recall@5 / MRR 覆盖，混进来会稀释伪科学守门的信号。
+        metrics["adversarial_acc"] = metrics.get("pseudo_block_acc", 1.0)
     metrics["n_hit_expected"] = n_hit
     metrics["n_reject_expected"] = n_rej
     metrics["n_total"] = len(items)
