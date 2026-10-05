@@ -15,11 +15,20 @@
   4. **已证伪 / 过度简化**的内容一律**不入库**（见文末 REJECTED）。
   5. parameters 是**可编译进排程引擎**的字段，只放能被机器消费的结构化值。
   6. 文本内强调一律用「」（U+300C/U+300D），**禁止**在字符串内出现 ASCII 双引号。
+  7. 🔴 v2 扩展纪律（2026-10-06 新增，见 `method_kb_data_v2.py`）：
+     - **临床红线**：情绪调节类只讲方法机制与转介，**不做诊断/不开药/不给治疗方案**。
+     - **contested 双向表述**：争议条目必须同时写明支持方与质疑方（见 `ego-depletion-contested`）。
+     - **外推禁令**：消费/金融场景的证据不得直接外推到学习与健康目标。
 
-取证说明（2026-09-20）：本轮用 search 工作流（agent-search MCP）核对了测试效应、间隔效应、
+v2 扩域（2026-10-06）：新增 119 条见 `method_kb_data_v2.py`，本文件末尾挂载。
+
+取证说明（2026-09-20 存量42 条）：本轮用 search 工作流（agent-search MCP）核对了测试效应、间隔效应、
 认知负荷、自我决定论、实施意图、拖延、记忆巩固、间隔重复；sogou/baidu/bing/duckduckgo 在若干次
 调用后统一触发 `bot_challenge` / `budget_exhausted`，故其余条目退化为 `canonical` 并由人工把关。
+（2026-10-06 追加的 119 条另有一轮独立取证，来源与冲突记录见 `docs/method-kb-plan-v2.md` §0。）
 """
+
+import sys  # 仅用于末尾 v2 挂载时取自身模块引用（数据模块本身保持零逻辑）
 
 # ============================================================
 # 一、元能力图谱（L4 骨架）—— 任务与训练法之间的桥
@@ -236,12 +245,14 @@ ENTRIES = [
 
     _e("habit-formation-loop", "principle", "behavior", "通用",
        "习惯靠重复与稳定情境，而非意志力",
-       "在固定情境里重复，行为会逐渐自动化；平均需要约 66 天，个体差异很大。",
-       "Lally 等(2010) 追踪日常行为的自动化过程，发现达到自动化平台期平均约 66 天，且漏掉一天影响不大，重要的是恢复。",
-       ["把新行为挂到已有的固定锚点后（如晚饭后）", "初期允许中断，重点是第二天回得来", "固定同一时间同一地点", "只培养 1-2 个新习惯，别同时开一堆"],
-       "B", {"authors": "Lally, P., van Jaarsveld, C. H. M., Potts, H. W. W., & Wardle, J.", "title": "How are habits formed: Modelling habit formation in the real world", "source": "European Journal of Social Psychology", "year": "2010", "url": "", "verification": "canonical"},
+       "在固定情境里重复，行为会逐渐自动化；平均需要约 66 天，个体差异很大。坚持不下来多半不是意志力问题，是情境没固定。",
+       "Lally 等(2010) 追踪日常行为的自动化过程，发现达到自动化平台期平均约 66 天，且漏掉一天影响不大，重要的是恢复。⚠️ 该数字是中位数且来自可建模子样本，个体范围可达数月到一年（见habit-formation-times）。关键机制是**情境一致**：线索固定时行为才会自动化。",
+       ["把新行为挂到已有的固定锚点后（如晚饭后）", "初期允许中断，重点是第二天回得来", "固定同一时间同一地点，别在宿舍和自习室之间来回换", "只培养 1-2 个新习惯，别同时开一堆", "坚持不下来时先查线索是否稳定，而不是责怪自己意志力差"],
+       "B", {"authors": "Lally, P., van Jaarsveld, C. H. M., Potts, H. W. W., & Wardle, J.", "title": "How are habits formed: Modelling habit formation in the real world", "source": "European Journal of Social Psychology", "year": "2010", "url": "https://en.wikipedia.org/wiki/Habit_formation", "verification": "canonical"},
        "verified", [("metacognitive-regulation", "train"), ("attention-sustain", "train")],
-       {"habitAnchor": "after-existing-routine", "expectDays": 66}),
+       {"habitAnchor": "after-existing-routine", "expectDays": 66, "minCueDays": 14},
+       applicable_when={"phase": ["any"], "persona": {}, "task": []},
+       contraindications="66 天是中位数不是保证；也不要把它当成「21 天」的翻版去承诺。三分钟热度常源于线索不稳或同时改了太多。"),
 
     _e("procrastination-regulation", "principle", "psych", "通用",
        "拖延是情绪调节问题，不是时间管理问题",
@@ -522,3 +533,20 @@ REJECTED = [
     {"slug": "mozart-effect", "name": "听莫扎特能变聪明（莫扎特效应）",
      "reason": "原始效应是短暂的空间推理小提升，被媒体放大为变聪明，未能复制。"},
 ]
+
+
+# ============================================================
+# 五、v2 扩域挂载（2026-10-06 MOSS 执行）
+# ------------------------------------------------------------
+# 119 条新条目（习惯/目标/执行力/自控力/情绪调节 + 边界条目）放在
+# `scripts/method_kb_data_v2.py`，本文件末尾挂载一次。
+# 这样做的原因：**存量42 条已验证内容保持零改动**，便于 diff 审查与回滚；
+# build_method_kb.py / method_rag.py / compile_method_params.py 侧完全无感知。
+# v2 的设计依据与引文证据台账见 `docs/method-kb-plan-v2.md`。
+def _mount_v2():
+    import method_kb_data_v2 as V2
+    return V2.mount_v2(_SELF_MODULE)
+
+
+_SELF_MODULE = sys.modules[__name__]
+_mount_v2()
