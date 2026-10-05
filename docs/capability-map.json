@@ -1,0 +1,1570 @@
+{
+  "generatedBy": "scripts/capability_map.mjs",
+  "schemaVersion": 1,
+  "note": "本文件由 scripts/capability_map.mjs 生成，请勿手工编辑。测试 ↔ 源码映射来自 import 扫描；新增测试后跑 --write 更新。",
+  "baseline": {
+    "engine": 458,
+    "ui": 321
+  },
+  "totals": {
+    "testFiles": 95,
+    "engineFiles": 62,
+    "uiFiles": 33,
+    "guardedSources": 82,
+    "reverseVerified": 49,
+    "orphans": 0
+  },
+  "domains": {
+    "planner-engine": {
+      "label": "排程引擎（两遍法/增量滚动/锁定/涟漪/buffer）",
+      "prefixes": [
+        "src/lib/planner/"
+      ],
+      "testCount": 49,
+      "tests": [
+        "scripts/buildPhases.test.ts",
+        "scripts/deadlineStore.test.ts",
+        "scripts/events.test.ts",
+        "scripts/libao-taxonomy.test.ts",
+        "scripts/lock.test.ts",
+        "scripts/rollingState.test.ts",
+        "scripts/scheduler.test.ts",
+        "tests/activityAndLocalized.test.ts",
+        "tests/campus-vocab.test.ts",
+        "tests/churn.test.ts",
+        "tests/construct.test.ts",
+        "tests/correctionsPolicy.test.ts",
+        "tests/courseOverride.test.ts",
+        "tests/explain.test.ts",
+        "tests/fatigue.test.ts",
+        "tests/feedback.test.ts",
+        "tests/fillGap.test.ts",
+        "tests/golden-lib.test.ts",
+        "tests/health_params.test.ts",
+        "tests/improve-live.test.ts",
+        "tests/improve-transfer.test.ts",
+        "tests/improve.test.ts",
+        "tests/knowledge-wiring.test.ts",
+        "tests/lifeModeAndSocial.test.ts",
+        "tests/longLock.test.ts",
+        "tests/method_params.test.ts",
+        "tests/objective-evaluate.test.ts",
+        "tests/p2-convergence.test.ts",
+        "tests/p2-essential-budget.test.ts",
+        "tests/p2-incremental-rolling.test.ts",
+        "tests/places-buildings.test.ts",
+        "tests/places-policy.test.ts",
+        "tests/places.test.ts",
+        "tests/planStability.test.ts",
+        "tests/planweek.test.ts",
+        "tests/profile-explain.test.ts",
+        "tests/profile-prefs.test.ts",
+        "tests/property/lock.machine.test.ts",
+        "tests/property/schedule.props.test.ts",
+        "tests/ripple.test.ts",
+        "tests/scoring-transfer.test.ts",
+        "tests/solver.test.ts",
+        "tests/toPlanRequest-persona.test.ts",
+        "tests/wp10.test.ts",
+        "tests/wp4a.test.ts",
+        "tests/wp4b.test.ts",
+        "tests/wp5.test.ts",
+        "tests/wp6.test.ts",
+        "tests/wp9.test.ts"
+      ],
+      "sources": [
+        "src/lib/planner/buildPhases",
+        "src/lib/planner/campusLookup",
+        "src/lib/planner/construct",
+        "src/lib/planner/corrections",
+        "src/lib/planner/courseOverrides",
+        "src/lib/planner/events",
+        "src/lib/planner/explain",
+        "src/lib/planner/fatigue",
+        "src/lib/planner/health",
+        "src/lib/planner/improve",
+        "src/lib/planner/incremental",
+        "src/lib/planner/index",
+        "src/lib/planner/knowledge",
+        "src/lib/planner/lifeModePolicy",
+        "src/lib/planner/localizedReplan",
+        "src/lib/planner/longLocks",
+        "src/lib/planner/longTermRules",
+        "src/lib/planner/methods",
+        "src/lib/planner/model",
+        "src/lib/planner/objective",
+        "src/lib/planner/places",
+        "src/lib/planner/placesPolicy",
+        "src/lib/planner/planWeek",
+        "src/lib/planner/profilePrefs",
+        "src/lib/planner/ripple",
+        "src/lib/planner/roll",
+        "src/lib/planner/schedule",
+        "src/lib/planner/solver",
+        "src/lib/planner/templates",
+        "src/lib/planner/unavailableSlots"
+      ]
+    },
+    "week-view": {
+      "label": "周计划视图（块卡片/抽屉/编辑/拖拽）",
+      "prefixes": [
+        "src/features/week/",
+        "src/components/"
+      ],
+      "testCount": 18,
+      "tests": [
+        "scripts/miniWeekPreview.test.ts",
+        "tests/assignment.test.ts",
+        "tests/d-batch.test.ts",
+        "tests/issue-bar-ui.test.ts",
+        "tests/ripple.test.ts",
+        "tests/syncContract.test.ts",
+        "tests/timeScale.test.ts",
+        "tests/userPlanStore.test.ts",
+        "tests/userPlanUndo.test.ts",
+        "tests/v1.test.ts",
+        "tests/v2.test.ts",
+        "tests/v3.test.ts",
+        "tests/week-view-model.test.ts",
+        "tests/weekplan-shift-ui.test.ts",
+        "tests/wp12.test.ts",
+        "tests/wp4b.test.ts",
+        "tests/wp7.test.ts",
+        "tests/wp9.test.ts"
+      ],
+      "sources": [
+        "src/components/ui/DetailDrawer",
+        "src/features/week/WeekPlanView",
+        "src/features/week/assignmentStore",
+        "src/features/week/dragPreview",
+        "src/features/week/miniWeekPreviewModel",
+        "src/features/week/saturation",
+        "src/features/week/timeScale",
+        "src/features/week/userPlanStore",
+        "src/features/week/weekViewModel"
+      ]
+    },
+    "libao-chat": {
+      "label": "梨宝对话（意图层/追问状态机/ActExecutor）",
+      "prefixes": [
+        "src/features/libao/",
+        "src/lib/lbao.ts",
+        "src/lib/api.ts"
+      ],
+      "testCount": 26,
+      "tests": [
+        "scripts/chatRestore.test.ts",
+        "scripts/day-replan-intent.test.ts",
+        "scripts/day-replan.test.ts",
+        "scripts/deadlineStore.test.ts",
+        "scripts/goal-pace.test.ts",
+        "scripts/goalPlan.test.ts",
+        "scripts/lbaoPlan.test.ts",
+        "scripts/libao-intent-clock.test.ts",
+        "scripts/libao-intent-fn-fix.test.ts",
+        "scripts/libao-intent-month.test.ts",
+        "scripts/libao-intent-term.test.ts",
+        "scripts/libao-intent-weekno.test.ts",
+        "scripts/libao-interact.test.ts",
+        "scripts/libao-taxonomy.test.ts",
+        "scripts/libao-understand-retry.test.ts",
+        "scripts/libao.test.ts",
+        "scripts/libaoIntent.test.ts",
+        "scripts/modeSetup.test.ts",
+        "scripts/schedSession.test.ts",
+        "tests/d-batch.test.ts",
+        "tests/libao-regression-anchor.test.ts",
+        "tests/v0.test.ts",
+        "tests/v2.test.ts",
+        "tests/v3.test.ts",
+        "tests/wp12.test.ts",
+        "tests/wp9.test.ts"
+      ],
+      "sources": [
+        "src/features/libao/LbaoChat",
+        "src/features/libao/chatRestore",
+        "src/features/libao/dialogManager",
+        "src/features/libao/lbaoPlanFromEngine",
+        "src/features/libao/libaoIntent",
+        "src/features/libao/modeSetup",
+        "src/features/libao/profileContext",
+        "src/features/libao/schedSession",
+        "src/features/libao/taxonomy",
+        "src/features/libao/weekPlanForChat"
+      ]
+    },
+    "persona": {
+      "label": "画像（问卷/规则映射/偏好接线）",
+      "prefixes": [
+        "src/features/persona/",
+        "src/features/welcome/",
+        "src/lib/persona.ts",
+        "src/features/onboarding/"
+      ],
+      "testCount": 4,
+      "tests": [
+        "scripts/basicInfo.test.ts",
+        "scripts/personaCopy.test.ts",
+        "tests/profile-explain.test.ts",
+        "tests/v0.test.ts"
+      ],
+      "sources": [
+        "src/features/onboarding/checklist",
+        "src/features/persona/PersonaResult",
+        "src/features/persona/personaCopy",
+        "src/features/welcome/basicInfo"
+      ]
+    },
+    "calendar": {
+      "label": "月历与截止事项/重要日",
+      "prefixes": [
+        "src/features/calendar/"
+      ],
+      "testCount": 2,
+      "tests": [
+        "scripts/deadlineStore.test.ts",
+        "tests/v1.test.ts"
+      ],
+      "sources": [
+        "src/features/calendar/deadlineStore"
+      ]
+    },
+    "activity-feedback": {
+      "label": "活动与反馈",
+      "prefixes": [
+        "src/features/activity/",
+        "src/features/feedback/"
+      ],
+      "testCount": 4,
+      "tests": [
+        "tests/activityAndLocalized.test.ts",
+        "tests/courseOverride.test.ts",
+        "tests/feedback.test.ts",
+        "tests/planIntent.test.ts"
+      ],
+      "sources": [
+        "src/features/activity/activityStore",
+        "src/features/activity/aggregate",
+        "src/features/activity/goalStore",
+        "src/features/feedback/parseCorrection",
+        "src/features/feedback/planIntent",
+        "src/features/feedback/store"
+      ]
+    },
+    "mobile": {
+      "label": "移动端（今日页/账号同步/ICS/Capacitor）",
+      "prefixes": [
+        "src/features/mobile/",
+        "m.html",
+        "mobile/"
+      ],
+      "testCount": 2,
+      "tests": [
+        "tests/mobile/notify.test.ts",
+        "tests/syncContract.test.ts"
+      ],
+      "sources": [
+        "src/features/mobile/lib/notifyBridge",
+        "src/features/mobile/lib/sync",
+        "src/features/mobile/lib/webSync"
+      ]
+    },
+    "contracts": {
+      "label": "契约层与全局类型（改这里=跨模块影响）",
+      "prefixes": [
+        "src/types.ts",
+        "src/constants",
+        "src/lib/"
+      ],
+      "testCount": 14,
+      "tests": [
+        "scripts/chatRestore.test.ts",
+        "scripts/lbaoPlan.test.ts",
+        "scripts/libao-understand-retry.test.ts",
+        "scripts/personaCopy.test.ts",
+        "scripts/personaTiering.test.ts",
+        "scripts/rollingState.test.ts",
+        "scripts/scheduler.test.ts",
+        "scripts/storage.test.ts",
+        "scripts/telemetry.test.ts",
+        "tests/campus-vocab.test.ts",
+        "tests/identity.test.ts",
+        "tests/improve-live.test.ts",
+        "tests/p2-incremental-rolling.test.ts",
+        "tests/wp12.test.ts"
+      ],
+      "sources": [
+        "src/constants/campus",
+        "src/constants/term",
+        "src/constants/time",
+        "src/lib/api",
+        "src/lib/date",
+        "src/lib/identity",
+        "src/lib/lbao",
+        "src/lib/persona",
+        "src/lib/storage",
+        "src/lib/telemetry"
+      ]
+    },
+    "backend": {
+      "label": "后端服务（RAG/问答/排程理解/账号同步）",
+      "prefixes": [
+        "server/"
+      ],
+      "testCount": 0,
+      "tests": [],
+      "sources": []
+    },
+    "data-kb": {
+      "label": "数据与知识库（方法库/健康库/空间库/资讯库）",
+      "prefixes": [
+        "data/",
+        "scripts/rag.py",
+        "evals/"
+      ],
+      "testCount": 0,
+      "tests": [],
+      "sources": []
+    },
+    "ui-kit": {
+      "label": "设计系统与通用组件",
+      "prefixes": [
+        "src/components/",
+        "src/styles",
+        "src/index.css",
+        "tailwind.config"
+      ],
+      "testCount": 0,
+      "tests": [],
+      "sources": []
+    }
+  },
+  "tests": {
+    "scripts/basicInfo.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "persona"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/behavior.test.ts": {
+      "suite": "ui",
+      "guards": [],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "scripts/buildPhases.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "scripts/chatRestore.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat",
+        "contracts"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "scripts/day-replan-intent.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/day-replan.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "scripts/deadlineStore.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "calendar",
+        "planner-engine",
+        "libao-chat"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "scripts/events.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 6,
+      "reverseVerified": false
+    },
+    "scripts/goal-pace.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "scripts/goalPlan.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "scripts/lbaoPlan.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "contracts",
+        "libao-chat"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "scripts/libao-intent-clock.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "scripts/libao-intent-fn-fix.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/libao-intent-month.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/libao-intent-term.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/libao-intent-weekno.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/libao-interact.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "scripts/libao-taxonomy.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat",
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
+    "scripts/libao-understand-retry.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat",
+        "contracts"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "scripts/libao.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "scripts/libaoIntent.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/lock.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "scripts/miniWeekPreview.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "scripts/modeSetup.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "scripts/personaCopy.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "persona",
+        "contracts"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "scripts/personaTiering.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "scripts/planLock.test.ts": {
+      "suite": "ui",
+      "guards": [],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "scripts/rollingState.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "planner-engine",
+        "contracts"
+      ],
+      "guardCount": 8,
+      "reverseVerified": false
+    },
+    "scripts/schedSession.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/scheduler.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "planner-engine",
+        "contracts"
+      ],
+      "guardCount": 8,
+      "reverseVerified": false
+    },
+    "scripts/storage.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "scripts/telemetry.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "scripts/weather.test.ts": {
+      "suite": "ui",
+      "guards": [],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/activityAndLocalized.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "activity-feedback"
+      ],
+      "guardCount": 6,
+      "reverseVerified": false
+    },
+    "tests/assignment.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/campus-vocab.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts",
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/churn.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "tests/construct.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": false
+    },
+    "tests/correctionsPolicy.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/courseOverride.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "activity-feedback"
+      ],
+      "guardCount": 5,
+      "reverseVerified": false
+    },
+    "tests/d-batch.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "libao-chat",
+        "week-view"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/demo-banner-ui.test.ts": {
+      "suite": "engine",
+      "guards": [],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/explain.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "tests/fatigue.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 6,
+      "reverseVerified": false
+    },
+    "tests/feedback.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback",
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "tests/fillGap.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/golden-lib.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/health_params.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/identity.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/improve-live.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "contracts"
+      ],
+      "guardCount": 5,
+      "reverseVerified": false
+    },
+    "tests/improve-transfer.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": false
+    },
+    "tests/improve.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 6,
+      "reverseVerified": false
+    },
+    "tests/issue-bar-ui.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/knowledge-wiring.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 7,
+      "reverseVerified": true
+    },
+    "tests/libao-regression-anchor.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/lifeModeAndSocial.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/longLock.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/method_params.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/mobile/notify.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/objective-evaluate.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/p2-convergence.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/p2-essential-budget.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/p2-incremental-rolling.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "contracts"
+      ],
+      "guardCount": 8,
+      "reverseVerified": false
+    },
+    "tests/places-buildings.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/places-policy.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/places.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/planIntent.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/planStability.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/planweek.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "tests/profile-explain.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "persona"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "tests/profile-prefs.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "tests/property/lock.machine.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/property/schedule.props.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/ripple.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "week-view"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/scoring-transfer.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "tests/solver.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
+    "tests/syncContract.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile",
+        "week-view"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/timeScale.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/toPlanRequest-persona.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/userPlanStore.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/userPlanUndo.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
+    "tests/v0.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "persona",
+        "libao-chat"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/v1.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "calendar"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/v2.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "libao-chat",
+        "week-view"
+      ],
+      "guardCount": 6,
+      "reverseVerified": true
+    },
+    "tests/v3.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "libao-chat"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/week-view-model.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/weekplan-shift-ui.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/wp10.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/wp12.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "libao-chat",
+        "contracts"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/wp4a.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/wp4b.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "week-view"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/wp5.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/wp6.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/wp7.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "tests/wp9.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "libao-chat",
+        "week-view",
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    }
+  },
+  "reverseIndex": {
+    "src/features/welcome/basicInfo": [
+      "scripts/basicInfo.test.ts"
+    ],
+    "src/features/behavior/behaviorLog": [
+      "scripts/behavior.test.ts",
+      "scripts/rollingState.test.ts"
+    ],
+    "src/lib/planner/buildPhases": [
+      "scripts/buildPhases.test.ts",
+      "tests/correctionsPolicy.test.ts",
+      "tests/improve-live.test.ts",
+      "tests/knowledge-wiring.test.ts",
+      "tests/lifeModeAndSocial.test.ts"
+    ],
+    "src/features/libao/chatRestore": [
+      "scripts/chatRestore.test.ts"
+    ],
+    "src/lib/api": [
+      "scripts/chatRestore.test.ts",
+      "scripts/libao-understand-retry.test.ts",
+      "tests/wp12.test.ts"
+    ],
+    "src/features/libao/libaoIntent": [
+      "scripts/day-replan-intent.test.ts",
+      "scripts/deadlineStore.test.ts",
+      "scripts/goalPlan.test.ts",
+      "scripts/libao-intent-clock.test.ts",
+      "scripts/libao-intent-fn-fix.test.ts",
+      "scripts/libao-intent-month.test.ts",
+      "scripts/libao-intent-term.test.ts",
+      "scripts/libao-intent-weekno.test.ts",
+      "scripts/libao-interact.test.ts",
+      "scripts/libao-taxonomy.test.ts",
+      "scripts/libao-understand-retry.test.ts",
+      "scripts/libaoIntent.test.ts",
+      "tests/libao-regression-anchor.test.ts",
+      "tests/v2.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/features/libao/weekPlanForChat": [
+      "scripts/day-replan.test.ts",
+      "scripts/goal-pace.test.ts",
+      "scripts/goalPlan.test.ts",
+      "scripts/libao-intent-clock.test.ts",
+      "scripts/libao-interact.test.ts",
+      "scripts/libao-taxonomy.test.ts",
+      "scripts/libao.test.ts",
+      "tests/d-batch.test.ts",
+      "tests/libao-regression-anchor.test.ts",
+      "tests/v2.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/data/usst": [
+      "scripts/day-replan.test.ts",
+      "scripts/deadlineStore.test.ts",
+      "scripts/events.test.ts",
+      "scripts/goal-pace.test.ts",
+      "scripts/lbaoPlan.test.ts",
+      "scripts/libao.test.ts",
+      "scripts/modeSetup.test.ts",
+      "tests/improve-live.test.ts",
+      "tests/places.test.ts",
+      "tests/toPlanRequest-persona.test.ts"
+    ],
+    "src/types": [
+      "scripts/day-replan.test.ts",
+      "scripts/goalPlan.test.ts",
+      "scripts/lbaoPlan.test.ts",
+      "scripts/libao-intent-clock.test.ts",
+      "scripts/libao-taxonomy.test.ts",
+      "scripts/libao.test.ts",
+      "scripts/lock.test.ts",
+      "scripts/miniWeekPreview.test.ts",
+      "scripts/personaCopy.test.ts",
+      "scripts/personaTiering.test.ts",
+      "scripts/planLock.test.ts",
+      "scripts/rollingState.test.ts",
+      "scripts/storage.test.ts",
+      "tests/activityAndLocalized.test.ts",
+      "tests/campus-vocab.test.ts",
+      "tests/churn.test.ts",
+      "tests/construct.test.ts",
+      "tests/courseOverride.test.ts",
+      "tests/d-batch.test.ts",
+      "tests/explain.test.ts",
+      "tests/fatigue.test.ts",
+      "tests/fillGap.test.ts",
+      "tests/golden-lib.test.ts",
+      "tests/improve-transfer.test.ts",
+      "tests/improve.test.ts",
+      "tests/knowledge-wiring.test.ts",
+      "tests/libao-regression-anchor.test.ts",
+      "tests/longLock.test.ts",
+      "tests/mobile/notify.test.ts",
+      "tests/objective-evaluate.test.ts",
+      "tests/p2-convergence.test.ts",
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/places-policy.test.ts",
+      "tests/planweek.test.ts",
+      "tests/profile-explain.test.ts",
+      "tests/profile-prefs.test.ts",
+      "tests/property/lock.machine.test.ts",
+      "tests/property/schedule.props.test.ts",
+      "tests/ripple.test.ts",
+      "tests/solver.test.ts",
+      "tests/syncContract.test.ts",
+      "tests/timeScale.test.ts",
+      "tests/v1.test.ts",
+      "tests/week-view-model.test.ts",
+      "tests/wp10.test.ts",
+      "tests/wp4a.test.ts",
+      "tests/wp4b.test.ts",
+      "tests/wp7.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/features/calendar/deadlineStore": [
+      "scripts/deadlineStore.test.ts",
+      "tests/v1.test.ts"
+    ],
+    "src/lib/planner/events": [
+      "scripts/deadlineStore.test.ts",
+      "scripts/events.test.ts"
+    ],
+    "src/lib/planner/schedule": [
+      "scripts/events.test.ts",
+      "scripts/rollingState.test.ts",
+      "scripts/scheduler.test.ts",
+      "tests/campus-vocab.test.ts",
+      "tests/churn.test.ts",
+      "tests/construct.test.ts",
+      "tests/explain.test.ts",
+      "tests/fatigue.test.ts",
+      "tests/golden-lib.test.ts",
+      "tests/improve-live.test.ts",
+      "tests/improve.test.ts",
+      "tests/p2-convergence.test.ts",
+      "tests/p2-essential-budget.test.ts",
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/places-buildings.test.ts",
+      "tests/planStability.test.ts",
+      "tests/planweek.test.ts",
+      "tests/property/schedule.props.test.ts",
+      "tests/scoring-transfer.test.ts",
+      "tests/solver.test.ts",
+      "tests/toPlanRequest-persona.test.ts",
+      "tests/wp5.test.ts",
+      "tests/wp6.test.ts"
+    ],
+    "src/lib/lbao": [
+      "scripts/lbaoPlan.test.ts"
+    ],
+    "src/features/libao/lbaoPlanFromEngine": [
+      "scripts/lbaoPlan.test.ts"
+    ],
+    "src/features/libao/taxonomy": [
+      "scripts/libao-taxonomy.test.ts"
+    ],
+    "src/lib/planner/templates": [
+      "scripts/libao-taxonomy.test.ts",
+      "scripts/scheduler.test.ts",
+      "tests/lifeModeAndSocial.test.ts",
+      "tests/p2-essential-budget.test.ts",
+      "tests/wp6.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/features/libao/profileContext": [
+      "scripts/libao.test.ts"
+    ],
+    "src/lib/planner/solver": [
+      "scripts/lock.test.ts",
+      "scripts/rollingState.test.ts",
+      "tests/churn.test.ts",
+      "tests/construct.test.ts",
+      "tests/fatigue.test.ts",
+      "tests/improve-live.test.ts",
+      "tests/improve-transfer.test.ts",
+      "tests/p2-convergence.test.ts",
+      "tests/p2-essential-budget.test.ts",
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/planStability.test.ts",
+      "tests/property/lock.machine.test.ts"
+    ],
+    "src/features/week/miniWeekPreviewModel": [
+      "scripts/miniWeekPreview.test.ts"
+    ],
+    "src/features/libao/modeSetup": [
+      "scripts/modeSetup.test.ts",
+      "tests/v2.test.ts"
+    ],
+    "src/features/persona/personaCopy": [
+      "scripts/personaCopy.test.ts"
+    ],
+    "src/lib/persona": [
+      "scripts/personaCopy.test.ts",
+      "scripts/personaTiering.test.ts"
+    ],
+    "src/data/personaBank": [
+      "scripts/personaTiering.test.ts"
+    ],
+    "src/features/plan/planLock": [
+      "scripts/planLock.test.ts",
+      "scripts/rollingState.test.ts"
+    ],
+    "src/features/plan/rollingState": [
+      "scripts/rollingState.test.ts"
+    ],
+    "src/lib/planner/fatigue": [
+      "scripts/rollingState.test.ts",
+      "tests/fatigue.test.ts"
+    ],
+    "src/lib/date": [
+      "scripts/rollingState.test.ts",
+      "tests/p2-incremental-rolling.test.ts"
+    ],
+    "src/features/libao/schedSession": [
+      "scripts/schedSession.test.ts"
+    ],
+    "src/lib/planner/places": [
+      "scripts/scheduler.test.ts",
+      "tests/campus-vocab.test.ts",
+      "tests/improve.test.ts",
+      "tests/places-buildings.test.ts",
+      "tests/places.test.ts"
+    ],
+    "src/constants/time": [
+      "scripts/scheduler.test.ts"
+    ],
+    "src/lib/storage": [
+      "scripts/storage.test.ts"
+    ],
+    "src/lib/telemetry": [
+      "scripts/telemetry.test.ts"
+    ],
+    "src/features/weather/weather": [
+      "scripts/weather.test.ts"
+    ],
+    "src/lib/planner/unavailableSlots": [
+      "tests/activityAndLocalized.test.ts"
+    ],
+    "src/lib/planner/localizedReplan": [
+      "tests/activityAndLocalized.test.ts",
+      "tests/wp4b.test.ts"
+    ],
+    "src/features/activity/activityStore": [
+      "tests/activityAndLocalized.test.ts"
+    ],
+    "src/features/activity/aggregate": [
+      "tests/activityAndLocalized.test.ts"
+    ],
+    "src/features/activity/goalStore": [
+      "tests/activityAndLocalized.test.ts"
+    ],
+    "src/features/week/assignmentStore": [
+      "tests/assignment.test.ts"
+    ],
+    "src/constants/campus": [
+      "tests/campus-vocab.test.ts"
+    ],
+    "src/lib/planner/model": [
+      "tests/churn.test.ts",
+      "tests/construct.test.ts",
+      "tests/fatigue.test.ts",
+      "tests/feedback.test.ts",
+      "tests/improve-transfer.test.ts",
+      "tests/improve.test.ts",
+      "tests/objective-evaluate.test.ts",
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/places-policy.test.ts",
+      "tests/scoring-transfer.test.ts",
+      "tests/solver.test.ts",
+      "tests/wp5.test.ts"
+    ],
+    "src/lib/planner/construct": [
+      "tests/construct.test.ts",
+      "tests/courseOverride.test.ts",
+      "tests/knowledge-wiring.test.ts",
+      "tests/places-policy.test.ts",
+      "tests/profile-prefs.test.ts",
+      "tests/wp5.test.ts",
+      "tests/wp6.test.ts"
+    ],
+    "src/lib/planner/courseOverrides": [
+      "tests/courseOverride.test.ts"
+    ],
+    "src/lib/planner/longTermRules": [
+      "tests/courseOverride.test.ts"
+    ],
+    "src/features/feedback/parseCorrection": [
+      "tests/courseOverride.test.ts",
+      "tests/feedback.test.ts"
+    ],
+    "src/features/libao/dialogManager": [
+      "tests/d-batch.test.ts"
+    ],
+    "src/features/libao/LbaoChat": [
+      "tests/d-batch.test.ts",
+      "tests/v0.test.ts",
+      "tests/v2.test.ts",
+      "tests/v3.test.ts",
+      "tests/wp12.test.ts"
+    ],
+    "src/features/week/WeekPlanView": [
+      "tests/d-batch.test.ts",
+      "tests/issue-bar-ui.test.ts",
+      "tests/v1.test.ts",
+      "tests/v2.test.ts",
+      "tests/v3.test.ts",
+      "tests/week-view-model.test.ts",
+      "tests/weekplan-shift-ui.test.ts",
+      "tests/wp12.test.ts",
+      "tests/wp4b.test.ts",
+      "tests/wp7.test.ts"
+    ],
+    "src/App": [
+      "tests/demo-banner-ui.test.ts",
+      "tests/v0.test.ts",
+      "tests/v3.test.ts",
+      "tests/weekplan-shift-ui.test.ts",
+      "tests/wp12.test.ts"
+    ],
+    "src/lib/planner/explain": [
+      "tests/explain.test.ts"
+    ],
+    "src/lib/planner/index": [
+      "tests/explain.test.ts",
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/planweek.test.ts",
+      "tests/solver.test.ts"
+    ],
+    "src/lib/planner/objective": [
+      "tests/fatigue.test.ts",
+      "tests/golden-lib.test.ts",
+      "tests/improve-transfer.test.ts",
+      "tests/improve.test.ts",
+      "tests/objective-evaluate.test.ts",
+      "tests/scoring-transfer.test.ts"
+    ],
+    "src/features/feedback/store": [
+      "tests/feedback.test.ts"
+    ],
+    "src/lib/planner/corrections": [
+      "tests/feedback.test.ts"
+    ],
+    "src/lib/planner/ripple": [
+      "tests/fillGap.test.ts",
+      "tests/longLock.test.ts",
+      "tests/ripple.test.ts",
+      "tests/wp10.test.ts",
+      "tests/wp4a.test.ts"
+    ],
+    "src/lib/planner/health": [
+      "tests/health_params.test.ts",
+      "tests/knowledge-wiring.test.ts"
+    ],
+    "src/lib/identity": [
+      "tests/identity.test.ts"
+    ],
+    "src/constants/term": [
+      "tests/improve-live.test.ts"
+    ],
+    "src/lib/planner/improve": [
+      "tests/improve-transfer.test.ts",
+      "tests/improve.test.ts"
+    ],
+    "src/lib/planner/knowledge": [
+      "tests/knowledge-wiring.test.ts"
+    ],
+    "src/lib/planner/methods": [
+      "tests/knowledge-wiring.test.ts",
+      "tests/method_params.test.ts"
+    ],
+    "src/lib/planner/lifeModePolicy": [
+      "tests/lifeModeAndSocial.test.ts",
+      "tests/wp5.test.ts"
+    ],
+    "src/lib/planner/longLocks": [
+      "tests/longLock.test.ts"
+    ],
+    "src/features/mobile/lib/notifyBridge": [
+      "tests/mobile/notify.test.ts"
+    ],
+    "src/lib/planner/incremental": [
+      "tests/p2-incremental-rolling.test.ts"
+    ],
+    "src/lib/planner/roll": [
+      "tests/p2-incremental-rolling.test.ts"
+    ],
+    "src/lib/planner/placesPolicy": [
+      "tests/places-policy.test.ts"
+    ],
+    "src/features/feedback/planIntent": [
+      "tests/planIntent.test.ts"
+    ],
+    "src/lib/planner/planWeek": [
+      "tests/planweek.test.ts"
+    ],
+    "src/lib/planner/profilePrefs": [
+      "tests/profile-explain.test.ts",
+      "tests/profile-prefs.test.ts"
+    ],
+    "src/features/persona/PersonaResult": [
+      "tests/profile-explain.test.ts"
+    ],
+    "src/features/week/userPlanStore": [
+      "tests/ripple.test.ts",
+      "tests/syncContract.test.ts",
+      "tests/userPlanStore.test.ts",
+      "tests/userPlanUndo.test.ts",
+      "tests/v1.test.ts",
+      "tests/wp12.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/features/mobile/lib/sync": [
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/mobile/lib/webSync": [
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/week/timeScale": [
+      "tests/timeScale.test.ts"
+    ],
+    "src/features/onboarding/checklist": [
+      "tests/v0.test.ts"
+    ],
+    "src/features/overview/OverviewPage": [
+      "tests/v0.test.ts"
+    ],
+    "src/features/week/saturation": [
+      "tests/v1.test.ts",
+      "tests/wp7.test.ts"
+    ],
+    "src/features/week/weekViewModel": [
+      "tests/week-view-model.test.ts"
+    ],
+    "src/components/ui/DetailDrawer": [
+      "tests/week-view-model.test.ts"
+    ],
+    "src/features/week/dragPreview": [
+      "tests/wp4b.test.ts"
+    ],
+    "src/lib/planner/campusLookup": [
+      "tests/wp6.test.ts"
+    ]
+  },
+  "orphans": []
+}
