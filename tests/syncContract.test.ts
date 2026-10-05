@@ -31,6 +31,10 @@ import {
   applyLayerToBlocks, todaySignature, stableHash, parseDate, fmtMin,
 } from '@/features/mobile/lib/sync.ts';
 import {
+  completeTodo, mergeGoals, mergeTodos, plannedDoneLabel, stampNewer, todoStamp,
+  type Goal, type Todo,
+} from '@/features/mobile/lib/memoTypes.ts';
+import {
   webSyncTick, WEB_STATE_KEY, WEB_LAYER_KEY, SWITCH_KEY, LAST_SIG_KEY, LAST_SYNC_KEY,
   type WebSyncDeps,
 } from '@/features/mobile/lib/webSync.ts';
@@ -66,7 +70,7 @@ test('buildSyncPayload：关键字段经 JSON 消毒后逐值往返相等', () =
     schedule: SCHEDULE, planState: PLAN_STATE, userOverrides: LAYER,
     termStart: '2026-09-07', weekNo: 4, clientUpdatedAt: '2026-10-03T12:00:00.000Z',
   });
-  assert.equal(payload.schemaVer, 1);
+  assert.equal(payload.schemaVer, 2, 'schemaVer=2（新任务三 P0 契约）');
   assert.equal(payload.termStart, '2026-09-07');
   assert.equal(payload.weekNo, 4);
   const rt = JSON.parse(JSON.stringify(payload));
@@ -172,6 +176,153 @@ test('todaySignature：内容不变签名稳定；时间/完成态任一变化�
   assert.notEqual(stableHash('abc'), stableHash('abd'), '哈希对输入敏感');
 });
 
+/* ---------------- schemaVer=2：todos / goals / persona 契约 ---------------- */
+
+const T1: Todo = {
+  id: 't1', kind: 'recent', title: '还书', createdAt: '2026-10-01T08:00:00.000Z',
+  updatedAt: '2026-10-05T08:00:00.000Z', completion: null,
+};
+const T2: Todo = {
+  id: 't2', kind: 'longterm', title: '背完六级词', createdAt: '2026-10-01T09:00:00.000Z',
+  completion: null, plannedDone: '2026-12-中旬',
+};
+const G1: Goal = {
+  id: 'g1', title: '拿下六级', createdAt: '2026-10-01T07:00:00.000Z',
+  updatedAt: '2026-10-05T07:00:00.000Z',
+  milestones: [{ id: 'ms1', title: '词汇量过 6000', done: false }],
+};
+
+test('buildSyncPayload：todos/goals/persona 随 schemaVer=2 完整往返', () => {
+  const payload = buildSyncPayload({
+    schedule: SCHEDULE, planState: PLAN_STATE, userOverrides: LAYER,
+    termStart: '2026-09-07', weekNo: 4, clientUpdatedAt: '2026-10-05T12:00:00.000Z',
+    todos: [T1, T2], goals: [G1],
+    persona: { axes: { social: 62 }, scenarios: null } as never,
+  });
+  assert.equal(payload.schemaVer, 2);
+  const rt = JSON.parse(JSON.stringify(payload));
+  assert.deepEqual(rt.todos, [T1, T2], 'todos 应原样往返');
+  assert.deepEqual(rt.goals, [G1], 'goals 应原样往返');
+  assert.equal(rt.persona.axes.social, 62, 'persona 应原样往返');
+});
+
+test('buildSyncPayload：空数组 / null 一律**键不出现**（不用空值覆盖云端）', () => {
+  const absent = buildSyncPayload({
+    schedule: SCHEDULE, planState: null, userOverrides: null,
+    termStart: '2026-09-07', weekNo: 1, clientUpdatedAt: '2026-10-05T12:00:00.000Z',
+  });
+  assert.ok(!('todos' in absent), '缺省时 todos 键不得出现');
+  assert.ok(!('goals' in absent), '缺省时 goals 键不得出现');
+  assert.ok(!('persona' in absent), '缺省时 persona 键不得出现');
+  const empty = buildSyncPayload({
+    schedule: SCHEDULE, planState: null, userOverrides: null,
+    termStart: '2026-09-07', weekNo: 1, clientUpdatedAt: '2026-10-05T12:00:00.000Z',
+    todos: [], goals: [], persona: null,
+  });
+  assert.ok(!('todos' in empty), '空数组也视为「没有」');
+  assert.ok(!('goals' in empty));
+  assert.ok(!('persona' in empty));
+});
+
+test('前向兼容：云端 state 含客户端不认识的字段 → 已知字段读取不受影响', () => {
+  const fromCloud = JSON.parse(JSON.stringify({
+    ...buildSyncPayload({
+      schedule: SCHEDULE, planState: null, userOverrides: LAYER,
+      termStart: '2026-09-07', weekNo: 4, clientUpdatedAt: '2026-10-05T12:00:00.000Z',
+    }),
+    futureField: { anything: true }, // 未来版本可能新增的键
+  }));
+  assert.equal(fromCloud.termStart, '2026-09-07');
+  assert.equal(fromCloud.userOverrides.moves[0].blockId, 'w4-d1-study-lib-1');
+  assert.equal(fromCloud.futureField.anything, true, '未知键原样存在（客户端忽略即可）');
+});
+
+/* ---------------- 逐项 LWW 合并（memoTypes 纯函数，服务端有同语义实现） ---------------- */
+
+test('mergeTodos：并集保序去重；同 id 新者胜（双向）', () => {
+  const localEdit: Todo = { ...T1, title: '还三本书', updatedAt: '2026-10-06T08:00:00.000Z' };
+  const remoteEdit: Todo = { ...T2, completion: 'done', actualDoneAt: '2026-10-06T09:00:00.000Z', updatedAt: '2026-10-06T09:00:00.000Z' };
+  // 本地改了 t1、云端改了 t2、两侧都有对方没有的项
+  const merged = mergeTodos([localEdit], [T1, remoteEdit, T2]);
+  const byId = new Map(merged.map((t) => [t.id, t]));
+  assert.equal(byId.get('t1')?.title, '还三本书', '本地新 → 本地胜');
+  assert.equal(byId.get('t2')?.completion, 'done', '云端新 → 云端胜');
+  assert.equal(merged.length, 2, '并集无重复');
+});
+
+test('mergeTodos：时间戳平局 → 云端副本胜（以云端为准）', () => {
+  const sameStamp: Todo = { ...T1 };
+  const remoteSame: Todo = { ...T1, title: '云端同戳版本' };
+  const merged = mergeTodos([sameStamp], [remoteSame]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].title, '云端同戳版本', '平局不许本地覆盖云端');
+});
+
+test('mergeTodos：updatedAt 缺省退回 createdAt；脏项（无 id）丢弃', () => {
+  const oldByCreatedAt: Todo = { ...T1, updatedAt: undefined, createdAt: '2026-10-02T00:00:00.000Z' };
+  const newerRemote: Todo = { ...T1, updatedAt: '2026-10-03T00:00:00.000Z' };
+  const merged = mergeTodos([oldByCreatedAt], [newerRemote, { title: '没 id 的毒项' } as never]);
+  assert.equal(merged.length, 1, '毒项必须被丢弃');
+  assert.equal(merged[0].updatedAt, '2026-10-03T00:00:00.000Z', 'createdAt 旧 → 云端胜');
+  const localNewer: Todo = { ...T1, updatedAt: undefined, createdAt: '2026-10-04T00:00:00.000Z' };
+  const merged2 = mergeTodos([localNewer], [newerRemote]);
+  assert.equal(merged2[0].createdAt, '2026-10-04T00:00:00.000Z', 'createdAt 新 → 本地胜');
+});
+
+test('mergeGoals：与待办同语义（里程碑整项随目标 LWW）', () => {
+  const localEdit: Goal = { ...G1, why: '为了出国交流', updatedAt: '2026-10-06T00:00:00.000Z' };
+  const remoteNew: Goal = { id: 'g2', title: '保研', createdAt: '2026-10-05T00:00:00.000Z' };
+  const merged = mergeGoals([localEdit], [G1, remoteNew]);
+  const byId = new Map(merged.map((g) => [g.id, g]));
+  assert.equal(byId.get('g1')?.why, '为了出国交流');
+  assert.equal(byId.get('g2')?.title, '保研');
+  assert.equal(merged.length, 2);
+});
+
+test('stampNewer/todoStamp：ISO 变体按时间比、非法退字符串比、空串最旧', () => {
+  assert.equal(stampNewer('2026-10-03T20:00:00+08:00', '2026-10-03T12:00:00Z'), false, '同一时刻不同写法 = 平局');
+  assert.equal(stampNewer('2026-10-03T12:00:01+00:00', '2026-10-03T12:00:00Z'), true);
+  assert.equal(stampNewer('abc', 'abd'), false, '非法退字符串比');
+  assert.equal(stampNewer('abd', 'abc'), true);
+  assert.equal(stampNewer('', ''), false, '双空 = 平局');
+  assert.equal(todoStamp({ updatedAt: undefined, createdAt: '2026-10-01T00:00:00Z' }), '2026-10-01T00:00:00Z');
+});
+
+/* ---------------- 完成分流（CY 核心：两类待办完成流程必须不同） ---------------- */
+
+test('completeTodo：recent 打勾即完成，**不要求**填时间', () => {
+  const nowIso = '2026-10-06T10:00:00.000Z';
+  const r = completeTodo(T1, { nowIso });
+  assert.ok(r.ok);
+  assert.equal(r.todo.completion, 'done');
+  assert.equal(r.todo.actualDoneAt, nowIso);
+  assert.equal(r.todo.plannedDone, undefined, 'recent 不许被塞完成期');
+  assert.equal(r.todo.updatedAt, nowIso, 'updatedAt 必须刷新（逐项 LWW 依据）');
+});
+
+test('completeTodo：longterm 未填完成时间 → 拒绝（防遗忘的硬规则）', () => {
+  const r = completeTodo(T2, { nowIso: '2026-10-06T10:00:00.000Z' });
+  assert.deepEqual(r, { ok: false, reason: 'need-planned-done' });
+  const r2 = completeTodo(T2, { nowIso: '2026-10-06T10:00:00.000Z', plannedDone: '  ' });
+  assert.equal(r2.ok, false);
+});
+
+test('completeTodo：longterm 填了粗粒度时间 → 完成；格式非法 → 拒绝', () => {
+  const nowIso = '2026-10-06T10:00:00.000Z';
+  const ok = completeTodo(T2, { nowIso, plannedDone: '2026-10-中旬' });
+  assert.ok(ok.ok);
+  assert.equal(ok.todo.plannedDone, '2026-10-中旬');
+  assert.equal(ok.todo.actualDoneAt, nowIso);
+  const bad = completeTodo(T2, { nowIso, plannedDone: '2026-10-15' }); // 精确到日 = 违反 CY「粗糙一点」
+  assert.deepEqual(bad, { ok: false, reason: 'bad-planned-done' });
+});
+
+test('plannedDoneLabel：粗粒度编码 → 人类文案；解析失败原样返回', () => {
+  assert.equal(plannedDoneLabel('2026-09-中旬'), '2026 年 9 月中旬');
+  assert.equal(plannedDoneLabel('2027-03-上旬'), '2027 年 3 月上旬');
+  assert.equal(plannedDoneLabel('随便'), '随便');
+});
+
 /* ---------------- F8 webSyncTick：开关关 = 零网络 ---------------- */
 
 function makeDeps(over: Partial<WebSyncDeps> = {}): { deps: WebSyncDeps; calls: Array<{ url: string; init: RequestInit }> } {
@@ -211,7 +362,7 @@ test('webSyncTick：开关开 + 内容变化 → 恰好一次 PUT，请求体契
   assert.equal(calls.length, 1, '只发一次');
   assert.equal(calls[0].url, '/api/sync/state');
   const body = JSON.parse(String(calls[0].init.body));
-  assert.equal(body.schemaVer, 1);
+  assert.equal(body.schemaVer, 2);
   assert.equal(body.state.termStart, '2026-09-07');
   assert.equal(body.state.weekNo, 4, 'termStart+today 推算当前周');
   assert.equal(body.state.userOverrides.moves[0].blockId, 'w4-d1-study-lib-1', 'web 覆盖层原样上行');

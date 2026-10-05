@@ -91,13 +91,15 @@ export async function webSyncTick(deps: WebSyncDeps): Promise<WebSyncTickResult>
     termStart,
     weekNo: weekNoFromTermStart(termStart, today) ?? 1,
     clientUpdatedAt,
+    // schemaVer=2：画像随主状态上行（web 端画像本来就在 AppState 里）
+    persona: (app.persona as never) ?? null,
   });
 
   try {
     const res = await deps.fetchImpl('/api/sync/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${deps.token}` },
-      body: JSON.stringify({ state: payload, schemaVer: 1, clientUpdatedAt }),
+      body: JSON.stringify({ state: payload, schemaVer: 2, clientUpdatedAt }),
     });
     if (!res.ok) {
       deps.log?.(`webSync 上传失败 HTTP ${res.status}`);

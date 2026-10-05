@@ -1,22 +1,33 @@
 /**
- * 光溯移动端 · 局部类型（方案 §5：零改动 src/types.ts，新增类型全部放这里）
+ * 光溯移动端 · 局部类型（新任务三 §5.3：零改动 src/types.ts，新增类型全部放这里）
  * ============================================================
- * SyncState payload（schemaVer=1）与端点响应的**线协议**形状。
+ * SyncState payload（schemaVer=2）与端点响应的**线协议**形状。
  * 字段语义以 src/types.ts 的 Schedule / PlanPersistState / UserPlanLayer 为准 ——
  * 服务端只透传不解释，客户端对不认识的字段一律忽略（前向兼容条款）。
+ *
+ * schemaVer 2（新任务三 P6-1/P4-1，CY 批准动契约）：
+ *   · `todos?` / `goals?`：待办与目标（类型在 memoTypes.ts，P0 契约）；
+ *   · `persona?`：完整画像 —— 修 planCompute `persona: null` 硬编码（F1）；
+ *   · 均可选：旧客户端（v1）不发 → 服务端保留库中原值，不覆盖不清空。
  */
 import type { Schedule } from '@/types';
 import type { PlanPersistState } from '@/types';
 import type { UserPlanLayer } from '@/features/week/userPlanStore';
+import type { Todo, Goal } from './memoTypes.ts';
 
 /** 方案 §5.1 —— 权威状态 */
 export interface SyncStatePayload {
-  schemaVer: 1;
+  schemaVer: 2;
   termStart: string;
   weekNo: number;
   schedule: Schedule;
   planState?: PlanPersistState | null;
   userOverrides?: UserPlanLayer | null;
+  /** schemaVer=2 新增：待办（最近/中长期）与目标；缺省 = 旧客户端，云端保留原值 */
+  todos?: Todo[];
+  goals?: Goal[];
+  /** schemaVer=2 新增：完整画像（手机重算的画像微调入口，F1） */
+  persona?: import('@/types').PersonaProfile | null;
   clientUpdatedAt: string;
 }
 

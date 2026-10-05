@@ -56,9 +56,13 @@ export function parseDate(s: string): number | null {
 }
 
 /**
- * 组装 SyncState payload（方案 §5.1）。
+ * 组装 SyncState payload（方案 §5.1 + 新任务三 §5.3 schemaVer=2）。
  * `JSON.parse(JSON.stringify(...))` 剔除不可序列化项（函数/undefined）——
  * 服务端只透传不解释，这里保证上行的 JSON 是干净的纯数据。
+ *
+ * schemaVer=2 新增均为**条件展开**（缺省 = 键不出现）：
+ *   · todos / goals：空数组也视为「没有」→ 服务端并集合并时不会用空数组覆盖云端；
+ *   · persona：null = 手机没有画像 → 服务端保留库中原值。
  */
 export function buildSyncPayload(args: {
   schedule: import('@/types').Schedule;
@@ -67,15 +71,21 @@ export function buildSyncPayload(args: {
   termStart: string;
   weekNo: number;
   clientUpdatedAt: string;
+  todos?: import('./memoTypes.ts').Todo[] | null;
+  goals?: import('./memoTypes.ts').Goal[] | null;
+  persona?: import('@/types').PersonaProfile | null;
 }): SyncStatePayload {
   const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v ?? null)) as T;
   return {
-    schemaVer: 1,
+    schemaVer: 2,
     termStart: args.termStart,
     weekNo: args.weekNo,
     schedule: clean(args.schedule),
     planState: args.planState ? clean(args.planState) : null,
     userOverrides: args.userOverrides ? clean(args.userOverrides) : null,
+    ...(args.todos?.length ? { todos: clean(args.todos) } : {}),
+    ...(args.goals?.length ? { goals: clean(args.goals) } : {}),
+    ...(args.persona ? { persona: clean(args.persona) } : {}),
     clientUpdatedAt: args.clientUpdatedAt,
   };
 }

@@ -43,7 +43,15 @@ from account import _conn, _err, _now_iso, _parse_iso, user_id_from_request
 router = APIRouter()
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SCHEMA_VER = 1
+SCHEMA_VER = 2
+# 支持的最低客户端版本：v1 = schemaVer=2 之前的旧 App（契约扩展后必须仍能同步，
+# 否则已发布的 0.2.0 APK 一夜全坏）。
+MIN_SCHEMA_VER = 1
+# 逐项 LWW 管的数组字段（新任务三 §5.3）：整数组覆盖会丢并发写入
+# （手机勾待办 ∥ 网页加待办 → 一方被拒/被吞），按 id 并集 + updatedAt 新者胜。
+MERGED_ARRAY_KEYS = ("todos", "goals")
+# 旧客户端（schemaVer<2）不知道的字段：PUT 时云端原值保留（不覆盖、不清空）
+PRESERVE_KEYS = ("todos", "goals", "persona")
 ICS_WINDOW_WEEKS = 1  # 当前周 ±1
 
 _VERSION_FILE = os.path.join(_HERE, "version.json")
@@ -74,6 +82,41 @@ def _get_state_row(user_id: int):
         c.close()
 
 
+def _item_stamp(item: dict) -> str:
+    """逐项 LWW 的时间戳：updatedAt 缺省退回 createdAt（与 TS memoTypes.todoStamp 同口径）。"""
+    return str(item.get("updatedAt") or item.get("createdAt") or "")
+
+
+def _item_newer(a: dict, b: dict) -> bool:
+    """a 是否严格新于 b：能解析成时间按时间比，否则退回字符串比（与 TS stampNewer 同口径）。"""
+    sa, sb = _item_stamp(a), _item_stamp(b)
+    ta, tb = _parse_iso(sa), _parse_iso(sb)
+    if ta is not None and tb is not None:
+        return ta > tb
+    if ta is not None:
+        return sa != ""
+    if tb is not None:
+        return False
+    return sa > sb
+
+
+def _merge_array_by_id(incoming, stored):
+    """待办/目标数组并集合并（schemaVer=2）：
+
+    · 同 id → updatedAt 新者胜；平局 → 云端副本胜（以云端为准，stored 先入）；
+    · 只在一侧有的 id → 保留（删除 = archived 归档，数组永不丢项）；
+    · 无 id / 非 dict 的脏项丢弃（前向兼容：毒项不进库）。
+    """
+    merged: dict = {}
+    for item in (stored or []) + (incoming or []):
+        if not (isinstance(item, dict) and item.get("id")):
+            continue
+        cur = merged.get(str(item["id"]))
+        if cur is None or _item_newer(item, cur):
+            merged[str(item["id"])] = item
+    return list(merged.values())
+
+
 @router.get("/api/sync/state")
 def api_sync_state_get(request: Request):
     user_id = user_id_from_request(request)
@@ -94,7 +137,8 @@ def api_sync_state_put(request: Request, body: SyncStatePut):
     user_id = user_id_from_request(request)
     if user_id is None:
         return _err(401, "unauthorized")
-    if body.schemaVer != SCHEMA_VER:
+    # schemaVer 兼容（新任务三 §5.3）：v1 旧 App 仍接受；>2 的高版本不认识 → 400 不瞎猜
+    if body.schemaVer > SCHEMA_VER or body.schemaVer < MIN_SCHEMA_VER:
         return _err(400, "unsupported_schema")
     client_ts = _parse_iso(body.clientUpdatedAt)
     if client_ts is None:
@@ -103,6 +147,7 @@ def api_sync_state_put(request: Request, body: SyncStatePut):
         return _err(400, "invalid_state")
 
     existing = _get_state_row(user_id)
+    stored_payload = None
     if existing:
         server_ts = _parse_iso(existing[2])
         # 服务端时间戳解析不了（脏数据）→ 按「极旧」处理，让客户端能救回来
@@ -113,6 +158,26 @@ def api_sync_state_put(request: Request, body: SyncStatePut):
             except (ValueError, TypeError):
                 state = None
             return {"accepted": False, "updatedAt": existing[2], "state": state}
+        try:
+            stored_payload = json.loads(existing[1])
+        except (ValueError, TypeError):
+            stored_payload = None
+    if not isinstance(stored_payload, dict):
+        stored_payload = {}
+
+    if body.schemaVer < SCHEMA_VER:
+        # 旧客户端（v1）：接受写入，但它不知道的新字段**保留云端原值**（不覆盖不清空）
+        for k in PRESERVE_KEYS:
+            if k in stored_payload:
+                body.state[k] = stored_payload[k]
+    else:
+        # 新客户端（v2）：todos/goals 按 id 逐项 LWW 并集（防并发写入互相覆盖）
+        for k in MERGED_ARRAY_KEYS:
+            if k in stored_payload or k in body.state:
+                body.state[k] = _merge_array_by_id(body.state.get(k), stored_payload.get(k))
+        # persona：上行没带（null）而云端有 → 保留（web 端画像不该被手机写空）
+        if stored_payload.get("persona") is not None and body.state.get("persona") is None:
+            body.state["persona"] = stored_payload["persona"]
 
     new_ts = client_ts
     if existing:
@@ -125,7 +190,7 @@ def api_sync_state_put(request: Request, body: SyncStatePut):
             "INSERT INTO sync_state(user_id, schema_ver, payload, updated_at) VALUES(?,?,?,?) "
             "ON CONFLICT(user_id) DO UPDATE SET schema_ver=excluded.schema_ver, "
             "payload=excluded.payload, updated_at=excluded.updated_at",
-            (user_id, SCHEMA_VER, json.dumps(body.state, ensure_ascii=False), new_ts.isoformat()),
+            (user_id, body.schemaVer, json.dumps(body.state, ensure_ascii=False), new_ts.isoformat()),
         )
         c.commit()
     finally:

@@ -49,7 +49,7 @@ assert r.status_code == 401, r.text
 r = c.get("/api/sync/state", headers=H)
 assert r.status_code == 200 and r.json()["found"] is False and r.json()["state"] is None, r.text
 
-# ---------- 2) PUT state → 回来原样 ----------
+# ---------- 2) PUT state（schemaVer=2，含 todos/goals）→ 回来原样 ----------
 demo_schedule = {
     "semesterName": "2026-2027-1", "semesterType": "autumn",
     "termStart": "2026-09-07", "totalWeeks": 20,
@@ -61,27 +61,40 @@ demo_schedule = {
     }],
     "source": "demo",
 }
+demo_todos = [
+    {"id": "td-recent-1", "kind": "recent", "title": "还图书馆的书",
+     "createdAt": NOW_ISO, "updatedAt": NOW_ISO, "completion": None},
+    {"id": "td-long-1", "kind": "longterm", "title": "背完六级词",
+     "createdAt": NOW_ISO, "updatedAt": NOW_ISO, "completion": None,
+     "plannedDone": "2026-12-中旬"},
+]
+demo_goals = [{"id": "g-1", "title": "拿下六级", "createdAt": NOW_ISO,
+               "updatedAt": NOW_ISO, "milestones": [{"id": "ms-1", "title": "词汇过 6000", "done": False}]}]
 state_payload = {
-    "schemaVer": 1, "termStart": "2026-09-07", "weekNo": 5,
+    "schemaVer": 2, "termStart": "2026-09-07", "weekNo": 5,
     "schedule": demo_schedule,
     "planState": {"version": 1, "lastPlanWeek": 5, "locks": {}, "churnMin": 0,
                   "lockedPlacements": {}, "updatedAt": NOW_ISO, "rolling": None,
                   "rollingBase": None},
     "userOverrides": {"schemaVersion": 2, "tasks": [], "excluded": [], "moves": [],
                       "slots": [], "courseOverrides": [], "mealPlaces": {}, "assignments": []},
+    "todos": demo_todos,
+    "goals": demo_goals,
     "clientUpdatedAt": NOW_ISO,
 }
-r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 1,
+r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 2,
                                    "clientUpdatedAt": NOW_ISO}, headers=H)
 assert r.status_code == 200 and r.json()["accepted"] is True, r.text
 server_ts = r.json()["updatedAt"]
 
 r = c.get("/api/sync/state", headers=H)
 body = r.json()
-assert body["found"] is True and body["schemaVer"] == 1, r.text
+assert body["found"] is True and body["schemaVer"] == 2, r.text
 assert body["state"]["schedule"]["termStart"] == "2026-09-07", "课表应原样往返"
 assert body["state"]["userOverrides"]["schemaVersion"] == 2, "覆盖层应原样往返"
 assert body["state"]["planState"]["lastPlanWeek"] == 5, "planState 应原样往返"
+assert body["state"]["todos"] == demo_todos, "todos 应原样往返"
+assert body["state"]["goals"] == demo_goals, "goals 应原样往返"
 
 # ---------- 3) LWW 反向：旧时间戳再 PUT → accepted=false + 服务端副本 ----------
 tampered = dict(state_payload)
@@ -94,15 +107,71 @@ r = c.get("/api/sync/state", headers=H)
 assert r.json()["state"]["weekNo"] == 5, "被拒的写入不得落库"
 
 # ---------- 4) 反向：坏时间戳 / 坏 schemaVer → 400 ----------
-r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 1,
+r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 2,
                                    "clientUpdatedAt": "昨天"}, headers=H)
 assert r.status_code == 400 and r.json()["error"] == "invalid_timestamp", r.text
-r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 2,
+r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 3,
                                    "clientUpdatedAt": NOW_ISO}, headers=H)
-assert r.status_code == 400 and r.json()["error"] == "unsupported_schema", r.text
-r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 1,
+assert r.status_code == 400 and r.json()["error"] == "unsupported_schema", "高版本（>2）必须 400"
+r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 0,
+                                   "clientUpdatedAt": NOW_ISO}, headers=H)
+assert r.status_code == 400 and r.json()["error"] == "unsupported_schema", "低于最低支持版本必须 400"
+r = c.put("/api/sync/state", json={"state": state_payload, "schemaVer": 2,
                                    "clientUpdatedAt": NOW_ISO}, headers={"Authorization": "Bearer forged"})
 assert r.status_code == 401, "坏令牌 PUT 必须 401"
+
+# ---------- 4b) 前向兼容：旧客户端 schemaVer=1 连 v2 服务端 → 接受且不清空云端新字段 ----------
+# LWW 是「严格新才写」，所以后续每个场景都要用递增的时间戳（模拟时间流逝，而非并发同戳）
+FUT1 = (NOW + timedelta(minutes=5)).isoformat()
+FUT2 = (NOW + timedelta(minutes=6)).isoformat()
+FUT3 = (NOW + timedelta(minutes=7)).isoformat()
+FUT4 = (NOW + timedelta(minutes=8)).isoformat()
+v1_state = {
+    "schemaVer": 1, "termStart": "2026-09-07", "weekNo": 6,
+    "schedule": demo_schedule, "planState": None,
+    "userOverrides": {"schemaVersion": 2, "tasks": [], "excluded": [], "moves": [],
+                      "slots": [], "courseOverrides": [], "mealPlaces": {}, "assignments": []},
+    "clientUpdatedAt": FUT1,
+    # 旧客户端没有 todos/goals/persona 键
+}
+r = c.put("/api/sync/state", json={"state": v1_state, "schemaVer": 1,
+                                   "clientUpdatedAt": FUT1}, headers=H)
+assert r.status_code == 200 and r.json()["accepted"] is True, "旧客户端必须被接受：" + r.text
+r = c.get("/api/sync/state", headers=H)
+body = r.json()
+assert body["state"]["weekNo"] == 6, "旧客户端的原有字段照常写入"
+assert body["state"]["todos"] == demo_todos, "🔴 旧客户端 PUT 后云端 todos 不得被清空"
+assert body["state"]["goals"] == demo_goals, "🔴 旧客户端 PUT 后云端 goals 不得被清空"
+
+# ---------- 4c) 逐项 LWW 并发场景（schemaVer=2）：同账号两次 PUT 不同待办 ----------
+t_old = {"id": "td-recent-1", "kind": "recent", "title": "旧版本标题（应被拒绝）",
+         "createdAt": NOW_ISO, "updatedAt": OLD_ISO, "completion": None}
+t_new = {"id": "td-new-1", "kind": "recent", "title": "另一端新加的待办",
+         "createdAt": FUT2, "updatedAt": FUT2, "completion": None}
+r = c.put("/api/sync/state", json={
+    "state": dict(v1_state, schemaVer=2, todos=[t_old, t_new], goals=[]),
+    "schemaVer": 2, "clientUpdatedAt": FUT2}, headers=H)
+assert r.status_code == 200 and r.json()["accepted"] is True, r.text
+r = c.get("/api/sync/state", headers=H)
+todos = r.json()["state"]["todos"]
+by_id = {t["id"]: t for t in todos}
+assert by_id["td-recent-1"]["title"] == "还图书馆的书", "旧时间戳（updatedAt=OLD）不得覆盖云端新版"
+assert by_id["td-new-1"]["title"] == "另一端新加的待办", "另一端新加的待办必须保留（并集不丢项）"
+assert len(todos) == 3, f"并集应为 3 条，得到 {len(todos)}"
+assert r.json()["state"]["goals"] == demo_goals, "空数组 goals 上行不得清空云端"
+
+# ---------- 4d) persona 保留：上行没带 persona → 云端原值不动 ----------
+persona_state = dict(v1_state, schemaVer=2)
+persona_state["clientUpdatedAt"] = FUT3
+persona_state["persona"] = {"axes": {"social": 62}, "scenarios": None}
+r = c.put("/api/sync/state", json={"state": persona_state, "schemaVer": 2,
+                                   "clientUpdatedAt": FUT3}, headers=H)
+assert r.status_code == 200, r.text
+r = c.put("/api/sync/state", json={"state": dict(persona_state, persona=None),
+                                   "schemaVer": 2, "clientUpdatedAt": FUT4}, headers=H)
+assert r.status_code == 200, r.text
+r = c.get("/api/sync/state", headers=H)
+assert r.json()["state"]["persona"]["axes"]["social"] == 62, "persona=null 上行不得清空云端画像"
 
 # ---------- 5) 周计划副本 PUT/GET 往返 ----------
 demo_plan = {
@@ -157,9 +226,13 @@ r = c.get(f"/api/sync/plan.ics?token={ics_token}")
 assert r.status_code == 200 and r.text.count("BEGIN:VEVENT") == 3, "脏块必须被跳过"
 
 # ---------- 8) /api/version：有文件 200 + 缺文件 404 ----------
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "server", "version.json"), encoding="utf-8") as _vf:
+    _vmeta = json.load(_vf)
 r = c.get("/api/version")
 assert r.status_code == 200, f"version.json 已提交，应 200：{r.text}"
-assert r.json()["version"] == "0.1.0" and "apkUrl" in r.json(), r.text
+assert r.json()["version"] == _vmeta["version"], "端点版本必须与 server/version.json 一致（不写死，防升版即红）"
+assert "apkUrl" in r.json(), r.text
 orig = sync._VERSION_FILE
 sync._VERSION_FILE = os.path.join(_tmp, "no_such_version.json")
 r = c.get("/api/version")
