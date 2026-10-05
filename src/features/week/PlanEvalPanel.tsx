@@ -215,11 +215,15 @@ export function PlanEvalPanel({
   digest,
   evaluation,
   review,
+  onAdopt,
 }: {
   digest: PlanDigest;
   evaluation: PlanEvaluation;
   /** H2（R批 Wave3）：后端三库复核 —— loading 拉取中 / ok 有报告 / offline 不可达 */
   review?: { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport };
+  /** 采纳回调：把建议的任务骨架交回周计划（与「加一件事」同一条攒改动流 ——
+   *  落到 layer.tasks + 🆕，重排后才出现在日程表；确认权仍在用户手里） */
+  onAdopt?: (task: Record<string, unknown>) => void;
 }) {
   const slugs = useMemo(() => citedSlugs(evaluation), [evaluation]);
   const judged = evaluation.dimensions.filter((d) => d.score != null);
@@ -322,6 +326,16 @@ export function PlanEvalPanel({
                       <span className="ml-1 whitespace-nowrap rounded border border-ink/15 px-1 text-[10px] text-ink-faint">
                         {a.source.lib} {a.source.tier} 级 · {a.source.slug}{a.source.retrieved ? '' : '（静态口径）'}
                       </span>
+                      {onAdopt && a.action?.kind === 'add_task' && (
+                        <button
+                          type="button"
+                          data-testid="plan-review-adopt"
+                          onClick={() => onAdopt(a.action!.task)}
+                          className="ml-1.5 rounded-md border border-brand/30 bg-brand/5 px-1.5 py-0.5 text-[10.5px] font-medium text-brand transition-colors hover:bg-brand/10"
+                        >
+                          采纳
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

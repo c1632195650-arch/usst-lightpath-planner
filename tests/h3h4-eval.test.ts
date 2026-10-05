@@ -158,4 +158,15 @@ test('H2 源码锁: 后端复核通道三段在位（端点 / 客户端 / 面板
   assert.match(panel, /data-testid="plan-review-backend"/, '后端复核渲染区');
   assert.match(panel, /data-testid="plan-review-offline"/, '离线如实说明');
   assert.match(panel, /（静态口径）/, '静态降级不冒充真检索');
+
+  // 采纳（验收补齐 2026-10-03）：建议可执行 —— 按钮 → onAdopt → 周计划攒改动流
+  assert.match(panel, /data-testid="plan-review-adopt"/, '采纳按钮（RV：删按钮 → 红）');
+  assert.match(panel, /a\.action\?\.kind === 'add_task' && \(/, '只有可加块表达的建议出采纳');
+  assert.match(panel, /onClick=\{\(\) => onAdopt\(a\.action!\.task\)\}/, '点击交回任务骨架');
+  const wv2 = src('/src/features/week/WeekPlanView.tsx');
+  assert.match(wv2, /onAdopt=\{\(skeleton\) => \{/, 'WeekPlanView 接线采纳');
+  assert.match(wv2, /note: '采纳自日程评估（重排后生效）'/, '任务 note 如实标注来源');
+  assert.match(wv2, /handleAddTask\(\{/, '复用「加一件事」同一条攒改动流（L4：重排才生效）');
+  const api2 = src('/src/lib/api.ts');
+  assert.match(api2, /action\?\: \{ kind: 'add_task'; task: Record<string, unknown> \} \| null/, 'advice action 类型');
 });

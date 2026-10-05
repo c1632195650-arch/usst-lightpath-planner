@@ -62,6 +62,7 @@ import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStor
 import { dayWindowWithFallback, loadRoutine } from './routineStore';
 import { getUserId, loadBasicInfo } from '@/lib/identity';
 import { planReview, type PlanReviewReport } from '@/lib/api';
+import { makeTaskId } from './planEditsStore';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
 import { SlotEditor } from './SlotEditor';
 // ── R3：调课/停课覆盖层 + 时间追问 ────────────────────────────
@@ -1936,7 +1937,31 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </summary>
         {evalOpen && (
           <div className="mt-3">
-            <PlanEvalPanel digest={evalDigest} evaluation={evalResult} review={evalReview} />
+            <PlanEvalPanel
+              digest={evalDigest}
+              evaluation={evalResult}
+              review={evalReview}
+              onAdopt={(skeleton) => {
+                // R批 Wave3 采纳（验收补齐）：任务骨架 → UserTask → 与「加一件事」
+                // 同一条流（layer.tasks + 🆕 高亮，重排后才出现在日程表）。
+                // L4 不变：这里只记用户的采纳决定，不改已排块的落点。
+                const t = skeleton as {
+                  title?: string; kind?: UserTask['kind']; durationMin?: number;
+                  weeks?: number[]; recurring?: boolean;
+                };
+                handleAddTask({
+                  id: makeTaskId(),
+                  title: t.title ?? '评估建议',
+                  kind: t.kind ?? 'activity',
+                  category: 'custom',
+                  durationMin: t.durationMin ?? 45,
+                  ...(Array.isArray(t.weeks) && t.weeks.length > 0 ? { weeks: t.weeks } : { weeks: [weekNo] }),
+                  ...(t.recurring ? { recurring: true } : {}),
+                  priority: 80,
+                  note: '采纳自日程评估（重排后生效）',
+                });
+              }}
+            />
           </div>
         )}
       </details>

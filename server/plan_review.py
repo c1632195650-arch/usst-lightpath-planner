@@ -64,14 +64,21 @@ _DIM_QUERY = {
     "growth": ("方法库", "习惯养成 目标 时间线"),
 }
 
+# 任务骨架（task）只描述「采纳后加什么块」；weeks 由 review_plan 按被评周回填。
+# 没有 action 的建议（睡眠类=要挪不要加、超长块=要拆不要加）→ 前端不出采纳按钮。
 _ADVICE = {
-    "aerobic-150": "每周再补 1-2 次 30 分钟以上的有氧（快走/慢跑都算）",
-    "strength-2days": "每周补 2 天力量练习（自重/器械均可，隔 48 小时）",
-    "sleep-duration-adult": "把最后一件事提前，给睡眠机会留足 7 小时以上",
-    "sleep-regularity": "对照「我的作息」里设置的就寝收尾；排不开就让我按新节奏重排",
-    "regular-meals-breakfast": "把没排到用餐的日子补上三餐块（食堂时段可从地点库看）",
-    "ultradian-rhythm": "把超长学习块拆成 ≤90 分钟的两段，中间休息",
-    "spacing-effect": "把集中复习拆成每周 2-3 次的分散安排（间隔效应，A 级）",
+    "aerobic-150": {"text": "每周再补 1-2 次 30 分钟以上的有氧（快走/慢跑都算）",
+                    "action": {"kind": "add_task", "task": {"title": "有氧锻炼", "kind": "activity", "durationMin": 45}}},
+    "strength-2days": {"text": "每周补 2 天力量练习（自重/器械均可，隔 48 小时）",
+                       "action": {"kind": "add_task", "task": {"title": "力量训练", "kind": "activity", "durationMin": 45}}},
+    "sleep-duration-adult": {"text": "把最后一件事提前，给睡眠机会留足 7 小时以上"},
+    "sleep-regularity": {"text": "对照「我的作息」里设置的就寝收尾；排不开就让我按新节奏重排"},
+    "regular-meals-breakfast": {"text": "把没排到用餐的日子补上三餐块（食堂时段可从地点库看）",
+                                "action": {"kind": "add_task", "task": {"title": "用餐", "kind": "meal", "durationMin": 30}}},
+    "ultradian-rhythm": {"text": "把超长学习块拆成 ≤90 分钟的两段，中间休息"},
+    "spacing-effect": {"text": "把集中复习拆成每周 2-3 次的分散安排（间隔效应，A 级）",
+                       "action": {"kind": "add_task", "task": {"title": "复习", "kind": "study", "durationMin": 45}},
+                       "multi": True},
 }
 
 
@@ -146,6 +153,26 @@ def _static_source(rule):
             "quote": rule["quote"], "retrieved": False}
 
 
+def _stamped_action(adv, week_no, total_weeks=None, recurring=False, title=None, kind=None, duration_min=None):
+    """把任务骨架回填成可执行 action：weeks=被评周（周级重复块铺到学期末）。"""
+    if "action" not in adv:
+        return None
+    task = dict(adv["action"]["task"])
+    if title:
+        task["title"] = title
+    if kind:
+        task["kind"] = kind
+    if duration_min:
+        task["durationMin"] = duration_min
+    if recurring:
+        task["recurring"] = True
+        end = total_weeks if isinstance(total_weeks, int) and total_weeks > 0 else week_no
+        task["weeks"] = list(range(week_no, end + 1))
+    else:
+        task["weeks"] = [week_no]
+    return {"kind": "add_task", "task": task}
+
+
 def _ok_headline(rule, v):
     return {
         "aerobic-150": "本周中高强度有氧 %d 分钟，达标" % v,
@@ -205,9 +232,10 @@ def review_plan(digest, user_id="anon", week_no=0):
             add("good", rule, _ok_headline(rule, fact["value"]), fact)
         else:
             add("gap", rule, gap_headline or _gap_headline(rule, fact["value"]), fact, gap_severity)
-            text = _ADVICE.get(rule["id"])
-            if text:
-                advice.append({"text": text, "dim": rule["dim"], "source": rule["_source"]})
+            adv = _ADVICE.get(rule["id"])
+            if adv:
+                advice.append({"text": adv["text"], "dim": rule["dim"], "source": rule["_source"],
+                               "action": _stamped_action(adv, week_no)})
 
     for r in rules:
         if r["kind"] == "aerobic":
@@ -225,18 +253,25 @@ def review_plan(digest, user_id="anon", week_no=0):
                 add("good", r, "本周中高强度有氧 %d 分钟，达标" % (m + v), combined)
             else:
                 add("gap", r, "本周中高强度有氧 %d 分钟，低于 150" % (m + v), combined)
-                advice.append({"text": _ADVICE[r["id"]], "dim": r["dim"], "source": r["_source"]})
+                adv = _ADVICE[r["id"]]
+                advice.append({"text": adv["text"], "dim": r["dim"], "source": r["_source"],
+                               "action": _stamped_action(adv, week_no)})
         elif r["kind"] == "min":
             judge(r, _fact(digest, r["fact"]), lambda x, t=r["target"]: x >= t)
         elif r["kind"] == "min_soft":
-            # 软目标：不足只是 info 级提示，不算 gap
+            # 软目标：不足只是 info 级提示，不算硬 gap —— 但 advice 照给（带 action）
             f = _fact(digest, r["fact"])
             if not f["confident"]:
                 add("unknown", r, "日程里判断不了这一项", severity="info")
             else:
-                add("good" if f["value"] >= r["target"] else "gap", r,
-                    _ok_headline(r, f["value"]) if f["value"] >= r["target"] else _gap_headline(r, f["value"]),
+                ok = f["value"] >= r["target"]
+                add("good" if ok else "gap", r,
+                    _ok_headline(r, f["value"]) if ok else _gap_headline(r, f["value"]),
                     f, severity="info")
+                if not ok:
+                    adv = _ADVICE[r["id"]]
+                    advice.append({"text": adv["text"], "dim": r["dim"], "source": r["_source"],
+                                   "action": _stamped_action(adv, week_no)})
         elif r["kind"] == "range":
             f = _fact(digest, r["fact"])
             if not f["confident"]:
@@ -247,7 +282,9 @@ def review_plan(digest, user_id="anon", week_no=0):
                 add("good", r, _ok_headline(r, f["value"]), f)
             elif f["value"] < floor:
                 add("gap", r, _gap_headline(r, f["value"]), f, severity="serious")
-                advice.append({"text": _ADVICE[r["id"]], "dim": r["dim"], "source": r["_source"]})
+                adv = _ADVICE[r["id"]]
+                advice.append({"text": adv["text"], "dim": r["dim"], "source": r["_source"],
+                               "action": _stamped_action(adv, week_no)})
             else:
                 add("good", r, "睡眠机会 %.1f 小时，偏长但不是问题" % f["value"], f)
         elif r["kind"] == "zero":
@@ -286,7 +323,11 @@ def review_plan(digest, user_id="anon", week_no=0):
                                             "evidence": [], "source": src})
                     if ratio < 0.5:
                         growth_advice.append({"text": "习惯要整段跑道 —— 说「把「%s」延续到学期末」我就补齐" % title,
-                                              "dim": "growth", "source": src})
+                                              "dim": "growth", "source": src,
+                                              "action": _stamped_action(
+                                                  {"action": {"kind": "add_task",
+                                                              "task": {"title": title, "kind": "activity", "durationMin": 30}}},
+                                                  week_no, total_weeks=total, recurring=True)})
     else:
         growth_findings.append({"id": "growth-habit-unknown", "dim": "growth", "status": "unknown",
                                 "severity": "info", "headline": "还没有长期重复的安排", "evidence": [],
@@ -311,7 +352,11 @@ def review_plan(digest, user_id="anon", week_no=0):
                                     "headline": "目标「%s」还有约 %d 周到期，本周没有相关安排" % (title, left),
                                     "evidence": [], "source": src})
             growth_advice.append({"text": "说「帮我排「%s」」，我把准备块铺进接下来的周" % title,
-                                  "dim": "growth", "source": src})
+                                  "dim": "growth", "source": src,
+                                  "action": _stamped_action(
+                                      {"action": {"kind": "add_task",
+                                                  "task": {"title": title, "kind": "study", "durationMin": 60}}},
+                                      week_no)})
         else:
             growth_findings.append({"id": "growth-goal-%s" % title, "dim": "growth", "status": "unknown",
                                     "severity": "info", "headline": "目标「%s」本周暂无相关安排（不等于没推进）" % title,
@@ -329,8 +374,7 @@ def review_plan(digest, user_id="anon", week_no=0):
         d["findings"].append(f)
     for a in advice + growth_advice:
         dims.setdefault(a["dim"], {"key": a["dim"], "label": _DIM_LABEL.get(a["dim"], a["dim"]),
-                                   "findings": [], "advice": []})["advice"].append(
-            {"text": a["text"], "source": a["source"]})
+                                   "findings": [], "advice": []})["advice"].append(a)  # 整条透传（含 action/dim）
     for d in dims.values():
         known = [f for f in d["findings"] if f["status"] != "unknown"]
         d["coverage"] = round(len(known) / max(1, len(d["findings"])), 2)
@@ -357,7 +401,9 @@ class PlanReviewReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str = "anon"
     week_no: int = 0
-    digest: dict = Field(default_factory=dict)
+    # digest 必填且非空（R批验收：缺 digest 曾静默 200 全 unknown —— 与
+    # MemoryFactReq 的 pydantic 校验纪律对齐，缺字段/空对象一律 422）
+    digest: dict = Field(min_length=1)
 
 
 router = APIRouter()

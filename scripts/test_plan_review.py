@@ -96,6 +96,8 @@ def main():
     gg = find(r, "growth-goal-四六级")
     check("目标有相关块=good", gg and gg["status"] == "good", str(gg))
     check("达标日程无 advice", len(advs(r)) == 0, str([x["text"] for x in advs(r)]))
+    check("检索命中 retrieval 标志全 True（假覆盖正侧锁）",
+          all(v is True for v in r["retrieval"].values()), str(r["retrieval"]))
 
     print("== 2. 不达标日程：gap + advice 带 source ==")
     d2 = digest(
@@ -121,6 +123,26 @@ def main():
     texts = [x["text"] for x in advs(r2)]
     check("advice 覆盖 7 条缺口", len(texts) >= 7, str(texts))
     check("每条 advice 带 source", all(x.get("source", {}).get("lib") for x in advs(r2)))
+    by_dim = {}
+    for a in advs(r2):
+        by_dim.setdefault(a.get("dim"), []).append(a)
+    for dim in ("exercise", "nutrition", "study"):
+        # 同维度可能有多条建议（如 study：超长块无 action、复习软目标有 action）
+        with_act = [a for a in by_dim.get(dim, []) if a.get("action")]
+        act = with_act[0].get("action") if with_act else None
+        check("%s advice 带 add_task action" % dim,
+              act and act.get("kind") == "add_task" and act.get("task", {}).get("title"), str(act))
+        check("%s action.weeks 回填被评周" % dim,
+              act and act["task"].get("weeks") == [12], str(act and act["task"].get("weeks")))
+    for dim in ("sleep",):
+        check("%s advice 不带 action（挪/减类不加块）" % dim,
+              all(a.get("action") is None for a in by_dim.get(dim, [])))
+    hg = next((a for a in advs(r2) if a.get("dim") == "growth" and "延续" in a.get("text", "")), None)
+    check("习惯延续 action=recurring 铺到学期末",
+          hg and hg["action"]["task"].get("recurring") is True and hg["action"]["task"].get("weeks") == list(range(12, 21)),
+          str(hg and hg["action"]))
+    gg = next((a for a in advs(r2) if a.get("dim") == "growth" and "帮我排" in a.get("text", "")), None)
+    check("目标准备块 action 在位", gg and gg["action"]["task"].get("title") == "数模国赛", str(gg and gg["action"]))
 
     print("== 3. unknown 不冒充 0：缺事实 → unknown，不出 gap ==")
     r3 = plan_review.review_plan(digest(), "tester", 3)
@@ -144,6 +166,10 @@ def main():
     check("降级后判定照出", a4 and a4["status"] == "good", str(a4))
     check("降级后 source.retrieved=False", a4 and a4["source"]["retrieved"] is False, str(a4 and a4["source"]))
     check("降级 quote 用静态口径", a4 and "150" in a4["source"]["quote"], str(a4 and a4["source"]))
+    check("降级后 retrieval 标志全 False（CY 假覆盖变异在此恰红）",
+          len(r4["retrieval"]) > 0 and all(v is False for v in r4["retrieval"].values()), str(r4["retrieval"]))
+    check("降级 advice 仍带 action（判定与检索正交）",
+          all(a.get("action", {}).get("kind") == "add_task" for a in advs(r4)), str(advs(r4)))
 
     print("== 5. 同库命中（slug 不同）→ 用库内 tier（真检索的次级形态） ==")
     plan_review._RETRIEVERS = {"健康库": _StubHealth, "方法库": _StubMethod}
@@ -160,6 +186,22 @@ def main():
     r6b = plan_review.review_plan(d6, "tester", 1)
     check("入参未被改写", d6 == snapshot)
     check("两次调用确定一致", r6a["dimensions"] == r6b["dimensions"])
+
+    print("== 7. 422 契约：digest 必填且非空（对齐 MemoryFactReq 纪律） ==")
+    from pydantic import ValidationError
+    from plan_review import PlanReviewReq
+    for label, payload in (("缺 digest", {"user_id": "x", "week_no": 1}),
+                           ("空 digest", {"user_id": "x", "week_no": 1, "digest": {}})):
+        try:
+            PlanReviewReq(**payload)
+            check("%s → 422" % label, False, "竟然通过了校验")
+        except ValidationError:
+            check("%s → 422" % label, True)
+    try:
+        ok_req = PlanReviewReq(user_id="x", week_no=1, digest={"moderateMin": {"value": 1, "confident": True}})
+        check("完整 digest 通过校验", ok_req.digest.get("moderateMin") is not None)
+    except ValidationError as e:
+        check("完整 digest 通过校验", False, str(e))
 
     print()
     if FAILS:

@@ -426,6 +426,8 @@ export interface PlanReviewFinding {
 export interface PlanReviewAdvice {
   text: string;
   source: PlanReviewSource;
+  /** 采纳动作（仅「可加块表达」的建议有）：add_task + 任务骨架（weeks 已按被评周回填） */
+  action?: { kind: 'add_task'; task: Record<string, unknown> } | null;
 }
 export interface PlanReviewDimension {
   key: string;
