@@ -29,7 +29,7 @@
 🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
    真实坐标只用于后端算路与排序，不出现在任何响应体里。
 """
-import os, re, sys, io, json, time, uuid, hashlib
+import asyncio, os, re, sys, io, json, time, uuid, hashlib
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -40,8 +40,8 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from typing import Annotated
 
-from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
@@ -893,8 +893,7 @@ def _chat_trace(rid, q, route, intent, top_raw, n_results, sources,
         print(f"[chat {rid}] trace 失败：{e}", flush=True)
 
 
-@app.post("/api/chat")
-def api_chat(body: ChatReq):
+def _chat_core(body: ChatReq) -> dict:
     # request_id：把「终端里那一行 trace」和「前端调试抽屉里这一轮」对起来
     rid = uuid.uuid4().hex[:8]
     _t0 = time.perf_counter()
@@ -1108,6 +1107,65 @@ def api_chat(body: ChatReq):
         "memory_proposals": mem_events["pending"],
         "memory_applied": mem_events["applied"],
     }
+
+
+@app.post("/api/chat")
+def api_chat(body: ChatReq):
+    # 2026-10-06 新任务三 W3（A1 梨宝抽屉）：主体抽成 _chat_core（检索/路由/生成管线
+    # 一行未动），本端点行为零变化；流式版 /api/chat/stream 复用同一个 _chat_core。
+    return _chat_core(body)
+
+
+# SSE 分块参数：生成完成后按「伪 token」节奏推送（真 token 流需给 llm_answer 加
+# stream=True 回调，动引擎侧签名，按任务书纪律登记 stretch，不在本批做）。
+_CHAT_STREAM_CHUNK = 2      # 每个 delta 的字符数
+_CHAT_STREAM_DELAY = 0.02   # chunk 间隔秒；300 字 ≈ 3s 渐进输出
+
+
+@app.post("/api/chat/stream")
+async def api_chat_stream(body: ChatReq, request: Request):
+    """梨宝抽屉专用 SSE 端点（新任务三 P3-1）。
+
+    🔴 复用而非重写：检索路由（rag/campus/memory/method_rag/health_rag/space_ctx/
+    profile_ctx）与 llm_answer()/agent 全部照 _chat_core 原样，只改输出方式。
+    协议：`data: {"type":"meta",...}` → `{"type":"delta","text":..}`* → `{"type":"done",...}`；
+    ChatReq 原样复用（extra="forbid" 不放宽）；无 LLM Key 时 _chat_core 自动降级
+    extractive，同样正常推流不报错；中途断开 = is_disconnected 逐块检测 +
+    Starlette 关闭生成器（GeneratorExit），连接不泄漏。
+    """
+    from fastapi.concurrency import run_in_threadpool
+
+    result = await run_in_threadpool(_chat_core, body)   # 阻塞管线放线程池，不卡事件循环
+    answer = str(result.get("answer") or "")
+    meta = {
+        "type": "meta",
+        "request_id": result.get("request_id"),
+        "route": result.get("route"),
+        "mode": result.get("mode"),
+    }
+    done = {k: result.get(k) for k in (
+        "sources", "memory_proposals", "memory_applied", "request_id", "elapsed_ms",
+        "used_space", "used_memory", "used_profile", "used_study", "used_health",
+    ) if k in result}
+    done["type"] = "done"
+
+    async def gen():
+        yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
+        for i in range(0, len(answer), _CHAT_STREAM_CHUNK):
+            if i % 80 == 0 and await request.is_disconnected():
+                return  # 用户关抽屉：停止推流，连接释放
+            yield "data: " + json.dumps(
+                {"type": "delta", "text": answer[i:i + _CHAT_STREAM_CHUNK]},
+                ensure_ascii=False,
+            ) + "\n\n"
+            await asyncio.sleep(_CHAT_STREAM_DELAY)
+        yield "data: " + json.dumps(done, ensure_ascii=False) + "\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 class ResetReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
