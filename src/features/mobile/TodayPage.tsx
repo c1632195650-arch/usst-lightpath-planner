@@ -34,6 +34,19 @@ import TomorrowPreview from './TomorrowPreview.tsx';
 import WeekGlance from './WeekGlance.tsx';
 import IcsGuide from './IcsGuide.tsx';
 import WhitelistGuide from './WhitelistGuide.tsx';
+import EvalPanel from './EvalPanel.tsx';
+import DailyQuizSheet from './DailyQuizSheet.tsx';
+import { computeExecutionProfile, dailySeries, offsetDayKey, tipForSlug } from './eval/compute.ts';
+import { EMPTY_EVAL_INPUT, type EvalInput } from './eval/model.ts';
+import {
+  finalDoneKeys, loadBehavior, localDateKey, recordBlockToggle, toCheckRecords,
+} from './eval/behaviorLog.ts';
+import {
+  hasOfferedToday, loadShown, recordAnswer, recordShown, slugLastShown, toSelfReportAnswers,
+  type ShownRecord,
+} from './eval/answerStore.ts';
+import { QUESTION_BANK, pickQuestions, fallbackCategory, type QuizQuestion } from './eval/questionBank.ts';
+import { completionUnits } from './eval/units.ts';
 
 /** 本 APP 的版本（F18 semver 比较；APK 打包时与服务端 version.json 对齐） */
 const APP_VERSION = '0.1.0';
@@ -72,6 +85,12 @@ export default function TodayPage({ identity, onLogout }: {
   const [tomorrow, setTomorrow] = useState<{ loading: boolean; blocks: TimeBlock[] | null }>({ loading: false, blocks: null });
   const [quickMsg, setQuickMsg] = useState('');
   const [updateUrl, setUpdateUrl] = useState<string | null>(null); // F18
+
+  /* ---------- 任务二 · 执行力评估（P1/P3 接线；副作用集中在 behaviorLog/answerStore） ---------- */
+  /** 今日待办尚未落地（任务三 todos[]）→ 类别映射先空着，题库走「无待办」类；落地后改为 categoriesFromTodoKinds(...) */
+  const [behaviorEvents, setBehaviorEvents] = useState(() => loadBehavior(localStorage));
+  const [shownRows, setShownRows] = useState<ShownRecord[]>(() => loadShown(localStorage));
+  const [quiz, setQuiz] = useState<{ dayKey: string; questions: QuizQuestion[] } | null>(null);
 
   /** 今日视图 = 重算计划 ∘ 覆盖层（excluded / moves / done） */
   const displayed = useMemo(
@@ -190,6 +209,19 @@ export default function TodayPage({ identity, onLogout }: {
   /* ---------- 轻编辑（F4）：全部落覆盖层 ---------- */
   const onAction = useCallback((b: TimeBlock, a: EditAction) => {
     if (!weekNo) return;
+    // 任务二 · 行为日志：勾选状态变化落一条（评估只采用户主动产生的数据）
+    if (a.type === 'toggleDone') {
+      const cur = layer.moves.find((m) => m.blockId === b.id && m.weekNo === weekNo);
+      const willBeDone = !(cur?.done ?? false);
+      recordBlockToggle(localStorage, {
+        blockId: b.id,
+        kind: b.kind,
+        plannedStartMin: b.startMin,
+        when: new Date(),
+        done: willBeDone,
+      });
+      setBehaviorEvents(loadBehavior(localStorage));
+    }
     setLayer((prev) => {
       const existing = prev.moves.find((m) => m.blockId === b.id && m.weekNo === weekNo);
       const done = a.type === 'toggleDone' ? !(existing?.done ?? false) : (existing?.done ?? false);
@@ -210,7 +242,7 @@ export default function TodayPage({ identity, onLogout }: {
     });
     setSheetBlock(null);
     setQuickMsg('');
-  }, [weekNo]);
+  }, [weekNo, layer]);
 
   /* ---------- 通知动作按钮（F14，仅 APK 内有事件源） ---------- */
   useEffect(() => {
@@ -254,6 +286,51 @@ export default function TodayPage({ identity, onLogout }: {
       })
       .catch(() => undefined); // 404/断网 = 没有更新信息，不是错误
   }, []);
+
+  /* ---------- 任务二 · 评估输入装配（计算全走纯函数，「今天」以 todayKey 注入） ---------- */
+  const todayKey = localDateKey(now);
+  const evalDays = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const k = offsetDayKey(todayKey, -i);
+      if (k) out.push(k);
+    }
+    return out;
+  }, [todayKey]);
+  const evalInput = useMemo<EvalInput>(() => {
+    if (!plan || !serverState) return EMPTY_EVAL_INPUT;
+    return {
+      // 任务三 todos[] 落地后：中长期待办进 lateTodos（拖延指数）
+      units: completionUnits({
+        plan, layer, termStart: serverState.termStart,
+        days: evalDays, doneKeys: finalDoneKeys(behaviorEvents),
+      }),
+      lateTodos: [],
+      checks: toCheckRecords(behaviorEvents),
+      answers: toSelfReportAnswers(shownRows),
+    };
+  }, [plan, serverState, layer, evalDays, behaviorEvents, shownRows]);
+  const profile = useMemo(() => computeExecutionProfile(evalInput, todayKey), [evalInput, todayKey]);
+  const series = useMemo(() => dailySeries(evalInput, evalDays), [evalInput, evalDays]);
+
+  /* ---------- 任务二 P3-2 · 每日采集弹窗（每天首次打开；题库空 = BLOCKED 于任务一，静默不弹） ---------- */
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const tk = localDateKey(new Date());
+    if (hasOfferedToday(localStorage, tk)) return;
+    // 今日待办类别：任务三 todos[] 落地后改为 categoriesFromTodoKinds(todos.map(t => t.kind))
+    const picked = pickQuestions({
+      bank: QUESTION_BANK,
+      categories: fallbackCategory(),
+      todayKey: tk,
+      slugLastShown: slugLastShown(loadShown(localStorage)),
+    });
+    if (picked.length === 0) return;
+    recordShown(localStorage, { todayKey: tk, questions: picked });
+    setShownRows(loadShown(localStorage));
+    setQuiz({ dayKey: tk, questions: picked });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   /* ---------- F11 快捷指令（两个固定问法，不调 LLM） ---------- */
   function quickWhatToday() {
@@ -408,6 +485,8 @@ export default function TodayPage({ identity, onLogout }: {
             <WeekGlance plan={plan} layer={layer} weekNo={weekNo ?? 0} todayDow={dow} />
             <IcsGuide icsToken={identity.icsToken} />
             <WhitelistGuide />
+            {/* 任务二 P3-1 · 「我的执行状态」折叠区（Today 页底部，不干扰执行） */}
+            <EvalPanel profile={profile} series={series} />
           </>
         )}
       </main>
@@ -418,6 +497,19 @@ export default function TodayPage({ identity, onLogout }: {
         onClose={() => setSheetBlock(null)}
         onAction={onAction}
       />
+
+      {/* 任务二 P3-2 · 每日采集弹窗（每天首次打开；题目可跳过、带「看方法」） */}
+      {quiz && (
+        <DailyQuizSheet
+          questions={quiz.questions}
+          tipForSlug={tipForSlug}
+          onAnswer={(q, optionIdx) => {
+            recordAnswer(localStorage, { todayKey: quiz.dayKey, question: q, optionIdx });
+            setShownRows(loadShown(localStorage));
+          }}
+          onFinished={() => setQuiz(null)}
+        />
+      )}
     </div>
   );
 }
