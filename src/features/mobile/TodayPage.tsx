@@ -1,492 +1,182 @@
 /**
- * 光溯移动端 · 今日页（方案 §7.2 数据流的落地）
+ * 光溯移动端 · 今日页（新任务三 §3.1 三区信息架构）
  * ============================================================
- *   登录 → GET /api/sync/state
- *     ├─ found=false → 空态引导（去网页端排计划）
- *     └─ found → 采纳云端覆盖层 → 本地 recomputeWeek 重算
- *              → 套覆盖层渲染今日时间轴（F2/F3）
- *   轻编辑（F4）→ userPlanStore 覆盖层（唯一写法）→ 本地即时重算
- *              → debounce 1s → PUT state + PUT plan 副本 → notifyBridge 重排通知
+ * 本文件只承担**渲染**；数据/同步/覆盖层/待办仓/通知决策全在 lib/useTodayData.ts
+ * 与各纯函数模块（硬指标：本文件 ≤260 行，禁止回填逻辑）。
  *
- * 其余：F5 现在横幅（30s tick）/ F6 ICS 引导 / F7 明日预告 / F9 变化标记 /
- *      F10 本周剩余 / F11 两个固定快捷指令（不调 LLM）/ F18 检查更新。
+ * 三区（竖持单手，重要性递减）：
+ *   ① 目标待办卡（≈4s 淡出 / 逾期转常驻）② 当前块 NowBlock（燃烧条+大按钮+tips 插槽）
+ *   ③ 接下来 + 当日时间轴（上下滑 = 只看当天）
+ * 底部：通知状态 / 梨宝抽屉 / ICS / 白名单（P6-2 降级折叠）/ 评估区（任务二）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { TimeBlock, WeekPlan } from '@/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { TimeBlock } from '@/types';
 import type { MobileIdentity } from './lib/auth.ts';
 import { clearIdentity } from './lib/auth.ts';
-import { ApiFailure, apiGetSyncState, apiGetVersion, apiPutPlanCopy, apiPutSyncState } from './lib/api.ts';
-import type { SyncStatePayload } from './lib/types.ts';
-import {
-  emptyUserPlan, loadUserPlan, saveUserPlan, upsertMove,
-  type MoveRecord, type UserPlanLayer,
-} from '@/features/week/userPlanStore';
-import { nextUpcoming, recomputeWeek } from './lib/planCompute.ts';
-import {
-  applyLayerToBlocks, buildSyncPayload, fmtMin,
-  minutesOfDay, todayDow, todaySignature, weekNoFromTermStart,
-} from './lib/sync.ts';
+import { applyLayerToBlocks, minutesOfDay } from './lib/sync.ts';
+import { nowTipForBlock } from './lib/nowTip.ts';
 import { useNow } from './lib/useNow.ts';
-import { registerActionHandler, rescheduleToday } from './lib/notifyBridge.ts';
+import { memoNeedsAttention } from './lib/memoStore.ts';
+import { useTodayData } from './lib/useTodayData.ts';
 import BlockCard from './BlockCard.tsx';
 import EditSheet, { type EditAction } from './EditSheet.tsx';
 import TomorrowPreview from './TomorrowPreview.tsx';
 import WeekGlance from './WeekGlance.tsx';
+import NowBlock from './NowBlock.tsx';
+import NextList from './NextList.tsx';
+import GoalTodoCard from './GoalTodoCard.tsx';
+import QuickBar from './QuickBar.tsx';
+import NotifyStatus from './NotifyStatus.tsx';
+import LbaoDrawer from './LbaoDrawer.tsx';
+import EvalSection from './EvalSection.tsx';
 import IcsGuide from './IcsGuide.tsx';
 import WhitelistGuide from './WhitelistGuide.tsx';
-import EvalPanel from './EvalPanel.tsx';
-import DailyQuizSheet from './DailyQuizSheet.tsx';
-import { computeExecutionProfile, dailySeries, offsetDayKey, tipForSlug } from './eval/compute.ts';
-import { EMPTY_EVAL_INPUT, type EvalInput } from './eval/model.ts';
-import {
-  finalDoneKeys, loadBehavior, localDateKey, recordBlockToggle, toCheckRecords,
-} from './eval/behaviorLog.ts';
-import {
-  hasOfferedToday, loadShown, recordAnswer, recordShown, slugLastShown, toSelfReportAnswers,
-  type ShownRecord,
-} from './eval/answerStore.ts';
-import { QUESTION_BANK, pickQuestions, fallbackCategory, type QuizQuestion } from './eval/questionBank.ts';
-import { completionUnits } from './eval/units.ts';
 
-/** 本 APP 的版本（F18 semver 比较；APK 打包时与服务端 version.json 对齐） */
-const APP_VERSION = '0.1.0';
-/** F9 当日签名存档 key */
-const SIG_KEY = 'usst.mobile.todaySig';
-
-function newerVersion(a: string, b: string): boolean {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) > (pb[i] ?? 0)) return true;
-    if ((pa[i] ?? 0) < (pb[i] ?? 0)) return false;
-  }
-  return false;
-}
-
-type Phase = 'loading' | 'empty-cloud' | 'ready' | 'error';
-
-export default function TodayPage({ identity, onLogout }: {
-  identity: MobileIdentity;
-  onLogout: () => void;
-}) {
+export default function TodayPage({ identity, onLogout }: { identity: MobileIdentity; onLogout: () => void }) {
   const now = useNow(30_000);
-  const dow = todayDow(now);
   const nowMin = minutesOfDay(now);
+  const d = useTodayData(identity, now);
 
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [errMsg, setErrMsg] = useState('');
-  const [serverState, setServerState] = useState<SyncStatePayload | null>(null);
-  const [weekNo, setWeekNo] = useState<number | null>(null);
-  const [plan, setPlan] = useState<WeekPlan | null>(null);
-  const [layer, setLayer] = useState<UserPlanLayer>(() => loadUserPlan());
   const [sheetBlock, setSheetBlock] = useState<TimeBlock | null>(null);
-  const [changed, setChanged] = useState(false); // F9「今天有变化」
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
-  const [tomorrow, setTomorrow] = useState<{ loading: boolean; blocks: TimeBlock[] | null }>({ loading: false, blocks: null });
-  const [quickMsg, setQuickMsg] = useState('');
-  const [updateUrl, setUpdateUrl] = useState<string | null>(null); // F18
-
-  /* ---------- 任务二 · 执行力评估（P1/P3 接线；副作用集中在 behaviorLog/answerStore） ---------- */
-  /** 今日待办尚未落地（任务三 todos[]）→ 类别映射先空着，题库走「无待办」类；落地后改为 categoriesFromTodoKinds(...) */
-  const [behaviorEvents, setBehaviorEvents] = useState(() => loadBehavior(localStorage));
-  const [shownRows, setShownRows] = useState<ShownRecord[]>(() => loadShown(localStorage));
-  const [quiz, setQuiz] = useState<{ dayKey: string; questions: QuizQuestion[] } | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   /** 今日视图 = 重算计划 ∘ 覆盖层（excluded / moves / done） */
   const displayed = useMemo(
-    () => (plan && weekNo ? applyLayerToBlocks(plan, layer, weekNo, dow) : null),
-    [plan, layer, weekNo, dow],
+    () => (d.plan && d.weekNo ? applyLayerToBlocks(d.plan, d.layer, d.weekNo, d.dow) : null),
+    [d.plan, d.layer, d.weekNo, d.dow],
   );
-  const displayedRef = useRef(displayed);
-  displayedRef.current = displayed;
-  const nowMinRef = useRef(nowMin);
-  nowMinRef.current = nowMin;
+  // 同步成功后的通知重排、通知动作按钮都吃这份视图（钩子经 ref 读取）
+  d.displayedRef.current = displayed;
 
-  /* ---------- 初次加载：拉云端状态 → 采纳覆盖层 → 本地重算 ---------- */
-  const load = useCallback(async (id: MobileIdentity) => {
-    setPhase('loading');
-    setErrMsg('');
-    try {
-      const st = await apiGetSyncState(id.token);
-      if (!st.found || !st.state) {
-        setPhase('empty-cloud');
-        return;
-      }
-      const s = st.state;
-      setServerState(s);
-      // 以云端为准（方案 §5.2 的载入侧语义）：云端覆盖层落本地，此后本地编辑再上行
-      const adopted: UserPlanLayer = s.userOverrides ?? emptyUserPlan();
-      saveUserPlan(adopted);
-      setLayer(adopted);
-      const wn = weekNoFromTermStart(s.termStart, new Date()) ?? s.weekNo ?? null;
-      setWeekNo(wn);
-      if (!wn) {
-        setPhase('error');
-        setErrMsg('学期起点有问题，去网页端检查学期设置');
-        return;
-      }
-      const p = await recomputeWeek({ schedule: s.schedule, weekNo: wn, planState: s.planState ?? null, layer: adopted });
-      if (!p) {
-        setPhase('error');
-        setErrMsg('本地重算失败，下拉重试');
-        return;
-      }
-      setPlan(p);
-      // F9：与上一次见过的今日签名比对，变了就提示
-      try {
-        const view = applyLayerToBlocks(p, adopted, wn, todayDow(new Date()));
-        const sig = todaySignature(view.blocks, view.doneIds);
-        const old = localStorage.getItem(SIG_KEY);
-        if (old && old !== sig) setChanged(true);
-        localStorage.setItem(SIG_KEY, sig);
-      } catch { /* 标记是增强，失败不影响主流程 */ }
-      setPhase('ready');
-    } catch (e) {
-      setPhase('error');
-      setErrMsg(e instanceof ApiFailure && e.code === 'network_error' ? '连不上服务器' : '同步失败，稍后重试');
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(identity);
-  }, [identity, load]);
-
-  /* ---------- 云同步（debounce 1s；LWW 被拒 → 以云端为准） ---------- */
-  const syncToCloud = useCallback(async () => {
-    if (!serverState || !weekNo || !plan) return;
-    setSyncStatus('syncing');
-    const clientUpdatedAt = new Date().toISOString();
-    const payload = buildSyncPayload({
-      schedule: serverState.schedule,
-      planState: serverState.planState ?? null,
-      userOverrides: layer,
-      termStart: serverState.termStart,
-      weekNo,
-      clientUpdatedAt,
-    });
-    try {
-      const r = await apiPutSyncState(identity.token, { state: payload, schemaVer: 1, clientUpdatedAt });
-      if (!r.accepted) {
-        // 云端更新 → 采纳服务端副本（方案 §5.2「以云端为准」）
-        const adopted = r.state?.userOverrides ?? emptyUserPlan();
-        saveUserPlan(adopted);
-        setLayer(adopted);
-        if (r.state) setServerState(r.state);
-        setSyncStatus('error');
-        return;
-      }
-      // 整周副本只作 ICS 素材（方案 §5.3）—— 本地刚重算的那份
-      await apiPutPlanCopy(identity.token, weekNo, plan);
-      setSyncStatus('saved');
-      void rescheduleToday(displayedRef.current?.blocks ?? [], nowMinRef.current);
-    } catch {
-      setSyncStatus('error');
-    }
-  }, [identity, serverState, weekNo, plan, layer]);
-
-  const firstLayerRender = useRef(true);
-  useEffect(() => {
-    if (phase !== 'ready') return;
-    if (firstLayerRender.current) {
-      firstLayerRender.current = false;
-      return;
-    }
-    if (!serverState || !weekNo) return;
-    // 本地即时重算（引擎吃新覆盖层：moves 已并入锁）
-    let cancelled = false;
-    void recomputeWeek({ schedule: serverState.schedule, weekNo, planState: serverState.planState ?? null, layer })
-      .then((p) => {
-        if (!cancelled && p) setPlan(p);
-      });
-    const t = window.setTimeout(() => void syncToCloud(), 1000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layer, phase]);
-
-  /* ---------- 轻编辑（F4）：全部落覆盖层 ---------- */
   const onAction = useCallback((b: TimeBlock, a: EditAction) => {
-    if (!weekNo) return;
-    // 任务二 · 行为日志：勾选状态变化落一条（评估只采用户主动产生的数据）
-    if (a.type === 'toggleDone') {
-      const cur = layer.moves.find((m) => m.blockId === b.id && m.weekNo === weekNo);
-      const willBeDone = !(cur?.done ?? false);
-      recordBlockToggle(localStorage, {
-        blockId: b.id,
-        kind: b.kind,
-        plannedStartMin: b.startMin,
-        when: new Date(),
-        done: willBeDone,
-      });
-      setBehaviorEvents(loadBehavior(localStorage));
-    }
-    setLayer((prev) => {
-      const existing = prev.moves.find((m) => m.blockId === b.id && m.weekNo === weekNo);
-      const done = a.type === 'toggleDone' ? !(existing?.done ?? false) : (existing?.done ?? false);
-      const rec: MoveRecord = {
-        weekNo,
-        blockId: b.id,
-        dayOfWeek: b.dayOfWeek,
-        startMin: a.type === 'shift' ? b.startMin + a.deltaMin : b.startMin,
-        endMin: a.type === 'shift' ? b.endMin + a.deltaMin : b.endMin,
-        ...(b.place !== undefined ? { place: b.place } : {}),
-        ...(b.room !== undefined ? { room: b.room } : {}),
-        source: 'edit',
-        ...(done ? { done: true } : {}),
-      };
-      const next = { ...prev, moves: upsertMove(prev.moves, rec) };
-      saveUserPlan(next);
-      return next;
-    });
+    d.onAction(b, a);
     setSheetBlock(null);
-    setQuickMsg('');
-  }, [weekNo, layer]);
-
-  /* ---------- 通知动作按钮（F14，仅 APK 内有事件源） ---------- */
-  useEffect(() => {
-    registerActionHandler((blockId, action) => {
-      const b = displayedRef.current?.blocks.find((x) => x.id === blockId);
-      if (!b) return;
-      onAction(b, action === 'done' ? { type: 'toggleDone' } : { type: 'shift', deltaMin: 15 });
-    });
-  }, [onAction]);
-
-  /* ---------- F7 明日预告 ---------- */
-  const tomorrowDow = (dow % 7) + 1;
-  useEffect(() => {
-    if (phase !== 'ready' || !weekNo) return;
-    if (tomorrowDow !== 1 && plan) {
-      const view = applyLayerToBlocks(plan, layer, weekNo, tomorrowDow);
-      setTomorrow({ loading: false, blocks: view.blocks });
-      return;
-    }
-    if (tomorrowDow === 1 && serverState) {
-      // 周日 → 下周一需要下一周的重算（懒算一次）
-      setTomorrow({ loading: true, blocks: null });
-      let cancelled = false;
-      void recomputeWeek({ schedule: serverState.schedule, weekNo: weekNo + 1, planState: serverState.planState ?? null, layer })
-        .then((p) => {
-          if (cancelled) return;
-          const view = p ? applyLayerToBlocks(p, layer, weekNo + 1, 1) : null;
-          setTomorrow({ loading: false, blocks: view?.blocks ?? [] });
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [phase, tomorrowDow, plan, layer, weekNo, serverState]);
-
-  /* ---------- F18 检查更新（APK 里才有意义；网页端静默） ---------- */
-  useEffect(() => {
-    void apiGetVersion()
-      .then((v) => {
-        if (newerVersion(v.version, APP_VERSION) && v.apkUrl) setUpdateUrl(v.apkUrl);
-      })
-      .catch(() => undefined); // 404/断网 = 没有更新信息，不是错误
-  }, []);
-
-  /* ---------- 任务二 · 评估输入装配（计算全走纯函数，「今天」以 todayKey 注入） ---------- */
-  const todayKey = localDateKey(now);
-  const evalDays = useMemo(() => {
-    const out: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const k = offsetDayKey(todayKey, -i);
-      if (k) out.push(k);
-    }
-    return out;
-  }, [todayKey]);
-  const evalInput = useMemo<EvalInput>(() => {
-    if (!plan || !serverState) return EMPTY_EVAL_INPUT;
-    return {
-      // 任务三 todos[] 落地后：中长期待办进 lateTodos（拖延指数）
-      units: completionUnits({
-        plan, layer, termStart: serverState.termStart,
-        days: evalDays, doneKeys: finalDoneKeys(behaviorEvents),
-      }),
-      lateTodos: [],
-      checks: toCheckRecords(behaviorEvents),
-      answers: toSelfReportAnswers(shownRows),
-    };
-  }, [plan, serverState, layer, evalDays, behaviorEvents, shownRows]);
-  const profile = useMemo(() => computeExecutionProfile(evalInput, todayKey), [evalInput, todayKey]);
-  const series = useMemo(() => dailySeries(evalInput, evalDays), [evalInput, evalDays]);
-
-  /* ---------- 任务二 P3-2 · 每日采集弹窗（每天首次打开；题库空 = BLOCKED 于任务一，静默不弹） ---------- */
-  useEffect(() => {
-    if (phase !== 'ready') return;
-    const tk = localDateKey(new Date());
-    if (hasOfferedToday(localStorage, tk)) return;
-    // 今日待办类别：任务三 todos[] 落地后改为 categoriesFromTodoKinds(todos.map(t => t.kind))
-    const picked = pickQuestions({
-      bank: QUESTION_BANK,
-      categories: fallbackCategory(),
-      todayKey: tk,
-      slugLastShown: slugLastShown(loadShown(localStorage)),
-    });
-    if (picked.length === 0) return;
-    recordShown(localStorage, { todayKey: tk, questions: picked });
-    setShownRows(loadShown(localStorage));
-    setQuiz({ dayKey: tk, questions: picked });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
-  /* ---------- F11 快捷指令（两个固定问法，不调 LLM） ---------- */
-  function quickWhatToday() {
-    const d = displayedRef.current;
-    if (!d) return;
-    const left = d.blocks.filter((b) => !d.doneIds.has(b.id) && b.endMin > nowMinRef.current);
-    setQuickMsg(left.length === 0
-      ? '今天排的都完成啦，剩下的时间留给你自己。'
-      : `今天还剩 ${left.length} 件：${left.slice(0, 3).map((b) => `${b.title} ${fmtMin(b.startMin)}`).join('、')}${left.length > 3 ? ' 等' : ''}`);
-  }
-  function quickSnoozeNext() {
-    const d = displayedRef.current;
-    if (!d) return;
-    const next = nextUpcoming(d.blocks, nowMinRef.current, d.doneIds);
-    if (!next) {
-      setQuickMsg('今天没有接下来的块了。');
-      return;
-    }
-    onAction(next, { type: 'shift', deltaMin: 15 });
-    setQuickMsg(`已把「${next.title}」顺延 15 分钟。`);
-  }
+  }, [d]);
 
   /* ---------- 渲染 ---------- */
   const current = displayed?.blocks.find((b) => b.startMin <= nowMin && nowMin < b.endMin && !displayed.doneIds.has(b.id)) ?? null;
-  const next = displayed ? nextUpcoming(displayed.blocks, nowMin, displayed.doneIds) : null;
+  const next = displayed ? displayed.blocks
+    .filter((b) => b.endMin > nowMin && !displayed.doneIds.has(b.id))
+    .sort((a, b) => a.startMin - b.startMin)[0] ?? null : null;
   const doneIds = displayed?.doneIds ?? new Set<string>();
+  const attention = memoNeedsAttention(d.memo, d.todayKey);
 
   return (
     <div className="min-h-screen w-full bg-paper pb-10">
-      {/* 顶栏 */}
       <header className="sticky top-0 z-30 bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-lg font-bold text-ink">光溯 · 今天</h1>
           <div className="flex items-center gap-2 text-xs text-ink-faint">
-            {weekNo && <span data-testid="m-weekno">第 {weekNo} 周</span>}
+            {d.weekNo && <span data-testid="m-weekno">第 {d.weekNo} 周</span>}
             <span data-testid="m-sync-status">
-              {syncStatus === 'syncing' && '同步中…'}
-              {syncStatus === 'saved' && '已同步 ✓'}
-              {syncStatus === 'error' && '同步失败'}
+              {d.syncStatus === 'syncing' && '同步中…'}
+              {d.syncStatus === 'saved' && '已同步 ✓'}
+              {d.syncStatus === 'error' && '同步失败'}
             </span>
-            <button type="button" onClick={() => { clearIdentity(); onLogout(); }} className="underline">
-              退出
-            </button>
+            <button type="button" onClick={() => { clearIdentity(); onLogout(); }} className="underline">退出</button>
           </div>
         </div>
         <p className="text-xs text-ink-faint">{identity.username} · 懂上理的智能决策伙伴</p>
       </header>
 
       <main className="mx-auto w-full max-w-md space-y-3 px-4">
-        {/* F9 变化标记 */}
-        {changed && (
+        {d.changed && (
           <div data-testid="m-changed-banner" className="rounded-xl bg-accent-light px-4 py-2.5 text-sm text-ink">
             今天的安排有更新 —— 以这里显示的为准。
-            <button type="button" className="ml-2 underline" onClick={() => setChanged(false)}>知道了</button>
+            <button type="button" className="ml-2 underline" onClick={() => d.setChanged(false)}>知道了</button>
           </div>
         )}
-        {/* F18 更新提示 */}
-        {updateUrl && (
+        {d.updateUrl && (
           <div data-testid="m-update" className="rounded-xl bg-brand-light px-4 py-2.5 text-sm text-ink">
-            有新版本。
-            <a className="ml-2 underline" href={updateUrl}>下载更新 APK</a>
+            有新版本。<a className="ml-2 underline" href={d.updateUrl}>下载更新 APK</a>
+          </div>
+        )}
+        {d.permDenied && (
+          <div data-testid="m-perm-banner" className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            通知没开，提醒收不到 —— 去系统设置打开通知权限，回来点「重排提醒」。
           </div>
         )}
 
-        {phase === 'loading' && (
-          <p data-testid="m-loading" className="py-16 text-center text-sm text-ink-faint">同步中…</p>
-        )}
-
-        {phase === 'error' && (
+        {d.phase === 'loading' && <p data-testid="m-loading" className="py-16 text-center text-sm text-ink-faint">同步中…</p>}
+        {d.phase === 'error' && (
           <div className="py-16 text-center">
-            <p className="text-sm text-danger">{errMsg}</p>
-            <button type="button" onClick={() => void load(identity)} className="mt-3 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">
-              重试
-            </button>
+            <p className="text-sm text-danger">{d.errMsg}</p>
+            <button type="button" onClick={() => void d.retry()} className="mt-3 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">重试</button>
           </div>
         )}
-
-        {phase === 'empty-cloud' && (
+        {d.phase === 'empty-cloud' && (
           <div data-testid="m-empty-cloud" className="rounded-card bg-paper-card p-6 text-center shadow-sm">
             <p className="text-base font-semibold text-ink">云端还没有你的计划</p>
-            <p className="mt-2 text-sm leading-6 text-ink-soft">
-              先去网页端导入课表、生成周计划，回来点一下同步，这里就能看了。
-            </p>
-            <button type="button" onClick={() => void load(identity)} className="mt-4 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">
-              我排好了，刷新
-            </button>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">先去网页端导入课表、生成周计划，回来点一下同步，这里就能看了。</p>
+            <button type="button" onClick={() => void d.retry()} className="mt-4 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">我排好了，刷新</button>
           </div>
         )}
 
-        {phase === 'ready' && (
+        {d.phase === 'ready' && (
           <>
-            {/* F5 「现在」横幅 */}
+            {/* 区① 目标 + 待办（CY：首屏浮现，作用类似欢迎页 —— 无数据也渲染出引导与记录入口；
+                逾期转常驻由卡内淡出逻辑承担） */}
+            <GoalTodoCard data={d.memo} attention={attention} h={d.memoHandlers} />
+
+            {/* 区② 当前块（绝对核心）｜ 区③ 接下来（次级·小） */}
             {current ? (
-              <div data-testid="m-now-banner" className="rounded-card bg-brand px-4 py-3 text-white shadow-sm">
-                <p className="text-xs opacity-80">正在进行</p>
-                <p className="text-base font-semibold">
-                  {current.emoji ?? ''}{current.title}
-                  {current.place ? ` · ${current.place}` : ''}
-                  <span className="ml-1 font-normal opacity-90">还剩 {Math.max(0, current.endMin - nowMin)} 分钟</span>
-                </p>
-              </div>
-            ) : next ? (
-              <div data-testid="m-next-banner" className="rounded-card bg-paper-card px-4 py-3 shadow-sm">
-                <p className="text-xs text-ink-soft">下一块 {fmtMin(next.startMin)}（还有 {Math.max(0, next.startMin - nowMin)} 分钟）</p>
-                <p className="text-base font-semibold text-ink">{next.emoji ?? ''}{next.title}{next.place ? ` · ${next.place}` : ''}</p>
-              </div>
+              <>
+                <NowBlock
+                  block={current} nowMin={nowMin} done={doneIds.has(current.id)}
+                  /* 任务一 P2-1 交付的 tips 接口（经 nowTip 适配层）：无匹配 → 插槽整块不渲染 */
+                  tip={nowTipForBlock(current)}
+                  onToggleDone={() => onAction(current, { type: 'toggleDone' })}
+                  onShift15={() => onAction(current, { type: 'shift', deltaMin: 15 })}
+                />
+                {next && <NextList next={next} nowMin={nowMin} />}
+              </>
             ) : (
-              <div data-testid="m-now-banner" className="rounded-card bg-ok-light px-4 py-3 shadow-sm">
-                <p className="text-sm text-ink">今天的块都结束了 —— 收工，好好休息。</p>
-              </div>
+              <NextList next={next} nowMin={nowMin} />
             )}
 
-            {/* F11 快捷指令 */}
-            <div className="flex gap-2">
-              <button type="button" data-testid="m-quick-today" onClick={quickWhatToday}
-                className="flex-1 rounded-xl border border-ink/10 bg-paper-card px-3 py-2.5 text-sm font-semibold text-ink">
-                今天还有啥
-              </button>
-              <button type="button" data-testid="m-quick-snooze" onClick={quickSnoozeNext}
-                className="flex-1 rounded-xl border border-ink/10 bg-paper-card px-3 py-2.5 text-sm font-semibold text-ink">
-                帮我顺延下一块
-              </button>
-            </div>
-            {quickMsg && (
-              <p data-testid="m-quick-msg" className="rounded-xl bg-paper-sunken px-4 py-2.5 text-sm text-ink-soft">{quickMsg}</p>
-            )}
+            <QuickBar displayed={displayed} nowMin={nowMin} onShift={(b) => onAction(b, { type: 'shift', deltaMin: 15 })} />
 
-            {/* F2 时间轴 / 空态 */}
+            {/* 当日时间轴（上下滑 = 只看当天） */}
             <section className="space-y-2" data-testid="m-today-list">
               {displayed && displayed.blocks.length === 0 && (
                 <div data-testid="m-empty" className="rounded-card bg-paper-card p-6 text-center shadow-sm">
                   <p className="text-base font-semibold text-ink">今天还没有安排</p>
-                  <p className="mt-2 text-sm leading-6 text-ink-soft">
-                    去网页端「周计划」把今天排上，或者把手机上的偏好告诉梨宝。
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-ink-soft">去网页端「周计划」把今天排上，或者把手机上的偏好告诉梨宝。</p>
                 </div>
               )}
               {displayed?.blocks.map((b) => (
-                <BlockCard
-                  key={b.id}
-                  block={b}
-                  nowMin={nowMin}
-                  done={doneIds.has(b.id)}
-                  isCurrent={current?.id === b.id}
-                  onOpen={setSheetBlock}
-                />
+                <BlockCard key={b.id} block={b} nowMin={nowMin} done={doneIds.has(b.id)}
+                  isCurrent={current?.id === b.id} onOpen={setSheetBlock} />
               ))}
             </section>
 
-            {/* F7 / F10 / F6 / F17 */}
-            <TomorrowPreview blocks={tomorrow.blocks} tomorrowDow={tomorrowDow} loading={tomorrow.loading} />
-            <WeekGlance plan={plan} layer={layer} weekNo={weekNo ?? 0} todayDow={dow} />
-            <IcsGuide icsToken={identity.icsToken} />
-            <WhitelistGuide />
-            {/* 任务二 P3-1 · 「我的执行状态」折叠区（Today 页底部，不干扰执行） */}
-            <EvalPanel profile={profile} series={series} />
+            <TomorrowPreview blocks={d.tomorrow.blocks} tomorrowDow={d.tomorrowDow} loading={d.tomorrow.loading} />
+            <WeekGlance plan={d.plan} layer={d.layer} weekNo={d.weekNo ?? 0} todayDow={d.dow} />
+
+            <NotifyStatus blocks={displayed?.blocks ?? []} nowMin={nowMin} dateKey={d.todayKey} />
+
+            {/* 梨宝抽屉（A1）+ 底部折叠（P6-2 降级） */}
+            <div className="flex gap-2">
+              <button type="button" data-testid="m-lbao-toggle" onClick={() => setDrawerOpen(true)}
+                className="h-11 flex-1 rounded-xl bg-brand text-sm font-bold text-white">☎ 问梨宝</button>
+              <button type="button" data-testid="m-more-toggle" onClick={() => setMoreOpen((v) => !v)}
+                className="h-11 flex-1 rounded-xl border border-ink/10 bg-paper-card text-sm font-semibold text-ink-soft">
+                提醒与帮助 {moreOpen ? '▴' : '▾'}
+              </button>
+            </div>
+            {moreOpen && (
+              <div className="space-y-3 rounded-card border border-ink/5 bg-paper-card p-4 shadow-sm">
+                <IcsGuide icsToken={identity.icsToken} />
+                <WhitelistGuide />
+              </div>
+            )}
+
+            {/* 任务二 · 执行力评估（折叠面板 + 每日采集弹窗，副作用在组件内） */}
+            <EvalSection
+              plan={d.plan} serverState={d.serverState} layer={d.layer} phase={d.phase}
+              todayKey={d.todayKey} behaviorEvents={d.behaviorEvents}
+            />
           </>
         )}
       </main>
@@ -497,19 +187,7 @@ export default function TodayPage({ identity, onLogout }: {
         onClose={() => setSheetBlock(null)}
         onAction={onAction}
       />
-
-      {/* 任务二 P3-2 · 每日采集弹窗（每天首次打开；题目可跳过、带「看方法」） */}
-      {quiz && (
-        <DailyQuizSheet
-          questions={quiz.questions}
-          tipForSlug={tipForSlug}
-          onAnswer={(q, optionIdx) => {
-            recordAnswer(localStorage, { todayKey: quiz.dayKey, question: q, optionIdx });
-            setShownRows(loadShown(localStorage));
-          }}
-          onFinished={() => setQuiz(null)}
-        />
-      )}
+      <LbaoDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userId={identity.username} />
     </div>
   );
 }

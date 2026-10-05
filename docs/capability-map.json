@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 101,
-    "engineFiles": 68,
+    "testFiles": 102,
+    "engineFiles": 69,
     "uiFiles": 33,
-    "guardedSources": 92,
-    "reverseVerified": 54,
+    "guardedSources": 93,
+    "reverseVerified": 55,
     "orphans": 0
   },
   "domains": {
@@ -259,7 +259,7 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 7,
+      "testCount": 8,
       "tests": [
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
@@ -267,6 +267,7 @@
         "tests/mobile/burnBar.test.ts",
         "tests/mobile/memoStore.test.ts",
         "tests/mobile/notify.test.ts",
+        "tests/mobile/tipsSlot.test.ts",
         "tests/syncContract.test.ts"
       ],
       "sources": [
@@ -280,6 +281,7 @@
         "src/features/mobile/lib/memoTypes",
         "src/features/mobile/lib/notifyBridge",
         "src/features/mobile/lib/notifyStatus",
+        "src/features/mobile/lib/nowTip",
         "src/features/mobile/lib/sync",
         "src/features/mobile/lib/webSync"
       ]
@@ -880,6 +882,14 @@
         "mobile"
       ],
       "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/mobile/tipsSlot.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 1,
       "reverseVerified": true
     },
     "tests/objective-evaluate.test.ts": {
@@ -1603,6 +1613,9 @@
     "src/features/mobile/lib/sync": [
       "tests/mobile/notify.test.ts",
       "tests/syncContract.test.ts"
+    ],
+    "src/features/mobile/lib/nowTip": [
+      "tests/mobile/tipsSlot.test.ts"
     ],
     "src/lib/planner/incremental": [
       "tests/p2-incremental-rolling.test.ts"

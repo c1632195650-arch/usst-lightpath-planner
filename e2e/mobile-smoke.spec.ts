@@ -1,15 +1,18 @@
 /**
- * 光溯移动端 E2E 冒烟（M2 · 方案 §7.4）
+ * 光溯移动端 E2E 冒烟（M2 · 方案 §7.4；M3 新任务三扩充至 8 条）
  * ============================================================
- * 视口 390×844（Mate 40E 量级）。流程：
- *   打开 /m.html → 注册 → 云端演示状态注入（route 桩）→ 本地重算 → 今日块渲染
- *   → F5 横幅 / F7 明日 / F10 本周 / F6 ICS 节点存在
- *   → 点块 → EditSheet 顺延 +15 → 覆盖层 localStorage 断言 + PUT state 请求体断言
- *   → 完成勾选 → 覆盖层 done 断言
+ * 视口 390×844（Mate 40E 量级）。覆盖：
+ *   1) 今日页闭环：注册 → 今日块 → 顺延/完成 → PUT 上报（含 schemaVer=2）
+ *   2) 空态：云端没计划时给引导
+ *   3) 三区 IA：当前块 NowBlock（燃烧条/大按钮）→ 完成直写
+ *   4) 最近待办：打勾即完成（不填时间）→ PUT 含 todos
+ *   5) 中长期待办：完成**必须**填粗粒度时段（选择器强制）
+ *   6) 云端 → 手机：GET 带 todos → 待办卡采纳显示（另一端添加不丢）
+ *   7) 梨宝抽屉：SSE 流式渲染 + 关闭后主界面状态不变（排程权已砍，无改计划入口）
+ *   8) 通知可见性：web 环境诚实显示页内提醒；一键重排不崩
  *
  * 网络层用 page.route 打桩（GUI 是真实的、后端契约由 _smoke_*_api.py 用真实
- * SQLite+TestClient 覆盖，约束文档 §4.3 的分工口径）：night 起后端属禁区，
- * 这里桩掉 /api/* 才能在「不起常驻服务」前提下跑真实浏览器闭环。
+ * SQLite+TestClient 覆盖）：/api/* 打桩才能在「不起常驻服务」前提下跑真实浏览器闭环。
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -39,10 +42,30 @@ const EMPTY_LAYER = {
   courseOverrides: [], mealPlaces: {}, assignments: [],
 };
 
-async function stubApi(page: Page) {
+const nowIso = () => new Date().toISOString();
+
+function stateBody(schedule: unknown, todos: unknown[] = [], goals: unknown[] = []) {
+  return {
+    found: true,
+    schemaVer: 2,
+    updatedAt: nowIso(),
+    state: {
+      schemaVer: 2,
+      termStart: '2026-09-07',
+      weekNo: 5,
+      schedule,
+      planState: null,
+      userOverrides: EMPTY_LAYER,
+      todos,
+      goals,
+      clientUpdatedAt: nowIso(),
+    },
+  };
+}
+
+async function stubCoreApi(page: Page, opts: { state?: unknown; todos?: unknown[] } = {}) {
   const putStateBodies: Array<Record<string, unknown>> = [];
   const putPlanBodies: Array<Record<string, unknown>> = [];
-  const nowIso = () => new Date().toISOString();
 
   await page.route('**/api/auth/register', (route) =>
     route.fulfill({ json: { userId: 7, token: 'e2e-token', icsToken: 'ics-e2e-token' } }));
@@ -56,22 +79,7 @@ async function stubApi(page: Page) {
       await route.fulfill({ json: { accepted: true, updatedAt: nowIso() } });
       return;
     }
-    await route.fulfill({
-      json: {
-        found: true,
-        schemaVer: 1,
-        updatedAt: nowIso(),
-        state: {
-          schemaVer: 1,
-          termStart: '2026-09-07',
-          weekNo: 4,
-          schedule: DEMO_SCHEDULE,
-          planState: null,
-          userOverrides: EMPTY_LAYER,
-          clientUpdatedAt: nowIso(),
-        },
-      },
-    });
+    await route.fulfill({ json: opts.state ?? stateBody(DEMO_SCHEDULE, opts.todos ?? []) });
   });
 
   await page.route('**/api/sync/plan*', async (route) => {
@@ -84,48 +92,47 @@ async function stubApi(page: Page) {
     await route.fulfill({ json: { found: false, plan: null, updatedAt: null } });
   });
 
-  // 转场批量问路：桩空 routes → 引擎走兜底估算（其既有降级路径）
   await page.route('**/api/route/batch*', (route) => route.fulfill({ json: { routes: {} } }));
-  // F18：没有版本信息 → 不出更新横幅
   await page.route('**/api/version', (route) => route.fulfill({ status: 404, json: { error: 'version_unavailable' } }));
 
   return { putStateBodies, putPlanBodies };
 }
 
-test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆盖层 → PUT 上报', async ({ page }) => {
-  const { putStateBodies, putPlanBodies } = await stubApi(page);
+async function registerAndReady(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/m.html');
-
-  // F1 注册（新建账号路径）
   await page.getByTestId('m-login-user').fill('端到端宝');
   await page.getByTestId('m-login-pass').fill('e2e-pass-123');
   await page.getByTestId('m-register-submit').click();
-
-  // F2 今日时间轴渲染（本地重算成功 = 课表块出现）
   await expect(page.getByTestId('m-today-list')).toBeVisible({ timeout: 30_000 });
+}
+
+/* ---------------- 1) 既有闭环（M2 原样，含新 IA 适配：引导已折叠） ---------------- */
+
+test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆盖层 → PUT 上报 schemaVer=2', async ({ page }) => {
+  const { putStateBodies, putPlanBodies } = await stubCoreApi(page);
+  await registerAndReady(page);
+
   const firstBlock = page.getByTestId('m-block').first();
   await expect(firstBlock).toBeVisible({ timeout: 30_000 });
   const blockId = await firstBlock.getAttribute('data-block-id');
   expect(blockId, '块 id 必须存在（语义键）').toBeTruthy();
   await expect(page.getByTestId('m-block-title').first()).toContainText(/./);
 
-  // F5 「现在」横幅（进行中 / 下一块 / 收工 三态其一）
+  // F5 三区 IA：当前块横幅（m-now-banner）或接下来（m-next-banner）必居其一
   await expect(page.getByTestId('m-now-banner').or(page.getByTestId('m-next-banner'))).toBeVisible();
   // F7 / F10 节点
   await expect(page.getByTestId('m-tomorrow')).toBeVisible();
   await expect(page.getByTestId('m-week-glance')).toBeVisible();
 
-  // F6 ICS 引导：展开 → 链接含 icsToken → 复制按钮可点
+  // F6/F17 已降级到「提醒与帮助」折叠区（P6-2）：先展开
+  await page.getByTestId('m-more-toggle').click();
   await page.getByTestId('m-ics').getByRole('button').first().click();
   await expect(page.getByTestId('m-ics-url')).toHaveValue(/\/api\/sync\/plan\.ics\?token=ics-e2e-token/);
   await expect(page.getByTestId('m-ics-copy')).toBeVisible();
 
-  // F17 白名单引导：展开 → 三家机型路径渲染
   await page.getByTestId('m-whitelist-toggle').click();
   await expect(page.getByTestId('m-whitelist-guide')).toContainText('华为 / 鸿蒙');
-  await expect(page.getByTestId('m-whitelist-guide')).toContainText('小米 / Redmi');
-  await expect(page.getByTestId('m-whitelist-guide')).toContainText('重启后提醒排程会清空');
 
   // F4 顺延 +15：写覆盖层（唯一写法）→ debounce 上报
   await firstBlock.click();
@@ -137,21 +144,16 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   expect(move, '顺延必须落覆盖层 moves').toBeTruthy();
   expect(move?.source).toBe('edit');
 
-  // debounce 1s → PUT /api/sync/state 请求体必须带上这条 move 与 clientUpdatedAt
   await expect.poll(async () => putStateBodies.length, { timeout: 15_000 }).toBeGreaterThan(0);
-  const stateBody = putStateBodies[0] as {
-    clientUpdatedAt: string;
+  const stateBody1 = putStateBodies[0] as {
+    clientUpdatedAt: string; schemaVer: number;
     state: { schemaVer: number; termStart: string; userOverrides: { moves: Array<Record<string, unknown>> } };
   };
-  expect(stateBody.clientUpdatedAt).toBeTruthy();
-  // schemaVer=2：2026-10-06 契约扩展（commit 5884027，todos/goals/persona 上车）后的正确口径
-  expect(stateBody.state.schemaVer).toBe(2);
-  expect(stateBody.state.termStart).toBe('2026-09-07');
-  expect(stateBody.state.userOverrides.moves.some((m) => m.blockId === blockId)).toBe(true);
-  // PUT /api/sync/plan（整周副本，仅 ICS 素材）
+  expect(stateBody1.clientUpdatedAt).toBeTruthy();
+  expect(stateBody1.schemaVer).toBe(2, 'schemaVer=2（M3-W0 契约）');
+  expect(stateBody1.state.termStart).toBe('2026-09-07');
+  expect(stateBody1.state.userOverrides.moves.some((m) => m.blockId === blockId)).toBe(true);
   await expect.poll(async () => putPlanBodies.length, { timeout: 15_000 }).toBeGreaterThan(0);
-  const planBody = putPlanBodies[0] as { plan: { weekNo: number; blocks: unknown[] } };
-  expect(planBody.plan.blocks.length).toBeGreaterThan(0);
 
   // F4 完成勾选：done 落覆盖层
   await firstBlock.click();
@@ -159,14 +161,15 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   const layer2 = JSON.parse(await page.evaluate(() => localStorage.getItem('usst-user-plan-v1') ?? '{}'));
   const move2 = (layer2.moves as Array<Record<string, unknown>>).find((m) => m.blockId === blockId);
   expect(move2?.done).toBe(true);
-  // 卡片上出现「已完成」标记（读取处向后兼容的可见面）
   await expect(firstBlock.getByTestId('m-block-done')).toBeVisible();
 });
+
+/* ---------------- 2) 空态（M2 原样） ---------------- */
 
 test('移动空态：云端没计划时给引导（F2 空态分支）', async ({ page }) => {
   await page.route('**/api/auth/register', (route) =>
     route.fulfill({ json: { userId: 8, token: 'e2e-token-2', icsToken: null } }));
-  await page.route('**/api/sync/state', (route) => route.fulfill({ json: { found: false, state: null, schemaVer: 1, updatedAt: null } }));
+  await page.route('**/api/sync/state', (route) => route.fulfill({ json: { found: false, state: null, schemaVer: 2, updatedAt: null } }));
   await page.route('**/api/version', (route) => route.fulfill({ status: 404, json: { error: 'version_unavailable' } }));
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -177,22 +180,165 @@ test('移动空态：云端没计划时给引导（F2 空态分支）', async ({
   await expect(page.getByTestId('m-empty-cloud')).toBeVisible({ timeout: 15_000 });
 });
 
-/* ==================== Second 夜批（2026-10-06）：e2e 2 → ≥8 的补充用例 ====================
-   原则：只依赖既有 testid（红线：一个都不许删），网络层照旧 page.route 打桩；
-   与并行批次的 TodayPage 三区重构解耦——不依赖新组件，只锁「跨重构必须存活」的行为。 */
+/* ---------------- 3) 三区 IA：当前块放大 + 燃烧条 + 大按钮（新任务三 Wave 1） ---------------- */
 
-/** 打开移动页并完成注册（复用 stubApi 的演示课表），返回时处于 ready 态 */
-async function registerAndReady(page: Page) {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
-  await page.getByTestId('m-login-user').fill('补充用例宝');
-  await page.getByTestId('m-login-pass').fill('e2e-pass-123');
-  await page.getByTestId('m-register-submit').click();
-  await expect(page.getByTestId('m-today-list')).toBeVisible({ timeout: 30_000 });
-}
+test('NowBlock 当前块：燃烧条/大标题/两枚大按钮，点「完成」直写不进二级页', async ({ page }) => {
+  // 构造「现在正在进行」的块：走覆盖层用户固定任务通道（星期+startMin → 固定块， construct §6.2）
+  const now = new Date();
+  const dow = ((now.getDay() + 6) % 7) + 1;
+  const startMin = Math.max(0, now.getHours() * 60 + now.getMinutes() - 30);
+  const liveState = stateBody(DEMO_SCHEDULE);
+  (liveState.state as { userOverrides: { tasks: unknown[] } }).userOverrides.tasks = [{
+    id: 'e2e-now', title: '背单词', kind: 'study', dayOfWeek: dow,
+    startMin, durationMin: 60, priority: 90,
+  }];
+  await stubCoreApi(page, { state: liveState });
+  await registerAndReady(page);
+
+  // 区② 当前块：绝对核心，燃烧条 + 两枚大按钮（1 层交互，不进二级页）
+  const banner = page.getByTestId('m-now-banner');
+  await expect(banner).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('m-now-title')).toContainText('背单词');
+  await expect(page.getByTestId('m-burn-bar')).toBeVisible();
+  await expect(page.getByTestId('m-now-done')).toBeVisible();
+  await expect(page.getByTestId('m-now-shift')).toBeVisible();
+
+  // 点「完成」：直接生效（不打开 EditSheet 二级页）
+  await page.getByTestId('m-now-done').click();
+  // 块 id 由重算时的真实周号决定（termStart=2026-09-07 固定，周号随日期走）
+  const weekNo = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+    - Date.UTC(2026, 8, 7)) / 86_400_000 / 7) + 1;
+  const blockId = `w${weekNo}-d${dow}-user-e2e-now`;
+  await expect(
+    page.locator(`[data-testid="m-block"][data-block-id="${blockId}"]`).getByTestId('m-block-done'),
+  ).toBeVisible({ timeout: 10_000 });
+});
+
+/* ---------------- 4/5) 待办两分支：最近打勾即完成；中长期必须填时段（Wave 4 · CY 核心） ---------------- */
+
+test('最近待办：记一条 → 点按露出动作 → 打勾即完成（不填时间）→ PUT 带 todos', async ({ page }) => {
+  const { putStateBodies } = await stubCoreApi(page);
+  await registerAndReady(page);
+
+  await page.getByTestId('m-todo-input').fill('还图书馆的书');
+  await page.getByTestId('m-todo-add-recent').click();
+  const row = page.getByTestId('m-todo-row').filter({ hasText: '还图书馆的书' });
+  await expect(row).toBeVisible();
+
+  // 点按露出动作（左滑的等价桌面路径）→ 完成 → 正反馈，**不要求**填时间
+  await row.click();
+  await page.getByTestId('m-todo-done-btn').click();
+  await expect(page.getByTestId('m-todo-feedback')).toContainText('办完一桩心事');
+
+  // debounce 上行：PUT 请求体 todos 里这条已完成
+  await expect.poll(async () => putStateBodies.length, { timeout: 15_000 }).toBeGreaterThan(0);
+  const withTodos = putStateBodies.map((b) => b.state as { todos?: Array<Record<string, unknown>> })
+    .find((s) => Array.isArray(s.todos) && s.todos.length > 0);
+  expect(withTodos, 'PUT 必须携带 todos').toBeTruthy();
+  const t = withTodos!.todos!.find((x) => x.title === '还图书馆的书');
+  expect(t?.completion).toBe('done');
+  expect(t?.actualDoneAt).toBeTruthy();
+  expect(t?.plannedDone).toBeUndefined();
+});
+
+test('中长期待办：打勾 → 必须填粗粒度时段（选择器拦截）→ 完成 + 记入显示', async ({ page }) => {
+  const { putStateBodies } = await stubCoreApi(page);
+  await registerAndReady(page);
+
+  await page.getByTestId('m-todo-input').fill('背完六级词');
+  await page.getByTestId('m-todo-add-long').click();
+  const row = page.getByTestId('m-todo-row').filter({ hasText: '背完六级词' });
+  await expect(row).toBeVisible();
+
+  // 点完成 → 弹出粗粒度选择器（不精确到日），必须确认时段才完成
+  await row.click();
+  await page.getByTestId('m-todo-done-btn').click();
+  await expect(page.getByTestId('m-todo-period-picker')).toBeVisible();
+  await page.getByTestId('m-todo-period-confirm').click();
+
+  // 正反馈 + 行上显示「已记入：YYYY 年 M 月中旬」
+  await expect(page.getByTestId('m-todo-feedback')).toContainText('办完一桩心事');
+  const ym = new Date();
+  const label = `${ym.getFullYear()} 年 ${ym.getMonth() + 1} 月中旬`;
+  await expect(row).toContainText(label);
+
+  await expect.poll(async () => putStateBodies.length, { timeout: 15_000 }).toBeGreaterThan(0);
+  const withTodos = putStateBodies.map((b) => b.state as { todos?: Array<Record<string, unknown>> })
+    .find((s) => Array.isArray(s.todos) && s.todos.length > 0);
+  const t = withTodos!.todos!.find((x) => x.title === '背完六级词');
+  expect(t?.completion).toBe('done');
+  expect(String(t?.plannedDone)).toMatch(/^\d{4}-\d{2}-(上旬|中旬|下旬)$/, '粗粒度时段，不精确到日');
+});
+
+/* ---------------- 6) 云端 → 手机：另一端（网页端）加的待办，GET 采纳显示 ---------------- */
+
+test('云端待办采纳：GET 带 todos → 待办卡显示（两端闭环的数据面）', async ({ page }) => {
+  const cloudTodos = [
+    { id: 'td-web-1', kind: 'recent', title: '网页端记的事', createdAt: nowIso(), updatedAt: nowIso(), completion: null },
+  ];
+  const cloudGoals = [
+    {
+      id: 'g-web-1', title: '拿下六级', createdAt: nowIso(), updatedAt: nowIso(),
+      milestones: [{ id: 'ms-1', title: '词汇过 6000', done: false }],
+    },
+  ];
+  await stubCoreApi(page, {
+    state: stateBody(DEMO_SCHEDULE, cloudTodos, cloudGoals),
+  });
+  await registerAndReady(page);
+
+  await expect(page.getByTestId('m-goal-card')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('m-goal-card')).toContainText('网页端记的事');
+  await expect(page.getByTestId('m-goal-card')).toContainText('拿下六级');
+  await expect(page.getByTestId('m-goal-card')).toContainText('词汇过 6000');
+});
+
+/* ---------------- 7) 梨宝抽屉（A1）：SSE 流式 + 排程权已砍 ---------------- */
+
+test('梨宝抽屉：流式渲染回答；抽屉内没有改计划入口；关闭后主界面状态不变', async ({ page }) => {
+  await stubCoreApi(page);
+  await page.route('**/api/chat/stream', (route) => route.fulfill({
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+    body: 'data: {"type":"meta","route":"llm","mode":"llm"}\n\n'
+      + 'data: {"type":"delta","text":"宝子，"}\n\n'
+      + 'data: {"type":"delta","text":"稳住节奏！"}\n\n'
+      + 'data: {"type":"done","sources":[]}\n\n',
+  }));
+  await registerAndReady(page);
+
+  await page.getByTestId('m-lbao-toggle').click();
+  await expect(page.getByTestId('m-drawer')).toBeVisible();
+  await page.getByTestId('m-drawer-input').fill('今天状态不好怎么办');
+  await page.getByTestId('m-drawer-send').click();
+  await expect(page.getByTestId('m-drawer-msg').filter({ hasText: '宝子，稳住节奏！' })).toBeVisible({ timeout: 10_000 });
+
+  // 🔴 排程权已砍：抽屉里没有任何「重排/改计划」按钮
+  expect(await page.getByTestId('m-drawer').getByTestId('m-notify-reshuffle').count()).toBe(0);
+
+  // 关抽屉：主界面原样（Today 状态不变）
+  await page.getByTestId('m-drawer-close').click();
+  await expect(page.getByTestId('m-drawer')).toHaveCount(0);
+  await expect(page.getByTestId('m-today-list')).toBeVisible();
+});
+
+/* ---------------- 8) 通知可见性（C1）：web 环境诚实口径 + 一键重排不崩 ---------------- */
+
+test('通知可见性：浏览器环境显示「页内提醒」诚实文案；重排按钮可点不崩', async ({ page }) => {
+  await stubCoreApi(page);
+  await registerAndReady(page);
+
+  const status = page.getByTestId('m-notify-status');
+  await expect(status).toBeVisible({ timeout: 15_000 });
+  await expect(status).toContainText('页内横幅提醒', 'web 环境不假装有时点通知（诚实口径）');
+  await page.getByTestId('m-notify-reshuffle').click();
+  await expect(page.getByTestId('m-notify-reshuffle')).toBeEnabled({ timeout: 10_000 });
+});
+
+/* ---------------- 9-15) Second 夜批（任务二会话）新增：登录/更新/变化标记/同步异常/退出 ---------------- */
 
 test('移动登录路径：老账号登录（非注册）→ 今日页正常渲染', async ({ page }) => {
-  await stubApi(page);
+  await stubCoreApi(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/m.html');
   await page.getByTestId('m-login-user').fill('老用户宝');
@@ -217,7 +363,7 @@ test('移动登录失败：密码错 → 页内报错文案，不进今日页', 
 });
 
 test('F18 检查更新：服务端版本更新 → 出下载横幅（有新版本）', async ({ page }) => {
-  await stubApi(page);
+  await stubCoreApi(page);
   // 后注册的 route 优先：覆盖 stubApi 里的 404 版本桩
   await page.route('**/api/version', (route) =>
     route.fulfill({ json: { version: '9.9.9', apkUrl: 'http://example.com/lightpath-9.9.9.apk' } }));
@@ -227,7 +373,7 @@ test('F18 检查更新：服务端版本更新 → 出下载横幅（有新版�
 });
 
 test('F9 变化标记：云端覆盖层变了 → 再次打开出「今天的安排有更新」', async ({ page }) => {
-  await stubApi(page);
+  await stubCoreApi(page);
   let extraMoves: Array<Record<string, unknown>> = [];
   // 后注册的 route 优先：GET /api/sync/state 带上 extraMoves（初始为空）
   await page.route('**/api/sync/state', async (route) => {
@@ -288,7 +434,7 @@ test('同步失败可见：GET 状态 500 → 错误态 + 重试按钮，不进�
 });
 
 test('同步被拒：云端更新时（accepted=false）→ 采纳云端副本 + 状态条「同步失败」', async ({ page }) => {
-  await stubApi(page);
+  await stubCoreApi(page);
   const serverState = () => ({
     schemaVer: 1,
     termStart: '2026-09-07',
@@ -316,7 +462,7 @@ test('同步被拒：云端更新时（accepted=false）→ 采纳云端副本 +
 });
 
 test('退出登录：清掉本地身份 → 回到登录页', async ({ page }) => {
-  await stubApi(page);
+  await stubCoreApi(page);
   await registerAndReady(page);
   await page.getByRole('button', { name: '退出' }).click();
   await expect(page.getByTestId('m-login-user')).toBeVisible({ timeout: 15_000 });

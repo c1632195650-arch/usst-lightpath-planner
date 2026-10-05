@@ -27,6 +27,13 @@ export interface RecomputeInput {
   weekNo: number;
   planState: PlanPersistState | null;
   layer: UserPlanLayer;
+  /**
+   * F1（新任务三 P6-1）：persona 随 schemaVer=2 同步上来后，手机重算也能吃到
+   * 画像微调。不传/缺省 = null → 与旧版行为**逐字节一致**（防回归锚点）。
+   */
+  persona?: import('@/types').PersonaProfile | null;
+  /** 与 persona 配套的场景字段；缺省 = persona?.scenarios（同WeekPlanView口径） */
+  scenarios?: import('@/types').ScenarioFields | null;
 }
 
 /** 锁的两半（与 WeekPlanView R2 同构）：edit/drag → hard、ripple → soft */
@@ -95,8 +102,8 @@ export async function recomputeWeek(input: RecomputeInput): Promise<WeekPlan | n
       schedule: effectiveSchedule,
       weekNo,
       policy: phase.policy,
-      scenarios: null,
-      persona: null,
+      scenarios: input.scenarios ?? input.persona?.scenarios ?? null,
+      persona: input.persona ?? null,
       tasks,
     }),
     lockLevels,
