@@ -114,14 +114,43 @@ function readFetchHead() {
   return out;
 }
 
-/** 需要真实 git 时才走子进程；不可用则返回 null（而不是假装成功）。 */
-function git(args, opts = {}) {
+/**
+ * git 可执行文件定位。
+ * ⚠️ 本机实测坑：沙箱/会话里 PATH 常常没有 PortableGit（`git: command not found`），
+ *    但绝对路径始终可用。先按 PATH 试，再用已知安装路径兜底 ——
+ *    否则 gitUsable 恒为 false，会退化成「无法判定」，把明明能查清的事报成未知。
+ */
+const GIT_CANDIDATES = [
+  'git',
+  'C:/Users/CY/.workbuddy/binaries/PortableGit/versions/1.2.0/cmd/git.exe',
+  'C:/Users/CY/.workbuddy/binaries/PortableGit/versions/1.2.0/mingw64/bin/git.exe',
+  'C:/Program Files/Git/cmd/git.exe',
+];
+
+function runGit(args, opts = {}) {
   const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, ...opts });
   if (r.error || r.status === null) return { ok: false, out: '', err: r.error?.message ?? 'status=null' };
   return { ok: r.status === 0, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
 }
 
-const gitUsable = (() => { try { return git(['rev-parse', '--git-dir']).ok; } catch { return false; } })();
+let _gitBin = null;
+function git(args, opts = {}) {
+  // 已锁定可用可执行文件 → 直接用它
+  if (_gitBin) {
+    const r = spawnSync(_gitBin, args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, ...opts });
+    if (r.error || r.status === null) return { ok: false, out: '', err: r.error?.message ?? 'status=null' };
+    return { ok: r.status === 0, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
+  }
+  return runGit(args, opts);
+}
+
+const gitUsable = (() => {
+  for (const bin of GIT_CANDIDATES) {
+    const r = spawnSync(bin, ['rev-parse', '--git-dir'], { cwd: ROOT, encoding: 'utf8' });
+    if (!r.error && r.status === 0) { _gitBin = bin; return true; }
+  }
+  return false;
+})();
 
 function numOf(s) {
   const n = Number(String(s || '').trim());
@@ -131,6 +160,7 @@ function numOf(s) {
 const report = {
   root: ROOT,
   gitUsable,
+  gitBin: _gitBin,
   branch: null,
   head: null,
   headShort: null,
@@ -248,29 +278,72 @@ if (!existsSync(GITDIR)) {
     }
 
     // ---- 🔴 硬阻塞判定 ----
+    //
+    // ⚠️ 关键设计（2026-10-06 修订）：「unrelated histories」有两种截然不同的成因，
+    //    出路完全不同，绝不能混为一谈：
+    //
+    //   A) 本地进度**从未推送** → 出路是「先推到远端」，agent 可执行
+    //   B) 本地进度**已推送**，但**没合并进 dev** → 出路是「人工评审后合并 dev」，
+    //      这是**决策题**（两条历史的内容差异巨大），agent 绝不能自行 merge
+    //
+    //    早先版本对两者都给同一句「去推远端」，会在 B 情形下误导 agent 反复重推。
+    //    现在先判定 HEAD 是否已存在于某个远端分支，再给对应出路。
+    const pushedTo = [];
+    for (const cand of ['origin/beta-v2', 'origin/main', 'origin/dev']) {
+      const s = readRef(`refs/remotes/${cand}`);
+      if (!s) continue;
+      if (gitUsable) {
+        // 精确：HEAD 是否是某远端分支的祖先（含快进与已合并两种情形）
+        if (git(['merge-base', '--is-ancestor', 'HEAD', cand]).ok) pushedTo.push(cand);
+      } else {
+        // 降级：远端 tip == 本地 HEAD → 本地进度确实已在该远端分支上。
+        // 只覆盖「刚推送完」这一最常见情形；差一点（远端领先本地）时宁可漏报也不误报，
+        // 因为误报会让 agent 以为「没推送」而重复推送，那比漏报更危险。
+        if (s === report.head) pushedTo.push(cand);
+      }
+    }
+    report.pushedTo = pushedTo;
+
     if (report.sharesAncestor === false) {
+      const alreadyPushed = pushedTo.length > 0;
       report.blocks.push({
-        code: 'UNRELATED_HISTORIES',
-        msg: `本地 HEAD 与 ${report.baseBranch} **没有共同祖先**（unrelated histories）。`,
-        detail:
-          `本地领先 ${report.ahead ?? '?'} commit、落后 ${report.behind ?? '?'} commit。\n`+
-          `           「拉取远端」和「你本地的进度」在 git 眼里是两条互不相干的历史——\n`+
-          `           任何 agent clone 仓库后都看不到你本地的功能，只能凭猜测重建，这正是重复造轮子的根因。`,
-        fix:
-          `唯一正确出路（人工做一次，agent 不得自动执行）：\n`+
-          `  1) 把本地进度推到远端新分支：git push origin HEAD:refs/heads/<新分支名>\n`+
-          `  2) 由 CY 人工评审后合并到 dev（合并本身是决策题，见 BLOCKERS.md）\n`+
-          `  3) 之后 fetch 即可对齐，agent 才可能「站在最新版本上」。\n`+
-          `  ⚠️ agent 禁止自行 push / 自行 merge —— 曾因自动合流静默丢过工作。`,
+        code: alreadyPushed ? 'UNMERGED_TO_BASE' : 'UNRELATED_HISTORIES',
+        msg: alreadyPushed
+          ? `本地进度**已推送到 ${pushedTo.join(', ')}**，但与 ${report.baseBranch} 仍无共同祖先（尚未合并）。`
+          : `本地 HEAD 与 ${report.baseBranch} **没有共同祖先**（unrelated histories）。`,
+        detail: alreadyPushed
+          ? `远端 ${pushedTo.join(', ')} 已含本地全部提交（不再有「只在本地磁盘」的单点丢失风险）。\n` +
+            `但 ${report.baseBranch} 仍在另一条历史上 → **任何 agent clone 默认分支（dev/main）` +
+            `仍然看不到这${report.ahead ?? '?'} 个 commit 的功能**。\n` +
+            `也就是说：这不是「推没推」的问题，是「合没合进主线」的问题。`
+          : `本地领先 ${report.ahead ?? '?'} commit、落后 ${report.behind ?? '?'} commit。\n` +
+            `           两条历史在 git 眼里互不相干 → agent clone 后看不到本地已形成的功能，只能凭猜测重建。`,
+        fix: alreadyPushed
+          ? `唯一出路（**人工决策题，agent 禁止自行执行**）：\n` +
+            `  由 CY 评审后把 ${pushedTo[0]} 合并进 ${report.baseBranch}（开 PR，走真合并）。\n` +
+            `  ⚠️ 两条历史内容差异巨大，合并前必须人工核对冲突——曾因自动合流静默丢过工作。\n` +
+            `  ⚠️ 在合并完成前，agent 应改用 \`git checkout ${pushedTo[0].replace('origin/', '')}\` ` +
+            `拉到含全部功能的那条历史上工作，而不是 clone 默认分支。`
+          : `唯一正确出路（人工做一次，agent 不得自动执行）：\n` +
+            `  1) 把本地进度推到远端新分支：git push origin HEAD:refs/heads/<新分支名>\n` +
+            `  2) 由 CY 人工评审后合并到 ${report.baseBranch}（合并本身是决策题）\n` +
+            `  ⚠️ agent 禁止自行 push / 自行 merge —— 曾因自动合流静默丢过工作。`,
       });
     } else if (report.sharesAncestor === null && report.remoteTipPresentLocally === false) {
+      const alreadyPushed2 = pushedTo.length > 0;
       report.blocks.push({
-        code: 'UNRELATED_HISTORIES',
-        msg: `本地仓库不含 ${report.baseBranch} 的任何对象——两条历史彼此独立（unrelated histories）。`,
-        detail:
-          `远端 ${report.baseBranch} tip=${baseSha.slice(0, 7)}，本地 object 库里找不到它。\n` +
-          `agent clone 后无法看到本地已形成的功能，只能重建。`,
-        fix: `与上面同：人工推本地进度到远端新分支，再由人工评审合并。agent 不得自动 push/merge。`,
+        code: alreadyPushed2 ? 'UNMERGED_TO_BASE' : 'UNRELATED_HISTORIES',
+        msg: alreadyPushed2
+          ? `本地进度已推送到 ${pushedTo.join(', ')}，但尚未合并进 ${report.baseBranch}。`
+          : `本地仓库不含 ${report.baseBranch} 的任何对象——两条历史彼此独立（unrelated histories）。`,
+        detail: alreadyPushed2
+          ? `远端 ${report.baseBranch} tip=${baseSha.slice(0, 7)} 与本地不同源。\n` +
+            `agent clone 默认分支仍看不到本地功能——需人工合并进主线。`
+          : `远端 ${report.baseBranch} tip=${baseSha.slice(0, 7)}，本地 object 库里找不到它。\n` +
+            `agent clone 后无法看到本地已形成的功能，只能重建。`,
+        fix: alreadyPushed2
+          ? `请 CY 人工评审后合并 ${pushedTo[0]} → ${report.baseBranch}。agent 不得自行 merge。`
+          : `请人工把本地进度推到远端新分支，再由人工评审合并。agent 不得自动 push/merge。`,
       });
     } else if (typeof report.behind === 'number' && report.behind > 0) {
       report.blocks.push({
