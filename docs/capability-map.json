@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 95,
-    "engineFiles": 62,
+    "testFiles": 101,
+    "engineFiles": 68,
     "uiFiles": 33,
-    "guardedSources": 82,
-    "reverseVerified": 49,
+    "guardedSources": 92,
+    "reverseVerified": 54,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 49,
+      "testCount": 50,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -48,6 +48,7 @@
         "tests/lifeModeAndSocial.test.ts",
         "tests/longLock.test.ts",
         "tests/method_params.test.ts",
+        "tests/method_params_v2.test.ts",
         "tests/objective-evaluate.test.ts",
         "tests/p2-convergence.test.ts",
         "tests/p2-essential-budget.test.ts",
@@ -258,13 +259,27 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 2,
+      "testCount": 7,
       "tests": [
+        "tests/eval-compute.test.ts",
+        "tests/eval-quiz.test.ts",
+        "tests/eval-tips.test.ts",
+        "tests/mobile/burnBar.test.ts",
+        "tests/mobile/memoStore.test.ts",
         "tests/mobile/notify.test.ts",
         "tests/syncContract.test.ts"
       ],
       "sources": [
+        "src/features/mobile/eval/answerStore",
+        "src/features/mobile/eval/behaviorLog",
+        "src/features/mobile/eval/compute",
+        "src/features/mobile/eval/model",
+        "src/features/mobile/eval/questionBank",
+        "src/features/mobile/lib/burnBar",
+        "src/features/mobile/lib/memoStore",
+        "src/features/mobile/lib/memoTypes",
         "src/features/mobile/lib/notifyBridge",
+        "src/features/mobile/lib/notifyStatus",
         "src/features/mobile/lib/sync",
         "src/features/mobile/lib/webSync"
       ]
@@ -681,6 +696,30 @@
       "guardCount": 1,
       "reverseVerified": true
     },
+    "tests/eval-compute.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/eval-quiz.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/eval-tips.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
     "tests/explain.test.ts": {
       "suite": "engine",
       "guards": [
@@ -811,12 +850,36 @@
       "guardCount": 1,
       "reverseVerified": true
     },
-    "tests/mobile/notify.test.ts": {
+    "tests/method_params_v2.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/mobile/burnBar.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/mobile/memoStore.test.ts": {
       "suite": "engine",
       "guards": [
         "mobile"
       ],
       "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/mobile/notify.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 4,
       "reverseVerified": true
     },
     "tests/objective-evaluate.test.ts": {
@@ -964,7 +1027,7 @@
         "mobile",
         "week-view"
       ],
-      "guardCount": 4,
+      "guardCount": 5,
       "reverseVerified": true
     },
     "tests/timeScale.test.ts": {
@@ -1442,6 +1505,26 @@
       "tests/weekplan-shift-ui.test.ts",
       "tests/wp12.test.ts"
     ],
+    "src/features/mobile/eval/compute": [
+      "tests/eval-compute.test.ts",
+      "tests/eval-tips.test.ts"
+    ],
+    "src/features/mobile/eval/model": [
+      "tests/eval-compute.test.ts",
+      "tests/eval-tips.test.ts"
+    ],
+    "src/features/mobile/eval/questionBank": [
+      "tests/eval-quiz.test.ts"
+    ],
+    "src/features/mobile/eval/behaviorLog": [
+      "tests/eval-quiz.test.ts"
+    ],
+    "src/features/mobile/eval/answerStore": [
+      "tests/eval-quiz.test.ts"
+    ],
+    "src/data/methodParams.generated": [
+      "tests/eval-tips.test.ts"
+    ],
     "src/lib/planner/explain": [
       "tests/explain.test.ts"
     ],
@@ -1491,7 +1574,8 @@
     ],
     "src/lib/planner/methods": [
       "tests/knowledge-wiring.test.ts",
-      "tests/method_params.test.ts"
+      "tests/method_params.test.ts",
+      "tests/method_params_v2.test.ts"
     ],
     "src/lib/planner/lifeModePolicy": [
       "tests/lifeModeAndSocial.test.ts",
@@ -1500,8 +1584,25 @@
     "src/lib/planner/longLocks": [
       "tests/longLock.test.ts"
     ],
+    "src/features/mobile/lib/burnBar": [
+      "tests/mobile/burnBar.test.ts"
+    ],
+    "src/features/mobile/lib/memoStore": [
+      "tests/mobile/memoStore.test.ts"
+    ],
+    "src/features/mobile/lib/memoTypes": [
+      "tests/mobile/memoStore.test.ts",
+      "tests/syncContract.test.ts"
+    ],
     "src/features/mobile/lib/notifyBridge": [
       "tests/mobile/notify.test.ts"
+    ],
+    "src/features/mobile/lib/notifyStatus": [
+      "tests/mobile/notify.test.ts"
+    ],
+    "src/features/mobile/lib/sync": [
+      "tests/mobile/notify.test.ts",
+      "tests/syncContract.test.ts"
     ],
     "src/lib/planner/incremental": [
       "tests/p2-incremental-rolling.test.ts"
@@ -1533,9 +1634,6 @@
       "tests/v1.test.ts",
       "tests/wp12.test.ts",
       "tests/wp9.test.ts"
-    ],
-    "src/features/mobile/lib/sync": [
-      "tests/syncContract.test.ts"
     ],
     "src/features/mobile/lib/webSync": [
       "tests/syncContract.test.ts"
