@@ -49,3 +49,11 @@
 - [2026-10-03 白天验证批·结项] M5 部署（夜班 BLOCKERS#1）：SSH 实为 **ubuntu** 用户（应用镜像非 root），公钥已布置；caddy（agent 入口）停用释放 80；**data/ 需全目录同步**的坑实测并修正（campus_vocab.json 等 import 期读取）；PYTHONPATH 增补写入 unit；公网验收全绿（/ 200、/m.html 200、api 200、注册/ICS/version 全过）——**结项**；建议用户尽快改 SSH 密码
 - [2026-10-03 白天验证批·结项] M4 构建（夜班 BLOCKERS#2）：JDK17(Temurin zip) + SDK 经 **googledownloads.cn 官方中国 CDN** 装齐（dl.google.com 被墙、其他镜像全灭的实测记录在日志）；maven 阿里云镜像 + `android.overridePathCheck=true`（路径含中文）；assembleRelease 出**签名 APK 3.2M**，上架 `http://101.35.253.143/apk/lightpath-0.1.0.apk`（200）——**结项**；真机走查留 Mate 40E
 - [2026-10-03 白天验证批·结项] F8 接线（夜班 BLOCKERS#3）：App.tsx 已挂 `installWebSyncHook({ identity: loadIdentity() })`，开关默认关语义不变，门禁全绿（engine 496/ui 413/tsc 0）——**结项**
+
+# I 批 · 移动端真机走查（2026-10-06 MOSS）
+
+- [2026-10-06 移动端验收] 🔴**已修并交付**：0.1.0 APK 漏打包全部第三方 Capacitor 插件，本地通知实际不可用（dex 内 `localnotifications` 计数 0、缺 `POST_NOTIFICATIONS` 权限）。根因=`mobile/package.json` 未声明依赖 → CLI 扫不到 `mobile/node_modules` → 识别 0 插件**但 `cap sync` 仍报成功**。已补依赖声明 + 建 node_modules 联接，出 0.2.0（dex 内 `LocalNotification` 0→25 次，权限齐备，已上架公网200/3306677字节），commit `b6fa13b`。**旧 0.1.0 已作废，真机走查必须用 0.2.0**。
+- [2026-10-06 移动端验收] 顺带发现：**本地 `dist/apk/` 与 `mobile/android/app/build/outputs/` 曾被清空**——`npm run build` 里 vite 会重写 dist/，把已构建的 APK 一起冲掉。教训：出完 APK 后不要再单独跑 `npm run build`；重出APK 的完整命令已写进 `docs/真机走查准备清单-2026-10-06.md` §8。
+- [2026-10-06 移动端验收] 环境：`node scripts/preflight.mjs` 与 `scripts/impact.mjs` 在本沙箱**读不到 git 子进程**（EBUSY），故 impact 报「改动文件 0 个」而非真实影响面；已手动补等价验证（改动全在 Capacitor 壳工程，不触任何既有 TS 逻辑；门禁 tsc 0 / engine 496·0 / ui 413·0 / 移动端 15·0 实跑）。`gate_overnight.mjs` 同因恒 FAIL，属沙箱限制非回归。
+- [2026-10-06 移动端验收] ⚠️ **需要人决定（承今日硬闸门）**：`preflight` 报 **UNRELATED_HISTORIES 硬阻塞**——`origin/dev` tip `1d695b9` 在本地 object 库中不存在，两条历史零共同祖先，本地 beta-v2 领先远端 130+ commit 且从未push。按 AGENTS.md 硬闸一，**agent 未自行 push/merge**（本批 6 文件仅本地提交）。出路需人工决策：把本地 beta-v2 推到远端新分支 → CY 评审 → 合入 dev。此事同时是「后续 agent 看不到本地进度」的根因，建议优先于真机走查处理。
+- [2026-10-06 移动端验收] 留痕：本次验收期间检测到**并行会话在同一工作树写入**（`AGENTS.md` 与 `scripts/gate_overnight.mjs` 于 00:27 被改，非本会话所为——内容为今日新立的 preflight/impact 硬闸门与 capability-map 机制）。本批提交已用 `git add<显式路径>` 精确隔离，未牵连上述文件。
