@@ -547,4 +547,20 @@
 
 **反向验证（6 处，全部删实现→恰红→sha256 一致还原）**：后端 aerobic 阈值翻倍恰 3 红｜RV-H3 删作息冲突计算恰 2 红｜RV-H4a 删 growth 注册恰 3 红｜RV-H4b 删 evalCtx 接线恰 1 红｜（另：H2 检索降级路径由用例 4 直接断言）。
 
+### §R·Wave3 验收补齐（2026-10-05，MOSS 验收 f1aac73 后指出的三处）
+
+| 项 | commit | 内容 |
+|---|---|---|
+| 采纳按钮 | `bfea222` | 后端 `_ADVICE` 由 `str` 升级为 `{text, action?}`；可加块类建议带 `add_task` 骨架，`_stamped_action` 回填 weeks（非 recurring=`[被评周]`，习惯延续=`recurring` + 铺到学期末）；前端 `PlanEvalPanel` 出「采纳」→ `onAdopt` → `WeekPlanView.handleAddTask`（与「加一件事」同一条攒改动流，`note: 采纳自日程评估（重排后生效）`，**L4 不变**：只记采纳决定，重排后才上日程表）。**不给 action 的两类**：睡眠（要挪）、超长学习块（要拆）——实测 action 恒 `None`，是设计而非漏写 |
+| 422 契约 | `bfea222` | `PlanReviewReq.digest` 由 `default_factory=dict` 改 `Field(min_length=1)`，`extra="forbid"` 一并生效。此前缺 `digest` 返 `200 + user_id:'anon' + week_no:0 + 全 unknown`，前端会把「成功但全看不到」误当真实评估。**可达性**：前端始终传 `digestPlan()` 产物（实测 25 键 / 2196 字节，恒非空），原属不可达路径，本批收紧为显式契约 |
+| 降级断言 | `bfea222` | 上一轮抓到 `"retrieved"` 恒 `True` 而 `test_plan_review` 仍全绿（假覆盖）。补命中侧 `all(v is True)` + 降级侧 `all(v is False)` |
+
+**验收方式**：门禁独立复跑 tsc 0 / engine 737/0 / ui 424/0 / 后端全过；变异×4 各恰1 红（降级伪造 True、摘按钮、破 L4 标注、digest 退回可选→2 红），sha256 一致还原；真机 HTTP 探针 12/12；真机 UI 见采纳按钮渲染 + 组件请求 200。
+
+**两条环境事实纠正（上一轮记错）**：
+1. 前端 API 基址开关是 **`VITE_API_BASE`**（`src/lib/api.ts:7`），**不是** `VITE_API_PROXY_TARGET`（后者只管 Vite 代理，两者独立）。上一轮把 offline 归因为「Vite 代理缺口」是错的——真因是 `API_BASE` 硬编码 `http://127.0.0.1:8000` 绝对地址、**绕过**代理。
+2. 排查手法：**页面内 hook `fetch` 打出组件真实请求的 URL**，比读配置文件更快定位（本次一击命中）。
+
+**变异验证新陷阱**：「无区分度变异」——把`"retrieved": True` 改成 `True if hits else True` 是**等价变异**（该分支本来就恒 `True`），抓不到≠ 无保护；假覆盖的真实形态在**降级分支**。判据：设计变异前先确认该分支取值是否已恒定。
+
 **断言漂移申报（1 处）**：H1.3 维度清单锁 5→6（growth 入列，锁意图=面板按维度分区渲染，不变）。
