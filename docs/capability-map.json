@@ -7,12 +7,12 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 103,
-    "engineFiles": 69,
+    "testFiles": 105,
+    "engineFiles": 71,
     "uiFiles": 34,
-    "guardedSources": 95,
-    "reverseVerified": 56,
-    "orphans": 0
+    "guardedSources": 96,
+    "reverseVerified": 58,
+    "orphans": 1
   },
   "domains": {
     "planner-engine": {
@@ -113,12 +113,13 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 18,
+      "testCount": 19,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
         "tests/d-batch.test.ts",
         "tests/issue-bar-ui.test.ts",
+        "tests/mobile/evalWiring.test.ts",
         "tests/ripple.test.ts",
         "tests/syncContract.test.ts",
         "tests/timeScale.test.ts",
@@ -260,13 +261,14 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 9,
+      "testCount": 10,
       "tests": [
         "scripts/memo-web-workspace.test.ts",
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
         "tests/eval-tips.test.ts",
         "tests/mobile/burnBar.test.ts",
+        "tests/mobile/evalWiring.test.ts",
         "tests/mobile/memoStore.test.ts",
         "tests/mobile/notify.test.ts",
         "tests/mobile/tipsSlot.test.ts",
@@ -278,6 +280,7 @@
         "src/features/mobile/eval/compute",
         "src/features/mobile/eval/model",
         "src/features/mobile/eval/questionBank",
+        "src/features/mobile/eval/units",
         "src/features/mobile/lib/burnBar",
         "src/features/mobile/lib/memoStore",
         "src/features/mobile/lib/memoTypes",
@@ -879,6 +882,21 @@
       "guardCount": 1,
       "reverseVerified": true
     },
+    "tests/mobile/evalWiring.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "mobile"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/mobile/icsHint.test.ts": {
+      "suite": "engine",
+      "guards": [],
+      "guardCount": 0,
+      "reverseVerified": true
+    },
     "tests/mobile/memoStore.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1301,6 +1319,7 @@
       "tests/knowledge-wiring.test.ts",
       "tests/libao-regression-anchor.test.ts",
       "tests/longLock.test.ts",
+      "tests/mobile/evalWiring.test.ts",
       "tests/mobile/notify.test.ts",
       "tests/objective-evaluate.test.ts",
       "tests/p2-convergence.test.ts",
@@ -1548,7 +1567,8 @@
     ],
     "src/features/mobile/eval/compute": [
       "tests/eval-compute.test.ts",
-      "tests/eval-tips.test.ts"
+      "tests/eval-tips.test.ts",
+      "tests/mobile/evalWiring.test.ts"
     ],
     "src/features/mobile/eval/model": [
       "tests/eval-compute.test.ts",
@@ -1558,7 +1578,8 @@
       "tests/eval-quiz.test.ts"
     ],
     "src/features/mobile/eval/behaviorLog": [
-      "tests/eval-quiz.test.ts"
+      "tests/eval-quiz.test.ts",
+      "tests/mobile/evalWiring.test.ts"
     ],
     "src/features/mobile/eval/answerStore": [
       "tests/eval-quiz.test.ts"
@@ -1628,6 +1649,19 @@
     "src/features/mobile/lib/burnBar": [
       "tests/mobile/burnBar.test.ts"
     ],
+    "src/features/week/userPlanStore": [
+      "tests/mobile/evalWiring.test.ts",
+      "tests/ripple.test.ts",
+      "tests/syncContract.test.ts",
+      "tests/userPlanStore.test.ts",
+      "tests/userPlanUndo.test.ts",
+      "tests/v1.test.ts",
+      "tests/wp12.test.ts",
+      "tests/wp9.test.ts"
+    ],
+    "src/features/mobile/eval/units": [
+      "tests/mobile/evalWiring.test.ts"
+    ],
     "src/features/mobile/lib/notifyBridge": [
       "tests/mobile/notify.test.ts"
     ],
@@ -1663,15 +1697,6 @@
     "src/features/persona/PersonaResult": [
       "tests/profile-explain.test.ts"
     ],
-    "src/features/week/userPlanStore": [
-      "tests/ripple.test.ts",
-      "tests/syncContract.test.ts",
-      "tests/userPlanStore.test.ts",
-      "tests/userPlanUndo.test.ts",
-      "tests/v1.test.ts",
-      "tests/wp12.test.ts",
-      "tests/wp9.test.ts"
-    ],
     "src/features/mobile/lib/webSync": [
       "tests/syncContract.test.ts"
     ],
@@ -1701,5 +1726,7 @@
       "tests/wp6.test.ts"
     ]
   },
-  "orphans": []
+  "orphans": [
+    "tests/mobile/icsHint.test.ts"
+  ]
 }

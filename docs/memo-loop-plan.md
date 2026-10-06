@@ -47,4 +47,34 @@
   4. **在线评测**（2026-10-06 08:52，`python scripts/eval_plan_understand.py http://127.0.0.1:8001`，105 条金标）：action **F1=1.0**（TP35/FP0/FN0）、槽位 EM **0.987**≥0.90、dialog act 宏 F1 **0.972**≥0.90、非法输出拦截率 **1.0**——门槛 ✅ 全过，零漂移。报告已追加至 `docs/eval-libao-understand-2026-09-27.md`。
 - **诚实申报（契约缺口）**：Todo 契约无「预计投入分钟」字段（已定型不可改）→ longterm 用固定档位 60 分钟、recent 30 分钟（`memoLogic` 常量，BLOCKERS 已报 CY，待追认后续批扩契约）。
 
-## 2026-10-06 · W4（门禁与反向验证）—— 占位，完成后补
+## 2026-10-06 · W4（门禁与反向验证）
+
+- **反向验证 4 组红绿对照（P4-1，全部为临时变异、当场还原、绝不入库；mobile 两处变异在还原后 `git diff` 字节级确认无损）**：
+  | # | 变异 | 变红用例 | 结果 |
+  |---|---|---|---|
+  | 1 | `toPlanRequest` 丢弃 `pendingTodos`（`schedule.ts`） | recent→UserTask / longterm→Commit 映射断言 | fail 1 ✅→还原绿 |
+  | 2 | `completeTodo` 去掉 longterm 必填时段门禁（`memoTypes.ts` 临时） | 「longterm 未填→拒绝」「填了→完成/非法拒绝」「toggleTodoDone 分流」 | fail 3 ✅→还原绿 |
+  | 3 | `blockIdForTodo` 写死 null（`memoLogic.ts`） | 回填匹配断言（endsWith/续段/未安排） | fail 1 ✅→还原绿 |
+  | 4 | `archiveTodo` 当删除（`memoStore.ts` 临时） | 「归档=archived 保留数据（不删除）」 | fail 1 ✅→还原绿 |
+- **⚠️ 并行会话再次出现（07:xx 后检测）**：`src/features/mobile/{EvalSection,IcsGuide}.tsx`、`eval/{behaviorLog,units}.ts` 出现非本批未提交改动——本批**零接触**这些文件（全程显式路径 `git add`），tsc 0 说明其可编译；已写 BLOCKERS 请 CY 白天核对该批归属。
+- **门禁实测**：见下方「W4 收尾」追加段（跑完补录）。
+
+## 2026-10-06 · W4 收尾
+
+- **门禁实测（2026-10-06 09:0x，原始输出在 `_w4_*.log` / `_e2e_all.log`，临时产物不入库）**：
+  - `npm run typecheck` → **0 错**
+  - `npm run test:engine` → **608 pass / 0 fail**（基线 593；增长来自并行批 c9e1884 与 W4 时段并行会话的新增用例，本批 0 删 0 改）
+  - `npm run test:ui` → **432 pass / 0 fail**（基线 413 + 本批 19）
+  - `npx playwright test`（全量三套：web smoke + mobile-smoke 18 条 + memo-smoke 2 条）→ **20 passed / 0 failed**
+  - `node scripts/capability_map.mjs --write` → 测试文件 **105**｜守护源文件 **96**｜RV 锚点 **58**（新增 `scripts/memo-web-workspace.test.ts` 纳入守护）
+- **黄金口径**：零漂移（四重验证见 W3 段；在线评测 105 条门槛全过，报告已追加）。
+- **三态截图**（`docs/screenshots-m4/`）：① `1-recent-done-no-dialog.png` 最近待办打勾即完成（无弹窗，完成后按「未完成」筛选移出列表）；② `2-longterm-period-required.png` / `2b-longterm-period-picked.png` 中长期待办完成**必须**选粗粒度时段（上/中/下旬 + 年月，未选不能确认）；③ `3-scheduled-chip.png` 排程回显「已排进周三」chip（刷新后无内存计划的诚实降级文案；带时刻的「已排进周三 15:00」由单测锁定）。
+- **交付物核对**：① 每 WP 单独提交（9c4c2b9 / 45f6c94 / 7c40609 / ad537ff / 本条）② 台账（本文）③ 指标原始输出（上方 log 文件 + 评测报告追加）④ 推 `origin/beta-v2`（见下）⑤ 三态截图（docs/screenshots-m4/）。
+- **现场遗留**：8001 后端与 4173 preview 系本批按任务书 §六起的本地服务，按「8001 不 kill」纪律原样保留；`_memo_shots.mjs` 等下划线临时产物不入库。
+- **待 CY 追认清单**：① `BuildWeekPlanInput.pendingTodos?: TodoLike[]` 契约扩展 + 常量（BLOCKERS 任务四·P3-1 条）；② Todo 契约无 effort 字段 → 固定档位 30/60 分钟（后续批扩契约才能真正由用户填）；③ longterm 有 plannedDone 且交期周 ≠ 目标周时不进本周计划（确定规则，已是实现行为）。
+
+## 剩余风险
+
+- e2e 走的是打桩云（GUI 真实、服务端契约由 syncContract + server 端测试覆盖）——真机/真云端的完整人肉走查仍未做（承移动端批遗留）。
+- 「AI 排」（梨宝对话排程）尚未消费待办——本批接线的是周计划页（WeekPlanView）；梨宝线接入待办属梨宝线批次，未做。
+- 最近待办映射为「本周一次性块」：查看任何一周都会看到它们（weeks=[weekNo] 按周落块）；是否要限定「仅当前周」待 CY 拍板。
