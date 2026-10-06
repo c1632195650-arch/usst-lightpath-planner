@@ -39,6 +39,22 @@ export type { EffectiveSlot } from './construct.ts';
  * 二、兼容入口
  * ========================================================== */
 
+/**
+ * 待办工作区 → 排程约束的桥接形状（任务四 P3-1 草案，BLOCKERS 2026-10-06 申报、CY 追认待）。
+ * `kind: 'recent'` 映射为 `UserTask`（本周一次性块）；`'longterm'` 映射为 `Commit`
+ * （可拆分 + 交期，"本周累计推进"语义）。**可选字段**：不传 = 旧行为逐字段一致。
+ */
+export interface TodoLike {
+  id: string;
+  title: string;
+  kind: 'recent' | 'longterm';
+  /** 预计投入分钟（引擎产能核算依赖） */
+  effortMin: number;
+  /** 交期（粗粒度完成时段解析所得，见 memo 特性 plannedDoneToDueAt） */
+  dueAt?: Commit['dueAt'];
+  splittable?: boolean;
+}
+
 export interface BuildWeekPlanInput {
   schedule: Schedule;
   /** 目标周次（1-based） */
@@ -85,6 +101,8 @@ export interface BuildWeekPlanInput {
   fromNow?: number | null;
   /** 与 `fromNow` 配套的星期几（1 = 周一） */
   fromNowDay?: DayOfWeek | null;
+  /** 待办工作区的未完成待办（任务四 W3）：缺省/空数组 = 旧行为，零漂移 */
+  pendingTodos?: TodoLike[];
 }
 
 export interface BuildWeekPlanResult {
@@ -95,14 +113,45 @@ export interface BuildWeekPlanResult {
 
 /** `BuildWeekPlanInput` → `PlanRequest`（旧入口到新管道的唯一适配点） */
 export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
+  // M4-W3（任务四 P3-2，BLOCKERS 2026-10-06 申报）：待办 → 两条既有引擎通道。
+  //   · recent → UserTask（`tasks`，本周一次性块，priority 70：高于普通活动、低于作业 78）
+  //   · longterm → Commit（`commits`，可拆分 + 交期，priority 92 略高于缺省 90）
+  // pendingTodos 缺省/空时下面两个数组都是空 → 与旧行为**逐字段一致**（黄金零漂移）。
+  const todoTasks: UserTask[] = [];
+  const todoCommits: Commit[] = [];
+  for (const t of input.pendingTodos ?? []) {
+    if (t.kind === 'longterm') {
+      todoCommits.push({
+        id: t.id,
+        title: t.title,
+        kind: 'study',
+        effortMin: t.effortMin,
+        splittable: t.splittable ?? true,
+        priority: 92,
+        weeks: [input.weekNo],
+        ...(t.dueAt ? { dueAt: t.dueAt } : {}),
+      });
+    } else {
+      todoTasks.push({
+        id: t.id,
+        title: t.title,
+        emoji: '📌',
+        kind: 'activity',
+        durationMin: t.effortMin,
+        weeks: [input.weekNo],
+        priority: 70,
+        note: '来自待办工作区（最近待办）',
+      });
+    }
+  }
   return {
     schedule: input.schedule,
     weekNo: input.weekNo,
     policy: input.policy,
-    commits: [], // 旧入口没有提交项（P1 兼容层：走 tasks）
+    commits: todoCommits, // 旧入口没有提交项（P1 兼容层：走 tasks）；待办经 pendingTodos 进入
     scenarios: input.scenarios ?? null,
     ...(input.persona != null ? { persona: input.persona } : {}),
-    tasks: input.tasks ?? [],
+    tasks: [...(input.tasks ?? []), ...todoTasks],
     transfer: input.transfer,
     dayStart: input.dayStart,
     dayEnd: input.dayEnd,

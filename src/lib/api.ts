@@ -4,7 +4,8 @@
  * 部署时可用 VITE_API_BASE 环境变量覆盖。
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://127.0.0.1:8000';
+// 任务四起对外导出（memo 云通道同源复用；原语义不变）
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://127.0.0.1:8000';
 
 export interface RagSource {
   title: string;

@@ -22,9 +22,10 @@ import { WeekView } from '@/features/week/WeekView';
 import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
+import MemoPanel from '@/features/memo/MemoPanel';
 
 type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
-type MainTab = 'calendar' | 'libao' | 'profile' | 'import';
+type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
 /** 周视图子模式：课表网格 vs 排程计划时间轴 */
 type WeekSubTab = 'timetable' | 'plan';
 
@@ -35,6 +36,7 @@ const SHOW_IMPORT = true;
 const TAB_LABEL: Record<MainTab, string> = {
   calendar: '总览',
   libao: '梨宝',
+  memo: '待办',
   profile: '我的画像',
   import: '课表',
 };
@@ -223,7 +225,7 @@ export default function App() {
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
             <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
-            {((SHOW_IMPORT ? ['calendar', 'libao', 'profile', 'import'] : ['calendar', 'libao', 'profile']) as MainTab[]).map((t) => (
+            {((SHOW_IMPORT ? ['calendar', 'libao', 'memo', 'profile', 'import'] : ['calendar', 'libao', 'memo', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
                 // 验收修正（2026-09-27）：「总览」tab 回归字面语义 —— 进入过周计划后
@@ -259,7 +261,10 @@ export default function App() {
             </button>
           </div>
         )}
-        {mainTab === 'import' ? (
+        {mainTab === 'memo' ? (
+          // 任务四（2026-10-06）：网页端待办工作区 —— 云同步数据与移动端共库（逐项 LWW）
+          <MemoPanel />
+        ) : mainTab === 'import' ? (
           <ImportTester onApply={(s) => {
             patchState({ schedule: s });
             setModeSetupOpen(true);
