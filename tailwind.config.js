@@ -56,6 +56,18 @@ export default {
         display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
       borderRadius: { card: '16px' },
+      /**
+       * 扁平 2.0（Skin Spec v1，见 docs/ui-revamp-plan-flat2-bento.md §2.3）：
+       * 阴影与颜色一样是一处可改的皮肤资产，禁止在组件里再写硬编码投影。
+       */
+      boxShadow: {
+        /** 贴地轻影：层次主要靠 border 承担，阴影永远单层、透明度 ≤ 0.05。 */
+        card: '0 1px 2px rgba(22,35,63,0.04), 0 4px 14px rgba(22,35,63,0.04)',
+        /** 深色大卡的第二档（原值保留）。 */
+        'card-dark': '0 18px 44px rgba(22,35,63,0.10)',
+        /** 主按钮投影，从 0_6px_16px_.22 减淡。 */
+        btn: '0 1px 3px rgba(43,76,155,0.18)',
+      },
     },
   },
   plugins: [],
