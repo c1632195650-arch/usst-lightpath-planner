@@ -325,13 +325,13 @@ test('梨宝抽屉：流式渲染回答；抽屉内没有改计划入口；关�
 
 /* ---------------- 8) 通知可见性（C1）：web 环境诚实口径 + 一键重排不崩 ---------------- */
 
-test('通知可见性：浏览器环境显示「页内提醒」诚实文案；重排按钮可点不崩', async ({ page }) => {
+test('通知可见性：浏览器环境显示「网页版」诚实文案（M5a）；重排按钮可点不崩', async ({ page }) => {
   await stubCoreApi(page);
   await registerAndReady(page);
 
   const status = page.getByTestId('m-notify-status');
   await expect(status).toBeVisible({ timeout: 15_000 });
-  await expect(status).toContainText('页内横幅提醒', 'web 环境不假装有时点通知（诚实口径）');
+  await expect(status).toContainText('当前是网页版', 'web 环境不假装有时点通知（诚实口径，M5a 三段式）');
   await page.getByTestId('m-notify-reshuffle').click();
   await expect(page.getByTestId('m-notify-reshuffle')).toBeEnabled({ timeout: 10_000 });
 });
