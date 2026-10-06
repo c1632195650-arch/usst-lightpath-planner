@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
-import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, type ChatResult, type MemoryFact, type RagSource } from '@/lib/api';
+import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, planReview, type ChatResult, type MemoryFact, type PlanReviewReport, type RagSource } from '@/lib/api';
 import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objectiveKeyToField } from '@/lib/identity';
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
@@ -60,6 +60,7 @@ import {
   planWeekWithTasks,
   replanDaysForChat,
   summarizeWeekPlan,
+  evaluatePlanForChat,
   holdSlotFrom,
   holdToUnavailableSlot,
   matchCandidate,
@@ -68,7 +69,13 @@ import {
   type GoalVerdict,
   type ReplanOption,
   type ReschedulePreview,
+  type PlanDigest,
+  type PlanEvaluation,
 } from '@/features/libao/weekPlanForChat';
+// R批触发点①（2026-10-06 收官批次 P0-1b）：评估面板**复用**周计划的 PlanEvalPanel，
+// 不另写一套 UI（任务书红线）；引擎逻辑已走 weekPlanForChat 接缝，这里只引 UI 组件。
+import { PlanEvalPanel } from '@/features/week/PlanEvalPanel';
+import { makeTaskId } from '@/features/week/planEditsStore';
 import type { MoveRecord, UnavailableSlot } from '@/features/week/userPlanStore';
 import { addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
@@ -89,6 +96,9 @@ interface Msg {
   planPoints?: string[];
   /** 提示去哪儿看完整时间轴 */
   goWeek?: boolean;
+  /** R批触发点①（P0-1b）：confirmGoal 落盘成功的回执 → 出「让梨宝评估这一版」按钮。
+   *  点击展开**复用**的 PlanEvalPanel（纯读评估），采纳只进重排草稿流（L4 不变）。 */
+  evalAsk?: boolean;
   needProfile?: boolean;
   /** 后端这一轮的完整元数据（route / intent / top_raw_vec / used_* / 耗时）。
    *  只用于 DEV 调试抽屉 —— 见本目录 ChatDebug.tsx 的说明。 */
@@ -364,6 +374,27 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   const [planVersion, setPlanVersion] = useState(0);
   const bumpPlanVersion = useCallback(() => setPlanVersion((v) => v + 1), []);
   const [previewPlan, setPreviewPlan] = useState<WeekPlan | null>(null);
+
+  /* ── R批触发点①（P0-1b）：「让梨宝评估这一版」────────────────────
+   * 评估是**纯读**：点击时从 previewPlan 现算（不缓存，防「评的是上一版」），
+   * 面板复用周计划的 PlanEvalPanel；后端三库复核失败静默降级（同 WeekPlanView）。
+   * 采纳只进重排草稿流（layer.tasks，重排才生效）—— L4 边界不变。 */
+  const [chatEval, setChatEval] = useState<
+    { idx: number; digest: PlanDigest; evaluation: PlanEvaluation } | null>(null);
+  const [chatEvalReview, setChatEvalReview] = useState<
+    { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport }>({ state: 'loading' });
+  const toggleChatEval = useCallback((idx: number) => {
+    if (chatEval?.idx === idx) { setChatEval(null); return; }
+    if (!previewPlan) return;
+    const { digest, evaluation } = evaluatePlanForChat(previewPlan);
+    setChatEval({ idx, digest, evaluation });
+    setChatEvalReview({ state: 'loading' });
+    const curWeekNo = schedule ? currentWeekNo(schedule.termStart, todayISO()) : 1;
+    planReview({ user_id: getUserId(), week_no: curWeekNo, digest: digest as unknown as Record<string, unknown> })
+      .then((report) => setChatEvalReview(report.ok ? { state: 'ok', report } : { state: 'offline' }))
+      .catch(() => setChatEvalReview({ state: 'offline' }));
+  }, [chatEval, previewPlan, schedule]);
+
   const pendingTasksKey = useMemo(
     () => Object.values(pending).map((g) => g.tasks.map((t) => t.id).join(',')).join('|'),
     [pending],
@@ -598,6 +629,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: '好，这段时间空出来了，日程正在重新排。不合适按 ↩ 撤销。',
           goWeek: true,
+          evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
         }]);
       } catch {
         setMessages((current) => [...current, { role: 'lbao', text: '落盘的时候出了点小状况，没写成。可以再说一遍。' }]);
@@ -625,6 +657,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: `好，「${g.title}」取消了。反悔按 ↩ 撤销；要重新排一遍去周计划点「重新排一遍」。`,
           goWeek: true,
+          evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
         }]);
       } catch {
         setMessages((current) => [...current, {
@@ -655,6 +688,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: `好，「${g.title}」挪过去了（要点「重新排一遍」才会真正重排；排得不合适按 ↩ 撤销）。`,
           goWeek: true,
+          evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
         }]);
       } catch {
         setMessages((current) => [...current, {
@@ -688,6 +722,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: `好，周${dr.days.map((d) => ['一', '二', '三', '四', '五', '六', '日'][d - 1]).join('、周')}重新排好了，其余天保持原样。不合适按 ↩ 撤销。`,
           goWeek: true,
+          evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
         }]);
       } catch {
         setMessages((current) => [...current, {
@@ -721,6 +756,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           role: 'lbao',
           text: `好，替换完成：取消「${target.title}」，新增「${g.title}」× ${g.tasks.length} 块。反悔按 ↩ 一步撤销。`,
           goWeek: true,
+          evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
         }]);
       } catch {
         setMessages((current) => [...current, {
@@ -752,6 +788,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         role: 'lbao',
         text: `好，「${g.title}」写进${weeksLabel(g.weeks)}的日程了，共 ${g.tasks.length} 个块。去周计划看全貌；排得不合适可以撤销（↩），也可以直接跟我说改。`,
         goWeek: true,
+        evalAsk: true, // P0-1b：落盘回执带评估入口（纯读；采纳只进重排草稿流）
       }]);
       track('plan_result', { ok: true, ms: 0, n: g.tasks.length });
     } catch {
@@ -2099,6 +2136,56 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
                 {message.goWeek && (
                   <p className="pl-1 text-[11.5px] text-ink-faint">完整时间轴在「总览 → 选一周 → 周计划」</p>
+                )}
+
+                {/* R批触发点①（P0-1b）：落盘回执 → 「让梨宝评估这一版」。
+                    面板复用 PlanEvalPanel；采纳只进重排草稿流（不直接改已排日程）。 */}
+                {message.evalAsk && (
+                  <div className="pl-1">
+                    <button
+                      data-testid="chat-eval-entry"
+                      onClick={() => toggleChatEval(index)}
+                      className="rounded-xl border border-ink/15 px-3 py-2 text-xs text-ink transition-colors hover:border-brand/40 hover:bg-brand/5"
+                    >
+                      {chatEval?.idx === index ? '收起评估' : '让梨宝评估这一版'}
+                    </button>
+                    {chatEval?.idx === index && (
+                      <div className="mt-3" data-testid="chat-eval-panel">
+                        <PlanEvalPanel
+                          digest={chatEval.digest}
+                          evaluation={chatEval.evaluation}
+                          review={chatEvalReview}
+                          onAdopt={(skeleton) => {
+                            // 与「就这么排」同一套落盘纪律：undo 快照 → layer.tasks →
+                            // bumpPlanVersion + usst:replan —— 重排后才出现在日程表（L4）。
+                            const t = skeleton as {
+                              title?: string; kind?: UserTask['kind']; durationMin?: number; weeks?: number[];
+                            };
+                            const adoptWeekNo = schedule ? currentWeekNo(schedule.termStart, todayISO()) : 1;
+                            const layer = loadUserPlan();
+                            pushUndoSnapshot(layer);
+                            const nextLayer = {
+                              ...layer,
+                              tasks: addTask(layer.tasks, {
+                                id: makeTaskId(),
+                                title: t.title ?? '评估建议',
+                                kind: t.kind ?? 'activity',
+                                category: 'custom',
+                                durationMin: t.durationMin ?? 45,
+                                ...(Array.isArray(t.weeks) && t.weeks.length > 0 ? { weeks: t.weeks } : { weeks: [adoptWeekNo] }),
+                                priority: 80,
+                                note: '采纳自日程评估（重排后生效）',
+                              }),
+                            };
+                            saveUserPlan(nextLayer);
+                            pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
+                            bumpPlanVersion();
+                            window.dispatchEvent(new CustomEvent('usst:replan'));
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* 记忆建议卡（M2）：客观事实（年级/学院/专业）只提议，点头才记 */}

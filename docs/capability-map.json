@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 108,
-    "engineFiles": 74,
+    "testFiles": 109,
+    "engineFiles": 75,
     "uiFiles": 34,
     "guardedSources": 101,
-    "reverseVerified": 61,
+    "reverseVerified": 62,
     "orphans": 0
   },
   "domains": {
@@ -162,7 +162,7 @@
         "src/lib/lbao.ts",
         "src/lib/api.ts"
       ],
-      "testCount": 26,
+      "testCount": 27,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/day-replan-intent.test.ts",
@@ -184,6 +184,7 @@
         "scripts/modeSetup.test.ts",
         "scripts/schedSession.test.ts",
         "tests/d-batch.test.ts",
+        "tests/libao-eval-entry.test.ts",
         "tests/libao-regression-anchor.test.ts",
         "tests/v0.test.ts",
         "tests/v2.test.ts",
@@ -870,6 +871,14 @@
       "guardCount": 7,
       "reverseVerified": true
     },
+    "tests/libao-eval-entry.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
     "tests/libao-regression-anchor.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1309,6 +1318,7 @@
       "scripts/libao-taxonomy.test.ts",
       "scripts/libao.test.ts",
       "tests/d-batch.test.ts",
+      "tests/libao-eval-entry.test.ts",
       "tests/libao-regression-anchor.test.ts",
       "tests/v2.test.ts",
       "tests/wp9.test.ts"
@@ -1581,6 +1591,7 @@
     ],
     "src/features/libao/LbaoChat": [
       "tests/d-batch.test.ts",
+      "tests/libao-eval-entry.test.ts",
       "tests/v0.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",

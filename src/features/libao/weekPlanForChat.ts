@@ -38,6 +38,10 @@ import { planWeekV2 } from '@/lib/planner/index';
 import type { UserTask } from '@/lib/planner/templates';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { diffDays as diffPlanDays, localizedPlan } from '@/lib/planner/localizedReplan';
+// R批 Wave3（H1）评估 glue（2026-10-06 收官批次 P0-1b 随触发点①接入）：
+// 评估是 lib/planner 的引擎逻辑，按红线 6 只能从本接缝进对话侧。
+import { digestPlan } from '@/lib/planner/planDigest';
+import { evaluateDigest } from '@/lib/planner/planEval';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { WEEKDAY_CN, addDays, currentWeekNo, diffDays, weekdayOf } from '@/lib/date';
@@ -176,6 +180,30 @@ export async function replanDaysForChat(args: {
  * 既定的智能边界（见项目记忆 §1）。所以这里只输出「哪天满」「哪里紧」
  * 「哪天空」，而不是「你应该把自习挪到周四」。
  */
+/* ============================================================
+ * R批 Wave3（H1）· 日程评估 glue（触发点①：对话侧「让梨宝评估这一版」）
+ * ------------------------------------------------------------
+ * 与 summarizeWeekPlan 同一存在理由：评估逻辑（digestPlan/evaluateDigest）
+ * 在 lib/planner，对话侧不许直引引擎（红线 6）—— 所以在接缝里包一层。
+ * 纯读、零副作用；结果的呈现与采纳都在 LbaoChat（复用 PlanEvalPanel）。
+ * ========================================================== */
+
+/** 评估上下文（DigestContext 的接缝投影；对话侧不感知 lib/planner 内部形状） */
+export type ChatEvalContext = Parameters<typeof digestPlan>[1];
+
+/** 把评估 glue 收进唯一接缝：plan → { digest, evaluation }（纯函数，无落库） */
+export function evaluatePlanForChat(plan: WeekPlan, ctx?: ChatEvalContext) {
+  const digest = digestPlan(plan, ctx);
+  return { digest, evaluation: evaluateDigest(digest) };
+}
+
+export type {
+  PlanDigest,
+} from '@/lib/planner/planDigest';
+export type {
+  PlanEvaluation,
+} from '@/lib/planner/planEval';
+
 export function summarizeWeekPlan(plan: WeekPlan): string[] {
   const out: string[] = [];
   const byDay = [1, 2, 3, 4, 5, 6, 7].map((day) => ({
