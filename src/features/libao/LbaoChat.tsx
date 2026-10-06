@@ -147,8 +147,10 @@ function weeksLabel(weeks: number[]): string {
   return `第 ${weeks[0]}–${weeks[weeks.length - 1]} 周`;
 }
 
-/** 常见问法，避免第一次进入对话没有入口。 */
-const QUICK = ['四六级什么时候报名', '帮我安排这周', '我要报名数学建模，帮我规划备赛', '这学期放假安排'];
+/** 常见问法，避免第一次进入对话没有入口。
+ *  W5a（CY 反馈②）：话术去命令化 —— 真实用户说「我明天打算去吃大餐」，
+ *  不说「帮我安排这周」；示例必须是自然口语句式（识别口径见 S2a）。 */
+const QUICK = ['我明天打算去吃大餐', '这周六想去看电影', '四六级什么时候报名', '下周要交实验报告'];
 
 /**
  * 追问话术渲染：带编号 + 尾注「可以用分号一起答」（S 批 §3.2）。
@@ -202,11 +204,10 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
   return patch;
 }
 
-/** 对话初始说明，明确问答与排程两个能力。 */
+/** 对话初始说明，明确问答与排程两个能力（W5a：自然陈述版话术）。 */
 const GREETING =
-  '我是梨宝，咱上理的校园助手。可以问四六级、选课、放假等校园问题；也可以说「帮我安排这周」，'
-  + '或者直接说要做什么（比如「我要报名数学建模，九月中旬比赛，帮我规划备赛」）——'
-  + '我会先排一版草稿给你确认，你不点头我不动日程。';
+  '我是梨宝，咱上理的校园助手。可以问我四六级、选课、放假这些校园事；'
+  + '也可以直接说「我明天想去打球」—— 你怎么说，我就怎么接。';
 
 /** D 批总回退开关（工作单 §11）：false = send 直落规则链路，一行回 S/T 批行为。 */
 const DIALOG_ENABLED = true;
@@ -355,6 +356,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
   );
   const [input, setInput] = useState(seedQuestion ?? '');
   const [loading, setLoading] = useState(false);
+  /** W5b：长回复折叠态（消息下标 → 是否已展开）。仅渲染态，不入快照。 */
+  const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(() => new Set());
   const [online, setOnline] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -1868,7 +1871,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       if (activeMode === 'chat') {
         setMessages((current) => [...current, {
           role: 'lbao',
-          text: '看起来你是想安排日程。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+          text: '听着像要排一件事 —— 切到排程模式我就接手：',
           modeHint: q,
         }]);
         setLoading(false);
@@ -1886,7 +1889,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       if (activeMode === 'chat') {
         setMessages((current) => [...current, {
           role: 'lbao',
-          text: '看起来你是想安排日程。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+          text: '听着像要排一件事 —— 切到排程模式我就接手：',
           modeHint: q,
         }]);
         setLoading(false);
@@ -1943,7 +1946,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         if (activeMode === 'chat') {
           setMessages((current) => [...current, {
             role: 'lbao',
-            text: '听出来你像是要安排一件事。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+            text: '听着像要排一件事 —— 切到排程模式我就接手：',
             modeHint: q,
           }]);
           setLoading(false);
@@ -2077,11 +2080,41 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                     <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-faint">梨宝{message.mode === 'llm' ? ' · AI' : ''}</span>
                   </div>
                 )}
-                <div className={`rounded-xl border px-3.5 py-3 text-sm leading-6 whitespace-pre-wrap ${
-                  message.role === 'user' ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink'
-                }`}>
-                  {message.text}
-                </div>
+                {(() => {
+                  // W5b（CY 反馈①「长回复被裁」）：闲聊/RAG 长回复软上限 —— >320 字默认
+                  // 折叠（前 4 行 + 「展开全文」）。结构化卡（草稿/选项/追问/切换提示）不折叠。
+                  const isLong = message.role === 'lbao' && message.text.length > 320
+                    && message.planPoints == null && message.modeHint == null
+                    && message.goalAsk == null && message.deadlineAsk == null
+                    && !(message.options && message.options.length > 0);
+                  const collapsed = isLong && !expandedMsgs.has(index);
+                  return (
+                    <>
+                      <div
+                        className={`rounded-xl border px-3.5 py-3 text-sm leading-6 whitespace-pre-wrap ${
+                          message.role === 'user' ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink'
+                        } ${collapsed ? 'line-clamp-4' : ''}`}
+                        data-testid={collapsed ? 'lbao-msg-collapsed' : undefined}
+                      >
+                        {message.text}
+                      </div>
+                      {isLong && (
+                        <button
+                          type="button"
+                          data-testid="lbao-msg-toggle"
+                          onClick={() => setExpandedMsgs((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(index)) next.delete(index); else next.add(index);
+                            return next;
+                          })}
+                          className="ml-1 text-[11px] font-medium text-brand underline underline-offset-2"
+                        >
+                          {collapsed ? '展开全文' : '收起'}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {message.needProfile && onGoProfile && (
                   <button onClick={onGoProfile} className="button-primary ml-1 px-3 py-2 text-xs">完成画像</button>
@@ -2099,7 +2132,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                     }}
                     className="button-primary ml-1 px-3 py-2 text-xs"
                   >
-                    切到排程模式并继续
+                    好，去排
                   </button>
                 )}
 
@@ -2311,7 +2344,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             </button>
           </div>
           <span className="text-[11px] leading-4 text-ink-faint">
-            {mode === 'sched' ? '排程模式：说要排的事，梨宝出草稿、你确认才落盘' : '问答模式：只查资料答问题，不动你的日程'}
+            {mode === 'sched' ? '排程模式：说一件想安排的事，梨宝出草稿、你确认才落盘' : '问答模式：只查资料答问题，不动你的日程'}
           </span>
         </div>
 
@@ -2327,9 +2360,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                 ? '草稿待确认 —— 点「就这么排」，或说「就这么排 / 先不排」…'
                 : schedMode === 'collect'
                   ? '排程中 —— 回答上面的问题，多个答案用分号隔开；说「退出排程」结束…'
-                  : mode === 'sched'
-                    ? '排程模式：说一件要安排的事（如「周四晚上出去玩一小时」）…'
-                    : '问梨宝，或说「帮我安排这周」…'}
+                : mode === 'sched'
+                  ? '说一件想安排的事，比如「我明天想去打球」…'
+                  : '说一句话就行，比如「我明天想去打球」…'}
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-4 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
           <button onClick={() => send()} disabled={loading || !input.trim()} className="button-primary shrink-0 px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">

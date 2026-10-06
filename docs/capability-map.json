@@ -7,12 +7,12 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 116,
+    "testFiles": 117,
     "engineFiles": 81,
-    "uiFiles": 35,
+    "uiFiles": 36,
     "guardedSources": 105,
     "reverseVerified": 68,
-    "orphans": 0
+    "orphans": 1
   },
   "domains": {
     "planner-engine": {
@@ -473,6 +473,12 @@
         "libao-chat"
       ],
       "guardCount": 4,
+      "reverseVerified": false
+    },
+    "scripts/libao-copy-guard.test.ts": {
+      "suite": "ui",
+      "guards": [],
+      "guardCount": 0,
       "reverseVerified": false
     },
     "scripts/libao-intent-clock.test.ts": {
@@ -1896,5 +1902,7 @@
       "tests/wp6.test.ts"
     ]
   },
-  "orphans": []
+  "orphans": [
+    "scripts/libao-copy-guard.test.ts"
+  ]
 }
