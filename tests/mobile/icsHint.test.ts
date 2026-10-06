@@ -14,7 +14,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(here, '..', '..', 'src', 'features', 'mobile', 'IcsGuide.tsx'), 'utf8');
+// 路径用单字面量 '../../src/...'（capability_map.mjs 源码锁通道只认含 src/ 的
+// 整段字符串；分段 join 会被误判「无源码依赖」成孤立测试，--check 恒红）。
+const src = readFileSync(join(here, '../../src/features/mobile/IcsGuide.tsx'), 'utf8');
 
 /** 剥行注释与块注释（源码锁同款口径，防「写在注释里骗测试」） */
 function stripComments(s: string): string {
