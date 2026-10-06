@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 112,
-    "engineFiles": 78,
+    "testFiles": 113,
+    "engineFiles": 79,
     "uiFiles": 34,
     "guardedSources": 102,
-    "reverseVerified": 64,
+    "reverseVerified": 65,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 56,
+      "testCount": 57,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -72,6 +72,7 @@
         "tests/scoring-transfer.test.ts",
         "tests/solver.test.ts",
         "tests/toPlanRequest-persona.test.ts",
+        "tests/weekly-activity-floor.test.ts",
         "tests/wp10.test.ts",
         "tests/wp4a.test.ts",
         "tests/wp4b.test.ts",
@@ -1220,6 +1221,14 @@
       "guardCount": 4,
       "reverseVerified": true
     },
+    "tests/weekly-activity-floor.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
     "tests/weekplan-shift-ui.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1455,6 +1464,7 @@
       "tests/scoring-transfer.test.ts",
       "tests/solver.test.ts",
       "tests/toPlanRequest-persona.test.ts",
+      "tests/weekly-activity-floor.test.ts",
       "tests/wp5.test.ts",
       "tests/wp6.test.ts"
     ],
@@ -1597,6 +1607,7 @@
       "tests/places-policy.test.ts",
       "tests/scoring-transfer.test.ts",
       "tests/solver.test.ts",
+      "tests/weekly-activity-floor.test.ts",
       "tests/wp5.test.ts"
     ],
     "src/lib/planner/construct": [
@@ -1605,6 +1616,7 @@
       "tests/knowledge-wiring.test.ts",
       "tests/places-policy.test.ts",
       "tests/profile-prefs.test.ts",
+      "tests/weekly-activity-floor.test.ts",
       "tests/wp5.test.ts",
       "tests/wp6.test.ts"
     ],

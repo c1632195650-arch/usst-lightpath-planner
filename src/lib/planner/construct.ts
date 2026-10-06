@@ -342,6 +342,14 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const sportQuota = extras?.sportSessions ?? null;
   /** 本周已排的运动次数（sportQuota 的周计数器） */
   let sportPlaced = 0;
+  // P1-5（2026-10-06 收官批次·批次 5，CY 裁决 R3）：每周活动量下限（分钟）。
+  // 口径 = 健康库 aerobic-150（A 级，WHO ≥150 中等强度/周）。缺省 undefined =
+  // 不生效（golden 零漂移）；运动模式 sportQuota 是更明确的用户表达，互斥时模式优先。
+  const weeklyActivityTarget = (req.weeklyActivityMin != null && sportQuota == null)
+    ? req.weeklyActivityMin
+    : null;
+  /** 本周已排的运动分钟（P1-5 周计数器） */
+  let weeklySportMin = 0;
 
   // 提交项（规格书 §5.1 步骤 3 / §9-T0.2）：固定落点的当硬块，其余走 EDF × urgency 择序
   const commitActive = (c: Commit) => !c.weeks?.length || c.weeks.includes(weekNo);
@@ -536,9 +544,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.5 活动模块（运动/午休/取快递/夜宵/自定义…） --- */
+    // P1-5：缺口按剩余天数均摊 —— remaining>0 的天强制出运动候选（软保底）
+    const dayIdx = DAY_ORDER.indexOf(day);
+    const daysLeft = DAY_ORDER.length - dayIdx;
+    const sportRemaining = weeklyActivityTarget != null
+      ? Math.max(0, weeklyActivityTarget - weeklySportMin)
+      : 0;
     const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day, {
       // WP5 运动模式：sportQuota 生效时绕过画像触发（模式本身就是对运动的显式表达）
-      forceSport: sportQuota != null,
+      // P1-5：周下限未达标同样强制出运动候选（缺口按天均摊的真实需求）
+      forceSport: sportQuota != null || sportRemaining > 0,
     });
     const perCat: Record<string, number> = {};
     let activityMin = 0;
@@ -560,7 +575,11 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       if (!tpl.budgetExempt && (perCat[cat] ?? 0) >= cap) continue;
       // WP5 运动模式：周配额 —— 本周已排满 sportSessions 次就不再排（每天 1 次天然隔天）
       if (cat === 'sport' && sportQuota != null && sportPlaced >= sportQuota) continue;
-      if (!tpl.budgetExempt && activityMin + Math.min(...tpl.durations) > activityBudget) continue;
+      if (!tpl.budgetExempt && activityMin + Math.min(...tpl.durations) > activityBudget) {
+        // P1-5：周下限未达标时运动块的预算闸放宽（缺口是知识库裁决的真实需求；
+        // 达标或字段未传 → 本分支等价于原来的 continue，零行为差异）
+        if (!(cat === 'sport' && sportRemaining > 0)) continue;
+      }
       const block = placeTemplate({
         tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
       });
@@ -568,7 +587,10 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         placed = [...placed, block];
         perCat[cat] = (perCat[cat] ?? 0) + 1;
         activityMin += block.endMin - block.startMin;
-        if (cat === 'sport' && sportQuota != null) sportPlaced += 1;
+        if (cat === 'sport') {
+          if (sportQuota != null) sportPlaced += 1;
+          weeklySportMin += block.endMin - block.startMin; // P1-5 周计数
+        }
       }
     }
 

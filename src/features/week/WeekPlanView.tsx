@@ -1432,6 +1432,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           // 未采集时 dayWindowWithFallback 返回 null → 一个字段都不加，
           // 引擎走缺省 '07:00'/'23:00'，行为与改造前**逐位一致**（golden 零漂移）。
           ...(dayWindowWithFallback(loadRoutine(), loadBasicInfo().sleepMin ?? null) ?? {}),
+          // P1-5（裁决 R3）：每周活动量下限，WHO ≥150 分钟/周（健康库 aerobic-150，A 级）。
+          // 引擎侧 opt-in：字段不传不生效；这里给产品缺省 150（已排够就不再补）。
+          weeklyActivityMin: 150,
           // 锁的两半都要传：
           //   · lockLevels     → improve 不主动移动 hard 块、churn 按锁加权
           //   · lockedPlacements → solver 在构造之后把 hard 块**写回原位**

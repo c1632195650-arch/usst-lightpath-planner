@@ -117,15 +117,16 @@ export function sedentarySafeDurations(durations: readonly number[]): number[] {
  * ========================================================== */
 
 /**
- * 睡眠保底窗口的**未来**接法提示：construct 的 placeTemplate 已支持
- * `notBeforeMin` / `notAfterMin`（D4 加的对偶上界），睡眠保底要做的是
- * 给非豁免块的候选空档叠「不在睡眠窗口内」约束 —— 但窗口的锚点
- * （用户就寝/起床时间）在 identity 基础信息里，PlanRequest 尚未携带。
- * 等契约侧把 sleepMin 递进来再接（改契约须双方确认，见工作单 §5 备注）。
+ * 结项注记（2026-10-06 收官批次，与上游 integration-full 10-02 P1-2 对齐）：
+ * 前两条 PARTIALS 已接线，登记转为「已接」事实——
+ *   · 睡眠保底窗口：作息真源 routineStore 经 `dayWindowWithFallback` 进
+ *     `PlanRequest.dayStart/dayEnd`（**已有**契约字段，零新契约），
+ *     周计划页 req 构造处消费；采集入口 = 周计划页 routine-entry（裁决 R2）。
+ *   · 每周活动量下限：`PlanRequest.weeklyActivityMin`（P1-5，裁决 R3 放行的新契约
+ *     字段，opt-in），construct 活动模块按「本周已排运动分钟 vs 下限」缺口按天均摊，
+ *     调用侧给 WHO 150 产品缺省（健康库 aerobic-150，A 级）。
  */
 export const KNOWLEDGE_PARTIALS: readonly string[] = [
-  '睡眠保底窗口未接线（需 identity.sleepMin 进 PlanRequest 契约）',
-  '每周活动量下限未接线（需 construct 活动块生成策略，150min/周均摊）',
   '模块库（templates.ts）既有自习档位 [45,60,90] 未动（属地文件不在本批授权表）；'
     + '仅策略现场工厂与久坐安全档受 knowledgeWired 控制',
 ];

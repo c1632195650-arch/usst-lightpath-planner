@@ -103,6 +103,12 @@ export interface BuildWeekPlanInput {
   fromNowDay?: DayOfWeek | null;
   /** 待办工作区的未完成待办（任务四 W3）：缺省/空数组 = 旧行为，零漂移 */
   pendingTodos?: TodoLike[];
+  /**
+   * P1-5（2026-10-06 收官批次·批次 5，CY 裁决 R3）：每周活动量下限（分钟），透传
+   * `PlanRequest.weeklyActivityMin`。缺省 undefined = 不生效（golden 零漂移）。
+   * 契约: BuildWeekPlanInput/PlanRequest 增 weeklyActivityMin?（可选字段，opt-in）。
+   */
+  weeklyActivityMin?: number;
 }
 
 export interface BuildWeekPlanResult {
@@ -165,6 +171,8 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     ...(input.previousCommits != null ? { previousCommits: input.previousCommits } : {}),
     ...(input.fromNow != null ? { fromNow: input.fromNow } : {}),
     ...(input.fromNowDay != null ? { fromNowDay: input.fromNowDay } : {}),
+    // P1-5：条件展开 —— 不传的字段不出现，保持与旧行为逐字段一致（零漂移）
+    ...(input.weeklyActivityMin != null ? { weeklyActivityMin: input.weeklyActivityMin } : {}),
   };
 }
 

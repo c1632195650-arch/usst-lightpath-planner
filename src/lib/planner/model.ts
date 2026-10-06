@@ -419,6 +419,18 @@ export interface PlanRequest {
     extraMeals?: number;
     blankBlocks?: number;
   } | null;
+
+  /**
+   * P1-5（2026-10-06 收官批次·批次 5，CY 裁决 R3 放行）：每周中高强度活动量下限（分钟）。
+   *
+   * 口径 = 健康库 `aerobic-150`（A 级）：WHO 建议每周 ≥150 分钟中等强度有氧。
+   * 引擎侧消费：construct 活动模块里「本周已排运动分钟 < 下限」的缺口按剩余天数
+   * 均摊，放宽运动块的预算闸并强制出运动候选（软保底：放不进就如实缺）。
+   * **缺省 undefined = 不生效**（golden 语料不带此字段 → 默认路径零漂移，opt-in 纪律
+   * 同 `lifeModeExtras`）；调用侧（周计划页 / 对话接缝）显式传 150 作产品缺省。
+   * 与 WP5 运动模式（`lifeModeExtras.sportSessions`）互斥——模式是更明确的用户表达。
+   */
+  weeklyActivityMin?: number;
 }
 
 /**

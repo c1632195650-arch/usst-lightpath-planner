@@ -100,6 +100,8 @@ export async function planWeekWithTasks(
       // 批 4.3（1A-③）：对话侧同样把完整画像喂进引擎（socialCap 链路）
       persona: profile,
       tasks,
+      // P1-5（裁决 R3）：对话侧同产品缺省 —— 每周活动量下限 150（周计划页同口径）
+      weeklyActivityMin: 150,
     }),
   );
   return result.plan;
@@ -596,6 +598,7 @@ export function checkGoalFeasibility(args: {
         policy: wkPhase.policy,
         scenarios: profile?.scenarios ?? null,
         tasks,
+        weeklyActivityMin: 150, // P1-5：与主预览同口径（基线/对照对称，diff 不失真）
       });
       // D7：swap 方案的干跑基线要把被换掉的块挖掉（construct 的排除机制）
       return excludeBlockIds?.length ? { ...req, excludedBlockIds: excludeBlockIds } : req;
@@ -1213,6 +1216,7 @@ export function modeSetupRequest(
     policy: phase.policy,
     scenarios: profile?.scenarios ?? null,
     tasks: [],
+    weeklyActivityMin: 150, // P1-5：与主预览同口径
   });
 }
 
