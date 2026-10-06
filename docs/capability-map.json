@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 102,
+    "testFiles": 103,
     "engineFiles": 69,
-    "uiFiles": 33,
-    "guardedSources": 93,
-    "reverseVerified": 55,
+    "uiFiles": 34,
+    "guardedSources": 95,
+    "reverseVerified": 56,
     "orphans": 0
   },
   "domains": {
@@ -20,13 +20,14 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 50,
+      "testCount": 51,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
         "scripts/events.test.ts",
         "scripts/libao-taxonomy.test.ts",
         "scripts/lock.test.ts",
+        "scripts/memo-web-workspace.test.ts",
         "scripts/rollingState.test.ts",
         "scripts/scheduler.test.ts",
         "tests/activityAndLocalized.test.ts",
@@ -259,8 +260,9 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 8,
+      "testCount": 9,
       "tests": [
+        "scripts/memo-web-workspace.test.ts",
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
         "tests/eval-tips.test.ts",
@@ -536,6 +538,15 @@
       ],
       "guardCount": 2,
       "reverseVerified": false
+    },
+    "scripts/memo-web-workspace.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "mobile",
+        "planner-engine"
+      ],
+      "guardCount": 7,
+      "reverseVerified": true
     },
     "scripts/miniWeekPreview.test.ts": {
       "suite": "ui",
@@ -1037,7 +1048,7 @@
         "mobile",
         "week-view"
       ],
-      "guardCount": 5,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/timeScale.test.ts": {
@@ -1254,6 +1265,7 @@
       "scripts/goal-pace.test.ts",
       "scripts/lbaoPlan.test.ts",
       "scripts/libao.test.ts",
+      "scripts/memo-web-workspace.test.ts",
       "scripts/modeSetup.test.ts",
       "tests/improve-live.test.ts",
       "tests/places.test.ts",
@@ -1267,6 +1279,7 @@
       "scripts/libao-taxonomy.test.ts",
       "scripts/libao.test.ts",
       "scripts/lock.test.ts",
+      "scripts/memo-web-workspace.test.ts",
       "scripts/miniWeekPreview.test.ts",
       "scripts/personaCopy.test.ts",
       "scripts/personaTiering.test.ts",
@@ -1320,6 +1333,7 @@
     ],
     "src/lib/planner/schedule": [
       "scripts/events.test.ts",
+      "scripts/memo-web-workspace.test.ts",
       "scripts/rollingState.test.ts",
       "scripts/scheduler.test.ts",
       "tests/campus-vocab.test.ts",
@@ -1376,6 +1390,23 @@
       "tests/p2-incremental-rolling.test.ts",
       "tests/planStability.test.ts",
       "tests/property/lock.machine.test.ts"
+    ],
+    "src/features/mobile/lib/memoTypes": [
+      "scripts/memo-web-workspace.test.ts",
+      "tests/mobile/memoStore.test.ts",
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/mobile/lib/memoStore": [
+      "scripts/memo-web-workspace.test.ts",
+      "tests/mobile/memoStore.test.ts",
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/memo/memoLogic": [
+      "scripts/memo-web-workspace.test.ts",
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/memo/milestonePicker": [
+      "scripts/memo-web-workspace.test.ts"
     ],
     "src/features/week/miniWeekPreviewModel": [
       "scripts/miniWeekPreview.test.ts"
@@ -1596,13 +1627,6 @@
     ],
     "src/features/mobile/lib/burnBar": [
       "tests/mobile/burnBar.test.ts"
-    ],
-    "src/features/mobile/lib/memoStore": [
-      "tests/mobile/memoStore.test.ts"
-    ],
-    "src/features/mobile/lib/memoTypes": [
-      "tests/mobile/memoStore.test.ts",
-      "tests/syncContract.test.ts"
     ],
     "src/features/mobile/lib/notifyBridge": [
       "tests/mobile/notify.test.ts"
