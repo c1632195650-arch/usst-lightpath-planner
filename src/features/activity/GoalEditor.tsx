@@ -98,7 +98,7 @@ export function GoalEditor({
 
       {goals.length === 0 && !open && (
         <p className="mt-1 text-[11px] text-ink-faint">
-          加了目标之后，登记投入时就能挂上去 —— 学期末才知道哪件事真的占了时间。
+          先挑一个最想推进的 —— 学期末才知道哪件事真的占了时间。
         </p>
       )}
 

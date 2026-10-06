@@ -407,6 +407,10 @@ export default function App() {
       {!isLbaoTab && (
         <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
           UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
+          {/* B2 彩蛋：校训小字，装饰性、纯事实（上理校训），可整体拔掉 */}
+          <span className="mt-1 block text-[11px] font-normal tracking-[0.18em] text-ink-faint">
+            信义勤爱 · 思学志远
+          </span>
         </footer>
       )}
     </div>

@@ -50,6 +50,20 @@ export default {
           coral: '#C24B3A',
           slate: '#5A6377',
         },
+
+        /**
+         * 上理校色（B2 彩蛋批新增，不进 chart.* 数据色组 ——
+         * SPECTRUM ↔ chart.* 的同步契约不受影响）。
+         * 只允许小面积装饰：圆点、描边、≤0.15 透明度光晕、11px 小字，
+         * 不与 brand 靛蓝大面积相邻（见 docs/ui-revamp-plan-flat2-bento.md B2 边界规则）。
+         */
+        school: {
+          /** 上理红·参考值。白底 7.9:1 / paper 底 7.4:1，作小字也达标（WCAG AA）。
+           *  待与官方 VI 手册《标准色与辅助色（正式版）》（xb.usst.edu.cn 可下载）核对后微调。 */
+          red: '#9E1B32',
+          /** 校红浅底：对 school.red 文字 6.9:1，对 ink 文字 13.7:1。 */
+          light: '#FBEDEE',
+        },
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],

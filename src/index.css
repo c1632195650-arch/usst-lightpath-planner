@@ -84,14 +84,16 @@
   }
 
   /**
-   * 深色面：深靛底 + 靛蓝与琥珀两端的光晕，整块就是一段压缩的光谱。
+   * 深色面：深靛底 + 靛蓝与校红两端的光晕，整块就是一段压缩的光谱。
    * 只用于关键区域（首屏、今日卡、画像结果、问卷题卡、周次头、梨宝侧栏）。
+   * 暖端原为琥珀 0.19；B2 彩蛋批换成上理红 0.15（藏在深色面底色里的校色，
+   * 装饰性、不承载信息；skin spec 法则 2 的唯一例外）。
    */
   .hero-surface {
     @apply bg-ink;
     background-image:
       radial-gradient(circle at 8% 0%, rgba(43, 76, 155, 0.62), transparent 46%),
-      radial-gradient(circle at 100% 100%, rgba(217, 131, 36, 0.19), transparent 40%);
+      radial-gradient(circle at 100% 100%, rgba(158, 27, 50, 0.15), transparent 40%);
   }
 
   /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
