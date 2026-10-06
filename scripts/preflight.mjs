@@ -223,9 +223,11 @@ if (!existsSync(GITDIR)) {
     try { return readFileSync(path.join(GITDIR, 'FETCH_HEAD'), 'utf8').trim().split('\n')[0]?.split(/\s+/)[1] ?? null; } catch { return null; }
   })();
 
-  // 基线分支：优先 dev，回落 main（与项目分支模型一致）
+  // 基线分支：优先 beta-v2（2026-10-06 收官批次 P0-0b，CY 授权：dev 是最早期
+  // 脚手架那条线，与本地 beta-v2 零共同祖先且已判定作废；主线基线改看 beta-v2），
+  // 回落 dev / main 以兼容其它工作树。
   let baseSha = null;
-  for (const cand of ['origin/dev', 'origin/main']) {
+  for (const cand of ['origin/beta-v2', 'origin/dev', 'origin/main']) {
     const sha = readRef(`refs/remotes/${cand}`) ?? fetchHead[cand];
     if (sha) { baseSha = sha; report.baseBranch = cand; break; }
   }
@@ -363,11 +365,14 @@ if (!existsSync(GITDIR)) {
 
 // ---- 3. 工作树提示（项目特有：AGENTS.md §8.6 三树分叉） ----
 const base = path.basename(ROOT);
-if (base !== '_work_dev') {
+// 2026-10-06 收官批次 P0-0b（CY 授权）：移植产物需要只读参考 _integration_full，
+// 故除主力树 _work_dev 外放行它；其余树照旧提醒。两树之间仍禁止自动合流（§8.6）。
+const ALLOWED_TREES = ['_work_dev', '_integration_full'];
+if (!ALLOWED_TREES.includes(base)) {
   report.warnings.push({
     code: 'NOT_MAIN_TREE',
-    msg: `当前工作树是 ${base}，不是主力树 _work_dev。`,
-    fix: 'AGENTS.md §8.6：无人值守只允许在 _work_dev 内工作；另两棵树不要自动合流。',
+    msg: `当前工作树是 ${base}，不在许可清单（${ALLOWED_TREES.join(' / ')}）。`,
+    fix: 'AGENTS.md §8.6：无人值守只允许在 _work_dev（及只读参考 _integration_full）内工作；树间不要自动合流。',
   });
 }
 
