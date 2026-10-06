@@ -431,6 +431,16 @@ export interface PlanRequest {
    * 与 WP5 运动模式（`lifeModeExtras.sportSessions`）互斥——模式是更明确的用户表达。
    */
   weeklyActivityMin?: number;
+
+  /**
+   * P1-7 部分（2026-10-06 收官批次·批次 5，CY 裁决 R3 放行）：三餐步行预算（分钟）。
+   *
+   * 消费点：pickCanteen 的食堂候选过滤（rankPlaces 统一纪律）——超过预算的食堂
+   * 被剔除（估算值按更紧预算收）。缺省 undefined → 回落 `blockPrefs(persona)` 的
+   * `mealWalkBudgetMin`（画像「就餐半径」near/far 两档）；两者都无 → 不按预算筛。
+   * 夜猫子作息问卷题按 R3/R8 另批，本字段只承载步行预算。
+   */
+  mealWalkBudgetMin?: number;
 }
 
 /**

@@ -237,6 +237,8 @@ export function profileFingerprint(
 export const PROFILE_PARTIALS: readonly string[] = [
   '"夜猫子时段"未接线：night_supply 说的是**夜间补给方式**（外卖/便利店/忍着），不是作息倾向'
     + ' —— 无可辩护依据前不臆造，等基础信息里的 sleepMin/作息字段进 PlanRequest 再接',
-  '三餐选点未接线：mealWalkBudgetMin 已产出，等 E2 的三餐接线落地后直接消费（templates.ts 食堂模块属地不在本批授权表）',
-  '画像变更的"受影响天"集未接线：profileFingerprint 已可作判据，接线点在 features/week（RAY 属地）+ localizedReplan，待 E5 一并做',
+  // 结项注记（2026-10-06 收官批次 P1-6/P1-7 部分，裁决 R3）：mealWalkBudgetMin 已被
+  // pickCanteen 消费（显式 PlanRequest.mealWalkBudgetMin 优先，回落本函数推导值）。
+  '画像变更的"受影响天"集：overrideAffectedDays 已在 WeekPlanView 真实消费'
+    + '（useWeekPlan/WeekPlanView 接线，E5 完成）—— 原「未接线」登记过期，2026-10-06 复核结项',
 ];

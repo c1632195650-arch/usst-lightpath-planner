@@ -224,9 +224,11 @@ export function orderByWalkFrom<T>(
  * ========================================================== */
 
 export const SPATIAL_PARTIALS: readonly string[] = [
-  '三餐食堂选取未接线（templates.ts 的食堂模块按校区写死 place+campus，属地文件不在本批授权表）；'
-    + '`rankPlaces` 已可直接用于该场景（category === "meal"），待下一批接线',
+  // 结项注记（2026-10-06 收官批次 P1-6，裁决 R3）：三餐食堂选取已接线 ——
+  // pickCanteen 候选池经本模块 rankPlaces 统一纪律（校区/营业/预算），择序仍按
+  // 「离下一节课最近」；步行预算来自 PlanRequest.mealWalkBudgetMin（P1-7 部分）
+  // 或画像「就餐半径」推导（profilePrefs.blockPrefs）。
   '1100 基础学院路网未入库 → 该校区地点拿不到实测分钟，`walk` 查询返回 null 即「未知」，'
-    + '本策略**保持未知、不吸附到本部坐标**（project-core.md §8 纪律）',
+    + '本策略**保持未知、不吸附到本部坐标**（project-core.md §8 纪律；pickCanteen 同口径）',
   '营业时段的「此刻」口径依赖调用方给 atMin（引擎纯函数不读时钟）',
 ];

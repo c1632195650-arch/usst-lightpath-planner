@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 113,
-    "engineFiles": 79,
+    "testFiles": 114,
+    "engineFiles": 80,
     "uiFiles": 34,
     "guardedSources": 102,
-    "reverseVerified": 65,
+    "reverseVerified": 66,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 57,
+      "testCount": 58,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -51,6 +51,7 @@
         "tests/knowledge-wiring.test.ts",
         "tests/lifeModeAndSocial.test.ts",
         "tests/longLock.test.ts",
+        "tests/meal-canteen-rank.test.ts",
         "tests/method-tip-timeblock.test.ts",
         "tests/method_params.test.ts",
         "tests/method_params_v2.test.ts",
@@ -909,6 +910,14 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/meal-canteen-rank.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
     "tests/method-tip-timeblock.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1453,6 +1462,7 @@
       "tests/golden-lib.test.ts",
       "tests/improve-live.test.ts",
       "tests/improve.test.ts",
+      "tests/meal-canteen-rank.test.ts",
       "tests/p2-convergence.test.ts",
       "tests/p2-essential-budget.test.ts",
       "tests/p2-incremental-rolling.test.ts",
@@ -1481,6 +1491,7 @@
       "scripts/libao-taxonomy.test.ts",
       "scripts/scheduler.test.ts",
       "tests/lifeModeAndSocial.test.ts",
+      "tests/meal-canteen-rank.test.ts",
       "tests/p2-essential-budget.test.ts",
       "tests/wp6.test.ts",
       "tests/wp9.test.ts"
@@ -1614,6 +1625,7 @@
       "tests/construct.test.ts",
       "tests/courseOverride.test.ts",
       "tests/knowledge-wiring.test.ts",
+      "tests/meal-canteen-rank.test.ts",
       "tests/places-policy.test.ts",
       "tests/profile-prefs.test.ts",
       "tests/weekly-activity-floor.test.ts",

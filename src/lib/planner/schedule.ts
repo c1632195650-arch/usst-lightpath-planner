@@ -109,6 +109,11 @@ export interface BuildWeekPlanInput {
    * 契约: BuildWeekPlanInput/PlanRequest 增 weeklyActivityMin?（可选字段，opt-in）。
    */
   weeklyActivityMin?: number;
+  /**
+   * P1-7 部分（裁决 R3）：三餐步行预算（分钟），透传 `PlanRequest.mealWalkBudgetMin`。
+   * 契约: BuildWeekPlanInput/PlanRequest 增 mealWalkBudgetMin?（可选字段，opt-in）。
+   */
+  mealWalkBudgetMin?: number;
 }
 
 export interface BuildWeekPlanResult {
@@ -171,8 +176,9 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     ...(input.previousCommits != null ? { previousCommits: input.previousCommits } : {}),
     ...(input.fromNow != null ? { fromNow: input.fromNow } : {}),
     ...(input.fromNowDay != null ? { fromNowDay: input.fromNowDay } : {}),
-    // P1-5：条件展开 —— 不传的字段不出现，保持与旧行为逐字段一致（零漂移）
+    // P1-5/P1-7：条件展开 —— 不传的字段不出现，保持与旧行为逐字段一致（零漂移）
     ...(input.weeklyActivityMin != null ? { weeklyActivityMin: input.weeklyActivityMin } : {}),
+    ...(input.mealWalkBudgetMin != null ? { mealWalkBudgetMin: input.mealWalkBudgetMin } : {}),
   };
 }
 

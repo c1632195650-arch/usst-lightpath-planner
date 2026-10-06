@@ -42,7 +42,8 @@ import {
 // 归属申报：CY 授权（工作单 §11），本文件属 Ray 目录，commit message 高亮说明。
 import { knowledgeWired, sedentarySafeDurations, studyBlockDurations } from './knowledge.ts';
 // E 批 E2（2026-09-28）：空间库选取策略（按「从上一块走过去的分钟」排序候选）。
-import { orderByWalkFrom, spatialWired } from './placesPolicy.ts';
+import { orderByWalkFrom, rankPlaces, spatialWired } from './placesPolicy.ts';
+import { campusFromLabel, placesFromTemplates } from './places.ts';
 // E 批 E3（2026-09-28）：画像的**块级**偏好（时段亲和度）——开关缺省关闭 = 零行为变化。
 import { blockPrefs, gapAffinity, prefsWired, type BlockPrefs } from './profilePrefs.ts';
 
@@ -469,6 +470,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     /* --- 6.3 三餐（按地点就近 + 营业时段 + 走路时间） --- */
     if (withMeals) {
       const firstStart = daySlots.length ? daySlots[0].startMin : null;
+      // P1-6：画像「就餐半径」→ mealWalkBudgetMin（prefsWired 关闭时为 null，同 fillStudy 口径）
+      const prefsMeal = blockPrefsOf(req);
       for (const meal of MEAL_SLOTS) {
         // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
         if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
@@ -478,6 +481,9 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
           ? pickCanteen({
               mealNominalMin: toMinutes(meal.nominal),
               daySlots, campusId: dayCampus, templates, transfer,
+              // P1-6/P1-7：三餐步行预算 —— 显式字段 > 画像「就餐半径」推导；
+              // 两者都无 = undefined → 候选池不做预算过滤（现状行为）
+              walkBudgetMin: req.mealWalkBudgetMin ?? prefsMeal?.mealWalkBudgetMin,
             })
           : undefined) ?? undefined;
         const res = placeMeal({
@@ -738,6 +744,13 @@ export interface CanteenPick {
   nextCourseTitle?: string;
   /** 候选食堂数据是否未核实（如南校）→ 汇总进 notes 如实标注 */
   verified: boolean;
+  /**
+   * P1-6（2026-10-06 收官批次·批次 5，裁决 R3）：预算过滤后的**推荐点集合**
+   * （rankPlaces 有序：开着优先 → 步行分钟升序 → 名称兜底）。
+   * 任务书 P1-6 验收口径「近/远两档推荐点集合不同（近档步行分钟更小）」即断言本字段。
+   * 全剔回退（饭点在营业时段外）时不带 pool —— 该状态下没有可信排序。
+   */
+  pool?: string[];
 }
 
 export function pickCanteen(args: {
@@ -746,8 +759,14 @@ export function pickCanteen(args: {
   campusId: string;
   templates: ActivityTemplate[];
   transfer: TransferProvider;
+  /**
+   * P1-6/P1-7 部分（2026-10-06 收官批次·批次 5，裁决 R3）：三餐步行预算（分钟）。
+   * 给了就经 rankPlaces 把超预算的食堂剔掉（估算值按更紧预算收）；
+   * 不给（undefined）→ 候选池不做预算过滤（行为与接线前一致）。
+   */
+  walkBudgetMin?: number;
 }): CanteenPick | null {
-  const { mealNominalMin, daySlots, campusId, templates, transfer } = args;
+  const { mealNominalMin, daySlots, campusId, templates, transfer, walkBudgetMin } = args;
   const label = campusLabel(campusId);
   const canteens = templates.filter(
     (t) => t.category === 'meal' && t.campus === label && t.id !== 'meal-yue',
@@ -758,16 +777,56 @@ export function pickCanteen(args: {
     .filter((s) => s.startMin >= mealNominalMin && s.course.building)
     .sort((a, b) => a.startMin - b.startMin)[0];
 
-  if (!next) {
-    const best = [...canteens].sort(
+  /* ── P1-6：食堂候选先过 rankPlaces 的统一纪律，再做「离下一节课最近」择序 ──
+   * 候选池 = 食堂模板 → Place 形状（campusFromLabel / fromTemplateWindows 同
+   * placesFromTemplates 的桥接口径），rankPlaces 负责：
+   *   ① 校区过滤 ② 营业时段（atMin = 名义饭点）③ 步行预算（给了 walkBudgetMin 才筛）。
+   * walk 查询（去下一节课教学楼的步行分钟）返回 null = 未知（如 1100 路网未入库）
+   * → rankPlaces 保留并排后 —— **保持未知、不吸附到本部坐标**（placesPolicy 纪律）。
+   * 全部被剔（饭点落在营业时段外等）→ 回退原候选池，绝不把饭排丢。
+   */
+  const placeByName = new Map(
+    placesFromTemplates(canteens).map((p) => [p.name, p] as const),
+  );
+  const ranked = rankPlaces({
+    candidates: canteens
+      .map((t) => placeByName.get(t.place ?? t.name))
+      .filter((p): p is NonNullable<typeof p> => !!p),
+    campus: campusFromLabel(label),
+    atMin: mealNominalMin,
+    ...(next
+      ? {
+          walk: (name: string) => {
+            const info = transfer(name, next.course.building as string);
+            return info ? { minutes: info.minutes, estimate: info.reliable === false } : null;
+          },
+        }
+      : {}),
+    ...(walkBudgetMin != null ? { walkBudgetMin } : {}),
+  });
+  const tplByName = new Map(canteens.map((t) => [t.place ?? t.name, t] as const));
+  const pool = ranked.map((r) => tplByName.get(r.name)).filter((t): t is ActivityTemplate => !!t);
+  const poolNames = pool.map((t) => t.place ?? t.name);
+  // 全剔回退（饭点在营业时段外 / 全员超支）→ 绝不把饭排丢：回退**默认推荐序**
+  // （priority，与无锚点路径同一口径），且该状态没有可信排序 → 不带 pool（不冒充）
+  const usable = pool.length ? pool : canteens;
+
+  if (!next || !pool.length) {
+    const byPriority = [...usable].sort(
       (a, b) => b.priority - a.priority || a.name.localeCompare(b.name),
-    )[0];
-    return { name: best.place ?? best.name, verified: !!best.verified };
+    );
+    const best = byPriority[0];
+    return {
+      name: best.place ?? best.name,
+      ...(next ? { nextCourseTitle: next.course.name } : {}),
+      verified: !!best.verified,
+      ...(pool.length ? { pool: poolNames } : {}),
+    };
   }
 
-  let best = canteens[0];
+  let best = usable[0];
   let bestMin = Number.POSITIVE_INFINITY;
-  for (const c of canteens) {
+  for (const c of usable) {
     const info = transfer(c.place ?? c.name, next.course.building as string);
     const m = info ? info.minutes : Number.POSITIVE_INFINITY;
     if (m < bestMin || (m === bestMin && c.priority > best.priority)) {
@@ -779,6 +838,7 @@ export function pickCanteen(args: {
     name: best.place ?? best.name,
     nextCourseTitle: next.course.name,
     verified: !!best.verified,
+    ...(pool.length ? { pool: poolNames } : {}),
   };
 }
 
