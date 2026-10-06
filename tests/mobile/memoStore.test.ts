@@ -14,7 +14,7 @@ import {
   openTodoCount, sortTodosForView, toggleGoalMilestone, toggleTodoDone,
   type MemoData,
 } from '@/features/mobile/lib/memoStore.ts';
-import { MEMO_CACHE_KEY, plannedDoneLabel, type Todo } from '@/features/mobile/lib/memoTypes.ts';
+import { MEMO_CACHE_KEY, plannedDoneLabel, todoScheduleHint, type Todo } from '@/features/mobile/lib/memoTypes.ts';
 
 const NOW = '2026-10-06T10:00:00.000Z';
 
@@ -140,4 +140,15 @@ test('⑩ 缓存容错：坏 JSON / 缺键 → 空仓不白屏；键名与 memoT
   assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY).todos, []);
   s.write(MEMO_CACHE_KEY, JSON.stringify({ todos: [], goals: [] }));
   assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY), { todos: [], goals: [] });
+});
+
+/* ---------------- M1c（2026-10-07）：待办排程状态回显 todoScheduleHint ---------------- */
+
+test('M1c · todoScheduleHint：有 id → 「已排进周X」；无 id/坏 id → null（不显示，不制造噪音）', () => {
+  assert.equal(todoScheduleHint({ scheduledBlockId: 'w5-d3-user-t1' }), '已排进周三');
+  assert.equal(todoScheduleHint({ scheduledBlockId: 'w6-d7-study-t2-2' }), '已排进周日');
+  // 反向三态
+  assert.equal(todoScheduleHint({ scheduledBlockId: undefined }), null, '无 id → null');
+  assert.equal(todoScheduleHint({ scheduledBlockId: 'study-policy-0' }), null, '坏 id（无星期段）→ null');
+  assert.equal(todoScheduleHint({ scheduledBlockId: 'w5-d9-x' }), null, '星期越界 → null');
 });

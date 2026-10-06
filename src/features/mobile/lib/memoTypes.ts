@@ -57,6 +57,18 @@ export interface Goal {
 /** 移动端本地缓存 key（GET 采纳后落地，离线可看；与 localStorage 其它键同前缀口径） */
 export const MEMO_CACHE_KEY = 'usst.mobile.memoCache';
 
+/* M1c（2026-10-07）：待办卡排程状态回显 —— 与网页端 S3a 同一套口径。
+ * 手机端不存整周计划，只有 block id：id 内含星期段（`w5-d3-…`）→ 「已排进周X」。
+ * 没有 id / id 解析不出 → null（不显示，避免噪音）。纯函数放类型层，双端可测。 */
+const DAY_CN = ['一', '二', '三', '四', '五', '六', '日'];
+
+export function todoScheduleHint(todo: Pick<Todo, 'scheduledBlockId'>): string | null {
+  const m = /-d(\d)-/.exec(todo.scheduledBlockId ?? '');
+  if (!m) return null;
+  const d = Number(m[1]);
+  return d >= 1 && d <= 7 ? `已排进周${DAY_CN[d - 1]}` : null;
+}
+
 /** 逐项 LWW 的时间戳：updatedAt 缺省退回 createdAt；都没有 = 空串（最旧） */
 export function todoStamp(t: Pick<Todo, 'updatedAt' | 'createdAt'>): string {
   return t.updatedAt ?? t.createdAt ?? '';

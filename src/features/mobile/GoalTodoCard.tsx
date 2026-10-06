@@ -1,14 +1,17 @@
 /**
- * 光溯移动端 · 目标 + 待办浮现卡（新任务三 Wave 4 · D1）
+ * 光溯移动端 · 目标 + 待办常驻设置区（新任务三 Wave 4 · D1；M1 改造 2026-10-07）
  * ============================================================
- * 三列表：目标（1-3）/ 最近待办 / 中长期待办。首屏浮现 ≈4 秒淡出；
- * 有到期/逾期（memoNeedsAttention）→ 转常驻；可手动收起（收起不持久，新会话仍浮现）。
+ * 三列表：目标（1-3）/ 最近待办 / 中长期待办。
+ * M1（CY 反馈⑥「压根没有待办目标的设置区域」）：此卡**不再 4 秒淡出** ——
+ * 标题行常驻，默认展开；用户点「收起」后保持收起（localStorage 持久化），
+ * 但标题行永远在（可随时点开）。「+ 记一条」随时聚焦输入框。
+ * 逾期/将到期（memoNeedsAttention）→ 自动展开 + 角标（保留原行为）。
  * 左滑露出「完成 / 归档」；**最近待办打勾即完成，中长期必须填粗粒度完成期**
  *（上/中/下旬 + 年月，不精确到日）—— 两条完成流程行为不同，tests/mobile/memoStore.test.ts 锁住。
  * 即时正反馈（CY：「办完一桩心事」）：打勾动画 + 文案 1.8s 自动消失，不遮挡主界面。
  */
 import { useEffect, useRef, useState } from 'react';
-import { plannedDoneLabel, type Todo } from './lib/memoTypes.ts';
+import { plannedDoneLabel, todoScheduleHint, type Todo } from './lib/memoTypes.ts';
 import {
   canAddGoal, openTodoCount, sortTodosForView,
   type MemoData,
@@ -73,6 +76,12 @@ function TodoRow({ todo, onPressDone, onArchive, feedback }: {
             {feedback.kind === 'ok' ? '✓ 办完一桩心事' : '要填完成时间'}
           </span>
         )}
+        {/* M1c：排程状态回显（与网页端 S3a 同口径）—— 已排进才显示，不制造噪音 */}
+        {!done && todo.scheduledBlockId && (
+          <span data-testid="m-todo-sched-hint" className="shrink-0 text-[10px] font-medium text-ok">
+            {todoScheduleHint(todo)}
+          </span>
+        )}
         {todo.plannedDone && todo.kind === 'longterm' && (
           <span className="shrink-0 text-[11px] text-ink-faint">{plannedDoneLabel(todo.plannedDone)}</span>
         )}
@@ -83,25 +92,36 @@ function TodoRow({ todo, onPressDone, onArchive, feedback }: {
 
 export default function GoalTodoCard({ data, attention, h }: {
   data: MemoData;
-  /** 有到期/逾期 → 常驻不淡出 */
+  /** 有到期/逾期 → 自动展开 + 角标 */
   attention: boolean;
   h: GoalTodoHandlers;
 }) {
-  const [visible, setVisible] = useState(true);
+  // M1a：展开态持久化（usst.mobile.goalCardOpen）；默认展开。不再 4 秒淡出。
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('usst.mobile.goalCardOpen') !== '0'; } catch { return true; }
+  });
   const [feedback, setFeedback] = useState<{ id: string; kind: 'ok' | 'blocked' } | null>(null);
   const [pickTodo, setPickTodo] = useState<string | null>(null); // longterm 正在选完成期
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
   const [part, setPart] = useState<(typeof PARTS)[number]>('中旬');
   const [newTitle, setNewTitle] = useState('');
   const [newKind, setNewKind] = useState<Todo['kind']>('recent');
-  const timer = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // 首屏浮现 4 秒淡出；逾期/待办将到期 → 转常驻
+  const setOpenPersist = (v: boolean) => {
+    setOpen(v);
+    try { localStorage.setItem('usst.mobile.goalCardOpen', v ? '1' : '0'); } catch { /* 无存储时仅本次生效 */ }
+  };
+
+  // M1a：逾期/待办将到期 → 自动展开（收起状态被顶开是有声的：有角标说明为什么）
   useEffect(() => {
-    if (attention || visible === false) return;
-    timer.current = window.setTimeout(() => setVisible(false), 4000);
-    return () => { if (timer.current) window.clearTimeout(timer.current); };
-  }, [attention, visible]);
+    if (attention) setOpen(true);
+  }, [attention]);
+
+  // 中长期待办点了「完成」要填时段 → 此时自动展开，保证选择器可见
+  useEffect(() => {
+    if (pickTodo) setOpen(true);
+  }, [pickTodo]);
 
   const flash = (id: string, kind: 'ok' | 'blocked') => {
     setFeedback({ id, kind });
@@ -123,61 +143,89 @@ export default function GoalTodoCard({ data, attention, h }: {
     flash(id, 'ok');
   };
 
-  if (!visible) return null;
+  // M1b：「+ 记一条」= 展开卡片 + 直接聚焦输入框（不依赖展开动画，任何时候都能记）
+  const quickAdd = () => {
+    setOpenPersist(true);
+    // 展开后输入框才挂载 → 等一帧再聚焦
+    window.setTimeout(() => inputRef.current?.focus(), 30);
+  };
+
   const goals = data.goals.filter((g) => !g.archived);
   const recent = sortTodosForView(data.todos.filter((t) => t.kind === 'recent'));
   const longterm = sortTodosForView(data.todos.filter((t) => t.kind === 'longterm'));
 
   return (
     <section data-testid="m-goal-card" className="rounded-card bg-paper-card p-4 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <p className="text-sm font-bold text-ink">目标与待办 <span className="text-ink-faint">({openTodoCount(data)})</span></p>
-        <button type="button" data-testid="m-goal-collapse" onClick={() => setVisible(false)}
-          className="text-xs text-ink-faint underline">收起</button>
+      {/* M1b：标题行 = 显式开合入口 + 「+ 记一条」快速出口（常驻，收起时也在） */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          data-testid="m-goal-card-toggle"
+          aria-expanded={open}
+          onClick={() => setOpenPersist(!open)}
+          className="text-sm font-bold text-ink"
+        >
+          目标与待办 <span className="text-ink-faint">({openTodoCount(data)})</span> {open ? '▴' : '▾'}
+        </button>
+        <div className="flex items-center gap-2">
+          {attention && (
+            <span data-testid="m-goal-attention" className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-semibold text-danger">有待办到期</span>
+          )}
+          <button type="button" data-testid="m-todo-quick-add" onClick={quickAdd}
+            className="rounded-xl bg-brand px-3 py-1.5 text-xs font-semibold text-white">+ 记一条</button>
+        </div>
       </div>
 
-      {/* 目标（1-3）+ 里程碑 */}
-      <div className="mt-2 space-y-1" data-testid="m-goal-list">
-        {goals.map((g) => (
-          <div key={g.id} className="rounded-xl bg-brand-light/60 px-3 py-2">
-            <p className="text-xs font-semibold text-ink">🎯 {g.title}</p>
-            {(g.milestones ?? []).map((m) => (
-              <button key={m.id} type="button" onClick={() => h.onToggleMilestone(g.id, m.id)}
-                className={`mt-0.5 block text-left text-[11px] ${m.done ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>
-                {m.done ? '✓' : '○'} {m.title}
-              </button>
+      {open && (
+        <>
+          {/* 目标（1-3）+ 里程碑 */}
+          <div className="mt-2 space-y-1" data-testid="m-goal-list">
+            {goals.map((g) => (
+              <div key={g.id} className="rounded-xl bg-brand-light/60 px-3 py-2">
+                <p className="text-xs font-semibold text-ink">🎯 {g.title}</p>
+                {(g.milestones ?? []).map((m) => (
+                  <button key={m.id} type="button" onClick={() => h.onToggleMilestone(g.id, m.id)}
+                    className={`mt-0.5 block text-left text-[11px] ${m.done ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>
+                    {m.done ? '✓' : '○'} {m.title}
+                  </button>
+                ))}
+                {(g.milestones ?? []).length === 0 && (
+                  <p className="mt-0.5 text-[11px] text-ink-faint">还没有里程碑 —— 在网页端拆解，或点下面「记一条」挂上去</p>
+                )}
+                <button type="button" data-testid="m-goal-add-ms" onClick={() => h.onAddMilestone(g.id, '下一步：')}
+                  className="mt-1 text-[11px] text-brand underline">+ 里程碑</button>
+              </div>
             ))}
-            {(g.milestones ?? []).length === 0 && (
-              <p className="mt-0.5 text-[11px] text-ink-faint">还没有里程碑 —— 在网页端拆解，或点下面「记一条」挂上去</p>
+            {goals.length === 0 && (
+              <p className="text-[11px] text-ink-faint">还没有目标（最多 3 个 {canAddGoal(data) ? '' : '· 已满'}）</p>
             )}
-            <button type="button" data-testid="m-goal-add-ms" onClick={() => h.onAddMilestone(g.id, '下一步：')}
-              className="mt-1 text-[11px] text-brand underline">+ 里程碑</button>
           </div>
-        ))}
-        {goals.length === 0 && (
-          <p className="text-[11px] text-ink-faint">还没有目标（最多 3 个 {canAddGoal(data) ? '' : '· 已满'}）</p>
-        )}
-      </div>
 
-      {/* 最近待办：打勾即完成，不要求时间 */}
-      <p className="mt-3 text-[11px] font-semibold tracking-wide text-ink-soft">最近待办（左滑可完成/收起）</p>
-      <div className="mt-1 space-y-1" data-testid="m-todo-recent">
-        {recent.slice(0, 4).map((t) => (
-          <TodoRow key={t.id} todo={t} onPressDone={() => complete(t)} onArchive={() => h.onArchive(t.id)} feedback={feedback} />
-        ))}
-        {recent.length === 0 && <p className="text-[11px] text-ink-faint">空空如也，随手记一条吧</p>}
-      </div>
+          {/* 最近待办：打勾即完成，不要求时间 */}
+          <p className="mt-3 text-[11px] font-semibold tracking-wide text-ink-soft">最近待办（左滑可完成/收起）</p>
+          <div className="mt-1 space-y-1" data-testid="m-todo-recent">
+            {recent.slice(0, 4).map((t) => (
+              <TodoRow key={t.id} todo={t} onPressDone={() => complete(t)} onArchive={() => h.onArchive(t.id)} feedback={feedback} />
+            ))}
+            {recent.length === 0 && (
+              <p className="text-[11px] text-ink-faint">还没有待办 —— 点「+ 记一条」随手记下，网页端排计划时会带上它。</p>
+            )}
+          </div>
 
-      {/* 中长期待办：打勾必须填完成时间（粗粒度） */}
-      <p className="mt-3 text-[11px] font-semibold tracking-wide text-ink-soft">中长期待办（完成时记时段，不怕忘）</p>
-      <div className="mt-1 space-y-1" data-testid="m-todo-long">
-        {longterm.slice(0, 4).map((t) => (
-          <TodoRow key={t.id} todo={t} onPressDone={() => complete(t)} onArchive={() => h.onArchive(t.id)} feedback={feedback} />
-        ))}
-        {longterm.length === 0 && <p className="text-[11px] text-ink-faint">还没有中长期待办</p>}
-      </div>
+          {/* 中长期待办：打勾必须填完成时间（粗粒度） */}
+          <p className="mt-3 text-[11px] font-semibold tracking-wide text-ink-soft">中长期待办（完成时记时段，不怕忘）</p>
+          <div className="mt-1 space-y-1" data-testid="m-todo-long">
+            {longterm.slice(0, 4).map((t) => (
+              <TodoRow key={t.id} todo={t} onPressDone={() => complete(t)} onArchive={() => h.onArchive(t.id)} feedback={feedback} />
+            ))}
+            {longterm.length === 0 && (
+              <p className="text-[11px] text-ink-faint">还没有中长期待办 —— 点「+ 记一条」后选「记长期」。</p>
+            )}
+          </div>
+        </>
+      )}
 
-      {/* 粗粒度完成期选择器（年月 + 上/中/下旬） */}
+      {/* 粗粒度完成期选择器（年月 + 上/中/下旬）—— pickTodo 时已自动展开 */}
       {pickTodo && (
         <div data-testid="m-todo-period-picker" className="mt-2 rounded-xl border border-brand/40 bg-white px-3 py-2">
           <p className="text-[11px] font-semibold text-ink">大概什么时候能办完？（不用精确到日）</p>
@@ -201,9 +249,10 @@ export default function GoalTodoCard({ data, attention, h }: {
         </div>
       )}
 
-      {/* 快速记录 */}
+      {/* 快速记录 —— M1b：「+ 记一条」聚焦到这里；回车默认记最近 */}
       <div className="mt-3 flex gap-2">
-        <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+        <input ref={inputRef} value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && newTitle.trim()) { h.onAddTodo(newTitle.trim(), 'recent'); setNewTitle(''); } }}
           data-testid="m-todo-input" placeholder="随手记一条…"
           className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-white px-3 py-2 text-xs" />
         <button type="button" data-testid="m-todo-add-recent"
