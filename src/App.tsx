@@ -16,6 +16,7 @@ import { getUserId } from '@/lib/identity';
 import { installWebSyncHook } from '@/features/mobile/lib/webSync';
 import { loadIdentity, type MobileIdentity } from '@/features/mobile/lib/auth';
 import CloudAccountCard from '@/features/cloudSync/CloudAccountCard';
+import AccountChip from '@/features/cloudSync/AccountChip';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -225,9 +226,13 @@ export default function App() {
       <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
           <Logo120 size={32} />
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="text-sm font-semibold tracking-tight text-ink">上理生活助手</div>
-            <div className="mt-0.5 text-[11px] font-medium tracking-[0.14em] text-ink-faint">USST · STUDENT LIFE</div>
+          {/* S1a：账号 chip 在 Logo 右侧标题行（左上角区域，CY 反馈④）；窄屏 flex-wrap 自然换行 */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 leading-tight">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold tracking-tight text-ink">上理生活助手</div>
+              <div className="mt-0.5 text-[11px] font-medium tracking-[0.14em] text-ink-faint">USST · STUDENT LIFE</div>
+            </div>
+            <AccountChip identity={identity} onIdentityChange={setIdentity} />
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
             <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
@@ -286,39 +291,35 @@ export default function App() {
             seedQuestion={libaoSeed?.text}
           />
         ) : mainTab === 'profile' ? (
-          // 必修 2/3：账号与云同步状态卡 —— 用户随时能看到「已连接手机端」与开关
-          <>
-            {state.persona ? (
-              <div className="space-y-3">
-                <PersonaResult
-                  profile={state.persona}
-                  onEnter={() => setMainTab('calendar')}
-                  onRetake={() => setView('persona')}
-                />
-                {/* V0-1：重看引导 —— 完整重走 标题→基本信息→问卷→结果→导入→模式（新旅程不再被 onboarded 藏起来） */}
-                <div className="flex justify-end px-4 sm:px-6">
-                  <button
-                    type="button"
-                    data-testid="replay-onboarding"
-                    onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
-                    className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-                  >
-                    重看引导
-                  </button>
-                </div>
+          // S1b（CY 反馈④⑤）：画像页底部那份 CloudAccountCard 已删 —— 账号入口唯一化到顶栏
+          // chip（S1a）；Welcome footer 那份保留（onboarding 阶段没有顶栏）。
+          state.persona ? (
+            <div className="space-y-3">
+              <PersonaResult
+                profile={state.persona}
+                onEnter={() => setMainTab('calendar')}
+                onRetake={() => setView('persona')}
+              />
+              {/* V0-1：重看引导 —— 完整重走 标题→基本信息→问卷→结果→导入→模式（新旅程不再被 onboarded 藏起来） */}
+              <div className="flex justify-end px-4 sm:px-6">
+                <button
+                  type="button"
+                  data-testid="replay-onboarding"
+                  onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
+                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                >
+                  重看引导
+                </button>
               </div>
-            ) : (
-              <div className="content-shell panel px-6 py-16 text-center sm:px-10">
-                <p className="section-label">PROFILE</p>
-                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
-                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
-                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
-              </div>
-            )}
-            <div className="mt-3">
-              <CloudAccountCard identity={identity} onIdentityChange={setIdentity} />
             </div>
-          </>
+          ) : (
+            <div className="content-shell panel px-6 py-16 text-center sm:px-10">
+              <p className="section-label">PROFILE</p>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
+              <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
+            </div>
+          )
         ) : weekMonday ? (
           <div className="space-y-3">
             {/* 课表 / 周计划 切换 */}
