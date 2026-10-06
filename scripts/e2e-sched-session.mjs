@@ -99,8 +99,7 @@ async function goWeek(page) {
   if (await overview.count()) { await overview.first().click().catch(() => {}); await T(500); }
   const open = page.getByRole('button', { name: '打开本周安排' });
   if (await open.count()) { await open.first().click().catch(() => {}); await T(900); }
-  const plan = page.getByRole('button', { name: '周计划' });
-  if (await plan.count()) { await plan.first().click().catch(() => {}); await T(900); }
+  // W3/P1-5e：课表/周计划子标签已删，「日程」单窗口直达
   const tl = page.locator('[data-testid="week-timeline"]');
   await tl.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   return tl.isVisible().catch(() => false);

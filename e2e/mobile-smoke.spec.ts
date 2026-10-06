@@ -508,16 +508,35 @@ async function desktopOnboard(page: Page) {
   await page.getByRole('button', { name: /进入|看看/ }).first().click();
 }
 
-/** 桌面端走到周计划时间轴（总览 → 打开本周安排 → 周计划；e2e-sched-session 同款） */
+/** 桌面端走到「日程」时间轴（总览 → 打开本周安排；W3/P1-5e：子标签已删，不再点「周计划」） */
 async function desktopGoWeek(page: Page) {
   const overview = page.getByRole('button', { name: '总览' });
   if (await overview.count()) { await overview.first().click(); }
   const open = page.getByRole('button', { name: '打开本周安排' });
   if (await open.count()) { await open.first().click(); }
-  const plan = page.getByRole('button', { name: '周计划' });
-  if (await plan.count()) { await plan.first().click(); }
   await expect(page.getByTestId('week-timeline')).toBeVisible({ timeout: 20_000 });
 }
+
+test('W3：总览点某天 → 进「日程」并高亮该天；「周计划」子标签不再存在', async ({ page }) => {
+  await desktopOnboard(page);
+  await page.getByRole('button', { name: '总览' }).click();
+
+  // 总览七天条里点周三（aria-label 以 ISO 日期开头，取本周的周三）
+  const wednesday = await page.evaluate(() => {
+    const d = new Date();
+    const off = (d.getDay() + 6) % 7; // 0 = 周一
+    d.setDate(d.getDate() - off + 2); // 周三
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  await page.locator(`button[aria-label^="${wednesday}"]`).first().click();
+
+  // 进了「日程」页且该天带「你点的那天」角标
+  await expect(page.getByTestId('week-timeline')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('focus-day-you-clicked')).toBeVisible({ timeout: 10_000 });
+
+  // 子标签按钮已删：全页不存在「周计划」按钮
+  await expect(page.getByRole('button', { name: '周计划' })).toHaveCount(0);
+});
 
 test('评估动线①：周计划 → 点评估 → 五维分数渲染 → 展开某维「看依据」可读', async ({ page }) => {
   await desktopOnboard(page);

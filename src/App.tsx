@@ -20,16 +20,15 @@ import AccountChip from '@/features/cloudSync/AccountChip';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
-import { WeekView } from '@/features/week/WeekView';
 import { WeekPlanView } from '@/features/week/WeekPlanView';
+import { FocusDaysPanel } from '@/features/week/FocusDaysPanel';
+import { WeekTimetable } from '@/features/week/WeekTimetable';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 import MemoPanel from '@/features/memo/MemoPanel';
 
 type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
-/** 周视图子模式：课表网格 vs 排程计划时间轴 */
-type WeekSubTab = 'timetable' | 'plan';
 
 /** WP12-H7：导入入口正式化 —— 正式构建也常驻（解析服务缺席时 ImportTester 自带降级提示，不白屏） */
 const SHOW_IMPORT = true;
@@ -52,8 +51,8 @@ export default function App() {
   const [view, setView] = useState<View>(() => initialView(state.onboarded));
   const [mainTab, setMainTab] = useState<MainTab>('calendar');
   const [weekMonday, setWeekMonday] = useState<string | null>(null);
-  // 默认落在「周计划」：这是感受测试的主体（课表网格是既有功能，随时可切回）
-  const [weekSubTab, setWeekSubTab] = useState<WeekSubTab>('plan');
+  // W3/P1-5d：总览点某天 → 进「日程」并高亮该天；点「总览」tab 清掉
+  const [focusedDay, setFocusedDay] = useState<string | null>(null);
   // H2：模式问询窗口（导入课表完成 / 周计划「换个节奏」打开）
   const [modeSetupOpen, setModeSetupOpen] = useState(false);
   // V0-3：checklist「加个重要日」→ 跳梨宝并预填提示（nonce 作 key，只在进入时注入一次）
@@ -140,6 +139,7 @@ export default function App() {
 
   const openWeek = (iso: string) => {
     setWeekMonday(mondayOf(iso));
+    setFocusedDay(iso); // P1-5d：点的那天要被看见
     setMainTab('calendar');
   };
 
@@ -242,7 +242,12 @@ export default function App() {
                 // 验收修正（2026-09-27）：「总览」tab 回归字面语义 —— 进入过周计划后
                 // 点「总览」必须能回总览页（onboarding checklist 卡在那里），否则卡被
                 // 周计划劫持埋掉（E2E 走查抓到）。周计划从总览页「打开本周安排」再进。
-                onClick={() => { setMainTab(t); if (t === 'profile' || t === 'calendar') setWeekMonday(null); }}
+                onClick={() => {
+                  setMainTab(t);
+                  // 总览 tab 回归字面语义（见下）；进总览/画像时清周定位
+                  if (t === 'calendar') { setWeekMonday(null); setFocusedDay(null); }
+                  else if (t === 'profile') setWeekMonday(null);
+                }}
                 className={`nav-item whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
               >
                 {TAB_LABEL[t]}
@@ -326,50 +331,36 @@ export default function App() {
           )
         ) : weekMonday ? (
           <div className="space-y-3">
-            {/* 课表 / 周计划 切换 */}
-            <div className="flex items-center gap-1 rounded-xl border border-ink/10 bg-white p-1 w-fit">
-              <button
-                onClick={() => setWeekSubTab('timetable')}
-                className={`nav-item whitespace-nowrap ${weekSubTab === 'timetable' ? 'nav-item-active' : ''}`}
-              >
-                课表
-              </button>
-              <button
-                onClick={() => setWeekSubTab('plan')}
-                className={`nav-item whitespace-nowrap ${weekSubTab === 'plan' ? 'nav-item-active' : ''}`}
-              >
-                周计划
-              </button>
-            </div>
-            {weekSubTab === 'plan' ? (
-              <WeekPlanView
-                schedule={schedule}
-                weekNo={weekNo}
-                persona={state.persona}
-                planState={state.planState}
-                onPlanStateChange={(ps) => patchState({ planState: ps })}
-                // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
-                // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
-                lifeMode={normalizeLifeMode(state.lifeMode)}
-                onOpenModeSetup={() => setModeSetupOpen(true)}
-                onShiftWeek={shiftWeekBy}
-              />
-            ) : (
-              <WeekView
-                weekMonday={weekMonday}
-                weekNo={weekNo}
-                schedule={schedule}
-                selectedDays={state.selectedDays}
-                onToggleDay={toggleDay}
-                onSelectWholeWeek={selectWholeWeek}
-                onClearDays={() => patchState({ selectedDays: [] })}
-                lifeMode={state.lifeMode}
-                onSelectMode={(id) => patchState({ lifeMode: id })}
-                persona={state.persona}
-                onBack={() => setWeekMonday(null)}
-                onShiftWeek={shiftWeekBy}
-              />
-            )}
+            {/* W3/P1-5a（CY 反馈③/S4-1）：课表/周计划两个并列窗口收敛为单一「日程」页 ——
+                子标签已删；FOCUS DAYS 置顶（P1-5b.1），课表降为底部默认折叠的只读块（P1-5b.3）。 */}
+            <FocusDaysPanel
+              weekMonday={weekMonday}
+              selectedDays={state.selectedDays}
+              focusedDay={focusedDay}
+              onToggleDay={toggleDay}
+              onSelectWholeWeek={selectWholeWeek}
+              onClearDays={() => patchState({ selectedDays: [] })}
+            />
+            <WeekPlanView
+              schedule={schedule}
+              weekNo={weekNo}
+              persona={state.persona}
+              planState={state.planState}
+              onPlanStateChange={(ps) => patchState({ planState: ps })}
+              // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
+              // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
+              lifeMode={normalizeLifeMode(state.lifeMode)}
+              onOpenModeSetup={() => setModeSetupOpen(true)}
+              onShiftWeek={shiftWeekBy}
+              onBack={() => setWeekMonday(null)}
+            />
+            {/* P1-5b.3：本块是单点可删的 —— CY 若说连折叠块也不要，删这一个 <details> 即可 */}
+            <details data-testid="week-timetable-details" className="panel px-4 py-3 sm:px-5">
+              <summary className="cursor-pointer text-[13px] font-medium text-ink-soft">本周课表（只读）</summary>
+              <div className="mt-3">
+                <WeekTimetable schedule={schedule} weekNo={weekNo} />
+              </div>
+            </details>
           </div>
         ) : (
           <OverviewPage

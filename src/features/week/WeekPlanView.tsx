@@ -130,6 +130,8 @@ interface Props {
   /** 批 4.1（2A）：切上一周/下一周（±1）。不传 = 不渲染按钮（老调用点零改动）。
    *  键盘 ←/→ 切周早已存在（App 全局 keydown），本字段只负责**可见性**。 */
   onShiftWeek?: (d: number) => void;
+  /** W3/P1-5b.2（2026-10-07）：「返回总览」—— WeekView 单窗口化后从那边搬来的出口 */
+  onBack?: () => void;
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -453,7 +455,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek, onBack }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1616,6 +1618,17 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       <div className="panel px-4 py-3.5 sm:px-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="flex items-center gap-1.5">
+            {/* W3/P1-5b.2：返回总览（WeekView 单窗口化后搬到这里） */}
+            {onBack && (
+              <button
+                type="button"
+                data-testid="weekplan-back-overview"
+                onClick={onBack}
+                className="rounded-lg bg-white px-2.5 py-1 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                返回总览
+              </button>
+            )}
             {onShiftWeek && (
               <button
                 type="button"

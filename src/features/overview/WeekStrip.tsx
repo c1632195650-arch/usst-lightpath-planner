@@ -43,7 +43,7 @@ export function WeekStrip({ schedule, weekNo, weekMonday, todayIso, onSelectDay 
             <button
               key={iso}
               onClick={() => onSelectDay(iso)}
-              aria-label={`${iso}，${count} 节课，点击查看该周安排`}
+              aria-label={`${iso}，${count} 节课，点击进入该周并定位到这一天`}
               className={`flex flex-col items-center gap-2 rounded-xl border px-1 py-3 transition-colors duration-200 ease-out ${
                 isToday
                   ? 'border-brand bg-brand-light'
