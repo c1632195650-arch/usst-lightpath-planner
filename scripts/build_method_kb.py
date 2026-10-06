@@ -24,6 +24,9 @@ DB_PATH = os.path.join(BASE, "..", "data", "method_kb.db")
 
 import method_kb_data as DATA
 
+# 孤儿清理开关（默认关，见 seed() 内注释）
+PRUNE = False
+
 
 def _dumps(x):
     return json.dumps(x, ensure_ascii=False)
@@ -117,9 +120,37 @@ def seed(conn):
         for aid, role in e["abilities"]:
             conn.execute("INSERT OR IGNORE INTO entry_ability(entry_id,ability_id,role) VALUES(?,?,?)",
                          (eid, aid, role))
+
+    # 🔴🔴 孤儿清理（2026-10-06 自验收补做）
+    # 问题：`seed()` 是 UPSERT（只增不删）。一旦从数据模块**删掉**某条目，
+    #   它在库里永远残留 —— 并且照样进 FTS 索引参与检索。
+    #   实测：删掉重复条目 `habit-cue-crease-budget-v2` 后，
+    #   数据模块 160 条，库里 161 条，那条幽灵仍在被检索。
+    #   → 这正是项目记忆里「审计工具自身会骗人」的典型：账面干净、实际有鬼。
+    #
+    # ⚠️ 默认**不删**（保护历史库，避免有人误跑 seed 就丢数据）；
+    #    确认数据模块是唯一真源后，用 `--prune` 显式开启。
+    n_pruned = 0
+    if PRUNE:
+        keep = {e["slug"] for e in DATA.ENTRIES}
+        orphans = [r[0] for r in conn.execute("SELECT slug FROM entries").fetchall()
+                   if r[0] not in keep]
+        for slug in orphans:
+            conn.execute("DELETE FROM entry_ability WHERE entry_id IN"
+                         " (SELECT id FROM entries WHERE slug=?)", (slug,))
+            conn.execute("DELETE FROM entries WHERE slug=?", (slug,))
+            n_pruned += 1
+
     conn.commit()
-    print(f"[seed] 元能力 {len(DATA.META_ABILITIES)}｜任务 {len(DATA.TASKS)}｜"
-          f"条目 新增 {n_new} / 更新 {n_upd}｜拒收清单 {len(DATA.REJECTED)} 项")
+    msg = (f"[seed] 元能力 {len(DATA.META_ABILITIES)}｜任务 {len(DATA.TASKS)}｜"
+           f"条目 新增 {n_new} / 更新 {n_upd}")
+    if PRUNE:
+        msg += f"｜孤儿清理 {n_pruned}"
+        if n_pruned:
+            msg += f"（已删：{', '.join(orphans)}）"
+    msg += f"｜拒收清单 {len(DATA.REJECTED)} 项"
+    print(msg)
+    return n_pruned
 
 
 def build_all():
@@ -145,6 +176,8 @@ def stats():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
+    # --prune：确认数据模块是唯一真源后，清掉库里已删除条目的残留（幽灵条目）
+    PRUNE = "--prune" in sys.argv
     if cmd == "seed":
         c = sqlite3.connect(DB_PATH); ensure_schema(c); seed(c); c.close()
     elif cmd == "stats":

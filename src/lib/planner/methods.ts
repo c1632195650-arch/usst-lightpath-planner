@@ -262,6 +262,35 @@ export type MethodBlockKind =
   | 'exercise'     // 运动 / 身体活动
   | 'rest';        // 休息 / 睡眠
 
+/**
+ * 🔴🔴 真实块类型 → 方法库类目的**显式映射**（2026-10-06 自验收补做）。
+ *
+ * 背景（真实缺陷，非假想）：`src/types.ts` 的 `BlockKind` 是
+ *   `'course' | 'meal' | 'study' | 'activity' | 'commute' | 'blank'`
+ * 而本文件原先**自造**了另一套 `MethodBlockKind`
+ *   `'assignment' | 'review' | 'exam' | 'exercise' | 'rest'`
+ * 两套枚举**零重叠**。移动端适配层用 `kind as never` 强行传参，编译通过，
+ * 但运行时六种真实块类型**全部查不到候选 → tips 永远返回 null**。
+ * 单测之所以全绿，是因为它只用本文件自己造的枚举——典型的「测自己、不测接线」。
+ *
+ * 修法（保持红线）：
+ *  · 映射**显式列出**，不靠字符串猜测；
+ *  · `course`/`meal`/`commute`/`blank` **不映射**——吃饭通勤上课不是「怎么学习」类问题，
+ *    硬凑就是给方法论找错主顾（宁缺毋滥）；
+ *  · `study` 按块性质分流：只有当调用方知道它是复习还是作业时才给 kind，
+ *    故这里做**保守映射**：study→assignment（最常见形态），其余不猜。
+ *  · 导出本映射让适配层复用，**从根上消除 `as never`**。
+ */
+export const BLOCK_KIND_TO_METHOD: Readonly<Record<string, MethodBlockKind | null>> = {
+  study: 'assignment',       // 学习块：按最常见的「做作业」形态处理
+  activity: 'exercise',      // 活动块：社团/运动类
+  exam: 'exam',              // 若未来BlockKind 含exam
+  course: null,              // 上课：不需要 tips
+  meal: null,                // 吃饭：不属于方法论问题
+  commute: null,             // 通勤：不属于方法论问题
+  blank: null,               // 空白：不提示
+};
+
 /** 块的时长特征（纯数值，不含学科） */
 export interface MethodTipContext {
   kind: MethodBlockKind;
@@ -456,4 +485,27 @@ export function methodTipForBlock(ctx: MethodTipContext): MethodTip | null {
     tier: top.hint.tier,
     status: top.hint.status,
   };
+}
+
+/**
+ * 按项目真实块类型（`BlockKind`）取方法论 tip —— **UI 侧应该用这个入口**。
+ *
+ * 🔴 2026-10-06 自验收补做：原先只有 `methodTipForBlock(MethodBlockContext)`，
+ * 而其`MethodBlockKind` 与 `src/types.ts` 的 `BlockKind` 零重叠，
+ * 导致移动端适配层拿 `kind as never` 硬传后 **tips 恒为 null**。
+ * 本函数是唯一的正确接线入口：内部做显式映射，未知 kind 一律 null。
+ *
+ * @param blockKind 项目的 `BlockKind`（字符串，来自 TimeBlock.kind）
+ * @param ctx其余上下文（时长/能量/是否已有 if-then）
+ * @returns 有匹配才返回 tip；**不硬凑**
+ */
+export function methodTipForTimeBlock(
+  blockKind: string,
+  ctx: Omit<MethodTipContext, 'kind'> = {},
+): MethodTip | null {
+  const mapped = Object.prototype.hasOwnProperty.call(BLOCK_KIND_TO_METHOD, blockKind)
+    ? BLOCK_KIND_TO_METHOD[blockKind]
+    : null;
+  if (!mapped) return null;
+  return methodTipForBlock({ kind: mapped, ...ctx });
 }

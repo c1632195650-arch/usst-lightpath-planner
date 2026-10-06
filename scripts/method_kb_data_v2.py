@@ -991,7 +991,11 @@ WILLPOWER_ENTRIES = [
        "B",
        {"authors": "Laibson, D. (1997)",
         "title": "Present Bias in Hyperbolic Discounting and Reminder Preferences",
-        "source": "Economics Letters, 59(3)",
+        # ⚠️ 2026-10-06 自验收：此处**刻意不给页码**。检索发现 Laibson 1997 有两篇常被混引的
+        # 论文（Economics Letters 的 present bias短文 vs. QJE 112(2) 的
+        # "Golden Eggs and Hyperbolic Discounting"），卷期页在二手来源间不一致。
+        # 按红线「零编造」，未核实到一手页就不写具体页码，只留刊名+卷期。
+        "source": "Economics Letters, 59(3)（页码未核实）",
         "year": "1997", "url": "https://www.nber.org/papers/w5995",
         "verification": "canonical"},
        "verified", [("metacognitive-regulation", "train")],
@@ -1116,8 +1120,10 @@ WILLPOWER_ENTRIES = [
     _e("implementation-intention-fatigue", "principle", "behavior", "通用",
        "旧计划会失效，要随情境更新",
        "if-then 计划绑定的是特定情境；情境变了之后机械执行旧计划反而是阻碍。",
-       "实施意图的机制依赖「if 部分是真实会遇到的情境」。若该情境已不复存在（如换了作息、换了目标），原计划会失去线索基础。此推论源自机制本身。",
-       ["情境变化时重写if-then", "定期检查 if 部分是否还成立", "保留仍有效的条，删掉失效的", "把计划当成活的文档"],
+       "实施意图的机制依赖「if 部分是真实会遇到的情境」。若该情境已不复存在（如换了作息、换了目标），原计划会失去线索基础。此推论源自机制本身。⚠️ 2026-10-06 自验收：原另有一条 `habit-cue-crease-budget-v2` 与本条同源且参数完全相同，已按「重叠只存一份」合并删除，其独有的「每两周固定扫一遍」操作并入本条 steps。",
+       ["情境变化时重写if-then", "每两周扫一遍所有 if-then（固定周期，不靠临时起意）",
+                        "问「这个 if 还成立吗」，删掉失效的而非留着",
+                        "为高频变动场景预设备用线索", "把计划当成活的文档"],
        "B",
        {"authors": "（实施意图机制的自洽推论；Gollwitzer & Sheeran 2006）",
         "title": "Implementation intentions 的情境依赖性",
@@ -1731,19 +1737,6 @@ BOUNDARY_ENTRIES = [
        {"rebuildContextMin": 1},
        contraindications="「23 分钟」是特定实验环境的经验值，不同任务差异很大；不要当常数硬用。"),
 
-    _e("habit-cue-crease-budget-v2", "method", "behavior", "通用",
-       "旧计划随情境更新",
-       "情境已变但if-then 照抄，会让计划失效并制造额外摩擦。",
-       "与 implementation-intention-fatigue 同源（该条在自控力域），此处给出**具体操作版本**：把计划更新做成固定动作而非临时起意。属 C 级实践共识。",
-       ["每两周扫一遍所有 if-then", "问「这个 if 还成立吗」", "删掉失效的而非留着", "为高频变动场景预设备用线索"],
-       "C",
-       {"authors": "（实践共识，机制见实施意图的情境依赖性）",
-        "title": "计划情境更新机制", "source": "行为改变实践共识",
-        "year": "—", "url": "https://en.wikipedia.org/wiki/Implementation_intention",
-        "verification": "canonical"},
-       "verified", [("metacognitive-regulation", "train")],
-       {"refreshIntervalDays": 14},
-       contraindications="频繁重写会变成不执行；应按固定周期而非按情绪。"),
 ]
 
 
