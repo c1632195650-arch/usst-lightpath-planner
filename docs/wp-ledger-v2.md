@@ -465,3 +465,26 @@
 | P1-4 移动端 F11/ICS/persona 三项 | **销案（设计决议/已做）** | QuickBar.tsx:2-5 决议、IcsGuide+icsHint 源码锁、persona? 已在 SyncState |
 | 6.5 fallbackCategory 切换 | **登记不切换** | 待 Todo.kind 取值清单核实（BLOCKERS 同条） |
 | 6.6 双树融合 922ac85/4ad2893 | **登记人工窗口** | §8.6 三树纪律，白天人工并入 integration-full |
+
+## 收官批次 · 施工记录（2026-10-06 上午，本会话执行部分；与并行会话分工见 §执行序列）
+
+> 执行权威：`docs/一键推进收尾方案-2026-10-06.md`（R1-R8 裁决）。本会话完成批次 0/1/2/3/5 与 7.2-7.5；
+> 批次 4（P1-1/P1-2/P1-3/P1-4）与批次 6 由并行会话完成（`52b197a`/`fc3e271`/`1bb7ef5`/`63162fa`）。
+
+| 项 | commit | 内容 | 门禁（本条实据） |
+|---|---|---|---|
+| P0-0 | `1230ce2` | capability-map 清单修复：原缺陷（memo-web-workspace 未登记）已被并行批 4a09096 修掉；残余 = icsHint 源码锁分段 join 路径不可见 → 改单字面量并 --write 重生成 | --check 连续两次 PASS（幂等）；icsHint 3/3 绿 |
+| P0-0b | `7f6bbda` | preflight 基线 origin/dev→origin/beta-v2 + 放行 _integration_full 只读参考（CY 授权） | preflight exit 0：基线 origin/beta-v2、共同祖先有、ahead1/behind0，不再报 UNRELATED_HISTORIES |
+| P0-1a | `f314111` | Wave3 评估引擎整组移植（planDigest/planEval/PlanEvalPanel/plan_review.py + 3 测试文件）+ 接线（app.py 路由、api.ts planReview、WeekPlanView 三段、routineStore 随移植、goalStore 增 GoalStatus） | tsc 0；engine 658/0；移植测试 50/50；HTTP 实测：完整 digest→200 且 source 带 库名+slug+tierA+quote（retrieved:true），缺 digest→422；impact PASS |
+| P0-1b | `174ced5` | 梨宝侧「让梨宝评估这一版」入口（触发点①）：confirmGoal 六类回执带 evalAsk → 复用 PlanEvalPanel；glue 收进唯一接缝 weekPlanForChat.evaluatePlanForChat（红线 6，含负向锁）；采纳只进重排草稿流 | tsc 0；ui 432/0；新源码锁 4/4；RV：摘按钮→恰1红（4→3/1）→还原 sha256 一致→回绿 |
+| P0-1c | `26acf14`+`4f24038` | E2E 评估动线：mobile-smoke +2（出报告/建议可采纳，17 passed）+ sched-session 场景 R 7 断言（六维渲染/offline 三态降级不白屏/免责声明） | mobile-smoke 17/0；sched-session 86 过/0 挂（隔离 vite 5173 离线）；e2e 总条数 22（≥22 达标） |
+| 批次2 | `1f05583` | routineStore 写入端（裁决 R2）：周计划页 routine-entry 采集面板 + 引擎日窗接线（dayWindowWithFallback → PlanRequest 已有字段，未采集时逐位一致）+ 上游测试 18 条移植（3 条结构锁按本树适配） | tsc 0；engine 680/0（golden 零漂移）；routineStore 18/18 |
+| P1-5 | `8eb897d` | 每周活动量下限 **契约: BuildWeekPlanInput/PlanRequest 增 weeklyActivityMin?**（opt-in，缺省不生效=golden 零漂移）；construct 缺口按天均摊（forceSport+预算闸放宽，软保底）；调用侧产品缺省 150（周计划页+对话接缝三处）；KNOWLEDGE_PARTIALS 两条结项 | tsc 0；engine 695/0；新测试 7/7；RV：删 forceSport 扩展→补排恰红（5/2）→还原 sha256 一致 |
+| P1-6/P1-7部分 | `4838b4a` | 三餐食堂选点接 rankPlaces 统一纪律 + 步行预算进引擎 **契约: BuildWeekPlanInput/PlanRequest 增 mealWalkBudgetMin?**（显式 > 画像就餐半径推导）；CanteenPick 增 pool（推荐点集合）；全员被剔回退默认推荐序且不带 pool；SPATIAL/PROFILE_PARTIALS 结项 | tsc 0；engine 703/0；ui 432/0；新测试 8/8；RV：拆预算透传→construct 级恰红（7/1）→还原 sha256 一致 |
+| 批次7.2 | 本节 | 全量门禁：tsc 0 / engine 703·0 / ui 432·0 / e2e 22 全绿（mobile 17+memo 2+smoke 3）/ gate_overnight 六门全 PASS（e922a4d 动态基线后首跑）/ capability_map --check PASS / impact PASS / golden 零漂移 | 见左 |
+| 批次7.3 | — | dist 同步：npm run build → tar+ssh（排除 apk）上 `ubuntu@101.35.253.143:/opt/usst/app/dist`；线上验证：/ 与 /m.html 200、index 资产哈希 = 本地新构建（index-Njsh1RbR.js）、/api/health ok | 见左；⚠️ 事故与恢复见 BLOCKERS 2026-10-06 10:41 条 |
+| 批次7.4 | — | push：`git push origin beta-v2:beta-v2` → `4a09096..4838b4a`（16 commit 上远端；dev/main/integration-full 零接触） | push 输出留痕本节 |
+
+**偏离登记（2 处）**：
+1. 批次1.3 要求 P0-1a 拆三笔提交，实际单笔 `f314111`（移植与接线同批落地，仍满足"可独立回滚"）；功能与 DoD 全部达成。
+2. 本会话与并行会话在同一工作树交错提交（10:04-10:38 共 7 笔交错），每笔提交前均核对 git log 与 git status 防撞车；台账/BLOCKERS 分工会话各自落节，无覆盖。
