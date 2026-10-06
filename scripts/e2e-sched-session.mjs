@@ -50,7 +50,7 @@ async function onboard(page) {
   // ⚠️ 选项点击后有 advancing 过渡（全部按钮短暂 disabled）——此时不能去点「下一步」，
   //    否则 locator 会挂着等它 enabled 卡死 30s（首次走查实测抓到）。
   for (let i = 0; i < 80; i++) {
-    if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    if (await page.getByTestId("persona-result-title").isVisible().catch(() => false)) break;
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click().catch(() => {}); await page.waitForTimeout(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();
@@ -61,7 +61,7 @@ async function onboard(page) {
       await page.waitForTimeout(300);
     }
   }
-  ok(await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false), '引导：画像结果页可达');
+  ok(await page.getByTestId("persona-result-title").isVisible().catch(() => false), '引导：画像结果页可达');
 
   await page.getByRole('button', { name: /进入|看看/ }).first().click().catch(() => {});
   await T(900);

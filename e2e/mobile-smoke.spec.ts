@@ -494,7 +494,7 @@ async function desktopOnboard(page: Page) {
   await page.getByRole('button', { name: /下一步/ }).click();
   // 问卷自动作答：点可选项直到结果页（advancing 过渡期不能点「下一步」，见 e2e-sched-session 注）
   for (let i = 0; i < 80; i++) {
-    if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    if (await page.getByTestId("persona-result-title").isVisible().catch(() => false)) break;
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click().catch(() => {}); await page.waitForTimeout(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();

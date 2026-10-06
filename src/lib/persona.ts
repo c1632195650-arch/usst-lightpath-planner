@@ -46,33 +46,34 @@ export const SCENARIO_META: Record<string, { label: string; values: Record<strin
 
 export const ARCHETYPES: Archetype[] = [
   {
-    id: 'planner', name: '卷王本王', tagline: '连吃饭都提前一周排好',
-    desc: '提前排课表、要确定性，脑子里住着一张 Excel。适合推政策通知、保研竞赛、效率工具。',
+    // W2-P2-1a（2026-10-07）：name/tagline/desc 为 CY 定稿（照抄，不改口径）；id/axes 一字节不动
+    id: 'planner', name: '提前一点的人', tagline: '把明天先摆好，再安心睡',
+    desc: '你做事喜欢先有个轮廓，心里才踏实。梨宝会顺着这一点，把要紧的事排前一些，也给留白留位置。',
     axes: { EXP: 30, PLAN: 80, SOC: 45, RES: 60, ACH: 75, HEA: 55, RAT: 70, BOLD: 40 },
   },
   {
-    id: 'social', name: '社交悍匪', tagline: '群里喊一声，三秒凑一桌',
-    desc: '社团活动、约饭是刚需，走到哪都自带热闹氛围。适合推活动聚合、搭子匹配、群入口。',
+    id: 'social', name: '总被想起的人', tagline: '一句「一起？」，一天就活了',
+    desc: '你的日程常常从一次邀约开始。梨宝会把人和事靠近一点，替你留出能约上的空当。',
     axes: { EXP: 70, PLAN: 45, SOC: 85, RES: 60, ACH: 45, HEA: 50, RAT: 45, BOLD: 70 },
   },
   {
-    id: 'explorer', name: '独行侠', tagline: '自己逛，自己懂',
-    desc: '喜欢自己找信息、爱挖小众店，一个人也能把日子过得有滋有味。适合推深度长文、小众探店、自助入口。',
+    id: 'explorer', name: '自己找路的人', tagline: '地图之外，还有一条',
+    desc: '比起现成答案，你更信自己走一趟。梨宝会多给你几个选项，而不是替你定死一条路。',
     axes: { EXP: 80, PLAN: 55, SOC: 30, RES: 60, ACH: 55, HEA: 45, RAT: 75, BOLD: 65 },
   },
   {
-    id: 'healthy', name: '早八战神', tagline: '早起跑步雷打不动',
-    desc: '作息运动规律到让人佩服，身体是本钱的坚定信徒。适合推操场空闲、体测提醒、轻食窗口。',
+    id: 'healthy', name: '天亮就醒的人', tagline: '身体先醒，一天就稳了',
+    desc: '你把作息过成了习惯，身体也跟着安分。梨宝会把运动和睡眠放进排程的底座。',
     axes: { EXP: 45, PLAN: 70, SOC: 50, RES: 70, ACH: 55, HEA: 85, RAT: 60, BOLD: 50 },
   },
   {
-    id: 'spontane', name: '随缘选手', tagline: '计划？随机应变',
-    desc: '临时起意、说走就走，讨厌被计划框住。适合推「附近现在有什么」、即时性内容。',
+    id: 'spontane', name: '临场发挥的人', tagline: '计划留白，精彩补上',
+    desc: '你不爱被排满，喜欢到了再看。梨宝会给你留出空白格，而不是把一天填死。',
     axes: { EXP: 75, PLAN: 25, SOC: 60, RES: 50, ACH: 35, HEA: 40, RAT: 40, BOLD: 70 },
   },
   {
-    id: 'steady', name: '佛系躺平家', tagline: '少折腾，稳一点',
-    desc: '喜欢确定、怕麻烦，稳稳当当就是福。适合推稳定口碑店、避坑提醒、明确步骤指引。',
+    id: 'steady', name: '慢慢来的人', tagline: '不追热闹，挑值得的',
+    desc: '你偏爱确定、怕折腾。梨宝会把变动收小，把步骤说清，让你走得不慌。',
     axes: { EXP: 25, PLAN: 65, SOC: 45, RES: 65, ACH: 50, HEA: 55, RAT: 55, BOLD: 30 },
   },
 ];

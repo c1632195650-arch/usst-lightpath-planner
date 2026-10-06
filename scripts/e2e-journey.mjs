@@ -56,13 +56,13 @@ const run = async () => {
 
   // ③ 问卷（自动作答：每个问题点第一个可点选项，直到结果页）
   for (let i = 0; i < 40; i++) {
-    if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    if (await page.getByTestId("persona-result-title").isVisible().catch(() => false)) break;
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click(); await T(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();
     if (await next.count()) { await next.click(); await T(420); }
   }
-  ok(await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false), '④ 画像结果页可达');
+  ok(await page.getByTestId("persona-result-title").isVisible().catch(() => false), '④ 画像结果页可达');
 
   // → 进入主界面（V0-2：没导课表 → 直达「课表」tab）
   await page.getByRole('button', { name: /进入|看看/ }).first().click().catch(() => {});

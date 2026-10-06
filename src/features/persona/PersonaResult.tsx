@@ -90,12 +90,16 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
           <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12 lg:px-10 lg:py-10">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">YOUR PLANNING PROFILE</p>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">你的节奏，已经有了轮廓。</h1>
+              {/* P2-1b/f：h1 去「武断感」+ 稳定锚点（E2E 统一走 testid） */}
+              <h1 data-testid="persona-result-title" className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">你的节奏，先有了一层轮廓。</h1>
               <p className="mt-3 text-base font-medium text-brand-light">「{epithet}」</p>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75">{blurb}</p>
+              <p data-testid="persona-soft-note" className="mt-2 text-sm leading-6 text-white/55">这只是此刻的你 —— 答案会变，轮廓也会跟着变。</p>
               {primary ? (
                 <>
-                  <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  {/* P2-1c：原型块引导语 —— 不绝对化 */}
+                  <p className="mt-6 text-xs text-white/45">更偏这一类的节奏（不是标签，只是此刻更像的一侧）</p>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                     <p className="text-xl font-semibold text-brand-light">{primary.name}</p>
                     <p className="text-sm text-white/55">{primary.tagline}</p>
                   </div>
@@ -114,7 +118,8 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
             <dl className="grid content-start gap-4 border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
               <div className="border-b border-white/10 pb-4">
                 <dt className="text-xs text-white/45">画像状态</dt>
-                <dd className="mt-1 text-sm font-semibold text-white">{profile.quality === 'ok' ? '可用于推荐' : '建议复测'}</dd>
+                {/* P2-1d：状态措辞放软 */}
+                <dd className="mt-1 text-sm font-semibold text-white">{profile.quality === 'ok' ? '可以拿来参考' : '建议复测'}</dd>
               </div>
               <div className="border-b border-white/10 pb-4">
                 <dt className="text-xs text-white/45">画像版本</dt>
@@ -122,13 +127,15 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
               </div>
               <div>
                 <dt className="text-xs text-white/45">会影响什么</dt>
-                <dd className="mt-1 text-sm leading-6 text-white/70">本周的学习、休息和校园生活建议；不会用于排名。</dd>
+                {/* P2-1d：说清影响范围（CY：「会影响什么的这个模块简直不知所云」） */}
+                <dd className="mt-1 text-sm leading-6 text-white/70">只影响梨宝替你排这一周的顺序 —— 先做什么、几点吃饭、什么时候歇。不参与评比，也不会给谁看。</dd>
               </div>
             </dl>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
-            <p className="text-sm text-white/55">这是一份可随使用慢慢校准的排程输入。</p>
+            {/* P2-1e：页脚放软 */}
+            <p className="text-sm text-white/55">这份轮廓会随你用起来慢慢校准 —— 不必现在就相信它。</p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <button onClick={onRetake} className="min-h-11 px-3 text-sm font-medium text-white/65 transition-colors hover:text-white">重新完成测评</button>
               <button onClick={onEnter} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light">进入我的本周安排</button>

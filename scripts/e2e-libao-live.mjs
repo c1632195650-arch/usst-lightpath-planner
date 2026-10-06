@@ -38,7 +38,7 @@ async function onboard(page) {
   await page.locator('select').nth(1).selectOption('军工路本部');
   await page.getByRole('button', { name: /下一步/ }).click(); await T(500);
   for (let i = 0; i < 80; i++) {
-    if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    if (await page.getByTestId("persona-result-title").isVisible().catch(() => false)) break;
     const opt = page.locator('button[aria-pressed]:enabled').first();
     if (await opt.count()) { await opt.click().catch(() => {}); await page.waitForTimeout(420); continue; }
     const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();

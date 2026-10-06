@@ -54,6 +54,26 @@ test('红线扫描：全部 blurb + 兜底无敏感词、无 markdown、无 emoj
   }
 });
 
+/* W2-P2-1g（2026-10-07）：原型 name/tagline/desc 纳入同一条红线扫描 ——
+ * 这是防止文案回潮的唯一锁（原稿「卷王本王/社交悍匪…」即漏网产物）。 */
+test('W2-P2-1g 红线扫描：6 原型的 name/tagline/desc 无敏感词、无 markdown、无 emoji', () => {
+  for (const a of ARCHETYPES) {
+    const texts = [a.name, a.tagline, a.desc];
+    for (const t of texts) {
+      assert.ok(t.trim().length > 0, `原型 ${a.id} 有空文案`);
+      for (const w of BANNED) assert.ok(!t.includes(w), `原型 ${a.id} 文案含敏感词「${w}」：${t}`);
+      assert.ok(!MARKDOWN.test(t), `原型 ${a.id} 文案含 markdown 符号：${t}`);
+      assert.ok(!EMOJI.test(t), `原型 ${a.id} 文案含 emoji：${t}`);
+    }
+  }
+});
+
+test('W2-P2-1a · 旧绝对化原型名已退役（不得回潮）', () => {
+  const retired = ['卷王本王', '社交悍匪', '独行侠', '早八战神', '随缘选手', '佛系躺平家'];
+  const joined = ARCHETYPES.map((a) => `${a.name}${a.tagline}${a.desc}`).join('\n');
+  for (const r of retired) assert.ok(!joined.includes(r), `旧原型名「${r}」回潮`);
+});
+
 test('未命中路径有兜底：primary == null 时 blurb 来自 FALLBACK_BLURBS', () => {
   const p = fakeProfile({ PLAN: 50 });
   const b = pickBlurb(p, 0);
