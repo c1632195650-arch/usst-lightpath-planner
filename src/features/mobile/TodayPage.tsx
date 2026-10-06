@@ -13,10 +13,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TimeBlock } from '@/types';
 import type { MobileIdentity } from './lib/auth.ts';
 import { clearIdentity } from './lib/auth.ts';
-import { applyLayerToBlocks, minutesOfDay } from './lib/sync.ts';
+import { applyLayerToBlocks, fmtMin, minutesOfDay } from './lib/sync.ts';
 import { nowTipForBlock } from './lib/nowTip.ts';
 import { useNow } from './lib/useNow.ts';
 import { memoNeedsAttention } from './lib/memoStore.ts';
+import { bannerBlock } from './lib/notifyStatus.ts';
 import { useTodayData } from './lib/useTodayData.ts';
 import BlockCard from './BlockCard.tsx';
 import EditSheet, { type EditAction } from './EditSheet.tsx';
@@ -61,6 +62,8 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
     .sort((a, b) => a.startMin - b.startMin)[0] ?? null : null;
   const doneIds = displayed?.doneIds ?? new Set<string>();
   const attention = memoNeedsAttention(d.memo, d.todayKey);
+  // M5b：块开始前 10 分钟 → 页内横幅（useNow(30s) 驱动，网页版的真实提醒通道）
+  const banner = bannerBlock(displayed?.blocks ?? [], nowMin, doneIds);
 
   return (
     <div className="min-h-screen w-full bg-paper pb-10">
@@ -95,6 +98,12 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
         {d.permDenied && (
           <div data-testid="m-perm-banner" className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
             通知没开，提醒收不到 —— 去系统设置打开通知权限，回来点「重排提醒」。
+          </div>
+        )}
+        {/* M5b：Web 页内横幅（真实通道，非只有文案）—— 块开始前 10 分钟弹，30s 轮询驱动 */}
+        {banner && (
+          <div data-testid="m-inpage-banner" className="rounded-xl bg-brand-light px-4 py-2.5 text-sm text-ink">
+            📣 「{banner.title}」{fmtMin(banner.startMin)} 开始 —— 还有 {banner.startMin - nowMin} 分钟
           </div>
         )}
 
@@ -155,7 +164,7 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
             {/* M3（CY 反馈⑧a）：本周视图 —— 周切换/回到现在/点天展开（替换只读 WeekGlance，S4-3） */}
             <WeekBoard plan={d.plan} layer={d.layer} weekNo={d.weekNo ?? 0} todayDow={d.dow} serverState={d.serverState} />
 
-            <NotifyStatus blocks={displayed?.blocks ?? []} nowMin={nowMin} dateKey={d.todayKey} />
+            <NotifyStatus blocks={displayed?.blocks ?? []} nowMin={nowMin} dateKey={d.todayKey} permDenied={d.permDenied} />
 
             {/* 梨宝抽屉（A1）+ 底部折叠（P6-2 降级） */}
             <div className="flex gap-2">

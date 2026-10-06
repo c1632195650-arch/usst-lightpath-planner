@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import type { TimeBlock } from '@/types';
 import { planTodayNotifications } from '@/features/mobile/lib/notifyBridge.ts';
 import {
-  markPermissionDenied, needsRecoveryPrompt, nextNotifyLabel,
+  bannerBlock, markPermissionDenied, needsRecoveryPrompt, nextNotifyLabel,
   notifyCountdown, shouldAutoRequestPermission,
   PERM_DENIED_KEY, RECOVERY_SHOWN_KEY,
 } from '@/features/mobile/lib/notifyStatus.ts';
@@ -139,3 +139,28 @@ test('⑫ notifyCountdown 与 planTodayNotifications 同源：进行中块计入
   assert.equal(next?.atMin, 301);
   assert.equal(next?.title.includes('至 05:40'), true, '进行中的开始通知带结束时间');
 });
+
+/* ---------------- M5b（2026-10-07）：Web 页内横幅触发时刻（纯函数） ---------------- */
+
+test('M5b · bannerBlock：开始前 ≤10 分钟 → 命中；>10 分钟/已开始/已完成 → null', () => {
+  const b1 = blk({ id: 'w4-d6-study-1', startMin: 600, endMin: 660 });
+  const b2 = blk({ id: 'w4-d6-study-2', startMin: 700, endMin: 760 });
+  // 前 9 分钟 → 命中（Web 横幅触发窗）
+  expectBanner([b1], 591, 'w4-d6-study-1');
+  // 恰好前 10 分钟 → 命中（与 planTodayNotifications 的预告提前量同口径）
+  expectBanner([b1], 590, 'w4-d6-study-1');
+  // 前 11 分钟 → 不弹（太早）
+  assert.equal(bannerBlock([b1], 589), null);
+  // 已开始 → 不弹（横幅只负责「快开始了」）
+  assert.equal(bannerBlock([b1], 601), null);
+  // 已完成 → 不弹
+  assert.equal(bannerBlock([b1], 595, new Set(['w4-d6-study-1'])), null);
+  // 多块同窗 → 取最早开始的
+  expectBanner([b2, b1, blk({ id: 'w4-d6-study-1b', startMin: 605, endMin: 665 })], 595, 'w4-d6-study-1');
+});
+
+function expectBanner(blocks: TimeBlock[], nowMin: number, wantId: string) {
+  const b = bannerBlock(blocks, nowMin);
+  assert.ok(b, `${nowMin} 分钟处应有横幅`);
+  assert.equal(b.id, wantId);
+}

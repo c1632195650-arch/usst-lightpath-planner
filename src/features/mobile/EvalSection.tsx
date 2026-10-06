@@ -15,6 +15,8 @@ import EvalPanel from './EvalPanel.tsx';
 import DailyQuizSheet from './DailyQuizSheet.tsx';
 import { computeExecutionProfile, dailySeries, offsetDayKey, tipForSlug } from './eval/compute.ts';
 import { EMPTY_EVAL_INPUT, type EvalInput } from './eval/model.ts';
+// M4b（CY 反馈⑧c）：dev 样例通道 —— 输入样例走**原样**真函数，结果现算（见 demoInput 头注释）
+import { DEMO_EVAL_DAYS, DEMO_EVAL_INPUT, DEMO_TODAY_KEY } from './eval/demoInput.ts';
 import {
   hasOfferedToday, loadShown, recordAnswer, recordShown, slugLastShown,
   toSelfReportAnswers, type ShownRecord,
@@ -32,6 +34,17 @@ function periodEndDayKey(pd: string): string {
   return `${y}-${mo}-${String(endDay).padStart(2, '0')}`;
 }
 
+/** M4b：dev 样例通道开关 —— 仅 DEV 生效；?demoEval 或 localStorage['usst.mobile.demoEval']==='1' */
+function demoEvalOn(): boolean {
+  if (!import.meta.env.DEV) return false;
+  try {
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('demoEval')) return true;
+    return localStorage.getItem('usst.mobile.demoEval') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function EvalSection({ plan, serverState, layer, phase, todayKey, behaviorEvents }: {
   plan: WeekPlan | null;
   serverState: SyncStatePayload | null;
@@ -43,6 +56,8 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
 }) {
   const [shownRows, setShownRows] = useState<ShownRecord[]>(() => loadShown(localStorage));
   const [quiz, setQuiz] = useState<{ dayKey: string; questions: QuizQuestion[] } | null>(null);
+  // M4b：样例通道状态（挂载时定一次；轮询 URL 不值得）
+  const [demo] = useState(() => demoEvalOn());
 
   const evalDays = useMemo(() => {
     const out: string[] = [];
@@ -53,6 +68,7 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
     return out;
   }, [todayKey]);
   const evalInput = useMemo<EvalInput>(() => {
+    if (demo) return DEMO_EVAL_INPUT; // M4b：样例输入 → 真函数现算（带「样例数据」角标）
     if (!plan || !serverState) return EMPTY_EVAL_INPUT;
     const lateTodos = (serverState.todos ?? [])
       .filter((t) => t.kind === 'longterm' && t.plannedDone)
@@ -77,8 +93,14 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
       answers: toSelfReportAnswers(shownRows),
     };
   }, [plan, serverState, layer, evalDays, behaviorEvents, shownRows]);
-  const profile = useMemo(() => computeExecutionProfile(evalInput, todayKey), [evalInput, todayKey]);
-  const series = useMemo(() => dailySeries(evalInput, evalDays), [evalInput, evalDays]);
+  const profile = useMemo(
+    () => computeExecutionProfile(evalInput, demo ? DEMO_TODAY_KEY : todayKey),
+    [evalInput, todayKey, demo],
+  );
+  const series = useMemo(
+    () => dailySeries(evalInput, demo ? DEMO_EVAL_DAYS : evalDays),
+    [evalInput, evalDays, demo],
+  );
 
   /* 每日采集弹窗（每天首次打开；题库空 = BLOCKED 于任务一，静默不弹）；
      待办类别接入：最近/中长期待办决定题库侧重（任务三 todos[] 已可用） */
@@ -104,8 +126,8 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
 
   return (
     <>
-      {/* 任务二 P3-1 · 「我的执行状态」（Today 页底部，不干扰执行） */}
-      <EvalPanel profile={profile} series={series} />
+      {/* 任务二 P3-1 · 「我的执行状态」（Today 页底部，不干扰执行）；M4b：样例通道带角标 */}
+      <EvalPanel profile={profile} series={series} demoBadge={demo} />
       {quiz && (
         <DailyQuizSheet
           questions={quiz.questions}

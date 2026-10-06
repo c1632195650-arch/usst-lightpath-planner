@@ -86,3 +86,26 @@ export function nextNotifyLabel(
   if (!next) return null;
   return `${fmt(next.atMin)} · ${next.title}`;
 }
+
+/**
+ * M5b（2026-10-07）· Web 页内横幅触发判定（纯函数，Node 可测）：
+ * 「块开始前 10 分钟内（且未开始、未完成）」→ 返回该块；否则 null。
+ * Web 不发本地通知 —— 页内横幅是网页版**真实存在**的提醒通道（不是只有文案）。
+ * 与 planTodayNotifications 的「前 10 分钟预告」同一口径（10 分钟提前量）。
+ */
+export const BANNER_LEAD_MIN = 10;
+
+export function bannerBlock(
+  blocks: readonly TimeBlock[],
+  nowMin: number,
+  doneIds?: ReadonlySet<string>,
+): TimeBlock | null {
+  let best: TimeBlock | null = null;
+  for (const b of blocks) {
+    const lead = b.startMin - nowMin;
+    if (lead <= 0 || lead > BANNER_LEAD_MIN) continue;
+    if (doneIds?.has(b.id)) continue;
+    if (best === null || b.startMin < best.startMin) best = b;
+  }
+  return best;
+}

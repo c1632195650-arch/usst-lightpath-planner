@@ -46,9 +46,11 @@ function DimSpark({ dim, series }: { dim: DimId; series: DailySeries }) {
   );
 }
 
-export default function EvalPanel({ profile, series }: {
+export default function EvalPanel({ profile, series, demoBadge }: {
   profile: ExecutionProfile;
   series: DailySeries;
+  /** M4b：dev 样例通道 → 「样例数据」角标（不得伪装成真实数据） */
+  demoBadge?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [tipOpen, setTipOpen] = useState(false);
@@ -62,7 +64,14 @@ export default function EvalPanel({ profile, series }: {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
-        <span className="text-sm font-semibold text-ink">我的执行状态</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+          我的执行状态
+          {demoBadge && (
+            <span data-testid="m-eval-demo-badge" className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-semibold text-ink-soft">
+              样例数据
+            </span>
+          )}
+        </span>
         <span className="text-xs text-ink-faint">{open ? '收起 ▲' : '展开 ▼'}</span>
       </button>
 
