@@ -3,9 +3,12 @@
  * 后端默认跑在 http://127.0.0.1:8000（server/app.py）。
  * 部署时可用 VITE_API_BASE 环境变量覆盖。
  */
+import { resolveApiBase } from '@/lib/apiBase';
 
 // 任务四起对外导出（memo 云通道同源复用；原语义不变）
-export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://127.0.0.1:8000';
+// W4/P1-3a（2026-10-07）：基址解析统一走 resolveApiBase() —— 双端同源；
+// ⚠️ 兜底默认值暂维持写死 8000（P1-3b「默认改同源」是行为变更，未拍板前不动，见 BLOCKERS）。
+export const API_BASE = resolveApiBase() || 'http://127.0.0.1:8000';
 
 export interface RagSource {
   title: string;

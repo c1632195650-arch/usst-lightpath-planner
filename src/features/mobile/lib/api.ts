@@ -27,23 +27,12 @@ import type {
   SyncStateResponse,
   VersionResponse,
 } from './types.ts';
+// W4/P1-3a（2026-10-07）：基址解析统一走 src/lib/apiBase.ts（双端同一解析，
+// 修「登录一个后端、待办另一个后端」的坑）。本文件原三种情形的语义不变：
+// VITE_MOBILE_API_BASE → 包内兜底 → 同源相对路径。
+import { resolveApiBase } from '@/lib/apiBase';
 
-/** 包内模式兜底的后端地址（与 capacitor.config.ts 的 server.url 一致） */
-const INLINE_API_FALLBACK = 'http://101.35.253.143';
-
-/** 是否跑在 Capacitor 包内（origin = https://localhost） */
-function isInlinePackage(): boolean {
-  try {
-    return typeof location !== 'undefined'
-      && location.protocol === 'https:'
-      && location.hostname === 'localhost';
-  } catch {
-    return false;
-  }
-}
-
-const API_BASE = (import.meta.env.VITE_MOBILE_API_BASE as string | undefined)
-  ?? (isInlinePackage() ? INLINE_API_FALLBACK : '');
+const API_BASE = resolveApiBase();
 
 
 export class ApiFailure extends Error {
