@@ -64,7 +64,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
   const kicker = next ? (next.status === 'ongoing' ? '正在上' : '下一节') : '今天';
 
   return (
-    <section className="hero-surface overflow-hidden rounded-2xl text-white shadow-[0_18px_44px_rgba(22,35,63,0.16)]">
+    <section className="hero-surface overflow-hidden rounded-2xl text-white shadow-card-dark">
       <div className="px-5 py-7 sm:px-8 sm:py-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
           WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {shortCN(todayIso)} {weekdayCN(todayIso)}
