@@ -14,9 +14,12 @@ export interface TodoListProps {
   onToggle: (todo: Todo) => void;
   onArchive: (todo: Todo) => void;
   onEdit: (todo: Todo) => void;
+  /** S3a（CY 反馈③）：排程状态回显口径 —— 未排进时给「登录后…/未排进本周+出口」。
+   *  已排进的仍走 scheduledLabel（todo-scheduled-chip），缺省 = 不显示。 */
+  schedHint?: { loggedIn: boolean; onGotoPlan?: () => void };
 }
 
-export default function TodoList({ todos, onToggle, onArchive, onEdit }: TodoListProps) {
+export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint }: TodoListProps) {
   if (todos.length === 0) {
     return <p className="px-1 py-3 text-[12px] text-ink-faint">还没有待办。想起什么就记一条，办好打个勾就行。</p>;
   }
@@ -61,6 +64,24 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit }: TodoLis
                     {chip}
                   </span>
                 )}
+                {/* S3a：完全没排上的待办不再零提示 —— 给状态 chip + 出口（CY 反馈③） */}
+                {!done && !chip && schedHint && (schedHint.loggedIn ? (
+                  <button
+                    type="button"
+                    data-testid="memo-todo-sched-state"
+                    onClick={schedHint.onGotoPlan}
+                    className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                  >
+                    未排进本周 · 排进本周 →
+                  </button>
+                ) : (
+                  <span
+                    data-testid="memo-todo-sched-state"
+                    className="rounded-full bg-paper px-1.5 py-0.5 text-[10px] text-ink-faint ring-1 ring-ink/10"
+                  >
+                    登录后可自动排进日程
+                  </span>
+                ))}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">

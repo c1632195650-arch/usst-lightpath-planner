@@ -18,7 +18,7 @@ import {
 } from '@/features/mobile/lib/memoStore.ts';
 import { plannedDoneLabel, type Goal, type Todo } from '@/features/mobile/lib/memoTypes.ts';
 import { loadIdentity } from '@/features/mobile/lib/auth.ts';
-import { filterTodos, tagsOf, updateTodoTitle, type TodoFilter } from './memoLogic.ts';
+import { filterTodos, tagsOf, updateTodoTitle, todosToPendingTodos, type TodoFilter } from './memoLogic.ts';
 import { readCachedMemo, withCloudMemo, writeCachedMemo } from './webMemo.ts';
 import TodoList from './TodoList.tsx';
 import TodoEditor, { type TodoDraft } from './TodoEditor.tsx';
@@ -27,7 +27,18 @@ import { monthOptions, periodLabel, periodValues, suggestPeriod } from './milest
 
 const nowIso = () => new Date().toISOString();
 
-export default function MemoPanel() {
+/** S3b：排程锚点 —— 状态条用「当前周会带上几条待办」作口径；App 传入（本组件不持有课表） */
+export interface MemoPlanAnchor {
+  termStart: string;
+  weekNo: number;
+}
+
+export default function MemoPanel({ planAnchor, onGotoPlan }: {
+  /** S3b：由 App 传（schedule.termStart + 当前教学周）；缺省 = 不显示状态条 */
+  planAnchor?: MemoPlanAnchor;
+  /** S3a：跳「日程」页（进当前周计划）的出口 */
+  onGotoPlan?: () => void;
+} ) {
   const [data, setData] = useState<MemoData>(() => readCachedMemo());
   const [filter, setFilter] = useState<TodoFilter>({ q: '', tag: null, state: 'open' });
   const [editorFor, setEditorFor] = useState<Todo | 'new' | null>(null);
@@ -35,7 +46,15 @@ export default function MemoPanel() {
   const [askDone, setAskDone] = useState<Todo | null>(null);
   const [askPeriod, setAskPeriod] = useState('');
   const [sync, setSync] = useState<'local' | 'synced' | 'offline'>('local');
+  /** S3c：新增待办后的轻提示（不弹窗，几秒自动消失） */
+  const [flash, setFlash] = useState('');
   const token = loadIdentity()?.token ?? '';
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(''), 5000);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   useEffect(() => {
     if (!token) { setSync('local'); return; }
@@ -93,6 +112,8 @@ export default function MemoPanel() {
   const onSubmitEditor = (draft: TodoDraft) => {
     if (editorFor === 'new') {
       mutate((d) => addTodo(d, { title: draft.title, kind: draft.kind, nowIso: nowIso(), note: draft.note, tags: draft.tags, goalId: draft.goalId }));
+      // S3c：闭环第一拍 —— 告诉用户这条待办下一步去哪（不弹窗，不拦人）
+      setFlash('已加入待办 —— 去「日程」页生成计划就会带上它');
     } else if (editorFor) {
       mutate((d) => {
         let next = updateTodoTitle(d, editorFor.id, draft.title, nowIso());
@@ -111,6 +132,11 @@ export default function MemoPanel() {
   const longterm = sortTodosForView(filterTodos(data.todos.filter((t) => t.kind === 'longterm'), filter));
   const tags = useMemo(() => tagsOf(data.todos), [data.todos]);
   const months = useMemo(() => monthOptions(new Date(), 6), []);
+  // S3b：当前周计划会带上几条未完成待办（todosToPendingTodos 与 WeekPlanView 排程前同源）
+  const pendingTodoCount = planAnchor
+    ? todosToPendingTodos(data.todos, planAnchor.termStart, planAnchor.weekNo).length
+    : null;
+  const schedHint = { loggedIn: !!token, onGotoPlan };
 
   return (
     <div className="mx-auto max-w-2xl space-y-4" data-testid="memo-panel">
@@ -139,6 +165,32 @@ export default function MemoPanel() {
           </button>
         </div>
       </div>
+
+      {/* S3b：待办 → 日程的可见闭环状态条（CY 反馈③：加了待办要看得见它去哪了） */}
+      {pendingTodoCount != null && (
+        <div
+          data-testid="memo-plan-link"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-[12px] text-ink-soft"
+        >
+          <span>
+            {pendingTodoCount > 0
+              ? <>本次排程带上了 <b className="text-ink">{pendingTodoCount}</b> 条待办{flash ? '' : ' —— 去「日程」页生成或重算就会排进去'}</>
+              : '待办还没进本周计划 —— 去「日程」页生成一次'}
+          </span>
+          <span className="flex items-center gap-2">
+            {flash && <span className="text-emerald-700">{flash}</span>}
+            {onGotoPlan && (
+              <button
+                type="button"
+                onClick={onGotoPlan}
+                className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+              >
+                去「日程」页 →
+              </button>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* 筛选/搜索（网页端专属） */}
       <div className="panel flex flex-wrap items-center gap-2 p-3">
@@ -192,6 +244,7 @@ export default function MemoPanel() {
             onToggle={onToggle}
             onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))}
             onEdit={(t) => setEditorFor(t)}
+            schedHint={schedHint}
           />
         </div>
       </section>
@@ -205,6 +258,7 @@ export default function MemoPanel() {
             onToggle={onToggle}
             onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))}
             onEdit={(t) => setEditorFor(t)}
+            schedHint={schedHint}
           />
         </div>
       </section>

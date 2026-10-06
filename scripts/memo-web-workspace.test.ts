@@ -222,6 +222,35 @@ test('scheduledLabel：有块位置 → 「已排进周三 15:00」；只有 id 
   assert.equal(scheduledLabel({ ...todo, scheduledBlockId: undefined }), null);
 });
 
+/* ---------------- ⑥·S3 待办→日程端到端闭环（CY 反馈③，2026-10-07） ---------------- */
+
+test('S3 闭环：待办 → todosToPendingTodos → 计划块 → blockIdForTodo → 回显「已排进周X」', () => {
+  // ① 未完成待办 → 排程输入（与 WeekPlanView 排程前同一入口）
+  const todos = [td({ id: 'todo-1', kind: 'recent', title: '买考研英语真题' })];
+  const pending = todosToPendingTodos(todos, schedule.termStart, 5);
+  assert.equal(pending.length, 1, '未完成 recent 待办必须进 pendingTodos');
+  assert.equal(pending[0].id, 'todo-1');
+
+  // ② 引擎产出块（id 规范：语义键 = todo id）→ blockIdForTodo 命中
+  const p = plan([block('w5-d3-user-todo-1', 3, 900)]);
+  const hit = blockIdForTodo(p, 'todo-1');
+  assert.ok(hit, '排进计划的待办必须能反查到块');
+
+  // ③ 回填后回显文案含「已排进周X」（精确到时刻）
+  const label = scheduledLabel(
+    { ...todos[0], scheduledBlockId: hit.id },
+    (id) => {
+      const b = p.blocks.find((bb) => bb.id === id);
+      return b ? { dayOfWeek: b.dayOfWeek, startMin: b.startMin } : null;
+    },
+  );
+  assert.equal(label, '已排进周三 15:00');
+  assert.match(label ?? '', /已排进周[一二三四五六日]/);
+
+  // ④ 反向：没排上的待办 → scheduledLabel null（前端据此给「未排进本周」chip）
+  assert.equal(scheduledLabel(td({ id: 'todo-2', kind: 'recent' })), null);
+});
+
 /* ---------------- ⑦ 筛选 / 搜索 / 标签 ---------------- */
 
 test('filterTodos + tagsOf：标签精确筛、关键字含 note、完成态分流', () => {

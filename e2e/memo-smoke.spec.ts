@@ -93,6 +93,9 @@ test('网页端建待办 → PUT 上行 → 刷新后云端仍在（持久化闭
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('memo-sync-state')).toContainText('已同步', { timeout: 15_000 });
 
+  // S3d：待办→日程闭环 —— 起点是 0 条，状态条诚实说「还没进本周计划」
+  await expect(page.getByTestId('memo-plan-link')).toContainText('待办还没进本周计划', { timeout: 15_000 });
+
   // 新建一条最近待办
   await page.getByTestId('memo-add').click();
   await page.getByTestId('todo-editor-title').fill('买考研英语真题');
@@ -100,6 +103,9 @@ test('网页端建待办 → PUT 上行 → 刷新后云端仍在（持久化闭
 
   // 列表即时可见（乐观渲染来自云端读改写返回）
   await expect(page.getByTestId('todo-list')).toContainText('买考研英语真题', { timeout: 15_000 });
+
+  // S3d：加待办后状态条计数 +1（与 WeekPlanView 的 todosToPendingTodos 同源口径）
+  await expect(page.getByTestId('memo-plan-link')).toContainText('本次排程带上了 1 条待办', { timeout: 15_000 });
 
   // PUT 上行：契约体 = { state(含 todos), schemaVer: 2, clientUpdatedAt }
   await expect.poll(() => putBodies.length, { message: '至少一次 PUT' }).toBeGreaterThanOrEqual(1);
@@ -114,6 +120,8 @@ test('网页端建待办 → PUT 上行 → 刷新后云端仍在（持久化闭
   await page.getByRole('button', { name: '待办' }).click();
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('todo-list')).toContainText('买考研英语真题', { timeout: 15_000 });
+  // S3a：已登录但尚未排进计划 → 条目级状态 chip 给出口（不再零提示）
+  await expect(page.getByTestId('memo-todo-sched-state').first()).toContainText('未排进本周', { timeout: 15_000 });
 });
 
 test('移动端写的待办 → 网页端读到并可补 note/标签 → PUT 不丢移动端字段', async ({ page }) => {

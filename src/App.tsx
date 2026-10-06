@@ -274,7 +274,11 @@ export default function App() {
         )}
         {mainTab === 'memo' ? (
           // 任务四（2026-10-06）：网页端待办工作区 —— 云同步数据与移动端共库（逐项 LWW）
-          <MemoPanel />
+          // S3b：传排程锚点 + 「日程」页出口，待办→日程的闭环可见（CY 反馈③）
+          <MemoPanel
+            planAnchor={{ termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart) }}
+            onGotoPlan={() => openWeek(todayISO())}
+          />
         ) : mainTab === 'import' ? (
           <ImportTester onApply={(s) => {
             patchState({ schedule: s });
