@@ -115,6 +115,7 @@ test('⑧ 逾期判定：longterm 的 plannedDone 时段整段过去未完成 �
   });
   assert.equal(isLongtermOverdue(mk({ plannedDone: '2026-09-中旬' }), '2026-10-06'), true, '9 月中旬早过完了');
   assert.equal(isLongtermOverdue(mk({ plannedDone: '2026-10-下旬' }), '2026-10-06'), false, '10 月下旬还没过完');
+  assert.equal(isLongtermOverdue(mk({ plannedDone: '2026-10-中旬' }), '2026-10-20'), false, '边界日：中旬最后一天（20 号）当天还不算逾期（2026-10-06 验收补，原覆盖缺口）');
   assert.equal(isLongtermOverdue(mk({ plannedDone: '2026-10-中旬' }), '2026-10-21'), true, '中旬 20 号止，21 号 = 逾期');
   assert.equal(isLongtermOverdue(mk({ kind: 'recent' }), '2027-01-01'), false);
   assert.equal(isLongtermOverdue(mk({ plannedDone: '2026-09-中旬', completion: 'done' }), '2026-10-06'), false, '完成了不算逾期');
