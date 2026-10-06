@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 105,
-    "engineFiles": 71,
+    "testFiles": 108,
+    "engineFiles": 74,
     "uiFiles": 34,
-    "guardedSources": 97,
-    "reverseVerified": 58,
+    "guardedSources": 101,
+    "reverseVerified": 61,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 51,
+      "testCount": 54,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -41,6 +41,9 @@
         "tests/feedback.test.ts",
         "tests/fillGap.test.ts",
         "tests/golden-lib.test.ts",
+        "tests/h1-eval-panel.test.ts",
+        "tests/h1-plan-eval.test.ts",
+        "tests/h3h4-eval.test.ts",
         "tests/health_params.test.ts",
         "tests/improve-live.test.ts",
         "tests/improve-transfer.test.ts",
@@ -97,6 +100,8 @@
         "src/lib/planner/objective",
         "src/lib/planner/places",
         "src/lib/planner/placesPolicy",
+        "src/lib/planner/planDigest",
+        "src/lib/planner/planEval",
         "src/lib/planner/planWeek",
         "src/lib/planner/profilePrefs",
         "src/lib/planner/ripple",
@@ -113,11 +118,13 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 19,
+      "testCount": 21,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
         "tests/d-batch.test.ts",
+        "tests/h1-eval-panel.test.ts",
+        "tests/h3h4-eval.test.ts",
         "tests/issue-bar-ui.test.ts",
         "tests/mobile/evalWiring.test.ts",
         "tests/ripple.test.ts",
@@ -137,6 +144,7 @@
       ],
       "sources": [
         "src/components/ui/DetailDrawer",
+        "src/features/week/PlanEvalPanel",
         "src/features/week/WeekPlanView",
         "src/features/week/assignmentStore",
         "src/features/week/dragPreview",
@@ -298,7 +306,7 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 14,
+      "testCount": 15,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
@@ -310,6 +318,7 @@
         "scripts/storage.test.ts",
         "scripts/telemetry.test.ts",
         "tests/campus-vocab.test.ts",
+        "tests/h3h4-eval.test.ts",
         "tests/identity.test.ts",
         "tests/improve-live.test.ts",
         "tests/p2-incremental-rolling.test.ts",
@@ -776,6 +785,33 @@
       ],
       "guardCount": 3,
       "reverseVerified": false
+    },
+    "tests/h1-eval-panel.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "week-view"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/h1-plan-eval.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
+    "tests/h3h4-eval.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine",
+        "week-view",
+        "contracts"
+      ],
+      "guardCount": 6,
+      "reverseVerified": true
     },
     "tests/health_params.test.ts": {
       "suite": "engine",
@@ -1244,6 +1280,7 @@
     "src/lib/api": [
       "scripts/chatRestore.test.ts",
       "scripts/libao-understand-retry.test.ts",
+      "tests/h3h4-eval.test.ts",
       "tests/wp12.test.ts"
     ],
     "src/features/libao/libaoIntent": [
@@ -1314,6 +1351,9 @@
       "tests/fatigue.test.ts",
       "tests/fillGap.test.ts",
       "tests/golden-lib.test.ts",
+      "tests/h1-eval-panel.test.ts",
+      "tests/h1-plan-eval.test.ts",
+      "tests/h3h4-eval.test.ts",
       "tests/improve-transfer.test.ts",
       "tests/improve.test.ts",
       "tests/knowledge-wiring.test.ts",
@@ -1548,6 +1588,7 @@
     ],
     "src/features/week/WeekPlanView": [
       "tests/d-batch.test.ts",
+      "tests/h3h4-eval.test.ts",
       "tests/issue-bar-ui.test.ts",
       "tests/v1.test.ts",
       "tests/v2.test.ts",
@@ -1616,6 +1657,23 @@
       "tests/ripple.test.ts",
       "tests/wp10.test.ts",
       "tests/wp4a.test.ts"
+    ],
+    "src/lib/planner/planDigest": [
+      "tests/h1-eval-panel.test.ts",
+      "tests/h1-plan-eval.test.ts",
+      "tests/h3h4-eval.test.ts"
+    ],
+    "src/lib/planner/planEval": [
+      "tests/h1-eval-panel.test.ts",
+      "tests/h1-plan-eval.test.ts",
+      "tests/h3h4-eval.test.ts"
+    ],
+    "src/features/week/PlanEvalPanel": [
+      "tests/h1-eval-panel.test.ts",
+      "tests/h3h4-eval.test.ts"
+    ],
+    "src/data/healthParams.generated": [
+      "tests/h1-plan-eval.test.ts"
     ],
     "src/lib/planner/health": [
       "tests/health_params.test.ts",

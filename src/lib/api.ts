@@ -379,3 +379,64 @@ export async function planUnderstand(body: {
   return lastResult;
 }import { periodStartMin } from '@/constants/time';
 
+
+
+/* ============================================================
+ * R批 Wave3（H2）· 后端日程复核 —— /api/plan/review
+ * （2026-10-06 收官批次 P0-1a 自 integration-full 移植）
+ * ============================================================
+ * H1 的本地评估（planEval）阈值来自编译期 kbParams，EvalBasis.tier 是本地查
+ * 静态表。本通道把复核搬到后端：对每维度调健康库/方法库**真检索**，每条建议
+ * 带 source（库名 + slug + tier + 引用原文，检索缺失降级并标 retrieved=false）。
+ * 失败静默 —— 评估是增强能力，绝不挡主流程（L4 边界不变：只建议不落盘）。
+ */
+
+/** 后端复核报告（server/plan_review.py::review_plan 的出参形状） */
+export interface PlanReviewSource {
+  lib: string;
+  slug: string;
+  tier: string;
+  quote: string;
+  retrieved: boolean;
+}
+export interface PlanReviewFinding {
+  id: string;
+  dim: string;
+  status: 'good' | 'gap' | 'unknown';
+  severity: 'info' | 'warn' | 'serious';
+  headline: string;
+  evidence: string[];
+  source: PlanReviewSource;
+}
+export interface PlanReviewAdvice {
+  text: string;
+  source: PlanReviewSource;
+  /** 采纳动作（仅「可加块表达」的建议有）：add_task + 任务骨架（weeks 已按被评周回填） */
+  action?: { kind: 'add_task'; task: Record<string, unknown> } | null;
+}
+export interface PlanReviewDimension {
+  key: string;
+  label: string;
+  findings: PlanReviewFinding[];
+  advice: PlanReviewAdvice[];
+  coverage: number;
+}
+export interface PlanReviewReport {
+  ok: boolean;
+  user_id: string;
+  week_no: number;
+  generated_at: string;
+  dimensions: PlanReviewDimension[];
+  retrieval: Record<string, boolean>;
+  caveats: string[];
+  error?: string;
+}
+
+/** 摘要 → 后端复核。digest 直接传 PlanDigest 的 JSON 形状（DigestFact 均可序列化）。 */
+export function planReview(body: {
+  user_id: string;
+  week_no: number;
+  digest: Record<string, unknown>;
+}): Promise<PlanReviewReport> {
+  return post<PlanReviewReport>('/api/plan/review', body);
+}

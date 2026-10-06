@@ -60,6 +60,8 @@ import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand�
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 app.include_router(plan_dialog.router)
+import plan_review  # R批 Wave3 H2：后端日程复核 /api/plan/review（三库检索，findings+advice 带 source）——2026-10-06 收官批次 P0-1a 自 integration-full 移植
+app.include_router(plan_review.router)  # R批 H2
 # 光溯移动端 M0（2026-10-03）：账号/令牌 + 云同步/ICS/版本 —— 各一个 APIRouter，其余零改动
 from account import router as _account_router  # noqa: E402
 from sync import router as _sync_router  # noqa: E402

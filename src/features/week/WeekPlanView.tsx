@@ -94,6 +94,19 @@ import type { CorrectionRule } from '@/lib/planner/corrections';
 // 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
 import { blockChip, blockDetail, summarizeIssues } from '@/features/week/weekViewModel';
 import { DetailDrawer } from '@/components/ui/DetailDrawer';
+// R批 Wave3（H1）：日程评估 —— 纯读，plan 一变就重算
+// （2026-10-06 收官批次 P0-1a 自 integration-full 移植）
+import { digestPlan } from '@/lib/planner/planDigest';
+import { evaluateDigest } from '@/lib/planner/planEval';
+import { PlanEvalPanel } from './PlanEvalPanel';
+// H2：后端三库复核（/api/plan/review，失败静默）；用户身份取自 identity
+import { planReview, type PlanReviewReport } from '@/lib/api';
+import { getUserId } from '@/lib/identity';
+import { loadRoutine } from './routineStore';
+import { makeTaskId } from './planEditsStore';
+
+/** 空计划兜底（引擎异步出结果前用）—— 见下方 evalDigest 的说明。 */
+const EMPTY_PLAN: WeekPlan = { weekNo: 0, blocks: [], stats: { courseMin: 0, studyMin: 0, blankMin: 0, blockCount: 0 }, issues: [] };
 
 interface Props {
   schedule: Schedule;
@@ -735,6 +748,69 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   /** 批 6.1：列头具体日期 —— 学期第 N 周星期 d 的 ISO（再压成 M/D 展示） */
   const dayISO = (day: number): string => addDays(schedule.termStart, (weekNo - 1) * 7 + (day - 1));
   const dayShort = (day: number): string => dayISO(day).slice(5).replace('-', '/');
+
+  /* ============================================================
+   * R批 Wave3（H1.3）· 日程评估（2026-10-06 收官批次 P0-1a 自 integration-full 移植）
+   * ------------------------------------------------------------
+   * 评估是**纯读**：`digestPlan(plan)` → `evaluateDigest`，零副作用、零落库。
+   * 所以状态只需要一个「面板是否展开」—— 不缓存评估结果，因为 plan 一变
+   * 就该重算，缓存反而会给出「评估的是上一版日程」的错觉。
+   *
+   * ⚠️ `plan` 在引擎出结果前是 null（引擎是异步 effect）。此时用
+   * **空计划**兜底而不是不渲染：入口本身要在整个挂载期都在（否则它会
+   * 「忽隐忽现」，用户正要展开时它消失了）。空计划的评估结果全是
+   * unknown + 稀疏数据提示，不会给出任何指控。
+   */
+  const [evalOpen, setEvalOpen] = useState(false);
+  // H3/H4（R批 Wave3）：评估摘要接真实数据源 ——
+  //  · routine = 作息设置真源（routineStore，与上游 Q1a/Q1b 同一份）→ 睡眠维度对「你自己的节奏」判定；
+  //  · goals = 目标库 active 目标（weeksLeft 用 today+termStart 折算，摘要层不读时钟）。
+  //  · habitSpans 不传：上游吃 R5.2 recurring 重复任务，本树 UserTask 无该字段
+  //    （digest 未传 = 该维 unknown 而非 0，不冒充数据）。
+  const evalCtx = useMemo(() => {
+    const r = loadRoutine();
+    const routine = r.wakeMin != null && r.sleepMin != null
+      ? { wakeMin: r.wakeMin, sleepMin: r.sleepMin }
+      : null;
+    const cur = currentWeekNo(schedule.termStart, todayISO());
+    const wkOf = (iso: string | undefined | null): number | null => {
+      if (!iso) return null;
+      const n = currentWeekNo(schedule.termStart, iso);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      routine,
+      goals: goals
+        .filter((g) => (g.status ?? 'active') === 'active')
+        .map((g) => {
+          const due = wkOf(g.dueAt);
+          return {
+            title: g.title,
+            ...(g.dueAt ? { dueAt: g.dueAt } : {}),
+            weeksLeft: due != null ? Math.max(0, due - cur) : null,
+          };
+        }),
+    };
+  }, [goals, schedule.termStart]);
+  const evalDigest = useMemo(
+    () => digestPlan(plan ?? EMPTY_PLAN, evalCtx),
+    [plan, evalCtx],
+  );
+  const evalResult = useMemo(() => evaluateDigest(evalDigest), [evalDigest]);
+
+  // H2（R批 Wave3）：后端三库复核 —— 面板展开时取一次；失败静默
+  //（本地 planEval 评估照常，后端只是「对照真库再核一遍」的增强层）。
+  const [evalReview, setEvalReview] = useState<
+    { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport }>({ state: 'loading' });
+  useEffect(() => {
+    if (!evalOpen) return;
+    let alive = true;
+    setEvalReview({ state: 'loading' });
+    planReview({ user_id: getUserId(), week_no: weekNo, digest: evalDigest as unknown as Record<string, unknown> })
+      .then((report) => { if (alive) setEvalReview(report.ok ? { state: 'ok', report } : { state: 'offline' }); })
+      .catch(() => { if (alive) setEvalReview({ state: 'offline' }); });
+    return () => { alive = false; };
+  }, [evalOpen, evalDigest, weekNo]);
 
   /**
    * 实际负荷（按星期几）—— 喂给引擎的 `actualLoadByDow`（P2-T2.2）。
@@ -1790,6 +1866,52 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           </details>
         );
       })()}
+
+      {/* R批 Wave3（H1.3）· 日程评估入口与结果 ——（2026-10-06 收官批次 P0-1a 自 integration-full 移植）
+          放在 issue 聚合条之后、时间轴之前：它属于「这一版日程的整体体检」，
+          紧贴用户刚排完的网格，不用往下翻。
+          **手动触发**而非自动弹：评估会占一屏，自动弹等于打断。 */}
+      <details
+        data-testid="plan-eval-entry"
+        className="panel px-4 py-3"
+        open={evalOpen}
+        onToggle={(e) => setEvalOpen((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer text-[13px] font-medium text-ink">
+          让梨宝评估这版日程
+          <span className="ml-2 text-[11px] font-normal text-ink-faint">
+            对照健康库与方法库，看缺什么、多了什么
+          </span>
+        </summary>
+        {evalOpen && (
+          <div className="mt-3">
+            <PlanEvalPanel
+              digest={evalDigest}
+              evaluation={evalResult}
+              review={evalReview}
+              onAdopt={(skeleton) => {
+                // R批 Wave3 采纳（验收补齐）：任务骨架 → UserTask → 与「加一件事」
+                // 同一条流（layer.tasks + 🆕 高亮，重排后才出现在日程表）。
+                // L4 不变：这里只记用户的采纳决定，不改已排块的落点。
+                const t = skeleton as {
+                  title?: string; kind?: UserTask['kind']; durationMin?: number;
+                  weeks?: number[];
+                };
+                handleAddTask({
+                  id: makeTaskId(),
+                  title: t.title ?? '评估建议',
+                  kind: t.kind ?? 'activity',
+                  category: 'custom',
+                  durationMin: t.durationMin ?? 45,
+                  ...(Array.isArray(t.weeks) && t.weeks.length > 0 ? { weeks: t.weeks } : { weeks: [weekNo] }),
+                  priority: 80,
+                  note: '采纳自日程评估（重排后生效）',
+                });
+              }}
+            />
+          </div>
+        )}
+      </details>
 
       {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
           E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，

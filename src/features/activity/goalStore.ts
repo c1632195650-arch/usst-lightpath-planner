@@ -17,6 +17,13 @@ export type GoalKind = 'contest' | 'interest' | 'study' | 'habit';
 /** 投入节奏（2026-09-19，用户拍板三选一，弹窗询问后可改） */
 export type GoalPace = 'sprint' | 'steady' | 'both';
 
+/**
+ * 目标状态（§14.3）—— 只有 `active` 参与排程/评估；其余不产出但保留成就统计。
+ * （2026-10-06 收官批次 P0-1a 自 integration-full 最小移植：本树暂无状态编辑 UI，
+ *  字段缺省 = active，读写与旧行为零差异。）
+ */
+export type GoalStatus = 'active' | 'paused' | 'done' | 'archived';
+
 export const GOAL_PACE_LABEL: Record<GoalPace, string> = {
   sprint: '最后几周强度大',
   steady: '慢慢做起来',
@@ -36,6 +43,8 @@ export interface Goal {
   pace?: GoalPace;
   /** 截止日期来源：手动填 or 将来自动获取（本期只 manual，留口子） */
   source?: 'manual' | 'auto';
+  /** 目标状态。缺省 = `'active'` */
+  status?: GoalStatus;
 }
 
 export const GOAL_KIND_LABEL: Record<GoalKind, string> = {
@@ -43,6 +52,10 @@ export const GOAL_KIND_LABEL: Record<GoalKind, string> = {
   interest: '兴趣',
   study: '学习',
   habit: '习惯',
+};
+
+export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = {
+  active: '进行中', paused: '已暂停', done: '已达成', archived: '已归档',
 };
 
 export const DEFAULT_EMOJI: Record<GoalKind, string> = {
