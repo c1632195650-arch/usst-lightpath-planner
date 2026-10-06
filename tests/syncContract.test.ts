@@ -34,6 +34,7 @@ import {
   completeTodo, mergeGoals, mergeTodos, plannedDoneLabel, stampNewer, todoStamp,
   type Goal, type Todo,
 } from '@/features/mobile/lib/memoTypes.ts';
+import { adoptCloudMemo } from '@/features/mobile/lib/memoStore.ts';
 import {
   webSyncTick, WEB_STATE_KEY, WEB_LAYER_KEY, SWITCH_KEY, LAST_SIG_KEY, LAST_SYNC_KEY,
   type WebSyncDeps,
@@ -490,4 +491,23 @@ test('任务四·移动端待办 × 网页端补 note/tags/scheduledBlockId → 
   assert.deepEqual(round.tags, ['读书', '备考']);
   assert.equal(round.scheduledBlockId, 'w5-d3-study-td-m2');
   assert.equal(round.completion, null, '网页端补 detail 不改变完成态');
+});
+
+/* ---------------- M2b（2026-10-07）：LWW 被拒 → 本地必须合并云端待办 ---------------- */
+
+test('M2b：LWW 被拒 → 本地合并云端 todos/goals（useTodayData 同调用形态，云端更新不得丢）', () => {
+  // useTodayData syncToCloud 的 !accepted 分支用这个调用形态（memoRef → adoptCloudMemo）
+  const local = { todos: [
+    { id: 't-local', kind: 'recent', title: '手机端新记的', createdAt: '2026-10-07T10:00:00.000Z', updatedAt: '2026-10-07T10:00:00.000Z', completion: null },
+  ] as Todo[], goals: [] as Goal[] };
+  // 云端有一条网页端改过 note 的待办（服务端版本更新 = LWW 拒绝本地 PUT 的场景）
+  const cloud = { todos: [
+    { id: 't-cloud', kind: 'longterm', title: '读完《学习之道》', note: '网页端补的备注', createdAt: '2026-10-05T02:00:00.000Z', updatedAt: '2026-10-07T09:00:00.000Z', completion: null },
+  ] as Todo[], goals: [] as Goal[] };
+  const merged = adoptCloudMemo(local, cloud.todos, cloud.goals);
+  assert.ok(merged.todos.some((t) => t.id === 't-local'), '本地新条目必须保留');
+  assert.ok(merged.todos.some((t) => t.id === 't-cloud' && t.note === '网页端补的备注'), '云端更新必须回落本地');
+  // null 容忍：云端没有 goals 键时不炸、不清空
+  const merged2 = adoptCloudMemo(local, cloud.todos, null);
+  assert.deepEqual(merged2.goals, []);
 });

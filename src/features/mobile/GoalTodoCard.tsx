@@ -90,10 +90,12 @@ function TodoRow({ todo, onPressDone, onArchive, feedback }: {
   );
 }
 
-export default function GoalTodoCard({ data, attention, h }: {
+export default function GoalTodoCard({ data, attention, syncError, h }: {
   data: MemoData;
   /** 有到期/逾期 → 自动展开 + 角标 */
   attention: boolean;
+  /** M2c：同步失败 → 卡内 amber 告警条（与网页端 W1-P0-2 同一文案体系，不另起一套） */
+  syncError?: boolean;
   h: GoalTodoHandlers;
 }) {
   // M1a：展开态持久化（usst.mobile.goalCardOpen）；默认展开。不再 4 秒淡出。
@@ -178,6 +180,12 @@ export default function GoalTodoCard({ data, attention, h }: {
 
       {open && (
         <>
+          {/* M2c：同步失败时如实告警（amber，与网页端 memo-write-error 同口径） */}
+          {syncError && (
+            <p data-testid="m-todo-sync-warn" className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800 ring-1 ring-amber-200">
+              未同步 · 已存在本机 —— 联网后会自动补传。
+            </p>
+          )}
           {/* 目标（1-3）+ 里程碑 */}
           <div className="mt-2 space-y-1" data-testid="m-goal-list">
             {goals.map((g) => (

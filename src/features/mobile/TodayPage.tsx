@@ -117,7 +117,7 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
           <>
             {/* 区① 目标 + 待办（CY：首屏浮现，作用类似欢迎页 —— 无数据也渲染出引导与记录入口；
                 逾期转常驻由卡内淡出逻辑承担） */}
-            <GoalTodoCard data={d.memo} attention={attention} h={d.memoHandlers} />
+            <GoalTodoCard data={d.memo} attention={attention} syncError={d.syncStatus === 'error'} h={d.memoHandlers} />
 
             {/* 区② 当前块（绝对核心）｜ 区③ 接下来（次级·小） */}
             {current ? (

@@ -72,6 +72,9 @@ export function useTodayData(identity: { token: string; username: string }, now:
   weekNoRef.current = weekNo;
   const layerRef = useRef(layer);
   layerRef.current = layer;
+  // M2b：待办仓的 ref（syncToCloud 在 LWW 被拒时要拿「当前本地待办」合并云端）
+  const memoRef = useRef<MemoData>(memo);
+  memoRef.current = memo;
   const displayedRef = useRef<{ blocks: TimeBlock[]; doneIds: ReadonlySet<string> } | null>(null);
   const nowMinRef = useRef(0);
   nowMinRef.current = now.getHours() * 60 + now.getMinutes();
@@ -162,6 +165,12 @@ export function useTodayData(identity: { token: string; username: string }, now:
         saveUserPlan(adopted);
         setLayer(adopted);
         if (r.state) setServerState(r.state);
+        // M2b：LWW 被拒 = 服务端版本更新 —— 必须把云端 todos/goals 回落本地，
+        // 否则手机端本地与服务端永久分叉（此前只采纳 userOverrides，云端待办更新丢失）。
+        const merged = adoptCloudMemo(memoRef.current, r.state?.todos ?? null, r.state?.goals ?? null);
+        saveMemo(LS_WRITE, MEMO_CACHE_KEY, merged);
+        memoRef.current = merged;
+        setMemo(merged);
         setSyncStatus('error');
         return;
       }
@@ -284,34 +293,28 @@ export function useTodayData(identity: { token: string; username: string }, now:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memo, phase]);
 
-  /* ---------- 待办/目标仓：乐观本地，随下一次 PUT 上行（服务端逐项 LWW） ---------- */
-  const memoHandlers: GoalTodoHandlers = useMemo(() => ({
-    onComplete: (tid, plannedDone) => setMemo((prev) => {
-      const r = toggleTodoDone(prev, tid, { nowIso: new Date().toISOString(), plannedDone });
-      if (r.ok) saveMemo(LS_WRITE, MEMO_CACHE_KEY, r.data);
-      return r.data;
-    }),
-    onArchive: (tid) => setMemo((prev) => {
-      const n = archiveTodo(prev, tid, new Date().toISOString());
-      saveMemo(LS_WRITE, MEMO_CACHE_KEY, n);
-      return n;
-    }),
-    onAddTodo: (title, kind) => setMemo((prev) => {
-      const n = addTodo(prev, { title, kind, nowIso: new Date().toISOString() });
-      saveMemo(LS_WRITE, MEMO_CACHE_KEY, n);
-      return n;
-    }),
-    onToggleMilestone: (gid, msid) => setMemo((prev) => {
-      const n = toggleGoalMilestone(prev, gid, msid, new Date().toISOString());
-      saveMemo(LS_WRITE, MEMO_CACHE_KEY, n);
-      return n;
-    }),
-    onAddMilestone: (gid, title) => setMemo((prev) => {
-      const n = addGoalMilestone(prev, gid, { title }, new Date().toISOString());
-      saveMemo(LS_WRITE, MEMO_CACHE_KEY, n);
-      return n;
-    }),
-  }), []);
+  /* ---------- 待办/目标仓：乐观本地，随下一次 PUT 上行（服务端逐项 LWW） ----------
+   * M2a（2026-10-07）：副作用移出 setState updater —— React StrictMode 会双调用
+   * updater，原实现会重复写盘、且 id 生成类操作有双跑风险。改为三步：
+   * 纯函数算 next → memoRef/setMemo 同步 → saveMemo 落盘（恰好一次）。 */
+  const memoHandlers: GoalTodoHandlers = useMemo(() => {
+    const applyMemo = (fn: (d: MemoData) => MemoData) => {
+      const next = fn(memoRef.current);
+      memoRef.current = next;
+      setMemo(next);
+      saveMemo(LS_WRITE, MEMO_CACHE_KEY, next);
+    };
+    return {
+      onComplete: (tid, plannedDone) => {
+        const r = toggleTodoDone(memoRef.current, tid, { nowIso: new Date().toISOString(), plannedDone });
+        if (r.ok) applyMemo(() => r.data);
+      },
+      onArchive: (tid) => applyMemo((d) => archiveTodo(d, tid, new Date().toISOString())),
+      onAddTodo: (title, kind) => applyMemo((d) => addTodo(d, { title, kind, nowIso: new Date().toISOString() })),
+      onToggleMilestone: (gid, msid) => applyMemo((d) => toggleGoalMilestone(d, gid, msid, new Date().toISOString())),
+      onAddMilestone: (gid, title) => applyMemo((d) => addGoalMilestone(d, gid, { title }, new Date().toISOString())),
+    };
+  }, []);
 
   return {
     phase, errMsg, serverState, weekNo, plan, layer, memo, tomorrow, tomorrowDow,
