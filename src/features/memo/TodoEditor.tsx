@@ -21,7 +21,8 @@ export interface TodoEditorProps {
   editing: Todo | null;
   goals: readonly Goal[];
   onCancel: () => void;
-  onSubmit: (draft: TodoDraft) => void;
+  /** P0-2c：异步提交 —— 'ok'/'offline' 都由父层关闭；await 期间按钮 disabled + 「…」 */
+  onSubmit: (draft: TodoDraft) => Promise<'ok' | 'offline'>;
 }
 
 export default function TodoEditor({ editing, goals, onCancel, onSubmit }: TodoEditorProps) {
@@ -30,24 +31,35 @@ export default function TodoEditor({ editing, goals, onCancel, onSubmit }: TodoE
   const [note, setNote] = useState(editing?.note ?? '');
   const [tags, setTags] = useState((editing?.tags ?? []).join('，'));
   const [goalId, setGoalId] = useState(editing?.goalId ?? '');
+  const [busy, setBusy] = useState(false);
   const openGoals = goals.filter((g) => !g.archived);
 
-  const submit = () => {
+  const submit = async () => {
     const t = title.trim();
-    if (!t) return;
+    if (!t || busy) return;
     const tagList = tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
-    onSubmit({
-      title: t,
-      kind,
-      ...(note.trim() ? { note: note.trim() } : {}),
-      ...(tagList.length ? { tags: tagList } : {}),
-      ...(goalId ? { goalId } : {}),
-    });
+    setBusy(true);
+    try {
+      await onSubmit({
+        title: t,
+        kind,
+        ...(note.trim() ? { note: note.trim() } : {}),
+        ...(tagList.length ? { tags: tagList } : {}),
+        ...(goalId ? { goalId } : {}),
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="todo-editor">
-      <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+      {/* P0-1a：包 <form> —— 标题输入框回车 = 提交（浏览器默认表单提交）；
+          textarea 备注保留回车换行（textarea 内回车不会触发提交） */}
+      <form
+        className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl"
+        onSubmit={(e) => { e.preventDefault(); void submit(); }}
+      >
         <h3 className="text-sm font-semibold text-ink">{editing ? '编辑待办' : '新待办'}</h3>
         <input
           data-testid="todo-editor-title"
@@ -105,16 +117,15 @@ export default function TodoEditor({ editing, goals, onCancel, onSubmit }: TodoE
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="rounded-lg px-4 py-1.5 text-[12px] text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper">取消</button>
           <button
-            type="button"
+            type="submit"
             data-testid="todo-editor-submit"
-            onClick={submit}
-            disabled={!title.trim()}
+            disabled={!title.trim() || busy}
             className="button-primary px-4 py-1.5 text-[12px] disabled:opacity-40"
           >
-            {editing ? '保存' : '添加'}
+            {busy ? '…' : editing ? '保存' : '添加'}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

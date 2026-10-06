@@ -11,8 +11,9 @@ export interface GoalPanelProps {
   goals: readonly Goal[];
   todos: readonly Todo[];
   canAdd: boolean;
-  onAddGoal: (title: string, why?: string) => void;
-  onAddMilestone: (goalId: string, title: string) => void;
+  /** P0-2c：异步提交 —— 失败也由父层兜底本地入列；'ok'/'offline' 都清空表单 */
+  onAddGoal: (title: string, why?: string) => Promise<'ok' | 'offline'>;
+  onAddMilestone: (goalId: string, title: string) => Promise<'ok' | 'offline'>;
   onToggleMilestone: (goalId: string, milestoneId: string) => void;
   onArchiveGoal: (goalId: string) => void;
 }
@@ -24,7 +25,36 @@ export default function GoalPanel({
   const [title, setTitle] = useState('');
   const [why, setWhy] = useState('');
   const [msTitle, setMsTitle] = useState<Record<string, string>>({});
+  /** P0-2c：await 期间按钮 disabled + 「…」（目标表单 / 各目标里程碑行分别记） */
+  const [busyGoal, setBusyGoal] = useState(false);
+  const [busyMs, setBusyMs] = useState<Record<string, boolean>>({});
   const active = goals.filter((g) => !g.archived);
+
+  const submitGoal = async () => {
+    const t = title.trim();
+    if (!t || busyGoal) return;
+    setBusyGoal(true);
+    try {
+      await onAddGoal(t, why.trim() || undefined);
+      setTitle('');
+      setWhy('');
+      setAdding(false);
+    } finally {
+      setBusyGoal(false);
+    }
+  };
+
+  const submitMilestone = async (goalId: string) => {
+    const t = (msTitle[goalId] ?? '').trim();
+    if (!t || busyMs[goalId]) return;
+    setBusyMs((prev) => ({ ...prev, [goalId]: true }));
+    try {
+      await onAddMilestone(goalId, t);
+      setMsTitle((prev) => ({ ...prev, [goalId]: '' }));
+    } finally {
+      setBusyMs((prev) => ({ ...prev, [goalId]: false }));
+    }
+  };
 
   return (
     <section className="panel p-4" data-testid="goal-panel">
@@ -46,7 +76,12 @@ export default function GoalPanel({
       )}
 
       {adding && (
-        <div className="mt-3 rounded-xl border border-ink/10 bg-paper p-3" data-testid="goal-form">
+        // P0-1b：包 <form> —— 目标标题回车即提交
+        <form
+          className="mt-3 rounded-xl border border-ink/10 bg-paper p-3"
+          data-testid="goal-form"
+          onSubmit={(e) => { e.preventDefault(); void submitGoal(); }}
+        >
           <input
             data-testid="goal-form-title"
             value={title}
@@ -66,16 +101,15 @@ export default function GoalPanel({
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setAdding(false)} className="rounded-lg px-3 py-1 text-[12px] text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper">取消</button>
             <button
-              type="button"
+              type="submit"
               data-testid="goal-form-submit"
-              disabled={!title.trim()}
-              onClick={() => { onAddGoal(title.trim(), why.trim() || undefined); setTitle(''); setWhy(''); setAdding(false); }}
+              disabled={!title.trim() || busyGoal}
               className="button-primary px-3 py-1 text-[12px] disabled:opacity-40"
             >
-              添加
+              {busyGoal ? '…' : '添加'}
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       <ul className="mt-3 space-y-2">
@@ -114,7 +148,11 @@ export default function GoalPanel({
                   </li>
                 ))}
               </ul>
-              <div className="mt-2 flex gap-1.5">
+              {/* P0-1b：里程碑行也包 <form> —— 输入框回车即加 */}
+              <form
+                className="mt-2 flex gap-1.5"
+                onSubmit={(e) => { e.preventDefault(); void submitMilestone(g.id); }}
+              >
                 <input
                   data-testid={`goal-ms-input-${g.id}`}
                   value={msTitle[g.id] ?? ''}
@@ -124,20 +162,14 @@ export default function GoalPanel({
                   className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-paper px-2 py-1 text-[12px] outline-none focus:border-ink/30"
                 />
                 <button
-                  type="button"
+                  type="submit"
                   data-testid={`goal-ms-add-${g.id}`}
-                  disabled={!(msTitle[g.id] ?? '').trim()}
-                  onClick={() => {
-                    const t = (msTitle[g.id] ?? '').trim();
-                    if (!t) return;
-                    onAddMilestone(g.id, t);
-                    setMsTitle((prev) => ({ ...prev, [g.id]: '' }));
-                  }}
+                  disabled={!(msTitle[g.id] ?? '').trim() || !!busyMs[g.id]}
                   className="rounded-lg bg-paper px-2.5 py-1 text-[11px] font-medium text-ink-soft ring-1 ring-ink/10 disabled:opacity-40"
                 >
-                  加
+                  {busyMs[g.id] ? '…' : '加'}
                 </button>
-              </div>
+              </form>
               {linked.length > 0 && (
                 <p className="mt-2 text-[11px] text-ink-faint" data-testid={`goal-linked-${g.id}`}>
                   待办 {open.length} 件未完成 / 共 {linked.length} 件挂在这个目标下

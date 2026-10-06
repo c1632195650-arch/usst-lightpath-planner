@@ -176,3 +176,36 @@ test('移动端写的待办 → 网页端读到并可补 note/标签 → PUT 不
   await expect(page.getByTestId('todo-item-td-mobile-1')).toContainText('第 4 章最重要', { timeout: 15_000 });
   await expect(page.getByTestId('todo-item-td-mobile-1')).toContainText('#读书');
 });
+
+test('P0-1：回车即提交待办/目标（不得依赖点按钮）+ P0-2：云端 500 不再静默丢输入', async ({ page }) => {
+  const serverMemo: ServerMemo = { todos: [], goals: [] };
+  await stubSyncApi(page, serverMemo);
+  await gotoWebWithIdentity(page);
+
+  await page.getByRole('button', { name: '待办' }).click();
+  await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('memo-sync-state')).toContainText('已同步', { timeout: 15_000 });
+
+  // ① 回车提交待办
+  await page.getByTestId('memo-add').click();
+  await page.getByTestId('todo-editor-title').fill('回车提交的待办');
+  await page.getByTestId('todo-editor-title').press('Enter');
+  await expect(page.getByTestId('todo-list')).toContainText('回车提交的待办', { timeout: 15_000 });
+
+  // ② 回车提交目标
+  await page.getByTestId('goal-add').click();
+  await page.getByTestId('goal-form-title').fill('回车提交的目标');
+  await page.getByTestId('goal-form-title').press('Enter');
+  await expect(
+    page.locator('[data-testid^="goal-item-"]').filter({ hasText: '回车提交的目标' }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // ③ 云端 500 → 该条仍出现在列表（本地兜底）+ 错误条可见 + 状态灯「未同步」
+  await page.route('**/api/sync/state', (route) => route.fulfill({ status: 500, json: { error: 'boom' } }));
+  await page.getByTestId('memo-add').click();
+  await page.getByTestId('todo-editor-title').fill('断网也要看得见的一条');
+  await page.getByTestId('todo-editor-submit').click();
+  await expect(page.getByTestId('todo-list')).toContainText('断网也要看得见的一条', { timeout: 15_000 });
+  await expect(page.getByTestId('memo-write-error')).toBeVisible();
+  await expect(page.getByTestId('memo-sync-state')).toContainText('未同步');
+});

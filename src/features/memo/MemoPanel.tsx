@@ -10,7 +10,7 @@
  *   · 中长期待办：打勾**必须**填粗粒度时段（上/中/下旬 + 年月），未填不能确认。
  * 归档而非删除（archived）。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addGoal, addGoalMilestone, addTodo, archiveGoal, archiveTodo, canAddGoal,
   patchTodoDetail, sortTodosForView, toggleGoalMilestone, toggleTodoDone,
@@ -48,6 +48,9 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
   const [sync, setSync] = useState<'local' | 'synced' | 'offline'>('local');
   /** S3c：新增待办后的轻提示（不弹窗，几秒自动消失） */
   const [flash, setFlash] = useState('');
+  /** P0-2：云端写失败/被拒 → 显式错误条（不静默丢输入）；记最近一次 mutate 供「重试」 */
+  const [writeError, setWriteError] = useState(false);
+  const lastMutateRef = useRef<((d: MemoData) => MemoData) | null>(null);
   const token = loadIdentity()?.token ?? '';
 
   useEffect(() => {
@@ -68,21 +71,44 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
     return () => { cancelled = true; };
   }, [token]);
 
-  /** 单项操作标准路径：登录 = 读-改-写云端；未登录 = 改本地缓存（不静默装作已同步） */
-  const mutate = (fn: (d: MemoData) => MemoData) => {
+  /** 单项操作标准路径：登录 = 读-改-写云端；未登录 = 改本地缓存（不静默装作已同步）。
+   *  P0-2a：登录写失败 → **本地兜底**（并集 LWW：本地新条目 updatedAt 更新，
+   *  下一次成功读改写会带上行）+ 显式错误条；返回 'ok' | 'offline' 供提交方分流。 */
+  const mutate = async (fn: (d: MemoData) => MemoData): Promise<'ok' | 'offline'> => {
+    lastMutateRef.current = fn;
     if (!token) {
       const next = fn(data);
       setData(next);
       writeCachedMemo(next);
-      return;
+      return 'ok';
     }
     setSync('offline'); // 写入中先给「未同步」提示，成功后回 synced
-    void withCloudMemo(token, fn).then((r) => {
-      if (!r) return; // 网络失败：保持本地态，状态灯如实显示
-      setData(r.data);
-      writeCachedMemo(r.data);
+    const r = await withCloudMemo(token, fn).catch(() => null);
+    if (!r) {
+      // 网络失败：本地兜底入列（用户看得见），错误条常驻
+      const next = fn(data);
+      setData(next);
+      writeCachedMemo(next);
+      setWriteError(true);
+      return 'offline';
+    }
+    setData(r.data);
+    writeCachedMemo(r.data);
+    if (r.accepted) {
       setSync('synced');
-    });
+      setWriteError(false);
+      return 'ok';
+    }
+    // LWW 被拒 = 服务端版本更新：已回落云端真相，但本次写没上去 —— 如实标注
+    setSync('offline');
+    setWriteError(true);
+    return 'offline';
+  };
+
+  /** P0-2b：错误条「重试」= 重放最近一次 mutate */
+  const retryLastMutate = () => {
+    const fn = lastMutateRef.current;
+    if (fn) void mutate(fn);
   };
 
   /** 打勾/撤销（两类分流在此：recent 直勾；longterm 未完成 → 弹时段确认） */
@@ -109,13 +135,16 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
     setAskDone(null);
   };
 
-  const onSubmitEditor = (draft: TodoDraft) => {
+  const onSubmitEditor = async (draft: TodoDraft): Promise<'ok' | 'offline'> => {
     if (editorFor === 'new') {
-      mutate((d) => addTodo(d, { title: draft.title, kind: draft.kind, nowIso: nowIso(), note: draft.note, tags: draft.tags, goalId: draft.goalId }));
+      const r = await mutate((d) => addTodo(d, { title: draft.title, kind: draft.kind, nowIso: nowIso(), note: draft.note, tags: draft.tags, goalId: draft.goalId }));
       // S3c：闭环第一拍 —— 告诉用户这条待办下一步去哪（不弹窗，不拦人）
       setFlash('已加入待办 —— 去「日程」页生成计划就会带上它');
-    } else if (editorFor) {
-      mutate((d) => {
+      setEditorFor(null);
+      return r;
+    }
+    if (editorFor) {
+      const r = await mutate((d) => {
         let next = updateTodoTitle(d, editorFor.id, draft.title, nowIso());
         next = patchTodoDetail(next, editorFor.id, {
           ...(draft.note !== undefined ? { note: draft.note } : {}),
@@ -124,8 +153,10 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
         }, nowIso());
         return next;
       });
+      setEditorFor(null);
+      return r;
     }
-    setEditorFor(null);
+    return 'ok';
   };
 
   const recent = sortTodosForView(filterTodos(data.todos.filter((t) => t.kind === 'recent'), filter));
@@ -165,6 +196,23 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
           </button>
         </div>
       </div>
+
+      {/* P0-2b：云端写失败/被拒 → 显式错误条（不再静默丢输入），带「重试」；下次成功自动清除 */}
+      {writeError && (
+        <div
+          data-testid="memo-write-error"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
+        >
+          <span>这次没连上云端，已先存在本机 —— 联网后会自动补传。</span>
+          <button
+            type="button"
+            onClick={retryLastMutate}
+            className="rounded-lg bg-white px-3 py-1 font-medium text-amber-800 ring-1 ring-amber-300 transition-colors hover:bg-amber-100"
+          >
+            重试
+          </button>
+        </div>
+      )}
 
       {/* S3b：待办 → 日程的可见闭环状态条（CY 反馈③：加了待办要看得见它去哪了） */}
       {pendingTodoCount != null && (
@@ -282,10 +330,14 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
         />
       )}
 
-      {/* 中长期待办完成确认：未选时段不能确认（阻止并提示，不静默跳过） */}
+      {/* 中长期待办完成确认：未选时段不能确认（阻止并提示，不静默跳过）
+          P0-1c：包 <form> —— 回车确认；「还没办成」保持 type=button 防误触 */}
       {askDone && (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="planned-done-dialog">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
+          <form
+            className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
+            onSubmit={(e) => { e.preventDefault(); confirmLongtermDone(); }}
+          >
             <h3 className="text-sm font-semibold text-ink">什么时候办成的？</h3>
             <p className="mt-1 text-[12px] text-ink-soft">「{askDone.title}」—— 选个大概时段就行，不精确到日。</p>
             <div className="mt-3 flex gap-2">
@@ -315,16 +367,15 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setAskDone(null)} className="rounded-lg px-4 py-1.5 text-[12px] text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper">还没办成</button>
               <button
-                type="button"
+                type="submit"
                 data-testid="planned-done-confirm"
                 disabled={!askPeriod}
-                onClick={confirmLongtermDone}
                 className="button-primary px-4 py-1.5 text-[12px] disabled:opacity-40"
               >
                 完成
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>
