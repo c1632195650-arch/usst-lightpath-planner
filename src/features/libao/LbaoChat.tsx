@@ -7,7 +7,7 @@ import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objecti
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, NATURAL_PLAN_RE, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -1930,6 +1930,42 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       }
       setLoading(false);
       return;
+    }
+
+    // ── S2c（2026-10-07）· 自然计划陈述保底：绝不掉校园问答长闲聊 ──────────
+    // parseGoalIntent 判非动作（LLM 裁决否决 / 端点低置信），但原话命中自然计划族
+    // 且规则层抽得到事由或时间 → 这是一句「想安排事」的话，不是闲聊（CY 反馈①）：
+    //  · 排程模式：回澄清卡并直接进 collect 相追问缺口（规则保底，不依赖 LLM）；
+    //  · 问答模式：同 D0 出切换提示卡（不静默改道、不替用户拍板）。
+    if (!outcome.action && NATURAL_PLAN_RE.test(q)) {
+      const natSlots = parseIntentSlots(q, today, whenOpts);
+      if (natSlots.title || natSlots.when) {
+        if (activeMode === 'chat') {
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: '听出来你像是要安排一件事。问答模式下我不动你的日程 —— 要排的话，切到排程模式我来接手：',
+            modeHint: q,
+          }]);
+          setLoading(false);
+          return;
+        }
+        if (natSlots.missing.length === 0) {
+          // 规则层已抽全（LLM 却否决了）→ 按动作句原路出草稿
+          await runGoalSlots(natSlots, today);
+          return;
+        }
+        const nextAsked = topQuestionPairs(natSlots).map((p) => p.slot);
+        setTopic(collectTopic(natSlots, nextAsked));
+        setMissStreak(0);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: `听出来你像是要安排一件事 —— 我来排：${natSlots.title || '这件事'}。`,
+          planPoints: numberedQuestions(questionsForSlots(natSlots, nextAsked)),
+          options: quickOptionsFor(nextAsked[0], natSlots, { today, plan: previewPlan, exercisePerWeek: loadBasicInfo().exercisePerWeek }),
+        }]);
+        setLoading(false);
+        return;
+      }
     }
 
     /** 问答意图经过后端检索；服务不可用时保留当前对话并给出恢复方式。
