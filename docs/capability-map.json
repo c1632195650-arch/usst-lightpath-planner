@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 115,
+    "testFiles": 116,
     "engineFiles": 81,
-    "uiFiles": 34,
+    "uiFiles": 35,
     "guardedSources": 105,
-    "reverseVerified": 67,
+    "reverseVerified": 68,
     "orphans": 0
   },
   "domains": {
@@ -169,7 +169,7 @@
         "src/lib/lbao.ts",
         "src/lib/api.ts"
       ],
-      "testCount": 27,
+      "testCount": 28,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/day-replan-intent.test.ts",
@@ -181,6 +181,7 @@
         "scripts/libao-intent-clock.test.ts",
         "scripts/libao-intent-fn-fix.test.ts",
         "scripts/libao-intent-month.test.ts",
+        "scripts/libao-intent-natural.test.ts",
         "scripts/libao-intent-term.test.ts",
         "scripts/libao-intent-weekno.test.ts",
         "scripts/libao-interact.test.ts",
@@ -491,6 +492,14 @@
       "reverseVerified": true
     },
     "scripts/libao-intent-month.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "scripts/libao-intent-natural.test.ts": {
       "suite": "ui",
       "guards": [
         "libao-chat"
@@ -1361,6 +1370,7 @@
       "scripts/libao-intent-clock.test.ts",
       "scripts/libao-intent-fn-fix.test.ts",
       "scripts/libao-intent-month.test.ts",
+      "scripts/libao-intent-natural.test.ts",
       "scripts/libao-intent-term.test.ts",
       "scripts/libao-intent-weekno.test.ts",
       "scripts/libao-interact.test.ts",

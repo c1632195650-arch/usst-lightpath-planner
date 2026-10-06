@@ -220,6 +220,8 @@ export const GOAL_NOUNS = [
   '证书', '实习', '社团', '招新',
   // 生活事件（「周四我要吃大餐」这类单日安排 —— 2026-09-20 CY 真实使用翻车）
   '大餐', '聚餐', '庆功', '生日',
+  // S2a（2026-10-07）：休闲事件 —— 「周末想去看电影」的自然陈述族要有落点
+  '电影',
   // 事务性事件（2026-09-27 CY 真机三连翻车：「我明天有一个学生会面试」——
   // 「面试」不在词表 → 标题抽空 → 要么掉进 RAG 聊天，要么被当成泛泛一周建议）
   '面试', '答辩', '宣讲', '讲座', '体检', '例会', '班会', '团建',
@@ -297,6 +299,22 @@ const LEGACY_RECOMMEND_DAY = /(这周|本周|今天|明天|后天|周末)/;
  *    「老形态一条不丢」与「新扩的形态确实被认了」。
  */
 const LEGACY_RECOMMEND_ACT = /(怎么|干嘛|做啥|干点|过|安排|干什么|干啥)/;
+
+/**
+ * S2a（2026-10-07）：自然计划陈述族 —— 「我明天打算去吃大餐」「周末想去看电影」
+ * 这类口语陈述。真实用户不总说「帮我排一下」（LEGACY_RECOMMEND 的命令式口径），
+ * 「打算/想去/要去/想吃」是同一诉求的自然说法。
+ * ⚠️ 只是**补充证据**（与 LEGACY_RECOMMEND 并列），不改老口径 —— 纪律④。
+ */
+export const NATURAL_PLAN_RE = /(打算|准备|计划|想去|要去|约了|想去看|想去吃|想吃|想喝|要去吃|要去玩)/;
+
+/**
+ * S2a：动词性「打算/准备/计划」**紧跟去/要**时是动词不是名词（「我打算去吃大餐」），
+ * 抽标题时不能让它把左扩切断在半截（「吃」带不上）。extractTitle 先把「动词+去/要」
+ * 整体掩成占位符（与 TERM_ANCHOR_USAGE 同法）：占位符不是 TITLE_CHAR，左扩到它自然停
+ * —— 标题干净地落在动词之后（「吃大餐」）。名词性的「我的打算」不紧跟去/要 → 不受影响，仍停。
+ */
+const PLAN_VERB_MASK_RE = /(打算|准备|计划)(去|要)/;
 
 /** 动作识别（决定 intent 枚举）。顺序敏感：取消 > 改时间 > 替换 > 只问 > 新增。 */
 const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
@@ -431,6 +449,12 @@ export function looksLikeAction(q: string): boolean {
   if (PURE_FACT.some((t) => s.includes(t))) return false;
   if (ADVICE_MARK.some((t) => s.includes(t))) return false;
 
+  // S2a（2026-10-07）：自然计划陈述 —— 计划词 +（时间/地点/事由任一线索），无疑问词。
+  // 疑问词守卫是硬前提：「打算去哪里玩」是问句，留给 RAG。
+  if (NATURAL_PLAN_RE.test(s) && !QUESTIONISH_RE.test(s)
+    && (extractConcreteWhen(s) != null || extractPlace(s) != null
+      || GOAL_NOUNS.some((n) => s.includes(n)))) return true;
+
   // 批 1.1（金标 i21）：「我这周忙不忙」是 query 意图的排程语境 —— detectIntent
   // 早就认得，快筛却把它拦成 RAG。放在 ADVICE 之后：「忙不忙是怎么算的」这类
   // 求解释的句子已在上一步被拦，走不到这里。（「有没有空」与 PURE_FACT 的
@@ -543,6 +567,13 @@ export function extractTitle(q: string): string {
   const anchor = TERM_ANCHOR_USAGE.exec(s);
   if (anchor) {
     s = s.slice(0, anchor.index) + '○'.repeat(anchor[0].length) + s.slice(anchor.index + anchor[0].length);
+  }
+
+  // S2a：动词性「打算/准备/计划 + 去/要」掩成占位符 —— 左扩撞到它就停，
+  // 标题不带动词残渣（「我打算去吃大餐」→「吃大餐」）。名词性「打算」不匹配，仍走停用词。
+  const planVerb = PLAN_VERB_MASK_RE.exec(s);
+  if (planVerb) {
+    s = s.slice(0, planVerb.index) + '○'.repeat(planVerb[0].length) + s.slice(planVerb.index + planVerb[0].length);
   }
 
   let best = '';
