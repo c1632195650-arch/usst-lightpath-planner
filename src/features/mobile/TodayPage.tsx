@@ -21,7 +21,7 @@ import { useTodayData } from './lib/useTodayData.ts';
 import BlockCard from './BlockCard.tsx';
 import EditSheet, { type EditAction } from './EditSheet.tsx';
 import TomorrowPreview from './TomorrowPreview.tsx';
-import WeekGlance from './WeekGlance.tsx';
+import WeekBoard from './WeekBoard.tsx';
 import NowBlock from './NowBlock.tsx';
 import NextList from './NextList.tsx';
 import GoalTodoCard from './GoalTodoCard.tsx';
@@ -152,7 +152,8 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
             </section>
 
             <TomorrowPreview blocks={d.tomorrow.blocks} tomorrowDow={d.tomorrowDow} loading={d.tomorrow.loading} />
-            <WeekGlance plan={d.plan} layer={d.layer} weekNo={d.weekNo ?? 0} todayDow={d.dow} />
+            {/* M3（CY 反馈⑧a）：本周视图 —— 周切换/回到现在/点天展开（替换只读 WeekGlance，S4-3） */}
+            <WeekBoard plan={d.plan} layer={d.layer} weekNo={d.weekNo ?? 0} todayDow={d.dow} serverState={d.serverState} />
 
             <NotifyStatus blocks={displayed?.blocks ?? []} nowMin={nowMin} dateKey={d.todayKey} />
 

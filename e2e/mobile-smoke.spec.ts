@@ -122,9 +122,9 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   // F5 三区 IA：当前块横幅（m-now-banner）与接下来（m-next-banner）至少其一可见
   // （当前块存在时两者并存 → .first() 规避 strict mode 二义性；2026-10-06 深层验收实测抓到的时间相关 flaky）
   await expect(page.getByTestId('m-now-banner').or(page.getByTestId('m-next-banner')).first()).toBeVisible();
-  // F7 / F10 节点
+  // F7 / F10 节点（F10 已由 M3 WeekBoard 替换 WeekGlance —— 周切换/回到现在/点天展开）
   await expect(page.getByTestId('m-tomorrow')).toBeVisible();
-  await expect(page.getByTestId('m-week-glance')).toBeVisible();
+  await expect(page.getByTestId('m-week-board')).toBeVisible();
 
   // F6/F17 已降级到「提醒与帮助」折叠区（P6-2）：先展开
   await page.getByTestId('m-more-toggle').click();

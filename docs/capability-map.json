@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 117,
-    "engineFiles": 81,
+    "testFiles": 118,
+    "engineFiles": 82,
     "uiFiles": 36,
-    "guardedSources": 105,
-    "reverseVerified": 68,
+    "guardedSources": 106,
+    "reverseVerified": 69,
     "orphans": 1
   },
   "domains": {
@@ -122,7 +122,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 23,
+      "testCount": 24,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
@@ -131,6 +131,7 @@
         "tests/h3h4-eval.test.ts",
         "tests/issue-bar-ui.test.ts",
         "tests/mobile/evalWiring.test.ts",
+        "tests/mobile/weekBoard.test.ts",
         "tests/ripple.test.ts",
         "tests/routineStore.test.ts",
         "tests/syncContract.test.ts",
@@ -278,7 +279,7 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 11,
+      "testCount": 12,
       "tests": [
         "scripts/memo-web-workspace.test.ts",
         "tests/cloudAccount.test.ts",
@@ -290,6 +291,7 @@
         "tests/mobile/memoStore.test.ts",
         "tests/mobile/notify.test.ts",
         "tests/mobile/tipsSlot.test.ts",
+        "tests/mobile/weekBoard.test.ts",
         "tests/syncContract.test.ts"
       ],
       "sources": [
@@ -308,7 +310,8 @@
         "src/features/mobile/lib/nowTip",
         "src/features/mobile/lib/sync",
         "src/features/mobile/lib/types",
-        "src/features/mobile/lib/webSync"
+        "src/features/mobile/lib/webSync",
+        "src/features/mobile/lib/weekBoard"
       ]
     },
     "contracts": {
@@ -1018,6 +1021,15 @@
       "guardCount": 1,
       "reverseVerified": true
     },
+    "tests/mobile/weekBoard.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "mobile"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
     "tests/objective-evaluate.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1450,6 +1462,7 @@
       "tests/method-tip-timeblock.test.ts",
       "tests/mobile/evalWiring.test.ts",
       "tests/mobile/notify.test.ts",
+      "tests/mobile/weekBoard.test.ts",
       "tests/objective-evaluate.test.ts",
       "tests/p2-convergence.test.ts",
       "tests/p2-incremental-rolling.test.ts",
@@ -1824,6 +1837,7 @@
     ],
     "src/features/week/userPlanStore": [
       "tests/mobile/evalWiring.test.ts",
+      "tests/mobile/weekBoard.test.ts",
       "tests/ripple.test.ts",
       "tests/syncContract.test.ts",
       "tests/userPlanStore.test.ts",
@@ -1850,6 +1864,9 @@
     ],
     "src/features/mobile/lib/nowTip": [
       "tests/mobile/tipsSlot.test.ts"
+    ],
+    "src/features/mobile/lib/weekBoard": [
+      "tests/mobile/weekBoard.test.ts"
     ],
     "src/lib/planner/incremental": [
       "tests/p2-incremental-rolling.test.ts"
