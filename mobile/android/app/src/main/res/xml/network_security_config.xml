@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  光溯 APK · 网络安全配置
+  ============================================================
+  🔴 存在的原因（2026-10-06）
+  ══════════════════════════════════════════════════════════════
+  后端目前走**裸跑 http**（方案 §2.3 拍板，尚未上 HTTPS），而
+  Android 9(API 28) 起默认**禁止明文流量**。若不处理，WebView 内
+  所有 http:// 请求会被系统静默拦截 → 前端报「连不上服务器」，
+  但服务端 curl 却是 200 ⇒ 极难定位的假故障（本次就踩了）。
+
+  为什么不用「一把梭」全局放开？
+  `android:usesCleartextTraffic="true"` 是**全局**放行明文，等于给全 App 开后门。
+  这里用 `domain-config` **只放行真正需要的那一个域名**，其余仍受系统默认保护。
+
+  ⚠️ 与 capacitor.config.ts 的关系（两者缺一不可，不是重复）
+  ══════════════════════════════════════════════════════════════
+  · 本文件（+ manifest 的 networkSecurityConfig 引用）= **Android 系统层**放行
+  · capacitor.config 的 `server.cleartext: true`  = **Capacitor WebView 层**放行
+  之前只设了后者 ⇒ 系统层仍拦 ⇒ 手机上「连不上服务器」。
+
+  上 HTTPS 后的收尾（勿忘）
+  ══════════════════════════════════════════════════════════════
+  1. 本文件改为仅 base-config cleartextTrafficPermitted="false"（或直接删除本文件）；
+  2. 删AndroidManifest.xml 的 android:usesCleartextTraffic；
+  3. capacitor.config.ts 删 server.cleartext；
+  4. capacitor.config / api.ts 的兜底 base 改 https://。
+-->
+<network-security-config>
+    <!-- 系统默认：禁止明文（比 Android 默认更明确，防将来误开） -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- 唯一需要明文的域名：光溯后端 + APK 下载源（同一台服务器） -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">101.35.253.143</domain>
+    </domain-config>
+</network-security-config>

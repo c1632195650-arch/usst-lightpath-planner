@@ -1,7 +1,7 @@
 {
   "name": "lightpath-mobile",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "光溯 APK 壳工程（Capacitor）",
   "dependencies": {
     "@capacitor/core": "^6.2.2",
