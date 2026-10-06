@@ -8,7 +8,11 @@
  *    AI 在对话里听到身份信息时只能**提议**（后端 facts 表 pending），
  *    用户在建议卡里点了确认，才经 `applyObjectiveFact` 写进这里；
  *  · AI 永远不直接改写基础信息（core §4 L4：绝不替用户拍板）。
+ * 2026-10-06 更新：user_id 改为「账号 ID 优先，无账号回退设备 ID」（见 getUserId）。
  */
+
+// 账号键的唯一事实来源在移动端 auth.ts（网页端登录复用同一键，假联通修复·必修 2）
+import { USER_KEY as ACCOUNT_USER_KEY } from '@/features/mobile/lib/auth';
 
 const USER_KEY = 'usst.libao.user_id';
 const BASIC_KEY = 'usst.libao.basic_info';
@@ -68,9 +72,24 @@ function newId(): string {
 }
 
 /** 设备级标识（唯一来源）：持久化复用 —— 后端的「对话信号」靠它跨会话累积。
- *  ⚠️ 已知限制（2026-09-20 确认先不做跨设备）：换设备或清缓存 = 变成另一个人。 */
+ *  2026-10-06「假联通」修复：登录后（网页/移动共用 `usst.mobile.user` 同一键）
+ *  **优先返回云端账号 ID**（`acct-<userId>`），记忆库/画像事实才能跨端续用；
+ *  无账号（或键损坏）回退设备 ID `u-*`（原语义不变，老用户无感）。
+ *  已知限制：未登录时换设备或清缓存 = 变成另一个人。 */
 export function getUserId(): string {
   try {
+    // 账号键损坏只降级这一处读取，绝不能落进外层 catch（那会返回 anon 而不是设备 ID）
+    try {
+      const raw = localStorage.getItem(ACCOUNT_USER_KEY);
+      if (raw) {
+        const u = JSON.parse(raw) as { userId?: unknown };
+        if (typeof u?.userId === 'number' && Number.isInteger(u.userId) && u.userId > 0) {
+          return `acct-${u.userId}`;
+        }
+      }
+    } catch {
+      /* 坏 JSON → 走设备 ID 回退 */
+    }
     const saved = localStorage.getItem(USER_KEY);
     if (saved) return saved;
     const id = `u-${newId()}`;

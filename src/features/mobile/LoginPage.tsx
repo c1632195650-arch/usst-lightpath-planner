@@ -13,7 +13,8 @@ const ERR_TEXT: Record<string, string> = {
   network_error: '连不上服务器，检查一下网络？',
 };
 
-function errText(e: unknown): string {
+/** 网页端账号卡（CloudAccountCard）复用同一套文案 —— 错误口径两端一致 */
+export function errText(e: unknown): string {
   if (e instanceof ApiFailure && ERR_TEXT[e.code]) return ERR_TEXT[e.code];
   return '出错了，稍后再试';
 }

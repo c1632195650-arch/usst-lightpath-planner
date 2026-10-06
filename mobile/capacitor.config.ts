@@ -10,9 +10,11 @@
  *   → 且每次前端更新都要重出 APK，服务器 10-25 到期后直接白屏。
  *
  * 现配置：**不设 `server.url`** → Capacitor 加载 `webDir` 内的包内资源（离线可用）。
- *   · `webDir` 指向 `../dist`（相对本文件），其中 `index.html` 已被替换为移动端入口
- *     （见 `scripts/prep_mobile_dist.py`：把 `dist/m.html` 复制成 `dist/index.html`），
- *     这样免改Android 侧 Java 代码即可让 WebView 首屏是移动端。
+ *   · `webDir` 指向 `../dist-mobile`（相对本文件）—— 2026-10-06 假联通审计 §四
+ *     污染修复：`scripts/prep_mobile_dist.py` 不再覆写 `dist/index.html`（那会把
+ *     移动端带上网页端部署），改为全量拷贝 `dist/` → `dist-mobile/` 并只在新目录
+ *     替换首屏。`dist/` 永远是干净网页端产物。
+ *     这样免改 Android 侧 Java 代码即可让 WebView 首屏是移动端。
  *   · `androidScheme: 'https'` + `hostname: 'localhost'`：Capacitor 默认的本地资源协议，
  *     `/assets/*` 绝对路径由其内部 WebView 拦截器映射到包内，**不要改成 http**。
  *   · cleartext 仅保留给「登录/同步/API」等走公网的 XHR（方案 §2.3 拍板，裸跑 http）。
@@ -32,9 +34,9 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.usst.lightpath',
   appName: '光溯',
-  // 相对本文件（mobile/）→ 仓库构建产物 dist/。
-  // 其中 dist/index.html 已被 prep_mobile_dist.py 覆写为移动端入口。
-  webDir: '../dist',
+  // 相对本文件（mobile/）→ APK 专用产物 dist-mobile/（prep_mobile_dist.py 生成，
+  // index.html=移动端入口）。⚠️ 不是 dist/ —— 那是网页端产物，绝不能被包内覆写。
+  webDir: '../dist-mobile',
   android: {
     path: 'android',
     // 允许 WebView 内的 XHR 走明文 http（连公网 API / 天气 / 地图等），非资源加载。

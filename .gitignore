@@ -9,6 +9,7 @@ node_modules/
 
 # 构建产物
 dist/
+dist-mobile/
 dist-ssr/
 
 # 环境变量（API Key 绝不进仓库）

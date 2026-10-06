@@ -4,12 +4,15 @@
  * token 存 localStorage `usst.mobile.token`。
  * ⚠️ **不碰 identity.ts**：`getUserId()` 是设备级 ID（记忆/画像用），保持原语义；
  * 移动端账号是另一套（昵称+密码 → 云端 user_id），两套 ID 并存、互不干扰。
+ *   ↑ 2026-10-06 更新：网页端登录（假联通修复·必修 2）复用本文件的同组键，
+ *     `getUserId()` 改为「账号 ID 优先」——USER_KEY 因此导出为唯一事实来源，
+ *     identity.ts 从这里读，禁止第二处硬编码这个键名。
  */
 import type { AuthResponse } from './types.ts';
 
-const TOKEN_KEY = 'usst.mobile.token';
-const USER_KEY = 'usst.mobile.user';
-const ICS_KEY = 'usst.mobile.ics';
+export const TOKEN_KEY = 'usst.mobile.token';
+export const USER_KEY = 'usst.mobile.user';
+export const ICS_KEY = 'usst.mobile.ics';
 
 export interface MobileIdentity {
   token: string;

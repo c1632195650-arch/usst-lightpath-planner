@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 114,
-    "engineFiles": 80,
+    "testFiles": 115,
+    "engineFiles": 81,
     "uiFiles": 34,
-    "guardedSources": 102,
-    "reverseVerified": 66,
+    "guardedSources": 105,
+    "reverseVerified": 67,
     "orphans": 0
   },
   "domains": {
@@ -277,9 +277,10 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 10,
+      "testCount": 11,
       "tests": [
         "scripts/memo-web-workspace.test.ts",
+        "tests/cloudAccount.test.ts",
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
         "tests/eval-tips.test.ts",
@@ -297,6 +298,7 @@
         "src/features/mobile/eval/model",
         "src/features/mobile/eval/questionBank",
         "src/features/mobile/eval/units",
+        "src/features/mobile/lib/auth",
         "src/features/mobile/lib/burnBar",
         "src/features/mobile/lib/memoStore",
         "src/features/mobile/lib/memoTypes",
@@ -304,6 +306,7 @@
         "src/features/mobile/lib/notifyStatus",
         "src/features/mobile/lib/nowTip",
         "src/features/mobile/lib/sync",
+        "src/features/mobile/lib/types",
         "src/features/mobile/lib/webSync"
       ]
     },
@@ -314,7 +317,7 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 15,
+      "testCount": 16,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
@@ -326,6 +329,7 @@
         "scripts/storage.test.ts",
         "scripts/telemetry.test.ts",
         "tests/campus-vocab.test.ts",
+        "tests/cloudAccount.test.ts",
         "tests/h3h4-eval.test.ts",
         "tests/identity.test.ts",
         "tests/improve-live.test.ts",
@@ -337,6 +341,7 @@
         "src/constants/term",
         "src/constants/time",
         "src/lib/api",
+        "src/lib/cloudAccount",
         "src/lib/date",
         "src/lib/identity",
         "src/lib/lbao",
@@ -688,6 +693,15 @@
       ],
       "guardCount": 4,
       "reverseVerified": false
+    },
+    "tests/cloudAccount.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts",
+        "mobile"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
     },
     "tests/construct.test.ts": {
       "suite": "engine",
@@ -1621,6 +1635,23 @@
       "tests/weekly-activity-floor.test.ts",
       "tests/wp5.test.ts"
     ],
+    "src/lib/cloudAccount": [
+      "tests/cloudAccount.test.ts"
+    ],
+    "src/lib/identity": [
+      "tests/cloudAccount.test.ts",
+      "tests/identity.test.ts"
+    ],
+    "src/features/mobile/lib/auth": [
+      "tests/cloudAccount.test.ts"
+    ],
+    "src/features/mobile/lib/webSync": [
+      "tests/cloudAccount.test.ts",
+      "tests/syncContract.test.ts"
+    ],
+    "src/features/mobile/lib/types": [
+      "tests/cloudAccount.test.ts"
+    ],
     "src/lib/planner/construct": [
       "tests/construct.test.ts",
       "tests/courseOverride.test.ts",
@@ -1749,9 +1780,6 @@
       "tests/health_params.test.ts",
       "tests/knowledge-wiring.test.ts"
     ],
-    "src/lib/identity": [
-      "tests/identity.test.ts"
-    ],
     "src/constants/term": [
       "tests/improve-live.test.ts"
     ],
@@ -1831,9 +1859,6 @@
     ],
     "src/features/week/routineStore": [
       "tests/routineStore.test.ts"
-    ],
-    "src/features/mobile/lib/webSync": [
-      "tests/syncContract.test.ts"
     ],
     "src/features/week/timeScale": [
       "tests/timeScale.test.ts"

@@ -1,11 +1,14 @@
+import type { ReactNode } from 'react';
 import { Logo120 } from '@/components/Logo120';
 
 interface Props {
   onStart: () => void;
   onSkip: () => void;
+  /** 欢迎页底部附加区（云账号卡片等，可选；不传完全不变） */
+  footer?: ReactNode;
 }
 
-export function Welcome({ onStart, onSkip }: Props) {
+export function Welcome({ onStart, onSkip, footer }: Props) {
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 sm:py-8">
       {/* 暖色重点面只停留在首屏上半区，避免整页被深红压暗。 */}
@@ -59,6 +62,7 @@ export function Welcome({ onStart, onSkip }: Props) {
               <button onClick={onSkip} className="button-secondary flex-1">先浏览应用</button>
             </div>
             <p className="mt-4 text-xs leading-5 text-ink-faint">画像可以随时重做；暂时跳过也不影响浏览校历与课表。</p>
+            {footer && <div className="mt-6">{footer}</div>}
           </section>
         </div>
       </div>

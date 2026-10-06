@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 """
-光溯 APK · 构建后处理：把 dist/m.html 复制为 dist/index.html
+光溯 APK · 构建后处理：dist → dist-mobile/（独立目录，index.html = 移动端入口）
 =====================================================================
-## 为什么需要这一步
+## 为什么是独立目录（2026-10-06 假联通审计 §四 的污染修复）
 
-去掉 `capacitor.config.ts` 的 `server.url` 后，Capacitor 加载**包内**资源，
-而包内首屏默认是 `webDir/index.html`。但 `dist/index.html` 是**网页端主站**
-（`id="root"` + `main-*.js`），移动端入口是 `dist/m.html`
-（`id="mobile-root"` + `mobile-*.js`）。
+**旧做法（已废）**：把 `dist/m.html` 覆写成 `dist/index.html`。
+代价是污染网页端构建产物——本地 `dist/` 曾因此变成移动端首屏，
+一旦照常 `tar dist` 部署，线上根路径会整体变成手机界面。
 
-→ 不做这一步，APK 会显示**网页端**（这正是 2026-10-06 排查到的「界面不更新」真因）。
+**新做法**：把 `dist/` 完整拷贝到 `dist-mobile/`，只在新目录里把
+`index.html` 替换为移动端入口；`dist/` 一个字节都不动。
 
-## 两种可选做法（本脚本用 A，避免动 Android Java 代码）
+  dist/            → 网页端产物，nginx 直接 serve，永远干净
+  dist-mobile/     → APK 包内产物（capacitor webDir 指向这里），首屏=移动端
 
-**A. 覆写 index.html（采用）**：`dist/m.html` → `dist/index.html`。
-   首屏即移动端，**零 Android 侧改动**。代价：APK 内 index.html 与网页端同名不同内容
-   （无害——两者本就在不同产物里：网页端走 nginx，APK 走包内）。
-
-**B. 改 Android MainActivity** 的 `getStartUrl()` 指向 `public/m.html`。
-   更「干净」，但要动原生工程+ 回归启动路径，收益不抵成本。
-
-## 资源路径说明（为何A 可行）
+## 资源路径说明
 
 构建后 `dist/m.html` 里的引用已被 vite 改写为 `/assets/mobile-*.js` 这类**绝对路径**。
 Capacitor 的 `androidScheme: 'https'` + `hostname: 'localhost'` 会让 WebView 把
@@ -29,7 +23,8 @@ Capacitor 的 `androidScheme: 'https'` + `hostname: 'localhost'` 会让 WebView 
 
 ## 幂等
 
-可重复执行；每次 `npm run build` 后重跑即可（vite 会重写 dist/，本脚本重新覆写）。
+可重复执行；每次 `npm run build` 后重跑即可。拷贝用 `dirs_exist_ok=True`
+**不删除任何文件**（残留的旧哈希资源无害，Android 打包时自行清理）。
 """
 
 from __future__ import annotations
@@ -41,10 +36,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DIST = REPO / "dist"
+DIST_MOBILE = REPO / "dist-mobile"
 MOBILE_HTML = DIST / "m.html"
-TARGET_HTML = DIST / "index.html"
+TARGET_HTML = DIST_MOBILE / "index.html"
 
-# 移动端特征：挂载点 id 与title —— 用于校验复制对了文件
+# 移动端特征：挂载点 id 与 title —— 用于校验复制对了文件
 MOBILE_MOUNT_ID = "mobile-root"
 MOBILE_TITLE_HINT = "光溯 · 今天"
 
@@ -57,37 +53,48 @@ def fail(msg: str) -> None:
 def main() -> None:
     if not MOBILE_HTML.exists():
         fail(f"未找到 {MOBILE_HTML}——请先跑 npm run build（vite 多页产物含 m.html）")
+    if not (DIST / "index.html").exists():
+        fail(f"未找到 {DIST / 'index.html'}——vite 构建产物不完整，请重跑 npm run build")
 
-    html = MOBILE_HTML.read_text(encoding="utf-8")
+    mobile_html = MOBILE_HTML.read_text(encoding="utf-8")
 
     # 校验：必须是移动端入口，不能是网页端
-    if MOBILE_MOUNT_ID not in html:
+    if MOBILE_MOUNT_ID not in mobile_html:
         fail(
             f"m.html 缺少挂载点 id='{MOBILE_MOUNT_ID}'，疑似拿错了文件。"
-            f"实际内容开头：{html[:120]!r}"
+            f"实际内容开头：{mobile_html[:120]!r}"
         )
-    if "<title>光溯 · 今天" not in html and MOBILE_TITLE_HINT not in html:
+    if "<title>光溯 · 今天" not in mobile_html and MOBILE_TITLE_HINT not in mobile_html:
         print(
-            f"[prep-mobile-dist] 警告：m.html 的title 不含「{MOBILE_TITLE_HINT}」，"
+            f"[prep-mobile-dist] 警告：m.html 的 title 不含「{MOBILE_TITLE_HINT}」，"
             f"但挂载点 id 正确，继续执行。"
         )
 
     # 校验：构建产物必须已把 /src/... 改写为 /assets/...（否则包内加载会 404）
-    if "/src/features/mobile" in html:
+    if "/src/features/mobile" in mobile_html:
         fail(
             "m.html 仍引用 /src/features/mobile/... —— vite 未完成构建。"
             "请跑完整的 npm run build（tsc --noEmit && vite build）"
         )
 
-    # 幂等覆写
-    if TARGET_HTML.exists() and TARGET_HTML.read_text(encoding="utf-8") == html:
-        print("[prep-mobile-dist] index.html 已是移动端入口，无需改动")
+    # 红线校验：dist/index.html 必须仍是网页端——本脚本绝不再碰它
+    web_html = (DIST / "index.html").read_text(encoding="utf-8")
+    if MOBILE_MOUNT_ID in web_html:
+        fail(
+            "dist/index.html 已被污染成移动端入口（旧版脚本覆写过？）。"
+            "请重跑 npm run build 重新生成 dist/ 后再执行本脚本。"
+        )
+
+    # dist → dist-mobile 全量拷贝（不删除旧文件），再替换首屏
+    shutil.copytree(DIST, DIST_MOBILE, dirs_exist_ok=True)
+    if TARGET_HTML.exists() and TARGET_HTML.read_text(encoding="utf-8") == mobile_html:
+        print("[prep-mobile-dist] dist-mobile/index.html 已是移动端入口，无需改动")
     else:
         shutil.copyfile(MOBILE_HTML, TARGET_HTML)
-        print(f"[prep-mobile-dist] 已用 m.html 覆写 {TARGET_HTML.name}（APK 首屏=移动端）")
+        print(f"[prep-mobile-dist] 已生成 {DIST_MOBILE.name}/index.html（APK 首屏=移动端；dist/ 未动）")
 
     # 打印 APK 首屏将要引用的资源，便于人工核对是否 200/存在
-    assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', html)
+    assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', mobile_html)
     if not assets:
         print("[prep-mobile-dist] 警告：未在 HTML 中解析到 /assets 引用，请检查构建产物")
         return

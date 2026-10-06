@@ -14,7 +14,8 @@ import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist';
 import { loadUserDeadlines } from '@/features/calendar/deadlineStore';
 import { getUserId } from '@/lib/identity';
 import { installWebSyncHook } from '@/features/mobile/lib/webSync';
-import { loadIdentity } from '@/features/mobile/lib/auth';
+import { loadIdentity, type MobileIdentity } from '@/features/mobile/lib/auth';
+import CloudAccountCard from '@/features/cloudSync/CloudAccountCard';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
 import { PersonaResult } from '@/features/persona/PersonaResult';
 import { OverviewPage } from '@/features/overview/OverviewPage';
@@ -61,8 +62,11 @@ export default function App() {
   }, [mainTab, libaoSeed]);
 
   // F8 网页端云同步观察者（BLOCKERS#3 白天接线）：开关默认关（usst.mobile.cloudSync!=='1'
-  // 时零网络，tests/syncContract.test.ts 有锁），登录后由移动页写入开关与身份
-  useEffect(() => installWebSyncHook({ identity: loadIdentity() }), []);
+  // 时零网络，tests/syncContract.test.ts 有锁），登录后由移动页写入开关与身份。
+  // 2026-10-06 假联通修复：identity 进 state —— 登录/登出会重装钩子，修掉「挂载时
+  // 快照 token、后登录永远 no-token」的静默断点（审计断点⑤）。
+  const [identity, setIdentity] = useState<MobileIdentity | null>(() => loadIdentity());
+  useEffect(() => installWebSyncHook({ identity }), [identity]);
 
   const schedule = state.schedule ?? MOCK_SCHEDULE;
 
@@ -171,6 +175,8 @@ export default function App() {
       <Welcome
         onStart={() => setView('basicinfo')}
         onSkip={() => { setView('main'); setMainTab('calendar'); }}
+        // 必修 2：onboarding 阶段就给登录入口（不登录也完全不影响本地使用）
+        footer={<CloudAccountCard identity={identity} onIdentityChange={setIdentity} />}
       />
     );
   }
@@ -280,33 +286,39 @@ export default function App() {
             seedQuestion={libaoSeed?.text}
           />
         ) : mainTab === 'profile' ? (
-          state.persona ? (
-            <div className="space-y-3">
-              <PersonaResult
-                profile={state.persona}
-                onEnter={() => setMainTab('calendar')}
-                onRetake={() => setView('persona')}
-              />
-              {/* V0-1：重看引导 —— 完整重走 标题→基本信息→问卷→结果→导入→模式（新旅程不再被 onboarded 藏起来） */}
-              <div className="flex justify-end px-4 sm:px-6">
-                <button
-                  type="button"
-                  data-testid="replay-onboarding"
-                  onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
-                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-                >
-                  重看引导
-                </button>
+          // 必修 2/3：账号与云同步状态卡 —— 用户随时能看到「已连接手机端」与开关
+          <>
+            {state.persona ? (
+              <div className="space-y-3">
+                <PersonaResult
+                  profile={state.persona}
+                  onEnter={() => setMainTab('calendar')}
+                  onRetake={() => setView('persona')}
+                />
+                {/* V0-1：重看引导 —— 完整重走 标题→基本信息→问卷→结果→导入→模式（新旅程不再被 onboarded 藏起来） */}
+                <div className="flex justify-end px-4 sm:px-6">
+                  <button
+                    type="button"
+                    data-testid="replay-onboarding"
+                    onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
+                    className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                  >
+                    重看引导
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="content-shell panel px-6 py-16 text-center sm:px-10">
+                <p className="section-label">PROFILE</p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
+                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
+              </div>
+            )}
+            <div className="mt-3">
+              <CloudAccountCard identity={identity} onIdentityChange={setIdentity} />
             </div>
-          ) : (
-            <div className="content-shell panel px-6 py-16 text-center sm:px-10">
-              <p className="section-label">PROFILE</p>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
-              <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
-            </div>
-          )
+          </>
         ) : weekMonday ? (
           <div className="space-y-3">
             {/* 课表 / 周计划 切换 */}
