@@ -85,3 +85,10 @@
 - [2026-10-06 08:55 任务三验收] 缺陷③（口径题）：**移动端总行数 4266 > 2600 上限**——三方批次叠加，其中含任务二 eval/ 计算层 5 文件（约 600+ 行）｜已排除：TodayPage 193 行远低上限；非单批失控而是口径未分层｜需要人决定：上限口径是否按「UI 层/计算层」拆分或放宽
 - [2026-10-06 08:55 任务三验收] 注记（非缺陷）：SSE「逐 token」实为管线算毕分块推（与「复用而非重写」自洽，真 token 级需重写 LLM 调用，建议记 stretch）；移动端单测用目录式传参（node --test tests/mobile/）会出目录级假 fail，须逐文件跑。验收全报告：docs/task3-acceptance-report-2026-10-06.md（36 过 / 3 缺陷 / 1 口径题；变异体亲测 3 条红绿；四库问答 4/4；e2e 18/18）
 - [2026-10-06 任务四·W4] ⚠️ 留痕：**检测到并行会话再次在同一工作树写入**（W4 期间 `src/features/mobile/EvalSection.tsx`、`IcsGuide.tsx`、`eval/behaviorLog.ts`、`eval/units.ts` 出现未提交改动，非本批所为；engine 套件期间测试数 596→608 亦为其新增用例）。本批处置：全程显式路径 `git add` 精确隔离、绝不提交上述文件；W4 反向验证对 `memoTypes.ts`/`memoStore.ts` 的两处**临时变异**已当场还原并经 `git diff` 字节级核验（diff 中无这两文件即为证）｜已排除：停下等待（对方改动与本批零交集，tsc 0 可编译）｜需要人决定：CY 白天核对 W4 时段 mobile eval 批次归属
+
+# 习惯与方法库（method_kb v2）· 全面深度验收（2026-10-06，zcode /goal 批）
+
+- [2026-10-06 方法库验收] **验收结论：通过（主体）**。独立取证：160/160 计划条目全入库（4 处改名入库已逐条确认）；引文 160/160 带 verification（verified 36/canonical 96/practitioner 28）；contested 9 条如实标注且编译期 FORBIDDEN_STATUS 硬拦在位；金标 126 条独立复跑 GATE PASS（recall 1.0/MRR 0.777/拒答 1.0/伪科学拦截 1.0）；编译链重跑零漂移；反向验证 2 条红绿（删黑名单词→GATE FAIL；拆 BlockKind 映射→tipsSlot 2 例红）。全报告：docs/method-kb-acceptance-report-2026-10-06.md｜已排除：采信 _last_run.json/交付方自述（全部当场重跑）｜需要人决定：无
+- [2026-10-06 方法库验收] 口径更正：BLOCKERS 此前「161 条」实为 **160 条**（sqlite_sequence 含已删条目）；金标实测 126 vs 计划 §5 的 124（方向为增，合「只增不改」）｜需要人决定：无
+- [2026-10-06 方法库验收] 遗留 4 项（不阻塞）：①QUESTION_BANK 仍为空题库——本验收即任务二登记的「任务一验收通过」前置，**题库补做已解锁**（建议按任务书 §三 补 ≥60 道）；②questionBank.ts:6 注释过期（写 42 条实际 160）；③v1 老 42 条中 23 条 contraindications 为空（v2 条目全满）；④methodTipForTimeBlock 映射的守护仅 tests/mobile/tipsSlot.test.ts 一处，eval-tips/method_params_v2 对真实 BlockKind 断链不报警（建议补直测）｜需要人决定：①的补做时点与执行批
+- [2026-10-06 方法库验收] 留痕：验收期间检测到并行会话在途改动（EvalSection.tsx/units.ts 未提交——任务三缺陷①修复中；WeekPlanView.tsx/syncContract.test.ts 为任务四批遗留），typecheck 一过性红字为写盘竞态、复跑即绿；本批仅新增验收报告 + 本条目，未触碰任何源码（变异体均现场还原，git checkout 复核干净）。
