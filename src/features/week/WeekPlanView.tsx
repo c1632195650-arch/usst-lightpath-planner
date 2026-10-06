@@ -461,7 +461,9 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   /**
    * 求解器诊断（规格书 §4.4）—— 排得「好不好」的量化凭据。
    * 以前只有「有没有冲突」这一个二值信号，现在能说出硬约束违反数、
-   * 加权质量分（越低越好）和耗时。这是答辩时「算法依据」的答案。
+   * 加权代价（越低越好；improve 只接受严格下降，cost 单调不增）和耗时。
+   * 这是答辩时「算法依据」的答案。曾经显示成「质量分」会让人误读成
+   * 百分制评分——P1-1 改为自解释的「调度代价（越低越好）」。
    */
   const [diag, setDiag] = useState<Diagnostics | null>(null);
   /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
@@ -1678,7 +1680,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         {diag && (
           <div className="mt-2 border-t border-ink/10 pt-1.5 font-mono text-[11px] text-ink-faint">
             {diag.hardViolations === 0 ? '硬约束违反 0' : `⚠ 硬约束违反 ${diag.hardViolations}`}
-            {' · '}质量分 {Math.round(diag.cost.total)}
+            {' · '}调度代价 {Math.round(diag.cost.total)}（越低越好）
             {' · '}{diag.iterations} 次迭代
             {' · '}{Math.round(diag.elapsedMs)} ms
             {lockCount(planState) > 0 && <>{' · '}已定住 {lockCount(planState)} 块</>}

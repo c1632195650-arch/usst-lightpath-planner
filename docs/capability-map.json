@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 110,
-    "engineFiles": 76,
+    "testFiles": 111,
+    "engineFiles": 77,
     "uiFiles": 34,
     "guardedSources": 102,
-    "reverseVerified": 62,
+    "reverseVerified": 63,
     "orphans": 0
   },
   "domains": {
@@ -119,7 +119,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 22,
+      "testCount": 23,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
@@ -137,6 +137,7 @@
         "tests/v1.test.ts",
         "tests/v2.test.ts",
         "tests/v3.test.ts",
+        "tests/week-diag-copy.test.ts",
         "tests/week-view-model.test.ts",
         "tests/weekplan-shift-ui.test.ts",
         "tests/wp12.test.ts",
@@ -1194,6 +1195,14 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/week-diag-copy.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
     "tests/week-view-model.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1618,6 +1627,7 @@
       "tests/v1.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",
+      "tests/week-diag-copy.test.ts",
       "tests/week-view-model.test.ts",
       "tests/weekplan-shift-ui.test.ts",
       "tests/wp12.test.ts",
