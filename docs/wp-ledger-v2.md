@@ -452,3 +452,16 @@
 
 - 方案 §5.3「频率语义→持续到什么时候」追问链**未接**（需扩 DialogTopic 追问槽位）——交付方已在 BLOCKERS 如实登记，建议并入后续批次。
 - beta-v2 本地领先 origin/beta-v2（`8503831`）**27 commit** 未推远端（本轮终验后）；与 origin/dev 仍 unrelated histories（见 §G/BLOCKERS）。
+
+## 收官批次 · 追认销案登记（2026-10-06，R4-R8 落纸；与 BLOCKERS.md 同日条目互为副本）
+
+| 项 | 裁决 | 落纸证据 |
+|---|---|---|
+| R4 移动端 schemaVer=2 契约 | **追认，销案** | 已上线、移动端 12/12 绿；`5884027`；`src/features/mobile/lib/types.ts:30` |
+| R5 任务四 P3-1 契约（pendingTodos） | **追认，销案** | WeekPlanView 接线 + e2e 断言；`1abba45` 批 |
+| R6 移动端行数分层（3600/320/260） | **追认，销案** | `30ea200` Second夜-F3；useTodayData 拆分另立项（§12 L4） |
+| R7 P1-3 canonical 全量复核 | **执行完毕** | 20 条真实条目全核（18✅+2⚠️ 无❌）：docs/canonical-review-2026-10-06.md（fc3e271） |
+| 任务四 W4 归属核对 | **销案** | 在途改动归属已查明并全部入库（M4 批 + 缺陷①修复），无悬空工作 |
+| P1-4 移动端 F11/ICS/persona 三项 | **销案（设计决议/已做）** | QuickBar.tsx:2-5 决议、IcsGuide+icsHint 源码锁、persona? 已在 SyncState |
+| 6.5 fallbackCategory 切换 | **登记不切换** | 待 Todo.kind 取值清单核实（BLOCKERS 同条） |
+| 6.6 双树融合 922ac85/4ad2893 | **登记人工窗口** | §8.6 三树纪律，白天人工并入 integration-full |

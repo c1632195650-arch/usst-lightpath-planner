@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 111,
-    "engineFiles": 77,
+    "testFiles": 112,
+    "engineFiles": 78,
     "uiFiles": 34,
     "guardedSources": 102,
-    "reverseVerified": 63,
+    "reverseVerified": 64,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 55,
+      "testCount": 56,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -51,6 +51,7 @@
         "tests/knowledge-wiring.test.ts",
         "tests/lifeModeAndSocial.test.ts",
         "tests/longLock.test.ts",
+        "tests/method-tip-timeblock.test.ts",
         "tests/method_params.test.ts",
         "tests/method_params_v2.test.ts",
         "tests/objective-evaluate.test.ts",
@@ -907,6 +908,14 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/method-tip-timeblock.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
     "tests/method_params.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1390,6 +1399,7 @@
       "tests/knowledge-wiring.test.ts",
       "tests/libao-regression-anchor.test.ts",
       "tests/longLock.test.ts",
+      "tests/method-tip-timeblock.test.ts",
       "tests/mobile/evalWiring.test.ts",
       "tests/mobile/notify.test.ts",
       "tests/objective-evaluate.test.ts",
@@ -1730,6 +1740,7 @@
     ],
     "src/lib/planner/methods": [
       "tests/knowledge-wiring.test.ts",
+      "tests/method-tip-timeblock.test.ts",
       "tests/method_params.test.ts",
       "tests/method_params_v2.test.ts"
     ],

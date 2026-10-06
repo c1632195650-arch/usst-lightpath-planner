@@ -152,3 +152,8 @@ node scripts/e2e-sched-session.mjs [baseURL]   # 需隔离 vite + 离线（脚�
 | 5 | 决赛材料未开始 | 10 月底决赛 | 申报书 → PPT → 演示视频 |
 
 > 逐批执行明细与「谁拍板了什么」见 `docs/wp-ledger-v2.md` 与 `BLOCKERS.md`。
+
+> **2026-10-06 收官批次补记**：收官批次（P0-0/P0-0b/P0-1a/1b/1c、Wave2/3）推进与销案明细见
+> `docs/一键推进收尾方案-2026-10-06.md`（含执行记录）；canonical 复核 `docs/canonical-review-2026-10-06.md`。
+> 上表第 2 项「四处 PARTIALS」中活动量下限/三餐预算两处在本批 Wave 3 接线（见方案批次 5），睡眠保底窗口
+> 经 routineStore 写入端（R2）落地；余下按 §12 另立项登记。

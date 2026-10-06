@@ -132,7 +132,7 @@ ssh ubuntu@101.35.253.143 'systemctl status usst-api --no-pager | head -10; \
 1. **真机走查**（Mate 40E 装_apk）：通知权限弹窗、开始前 10 分钟+开始时刻两条通知、动作按钮（完成/顺延 15）、重启手机后打开 App 恢复提醒、F17 白名单引导页三机型路径。
 2. **服务器续费**——**10-25 12:17 到期，卡在决赛前**，只有 CY 能在控制台点。
 3. SSH 密码更换（公钥已通，改密码零影响）。
-4. P1 收尾小项：persona 加进 SyncState（schemaVer 前向兼容）、F11 快捷指令接 `/api/plan/understand` 真端点、ICS 对 web-only 用户为空的提示。
+4. ~~P1 收尾小项~~ **已结项（2026-10-06 收官批次 P1-4 销案，实测证据见 BLOCKERS.md 同日条目）**：persona 进 SyncState ✅ 已做（`5884027`，schemaVer=2）；F11 快捷指令——**设计决议不接真端点**（QuickBar.tsx:2-5 零延迟本地应答，P6-3 决议）；ICS 空值提示 ✅ 已做（IcsGuide 组件化 + `m-ics-empty`，Second夜-F2）。
 5. F16 桌面小部件 + 通知倒计时（stretch，需原生代码，决赛后再议）。
 6. push beta-v2 与 dev 合并（关联 BLOCKERS 里 unrelated histories 大事，与移动端无关但同树）。
 

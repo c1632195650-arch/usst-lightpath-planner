@@ -95,3 +95,12 @@
 - [2026-10-06 09:40 任务三验收·结项] 缺陷①**已修**（Second夜-F1）：EvalSection 统计窗经 inUseDays(firstEventDayKey(events)) 截断——冷启动显示「数据累积中（0/7 天）」、三天种子「（4/7 天）」，变异体④红绿齐全（tests/mobile/evalWiring.test.ts 7 条守护），tsc 0/engine 608/ui 432/e2e 20 全绿｜需要人决定：无（修复已验证，供 MOSS 复核）
 - [2026-10-06 09:40 任务三验收·结项] 缺陷②**已修**（Second夜-F2）：IcsGuide 空值提示 m-ics-empty 上线（源码锁 tests/mobile/icsHint.test.ts 3 条）｜需要人决定：无
 - [2026-10-06 09:40 任务三验收·结项] 缺陷③**裁决已执行**（Second夜-F3，供 CY 追认）：行数上限分层核算——eval/ 计算层 871 行计入任务二；任务三 UI+lib 3445 行，主约束改为「单文件 ≤320 + TodayPage ≤260」（均实测达标），层上限放宽至 3600｜需要人决定：CY 追认；若不追认 → 立项 useTodayData 拆分瘦身（不动功能）
+
+# 收官批次 · 销案登记（2026-10-06，一键推进方案批次 4/6，CY 裁决 R4-R8 落纸）
+
+- [2026-10-06 收官批次 P1-4] **销案×3（移动端 F11 / ICS 空值提示 / persona 进 SyncState）**：①F11 快捷指令接真端点——**不是欠账，是设计决议**：`src/features/mobile/QuickBar.tsx:2-5` 明写两个固定问法保留为零延迟本地应答（不调 LLM），自由输入统一由梨宝抽屉承担（避免双输入框，P6-3 决议）；②ICS 空值提示——已做且经两轮形态演进：`TodayPage.tsx` `<IcsGuide icsToken=…>` 组件化 + Second夜-F2 补 `m-ics-empty` 空值提示（源码锁 tests/mobile/icsHint.test.ts）；③persona 进 SyncState——已做（`5884027`，schemaVer=2，`src/features/mobile/lib/types.ts:30` `persona?`，R4 追认）｜已排除：写代码补实现（实测三处均无需改代码）｜需要人决定：无（结项留痕同步 docs/mobile-line-alignment-2026-10-03.md §7.4）
+- [2026-10-06 收官批次 P1-4] **销案（P0-0 / P0-0b）**：预检闸门两条已在 `1230ce2`（capability-map icsHint 源码锁登记）与 `7f6bbda`（preflight 基线 origin/dev→origin/beta-v2 + 放行 _integration_full 只读参考）落地并全绿——任务书 Wave0 两项结项；任务书第三处即上条移动端销案×3｜需要人决定：无
+- [2026-10-06 收官批次 6.1] **追认销案×4（CY 裁决 R4-R7）**：R4 移动端 schemaVer=2 契约（Todo/Goal 增 updatedAt?、Todo 增 archived?、按 id 逐项 LWW 并集）**追认**——已上线、移动端 12/12 绿；R5 任务四 P3-1 契约（`BuildWeekPlanInput.pendingTodos?`，recent 70 / longterm 92 / splittable 缺省 true）**追认**——已在 WeekPlanView 接线并有 e2e 断言；R6 移动端行数分层裁决（层上限 3600、单文件 ≤320、TodayPage ≤260；useTodayData 拆分另立项 L4）**追认**；R7 P1-3 canonical **全 21 条逐条复核**——已完成（20 条真实条目 + 1 处缺省机制，18✅+2⚠️ 无❌，详见 docs/canonical-review-2026-10-06.md，commit fc3e271）｜需要人决定：无
+- [2026-10-06 收官批次 6.1] **销案（任务四 W4 归属核对）**：BLOCKERS 早前「W4 时段 mobile eval 批次归属待 CY 核对」——经收官批次对照任务四 M4 提交链（`1abba45`/`7c40609`/`4a09096`/`9c4c2b9`）与任务三缺陷①修复（`30ea200` Second夜-F1），该时段在途改动归属明确（EvalSection/units.ts=缺陷①修复；其余为任务四 M4 批），且全部已提交入库，无悬空工作｜需要人决定：无
+- [2026-10-06 收官批次 6.5] **登记不切换（R8⑦）**：`fallbackCategory → categoriesFromTodoKinds` 活数据切换——待确认 `Todo.kind` 全量取值清单后再切；现切有把未知 kind 值错分类的风险｜已排除：本轮直接切换（取值清单未核实，10 月底决赛在即，回归面不成比例）｜需要人决定：Todo.kind 取值清单核实后放行切换
+- [2026-10-06 收官批次 6.6] **登记人工窗口（R8⑤）**：H 方案终验两笔修复 `922ac85`/`4ad2893`（e2e 资产过期修复 + CORS/端口环境坑）需人工并入 `_integration_full` 融合线——按 §8.6 三树纪律，跨树融合必须白天人工做，agent 不动｜需要人决定：CY 择机执行
