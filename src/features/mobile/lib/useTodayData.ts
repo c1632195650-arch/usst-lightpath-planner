@@ -29,7 +29,13 @@ import { ensurePermissionOnce } from './notifyStatus.ts';
 import { loadBehavior, recordBlockToggle, type BehaviorEvent } from '../eval/behaviorLog.ts';
 import type { GoalTodoHandlers } from '../GoalTodoCard.tsx';
 
-const APP_VERSION = '0.1.0';
+/**
+ * 本 APK 内置版本号 —— **构建期由 vite `define` 注入**（`vite.config.ts` 读 package.json）。
+ * 🔴 此前是手写`'0.1.0'`，每次出 APK 漏改就会让 F18 检查更新**静默失效**
+ * （永远判定"已是最新"）。现改为自动注入，漏改不再可能。详见 `src/vite-env.d.ts`。
+ */
+const APP_VERSION = __APP_VERSION__;
+
 const SIG_KEY = 'usst.mobile.todaySig';
 const LS_READ = (k: string) => localStorage.getItem(k);
 const LS_WRITE = (k: string, v: string) => localStorage.setItem(k, v);

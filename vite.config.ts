@@ -4,9 +4,20 @@ import react from '@vitejs/plugin-react';
 // 所以这里不能用 __dirname（ESM 下未定义），必须用 import.meta.url。
 // 这是新手最常踩的坑之一，别改成 path.resolve(__dirname, ...)。
 import { fileURLToPath } from 'node:url';
+// 读 package.json 的 version，作为构建期常量注入（单一事实源，防"出包忘改版本号"）
+import { readFileSync } from 'node:fs';
+
+const pkgVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
+).version as string;
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // 移动端 F18 检查更新要比对"本APK 内置版本"与"服务器 /api/version"。
+    // 🔴 此前该值硬编码在 useTodayData.ts，出包漏改 → 静默失效。注入后自动跟随 package.json。
+    __APP_VERSION__: JSON.stringify(pkgVersion),
+  },
   // 🔧 只扫应用入口做预构建：Newton/ 下的两份技术验证 Demo import 了未安装的
   //    `three`，默认全量扫 html 入口会让干净检出起不了 dev server（vite build 不受影响，
   //    所以 CI 发现不了）。见 DETAIL.md §C。

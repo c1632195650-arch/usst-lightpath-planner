@@ -1,10 +1,21 @@
 /**
  * 光溯移动端 · API 客户端（方案 §7.1 lib/api.ts）
  * ============================================================
- * API_BASE 缺省 = **同源**（相对路径）：
- *   · APK 内 server.url = http://101.35.253.143 → /api 同源直达；
- *   · vite preview / e2e 同源，网络层由测试桩（page.route）接管；
- *   · 需要跨源时用 VITE_MOBILE_API_BASE 覆盖（本地 dev 调后端 8001 等）。
+ * ## API_BASE 的三种情形（2026-10-06 随「包内资源模式」重写）
+ *
+ * 1. **APK 包内模式（当前默认）**：页面 origin = `https://localhost`（Capacitor 的
+ *    本地资源 scheme）。此时「同源相对路径」会打到**包内而非服务器**，
+ *    所以必须显式指到公网后端。
+ * 2. **旧模式（server.url = http://101.35.253.143）**：origin 就是公网 IP，相对路径可用。
+ * 3. **本地 dev / vite preview / e2e**：相对路径即可（e2e 由 page.route 打桩）。
+ *
+ * 判定方式：**看当前 origin 是不是 Capacitor 的本地 scheme**
+ *   —— `location.hostname === 'localhost'` 且协议为 https ⇒ 包内模式。
+ * 这样无需在构建期注入 URL，dev 与 e2e 的现有行为也完全不变（它们 origin 不是 localhost）。
+ *
+ * 覆盖优先级：构建期 `VITE_MOBILE_API_BASE` > 运行时包内兜底 > 相对路径（空串）。
+ * ⚠️ 后端地址在此**仅作兜底默认值**（与 capacitor.config 里的 server.url 同源同值）；
+ *    改地址时两处一起改，别只改一处。
  * 失败一律返回 {ok:false, error}，不 throw —— 移动端网络差是常态，调用方决定降级。
  */
 import type {
@@ -17,7 +28,23 @@ import type {
   VersionResponse,
 } from './types.ts';
 
-const API_BASE = (import.meta.env.VITE_MOBILE_API_BASE as string | undefined) ?? '';
+/** 包内模式兜底的后端地址（与 capacitor.config.ts 的 server.url 一致） */
+const INLINE_API_FALLBACK = 'http://101.35.253.143';
+
+/** 是否跑在 Capacitor 包内（origin = https://localhost） */
+function isInlinePackage(): boolean {
+  try {
+    return typeof location !== 'undefined'
+      && location.protocol === 'https:'
+      && location.hostname === 'localhost';
+  } catch {
+    return false;
+  }
+}
+
+const API_BASE = (import.meta.env.VITE_MOBILE_API_BASE as string | undefined)
+  ?? (isInlinePackage() ? INLINE_API_FALLBACK : '');
+
 
 export class ApiFailure extends Error {
   constructor(
