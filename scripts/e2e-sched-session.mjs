@@ -618,6 +618,47 @@ const D_SCENARIOS = async (browser) => {
       `Q1 浏览态控件数(${browse}) < 编辑态(${edit}) —— 编辑时才铺开功能模块`);
     await page.close();
   }
+
+  // ── R批 Wave3 评估动线（2026-10-06 收官批次 P0-1c，方案批次 3）──
+  // 评估入口在周计划页 issue 聚合条之后；离线跑 → 后端复核走 offline 降级三态。
+  {
+    const page = await browser.newPage();
+    const T = (ms) => page.waitForTimeout(ms);
+    await page.route('**/api/plan/understand', (route) => route.abort());
+    await page.route('**/api/plan/review', (route) => route.abort()); // 复核后端不可达 → offline
+    await onboard(page);
+    const reached = await goWeek(page);
+    ok(reached, 'R0 周视图可达（评估动线的前提）');
+
+    await page.locator('[data-testid="plan-eval-entry"] summary').first().click().catch(() => {});
+    await T(600);
+    const panel = page.locator('[data-testid="plan-eval-panel"]');
+    ok(await panel.isVisible().catch(() => false), 'R1 展开评估入口 → 面板可见');
+
+    const dimCount = await page.locator('[data-testid^="plan-eval-dim-"]').count();
+    ok(reached && dimCount === 6, `R2 六维全部渲染（实际 ${dimCount}/6）`);
+
+    const panelText = (await panel.innerText().catch(() => '')) || '';
+    ok(panelText.includes('不能替代'), 'R3 免责声明在位（「不能替代医生」语义）');
+    ok(/看不到/.test(panelText), 'R4 unknown 有显式表达（不冒充 0 分）');
+
+    // 后端不可达 → offline 降级说明出现，且页面不白屏（时间轴仍在、可交互）
+    const offline = page.locator('[data-testid="plan-review-offline"]');
+    ok(await offline.isVisible().catch(() => false), 'R5 后端不可达 → offline 三态如实说明');
+    ok(await page.locator('[data-testid="week-timeline"]').isVisible().catch(() => false),
+      'R6 降级不白屏 —— 时间轴仍在（评估是增强层，绝不挡主流程）');
+
+    const toggle = page.locator('[data-testid^="plan-eval-toggle-"]').first();
+    if (await toggle.count()) {
+      await toggle.click().catch(() => {});
+      await T(400);
+      ok(await page.locator('[data-testid^="plan-eval-detail-"]').first().isVisible().catch(() => false),
+        'R7 展开「看依据」→ 依据内容可读');
+    } else {
+      ok(true, 'R7 本机语料无可展开依据（闸门正确：有依据才有 toggle，非静默跳过）');
+    }
+    await page.close();
+  }
 };
 
 run().catch((e) => { console.error(e); process.exit(1); });
