@@ -471,3 +471,115 @@ test('退出登录：清掉本地身份 → 回到登录页', async ({ page }) =
   await page.reload();
   await expect(page.getByTestId('m-login-user')).toBeVisible({ timeout: 15_000 });
 });
+
+/* ============================================================
+ * R批 Wave3 评估动线（2026-10-06 收官批次 P0-1c，验收项「E2E 点『评估』
+ * 出报告且建议可采纳」——此前 E2E 对评估零覆盖）。
+ * 评估入口在桌面端周计划页（plan-eval-entry），故这两条驱动 `/` 走真实
+ * onboarding 动线（与 scripts/e2e-sched-session.mjs 的成熟路径同源）；
+ * 后端三库复核 /api/plan/review 按「GUI 真实、契约打桩」口径打桩。
+ * ============================================================ */
+
+/** 桌面端 onboarding：画像问卷自动作答 → 落主界面（e2e-sched-session 同款） */
+async function desktopOnboard(page: Page) {
+  test.setTimeout(180_000);
+  await page.goto('/');
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+  await page.reload();
+  await page.getByRole('button', { name: '开始画像测评' }).click();
+  await page.getByPlaceholder('怎么称呼你').fill('走查生');
+  await page.locator('select').first().selectOption('2');
+  await page.getByPlaceholder('如：光电学院').fill('光电学院');
+  await page.locator('select').nth(1).selectOption('军工路本部');
+  await page.getByRole('button', { name: /下一步/ }).click();
+  // 问卷自动作答：点可选项直到结果页（advancing 过渡期不能点「下一步」，见 e2e-sched-session 注）
+  for (let i = 0; i < 80; i++) {
+    if (await page.getByText('你的节奏，已经有了轮廓').isVisible().catch(() => false)) break;
+    const opt = page.locator('button[aria-pressed]:enabled').first();
+    if (await opt.count()) { await opt.click().catch(() => {}); await page.waitForTimeout(420); continue; }
+    const next = page.getByRole('button', { name: /下一步|生成我的画像/ }).first();
+    if (await next.count() && await next.isEnabled().catch(() => false)) {
+      await next.click().catch(() => {});
+      await page.waitForTimeout(420);
+    } else {
+      await page.waitForTimeout(300);
+    }
+  }
+  await page.getByRole('button', { name: /进入|看看/ }).first().click();
+}
+
+/** 桌面端走到周计划时间轴（总览 → 打开本周安排 → 周计划；e2e-sched-session 同款） */
+async function desktopGoWeek(page: Page) {
+  const overview = page.getByRole('button', { name: '总览' });
+  if (await overview.count()) { await overview.first().click(); }
+  const open = page.getByRole('button', { name: '打开本周安排' });
+  if (await open.count()) { await open.first().click(); }
+  const plan = page.getByRole('button', { name: '周计划' });
+  if (await plan.count()) { await plan.first().click(); }
+  await expect(page.getByTestId('week-timeline')).toBeVisible({ timeout: 20_000 });
+}
+
+test('评估动线①：周计划 → 点评估 → 五维分数渲染 → 展开某维「看依据」可读', async ({ page }) => {
+  await desktopOnboard(page);
+  await desktopGoWeek(page);
+
+  // 入口在 issue 聚合条之后、时间轴之前；手动展开（评估不自动弹）
+  await page.getByTestId('plan-eval-entry').locator('summary').click();
+  const panel = page.getByTestId('plan-eval-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+
+  // 五维分数渲染：每个维度一行，分数或「—」（unknown 如实展示，不冒充 0）
+  const dims = page.locator('[data-testid^="plan-eval-dim-"]');
+  await expect(dims).not.toHaveCount(0);
+  const dimCount = await dims.count();
+  if (dimCount < 2) throw new Error(`评估维度应 ≥2，实际 ${dimCount}`);
+
+  // 后端未起 → 复核区如实显示离线说明（不冒充真检索）
+  await expect(page.getByTestId('plan-review-offline')).toBeVisible({ timeout: 20_000 });
+
+  // 展开某维的「看依据（N个块）」→ 依据内容可读
+  const toggle = page.locator('[data-testid^="plan-eval-toggle-"]').first();
+  await toggle.click();
+  await expect(page.locator('[data-testid^="plan-eval-detail-"]').first()).toBeVisible();
+});
+
+test('评估动线②：有 gap 的语料 → 复核建议出「采纳」→ 进入重排草稿流（不断言直接改表）', async ({ page }) => {
+  // 打桩后端复核：运动维度 gap → 建议带 add_task 骨架（采纳按钮的来源）
+  await page.route('**/api/plan/review', (route) =>
+    route.fulfill({
+      json: {
+        ok: true, user_id: 'e2e', week_no: 5, generated_at: nowIso(),
+        dimensions: [{
+          key: 'exercise', label: '运动', coverage: 1,
+          findings: [],
+          advice: [{
+            text: '本周中高强度运动低于 150 分钟，先补一次 30 分钟快走。',
+            source: { lib: '健康库', slug: 'aerobic-150', tier: 'A', quote: '每周至少 150 分钟中等强度有氧', retrieved: true },
+            action: { kind: 'add_task', task: { title: '快走 30 分钟', kind: 'activity', durationMin: 30 } },
+          }],
+        }],
+        retrieval: { health: true }, caveats: ['复核为对照真库的增强层，判定以前端 digest 为准。'],
+      },
+    }));
+
+  await desktopOnboard(page);
+  await desktopGoWeek(page);
+
+  await page.getByTestId('plan-eval-entry').locator('summary').click();
+  const backend = page.getByTestId('plan-review-backend');
+  await expect(backend).toBeVisible({ timeout: 20_000 });
+  // 复核建议收在 <details> 里 —— 展开才能看到「采纳」
+  await backend.locator('summary').click();
+
+  // 点「采纳」→ 任务进覆盖层草稿（layer.tasks），toast 明说「重排后」才上表
+  await page.getByTestId('plan-review-adopt').first().click();
+  await expect(page.getByText(/已加入「快走 30 分钟」/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/重排后会标注 🆕/)).toBeVisible({ timeout: 15_000 });
+
+  // 草稿流证据：覆盖层里确有这条任务（不断言日程表直接变化 —— L4：重排才生效）
+  const layerHasTask = await page.evaluate(() => {
+    const raw = localStorage.getItem('usst-user-plan-v1');
+    return !!raw && raw.includes('快走 30 分钟') && raw.includes('采纳自日程评估');
+  });
+  if (!layerHasTask) throw new Error('采纳后覆盖层（草稿）里应有该任务');
+});
