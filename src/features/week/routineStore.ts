@@ -22,6 +22,8 @@
  *   上游版存储层走 `@/lib/persistence`（云双写，integration-full 的账号线）；
  *   本树存储层仍是 `storage.ts` 单机口径（同 `userPlanStore` 惯例：store 内裸
  *   localStorage + try/catch），故这里只换存储三行，纯函数与语义逐行一致。
+ * Q1a，自 _integration_full 移植；2026-10-06 CY 裁决 R2 本批补齐写入端
+ * （采集入口 = 周计划页 routine-entry 面板；引擎日窗接线走已有字段）。
  */
 
 import { toMinutes } from '@/constants/time';

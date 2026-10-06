@@ -101,8 +101,11 @@ import { evaluateDigest } from '@/lib/planner/planEval';
 import { PlanEvalPanel } from './PlanEvalPanel';
 // H2：后端三库复核（/api/plan/review，失败静默）；用户身份取自 identity
 import { planReview, type PlanReviewReport } from '@/lib/api';
-import { getUserId } from '@/lib/identity';
-import { loadRoutine } from './routineStore';
+import { getUserId, loadBasicInfo } from '@/lib/identity';
+import {
+  clearRoutine, dayWindowWithFallback, loadRoutine, minutesToHHMM,
+  routineFromHHMM, saveRoutine,
+} from './routineStore';
 import { makeTaskId } from './planEditsStore';
 
 /** 空计划兜底（引擎异步出结果前用）—— 见下方 evalDigest 的说明。 */
@@ -762,6 +765,40 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * unknown + 稀疏数据提示，不会给出任何指控。
    */
   const [evalOpen, setEvalOpen] = useState(false);
+  // 裁决 R2（批次 2）：「我的作息」写入端 —— 面板草稿状态 + 变更计数。
+  // 只写 store、不触发重排（与「改完攒着、点重新排一遍」同口径）；routineTick
+  // 让评估摘要即时重读 store（loadRoutine 非响应式）。
+  const [routineTick, setRoutineTick] = useState(0);
+  const [routineDraft, setRoutineDraft] = useState({ wake: '', sleep: '' });
+  const [routineMsg, setRoutineMsg] = useState<string | null>(null);
+  const openRoutinePanel = (open: boolean) => {
+    if (open) {
+      const r = loadRoutine();
+      setRoutineDraft({
+        wake: r.wakeMin != null ? minutesToHHMM(r.wakeMin) : '',
+        sleep: r.sleepMin != null ? minutesToHHMM(r.sleepMin) : '',
+      });
+      setRoutineMsg(null);
+    }
+  };
+  const saveRoutineDraft = () => {
+    const r = routineFromHHMM(routineDraft.wake, routineDraft.sleep);
+    if (!r.ok) {
+      setRoutineMsg(r.reason === 'order'
+        ? '起床要早于入睡（跨零点入睡先按当天时刻记，比如 23:30）'
+        : '时间格式要用 HH:MM，比如 07:30');
+      return;
+    }
+    saveRoutine(r.routine);
+    setRoutineMsg('已保存。点「重新排一遍」按新作息重排；评估摘要已同步。');
+    setRoutineTick((t) => t + 1);
+  };
+  const clearRoutineDraft = () => {
+    clearRoutine();
+    setRoutineDraft({ wake: '', sleep: '' });
+    setRoutineMsg('已清除，引擎回到缺省 07:00–23:00。');
+    setRoutineTick((t) => t + 1);
+  };
   // H3/H4（R批 Wave3）：评估摘要接真实数据源 ——
   //  · routine = 作息设置真源（routineStore，与上游 Q1a/Q1b 同一份）→ 睡眠维度对「你自己的节奏」判定；
   //  · goals = 目标库 active 目标（weeksLeft 用 today+termStart 折算，摘要层不读时钟）。
@@ -791,7 +828,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           };
         }),
     };
-  }, [goals, schedule.termStart]);
+    // routineTick：作息面板保存/清除后让摘要重读 store（loadRoutine 非响应式，R2）
+  }, [goals, schedule.termStart, routineTick]);
   const evalDigest = useMemo(
     () => digestPlan(plan ?? EMPTY_PLAN, evalCtx),
     [plan, evalCtx],
@@ -1387,6 +1425,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // 任务四（M4-W3）：待办约束（空数组 = 与旧行为逐字段一致）
             pendingTodos,
           }),
+          // 裁决 R2（2026-10-06 收官批次·批次 2）：作息设置真源 → 引擎日窗。
+          // 走 PlanRequest **已有**字段 dayStart/dayEnd（model.ts），零契约改动；
+          // 未采集时 dayWindowWithFallback 返回 null → 一个字段都不加，
+          // 引擎走缺省 '07:00'/'23:00'，行为与改造前**逐位一致**（golden 零漂移）。
+          ...(dayWindowWithFallback(loadRoutine(), loadBasicInfo().sleepMin ?? null) ?? {}),
           // 锁的两半都要传：
           //   · lockLevels     → improve 不主动移动 hard 块、churn 按锁加权
           //   · lockedPlacements → solver 在构造之后把 hard 块**写回原位**
@@ -1866,6 +1909,56 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           </details>
         );
       })()}
+
+      {/* 裁决 R2（2026-10-06 收官批次·批次 2）：「我的作息」采集入口 —— 写入端补齐。
+          校验复用 routineFromHHMM（不猜纪律：无效给具体原因，不静默丢弃）；
+          保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见上方 req 构造）。 */}
+      <details
+        data-testid="routine-entry"
+        className="panel px-4 py-3"
+        onToggle={(e) => openRoutinePanel((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer text-[13px] font-medium text-ink">
+          我的作息
+          <span className="ml-2 text-[11px] font-normal text-ink-faint">
+            起床/就寝决定引擎给你排事的时段（不排「你还没起床」的块）
+          </span>
+        </summary>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+          <label className="flex items-center gap-1">
+            起床
+            <input
+              data-testid="routine-wake"
+              type="time"
+              value={routineDraft.wake}
+              onChange={(e) => setRoutineDraft((d) => ({ ...d, wake: e.target.value }))}
+              className="rounded-lg border border-ink/15 px-2 py-1 text-[12px]"
+            />
+          </label>
+          <label className="flex items-center gap-1">
+            就寝
+            <input
+              data-testid="routine-sleep"
+              type="time"
+              value={routineDraft.sleep}
+              onChange={(e) => setRoutineDraft((d) => ({ ...d, sleep: e.target.value }))}
+              className="rounded-lg border border-ink/15 px-2 py-1 text-[12px]"
+            />
+          </label>
+          <button type="button" data-testid="routine-save" onClick={saveRoutineDraft} className="button-primary px-3 py-1.5 text-xs">
+            保存
+          </button>
+          <button
+            type="button"
+            data-testid="routine-clear"
+            onClick={clearRoutineDraft}
+            className="rounded-xl border border-ink/15 px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-ink/30"
+          >
+            清除
+          </button>
+          {routineMsg && <span className="w-full text-[11.5px] text-ink-soft" data-testid="routine-msg">{routineMsg}</span>}
+        </div>
+      </details>
 
       {/* R批 Wave3（H1.3）· 日程评估入口与结果 ——（2026-10-06 收官批次 P0-1a 自 integration-full 移植）
           放在 issue 聚合条之后、时间轴之前：它属于「这一版日程的整体体检」，

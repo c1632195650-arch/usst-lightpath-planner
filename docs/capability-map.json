@@ -7,10 +7,10 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 109,
-    "engineFiles": 75,
+    "testFiles": 110,
+    "engineFiles": 76,
     "uiFiles": 34,
-    "guardedSources": 101,
+    "guardedSources": 102,
     "reverseVerified": 62,
     "orphans": 0
   },
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 54,
+      "testCount": 55,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -67,6 +67,7 @@
         "tests/property/lock.machine.test.ts",
         "tests/property/schedule.props.test.ts",
         "tests/ripple.test.ts",
+        "tests/routineStore.test.ts",
         "tests/scoring-transfer.test.ts",
         "tests/solver.test.ts",
         "tests/toPlanRequest-persona.test.ts",
@@ -118,7 +119,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 21,
+      "testCount": 22,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
@@ -128,6 +129,7 @@
         "tests/issue-bar-ui.test.ts",
         "tests/mobile/evalWiring.test.ts",
         "tests/ripple.test.ts",
+        "tests/routineStore.test.ts",
         "tests/syncContract.test.ts",
         "tests/timeScale.test.ts",
         "tests/userPlanStore.test.ts",
@@ -149,6 +151,7 @@
         "src/features/week/assignmentStore",
         "src/features/week/dragPreview",
         "src/features/week/miniWeekPreviewModel",
+        "src/features/week/routineStore",
         "src/features/week/saturation",
         "src/features/week/timeScale",
         "src/features/week/userPlanStore",
@@ -1089,6 +1092,15 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/routineStore.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view",
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": false
+    },
     "tests/scoring-transfer.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1420,6 +1432,7 @@
       "tests/planStability.test.ts",
       "tests/planweek.test.ts",
       "tests/property/schedule.props.test.ts",
+      "tests/routineStore.test.ts",
       "tests/scoring-transfer.test.ts",
       "tests/solver.test.ts",
       "tests/toPlanRequest-persona.test.ts",
@@ -1601,6 +1614,7 @@
       "tests/d-batch.test.ts",
       "tests/h3h4-eval.test.ts",
       "tests/issue-bar-ui.test.ts",
+      "tests/routineStore.test.ts",
       "tests/v1.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",
@@ -1646,6 +1660,7 @@
       "tests/explain.test.ts",
       "tests/p2-incremental-rolling.test.ts",
       "tests/planweek.test.ts",
+      "tests/routineStore.test.ts",
       "tests/solver.test.ts"
     ],
     "src/lib/planner/objective": [
@@ -1768,6 +1783,9 @@
     ],
     "src/features/persona/PersonaResult": [
       "tests/profile-explain.test.ts"
+    ],
+    "src/features/week/routineStore": [
+      "tests/routineStore.test.ts"
     ],
     "src/features/mobile/lib/webSync": [
       "tests/syncContract.test.ts"
