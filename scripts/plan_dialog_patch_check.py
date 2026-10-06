@@ -45,3 +45,27 @@ out = plan_dialog._clean_patch({"startMin": 1079.7})
 assert out.get("startMin") == 1079, out
 
 print("[plan_dialog_patch_check] startMin/endMin whitelist 0-1440 OK")
+
+# ---- S2b（2026-10-07）：自然计划陈述 → new_intent(create) 的离线用例 ----
+# 口径（_SYSTEM_DIALOG 易混边界）：「我明天打算去吃大餐」这类第一人称自然陈述
+# 应被对话管理器判成 new_intent(intent=create)，绝不落 chit_chat（无 topic 也一样）。
+# 代码层可断言的部分：_clean_dialog 对该 act/args 形态放行（patch 槽位全保留），
+# 且无 topic 状态下不因状态对账误杀。
+clean = plan_dialog._clean_dialog(
+    {
+        "act": "new_intent",
+        "args": {
+            "intent": "create",
+            "patch": {"title": "吃大餐", "relativeDays": 1},
+        },
+        "reply_note": "听出来你要安排周六的大餐，我来排",
+        "confidence": 0.9,
+    },
+    {"topic": None, "missStreak": 0},
+)
+assert clean is not None, "new_intent(create) 自然陈述在无 topic 下必须放行"
+assert clean["act"] == "new_intent"
+assert clean["args"]["intent"] == "create"
+assert clean["args"]["patch"]["title"] == "吃大餐"
+assert clean["args"]["patch"]["relativeDays"] == 1
+print("[plan_dialog_patch_check] S2b natural-plan new_intent(create) passthrough OK")

@@ -150,6 +150,11 @@ D7 协商方案：blocked 状态的 blocking.options 列出**引擎干跑过、�
 - 没有草稿在场（phase 不是 draft）时，用户说「好/对/按你说的办」**没有可确认的对象**
   → ask_slot 问清楚，绝不 confirm_draft
 - chit_chat 只用于与当前排程议题**完全无关**的问答/闲聊；与议题有关的含糊回答用 ask_slot
+- 用户以第一人称**陈述**一个带时间或事由的个人安排（「我明天打算去吃大餐」「周末想去看电影」
+  「打算去健身房」—— 即使没有『安排/排』这类动词）→ 这是 new_intent（intent=create，
+  args.patch 放听到的槽位），**不是 chit_chat**；没有 topic（topic 为空）时也一样，
+  自然计划陈述绝不落 chit_chat
+- 只有当这句话既不是安排、也不是对议题的回应、也不含任何可排的事件信息时才用 chit_chat
 
 只输出 JSON，不要输出别的。"""
 
