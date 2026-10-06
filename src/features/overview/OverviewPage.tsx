@@ -40,9 +40,9 @@ export function OverviewPage({
   }).length;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
       {onboardingCard}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <TodayCard
           schedule={schedule}
           todayIso={todayIso}

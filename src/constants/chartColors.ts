@@ -23,6 +23,13 @@ export const SPECTRUM = {
 /** 未知类别的兜底色，避免出现纯黑或透明块。 */
 export const FALLBACK_COLOR = SPECTRUM.slate;
 
+/**
+ * 上理校红（与 tailwind school.red 同源，B2 彩蛋批）。
+ * 校庆圆点从光谱紫换成校红 —— 校事用校色，月历圆点与图例自动跟随。
+ * 不进 SPECTRUM：数据色按波长排列、与 tailwind chart.* 同步的契约不受影响。
+ */
+export const SCHOOL_RED = '#9E1B32';
+
 /** 课表类别 → 色。专业核心用品牌靛蓝，因为它是课表里最需要被先看到的。 */
 export const CATEGORY_COLOR: Record<CourseCategory, string> = {
   专业核心: SPECTRUM.indigo,
@@ -37,7 +44,7 @@ export const CATEGORY_COLOR: Record<CourseCategory, string> = {
 export const EVENT_STYLE: Record<CalEvent['type'], { dot: string; label: string }> = {
   term: { dot: SPECTRUM.slate, label: '学期' },
   holiday: { dot: SPECTRUM.amber, label: '假期' },
-  anniversary: { dot: SPECTRUM.violet, label: '校庆' },
+  anniversary: { dot: SCHOOL_RED, label: '校庆' },
   exam: { dot: SPECTRUM.coral, label: '考试' },
   activity: { dot: SPECTRUM.green, label: '活动' },
 };

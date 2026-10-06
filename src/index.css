@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * ─── 皮肤规范 Skin Spec v1（docs/ui-revamp-plan-flat2-bento.md §2.2）────────
+ * 改任何 UI 前先读这五条：
+ * 1. 层次靠描边和底色差，不靠阴影。阴影只做"贴地" elevation，
+ *    永远单层、透明度 ≤ 0.05（统一用 tailwind 的 shadow-card / shadow-btn）。
+ * 2. 深色面是唯一的强调手段。hero-surface / hero-surface-flat 及其光晕
+ *    是品牌资产，结构不动（B2 彩蛋批唯一例外：hero-surface 暖端光晕换成上理红）。
+ * 3. 间距 8pt 网格：padding/margin/gap 取 4 的倍数；卡片内边距 p-5 起步，
+ *    主卡 sm:p-6，页面区段 py-8。
+ * 4. 可点击目标 ≥ 44px 高（三种 button-* 已统一 min-h-11），文字按钮除外。
+ * 5. 琥珀点缀上限：accent 只出现在光晕和极少数"暖端"提示位，
+ *    禁止用于大面积底色和正文文字。
+ * 状态色角色映射（AntD 逻辑）：ok=成功 / warn=警告 / danger=错误 /
+ * brand=进行中·选中。语义色禁止做按钮底色，只用于徽章、提示条、状态点。
+ * 对比度红线：正文用 text-ink（14.6:1）或 text-ink-soft（7.9:1），
+ * 小字标签 text-ink-faint（4.6:1，无余量，不得再降）。
+ * ────────────────────────────────────────────────────────────────────────
+ */
+
 @layer base {
   :root {
     color: #16233f;
@@ -61,23 +80,25 @@
   }
 
   .panel {
-    @apply rounded-2xl border border-ink/[0.07] bg-white shadow-[0_8px_28px_rgba(22,35,63,0.06)];
+    @apply rounded-2xl border border-ink/[0.09] bg-white shadow-card;
   }
 
   /**
-   * 深色面：深靛底 + 靛蓝与琥珀两端的光晕，整块就是一段压缩的光谱。
+   * 深色面：深靛底 + 靛蓝与校红两端的光晕，整块就是一段压缩的光谱。
    * 只用于关键区域（首屏、今日卡、画像结果、问卷题卡、周次头、梨宝侧栏）。
+   * 暖端原为琥珀 0.19；B2 彩蛋批换成上理红 0.15（藏在深色面底色里的校色，
+   * 装饰性、不承载信息；skin spec 法则 2 的唯一例外）。
    */
   .hero-surface {
     @apply bg-ink;
     background-image:
       radial-gradient(circle at 8% 0%, rgba(43, 76, 155, 0.62), transparent 46%),
-      radial-gradient(circle at 100% 100%, rgba(217, 131, 36, 0.19), transparent 40%);
+      radial-gradient(circle at 100% 100%, rgba(158, 27, 50, 0.15), transparent 40%);
   }
 
   /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
   .button-on-dark {
-    @apply min-h-10 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
+    @apply min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
   }
 
   /**
@@ -91,15 +112,15 @@
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(43,76,155,0.22)] transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-btn transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
   }
 
   .icon-button {
-    @apply grid h-9 w-9 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
+    @apply grid h-10 w-10 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
   }
 
   .nav-item {

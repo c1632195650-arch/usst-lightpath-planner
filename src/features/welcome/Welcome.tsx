@@ -18,7 +18,10 @@ export function Welcome({ onStart, onSkip, footer }: Props) {
         <div className="grid w-full overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_24px_72px_rgba(22,35,63,0.16)] lg:grid-cols-[1.1fr_0.9fr]">
           <section className="hero-surface flex min-h-[430px] flex-col justify-between px-7 py-8 text-white sm:px-10 sm:py-12">
             <div className="flex items-center gap-3">
-              <Logo120 size={42} />
+              {/* B2 彩蛋：徽标垫一层校红浅底 + 细描边，纯装饰、可整体拔掉 */}
+              <span className="grid place-items-center rounded-full bg-school-light p-0.5 ring-1 ring-school-red/60">
+                <Logo120 size={40} />
+              </span>
               <div>
                 <div className="text-sm font-semibold">上理生活助手</div>
                 <div className="mt-1 text-[11px] font-medium tracking-[0.16em] text-white/50">USST · STUDENT LIFE</div>

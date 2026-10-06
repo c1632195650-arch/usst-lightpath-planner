@@ -50,12 +50,38 @@ export default {
           coral: '#C24B3A',
           slate: '#5A6377',
         },
+
+        /**
+         * 上理校色（B2 彩蛋批新增，不进 chart.* 数据色组 ——
+         * SPECTRUM ↔ chart.* 的同步契约不受影响）。
+         * 只允许小面积装饰：圆点、描边、≤0.15 透明度光晕、11px 小字，
+         * 不与 brand 靛蓝大面积相邻（见 docs/ui-revamp-plan-flat2-bento.md B2 边界规则）。
+         */
+        school: {
+          /** 上理红·参考值。白底 7.9:1 / paper 底 7.4:1，作小字也达标（WCAG AA）。
+           *  待与官方 VI 手册《标准色与辅助色（正式版）》（xb.usst.edu.cn 可下载）核对后微调。 */
+          red: '#9E1B32',
+          /** 校红浅底：对 school.red 文字 6.9:1，对 ink 文字 13.7:1。 */
+          light: '#FBEDEE',
+        },
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],
         display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
       borderRadius: { card: '16px' },
+      /**
+       * 扁平 2.0（Skin Spec v1，见 docs/ui-revamp-plan-flat2-bento.md §2.3）：
+       * 阴影与颜色一样是一处可改的皮肤资产，禁止在组件里再写硬编码投影。
+       */
+      boxShadow: {
+        /** 贴地轻影：层次主要靠 border 承担，阴影永远单层、透明度 ≤ 0.05。 */
+        card: '0 1px 2px rgba(22,35,63,0.04), 0 4px 14px rgba(22,35,63,0.04)',
+        /** 深色大卡的第二档（原值保留）。 */
+        'card-dark': '0 18px 44px rgba(22,35,63,0.10)',
+        /** 主按钮投影，从 0_6px_16px_.22 减淡。 */
+        btn: '0 1px 3px rgba(43,76,155,0.18)',
+      },
     },
   },
   plugins: [],

@@ -18,7 +18,7 @@ export interface TodoListProps {
 
 export default function TodoList({ todos, onToggle, onArchive, onEdit }: TodoListProps) {
   if (todos.length === 0) {
-    return <p className="px-1 py-3 text-[12px] text-ink-faint">这里还空着 —— 点「新待办」记一件。</p>;
+    return <p className="px-1 py-3 text-[12px] text-ink-faint">还没有待办。想起什么就记一条，办好打个勾就行。</p>;
   }
   return (
     <ul className="space-y-1.5" data-testid="todo-list">
