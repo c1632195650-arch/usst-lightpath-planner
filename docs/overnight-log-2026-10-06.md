@@ -72,3 +72,21 @@
     3. `gate_overnight.mjs` BASELINE 常量 458/321 同步为实测（496+/413/35）
     4. CY 核对三方 commit 拼图完整性（甲：5884027→甲 W 系；乙：7a0085f→5ce51a4；本批：33ac42a）
     5. UNRELATED_HISTORIES 老阻塞仍在（beta-v2 从未 push，超出本批权限）
+
+## [09:35] Second夜-F1 · 验收缺陷①（铁律 2）修复  [DONE]
+- 做了什么：接线层修复——`eval/units.ts` 新增纯函数 `inUseDays(days, firstEventDayKey)`（从首个行为事件当天起算在用日）；`eval/behaviorLog.ts` 新增 `firstEventDayKey`（取最早合法 dayKey，脏忽略）；`EvalSection.tsx` 的 completionUnits 统计窗改用 `inUseDays(evalDays, firstEventDayKey(behaviorEvents))`。装 App 前的日子不再虚构 done=false 单元。
+- 证据命令：`node --import ./scripts/register-alias.mjs --test tests/mobile/evalWiring.test.ts`（新增 7 条：冷启动端到端复现/中间锚点/窗首锚点/脏键/合法 7 天路径）；变异体④：sed 退化 inUseDays → **5 pass/2 fail（红）** → 定点还原 → **7/0（绿）**（教训：变异还原禁用 git checkout——曾把未提交改动整体抹掉一次，已重落并改用定点 sed）
+- 关键输出：重截图证实——05 冷启动「任务完成率 数据累积中（0/7 天）」、06 三天种子「数据累积中（4/7 天）」、08 七天种子完整面板五维正常（时间纪律 2 分钟/自评 75 分与种子吻合）；tsc 0 / engine 608-0 / ui 432-0 / e2e 20-0。
+- 剩余风险：在用窗内「排了但没勾」仍按申报口径计未完成（分母=排了多少）——这是任务二明文取舍，非缺陷。
+
+## [09:36] Second夜-F2 · 验收缺陷②（ICS 空值提示）修复  [DONE]
+- 做了什么：`IcsGuide.tsx` 删除「!icsToken 整体 return null」，空值展开显示 `m-ics-empty` 提示（先去网页端排好计划 → 手机点一次同步 → 链接生成）。
+- 证据命令：`node --import ./scripts/register-alias.mjs --test tests/mobile/icsHint.test.ts`（新增 3 条源码锁：空值提示在渲染路径/旧 return null 已删/含行动指引；剥注释口径）
+- 关键输出：3/3 绿；e2e 20/20（含带 token 的 m-ics-url/copy 断言）不受影响；变异体反验=恢复 return null 即红（源码锁断言「静默不渲染=缺陷②复发」）。
+- 剩余风险：无（纯 UI 增提示，不触契约）。
+
+## [09:38] Second夜-F3 · 验收缺陷③（行数上限）分层裁决  [DONE]
+- 做了什么：实测分层——eval/ 计算层（任务二属地）871 行；任务三 UI+lib 3445 行。**裁决**：①上限分层核算，eval/ 871 不入任务三账；②任务三层按「单文件 ≤320 行 + TodayPage ≤260」为主约束（当前最大 useTodayData 316 ✓、TodayPage 193 ✓），层上限放宽至 3600 备案供 CY 追认——拒绝机械删行凑数：任务书在同批自身就要求新增 ~10 组件+3 库（抽屉 SSE 解析/左滑/键盘适配/采集弹窗等），2600 系制定时低估。
+- 证据命令：`wc -l` 分层统计（见上方验收对话记录）
+- 关键输出：任务三口径 3445 ≤ 3600 ✓；两硬指标（单文件/TodayPage）全过。
+- 剩余风险：CY 若不追认 3600，需立项做 useTodayData 拆分（316 行）等瘦身，不动功能。

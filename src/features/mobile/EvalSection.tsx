@@ -20,8 +20,8 @@ import {
   toSelfReportAnswers, type ShownRecord,
 } from './eval/answerStore.ts';
 import { QUESTION_BANK, pickQuestions, fallbackCategory, categoriesFromTodoKinds, type QuizQuestion } from './eval/questionBank.ts';
-import { completionUnits } from './eval/units.ts';
-import { finalDoneKeys, localDateKey, toCheckRecords, type BehaviorEvent } from './eval/behaviorLog.ts';
+import { completionUnits, inUseDays } from './eval/units.ts';
+import { finalDoneKeys, firstEventDayKey, localDateKey, toCheckRecords, type BehaviorEvent } from './eval/behaviorLog.ts';
 
 /** 粗粒度完成期 '2026-10-中旬' → 该时段最后一天的日历日（拖延指数的比较锚点） */
 function periodEndDayKey(pd: string): string {
@@ -65,9 +65,12 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
           : null,
       }));
     return {
+      // 铁律 2（2026-10-06 验收缺陷①）：完成率只统计「App 在用」的日子——
+      // 首个行为事件前的日子没有可信完成数据，虚构 done=false 会让冷启动恒显 0%。
       units: completionUnits({
         plan, layer, termStart: serverState.termStart,
-        days: evalDays, doneKeys: finalDoneKeys(behaviorEvents),
+        days: inUseDays(evalDays, firstEventDayKey(behaviorEvents)),
+        doneKeys: finalDoneKeys(behaviorEvents),
       }),
       lateTodos,
       checks: toCheckRecords(behaviorEvents),

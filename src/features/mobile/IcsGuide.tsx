@@ -10,9 +10,7 @@ import { useState } from 'react';
 export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
-  if (!icsToken) return null;
-
-  const url = `${window.location.origin}/api/sync/plan.ics?token=${icsToken}`;
+  const url = icsToken ? `${window.location.origin}/api/sync/plan.ics?token=${icsToken}` : '';
 
   async function copy() {
     try {
@@ -36,7 +34,15 @@ export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
         <h3 className="text-sm font-semibold text-ink-soft">系统日历订阅（不装 App 也有提醒）</h3>
         <span className="text-ink-faint">{open ? '收起' : '展开'}</span>
       </button>
-      {open && (
+      {open && !icsToken && (
+        /* P6-2 缺口补提示（2026-10-06 验收缺陷②）：web-only 用户第一次要靠移动页
+           同步一次才有 ICS 副本 —— 空值不许静默不渲染，要告诉用户怎么把链接变出来。 */
+        <p data-testid="m-ics-empty" className="mt-2 text-[11px] leading-5 text-ink-faint">
+          还没有订阅链接 —— 先去网页端排好计划，然后在手机上点一次同步
+          （顶栏「已同步 ✓」就行），这里就会生成你的日历订阅链接。
+        </p>
+      )}
+      {open && icsToken && (
         <div className="mt-2">
           <input
             id="m-ics-url"

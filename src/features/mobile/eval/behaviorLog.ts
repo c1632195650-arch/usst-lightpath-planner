@@ -119,3 +119,18 @@ export function finalDoneKeys(events: readonly BehaviorEvent[]): ReadonlySet<str
   }
   return done;
 }
+
+/**
+ * 首个行为事件的本地日历日（=「App 开始被使用」的锚点，含当天）。
+ * 没有任何事件（冷启动）→ null。脏 dayKey 忽略；无事件或全脏 → null。
+ * 供 `units.ts` 的 `inUseDays` 截断统计窗（铁律 2：装 App 前不虚构 done=false 单元）。
+ */
+export function firstEventDayKey(events: readonly BehaviorEvent[]): string | null {
+  let min: string | null = null;
+  for (const e of events) {
+    const k = e.dayKey;
+    if (typeof k !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+    if (min === null || k < min) min = k;
+  }
+  return min;
+}

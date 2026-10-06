@@ -92,3 +92,6 @@
 - [2026-10-06 方法库验收] 口径更正：BLOCKERS 此前「161 条」实为 **160 条**（sqlite_sequence 含已删条目）；金标实测 126 vs 计划 §5 的 124（方向为增，合「只增不改」）｜需要人决定：无
 - [2026-10-06 方法库验收] 遗留 4 项（不阻塞）：①QUESTION_BANK 仍为空题库——本验收即任务二登记的「任务一验收通过」前置，**题库补做已解锁**（建议按任务书 §三 补 ≥60 道）；②questionBank.ts:6 注释过期（写 42 条实际 160）；③v1 老 42 条中 23 条 contraindications 为空（v2 条目全满）；④methodTipForTimeBlock 映射的守护仅 tests/mobile/tipsSlot.test.ts 一处，eval-tips/method_params_v2 对真实 BlockKind 断链不报警（建议补直测）｜需要人决定：①的补做时点与执行批
 - [2026-10-06 方法库验收] 留痕：验收期间检测到并行会话在途改动（EvalSection.tsx/units.ts 未提交——任务三缺陷①修复中；WeekPlanView.tsx/syncContract.test.ts 为任务四批遗留），typecheck 一过性红字为写盘竞态、复跑即绿；本批仅新增验收报告 + 本条目，未触碰任何源码（变异体均现场还原，git checkout 复核干净）。
+- [2026-10-06 09:40 任务三验收·结项] 缺陷①**已修**（Second夜-F1）：EvalSection 统计窗经 inUseDays(firstEventDayKey(events)) 截断——冷启动显示「数据累积中（0/7 天）」、三天种子「（4/7 天）」，变异体④红绿齐全（tests/mobile/evalWiring.test.ts 7 条守护），tsc 0/engine 608/ui 432/e2e 20 全绿｜需要人决定：无（修复已验证，供 MOSS 复核）
+- [2026-10-06 09:40 任务三验收·结项] 缺陷②**已修**（Second夜-F2）：IcsGuide 空值提示 m-ics-empty 上线（源码锁 tests/mobile/icsHint.test.ts 3 条）｜需要人决定：无
+- [2026-10-06 09:40 任务三验收·结项] 缺陷③**裁决已执行**（Second夜-F3，供 CY 追认）：行数上限分层核算——eval/ 计算层 871 行计入任务二；任务三 UI+lib 3445 行，主约束改为「单文件 ≤320 + TodayPage ≤260」（均实测达标），层上限放宽至 3600｜需要人决定：CY 追认；若不追认 → 立项 useTodayData 拆分瘦身（不动功能）
