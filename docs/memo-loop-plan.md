@@ -24,8 +24,27 @@
 - **证据**：`scripts/memo-web-workspace.test.ts` **19 用例全绿**（node --test，输出见 W4 汇总）；`npm run typecheck` 0 错。
 - **关键裁决留痕**：两类待办行为差异有 4 个专用用例锁定；`plannedDone → dueAt` 规则确定性有 3 个用例锁定（红线 12）。
 
-## 2026-10-06 · W2（同步往返）—— 占位，完成后补
+## 2026-10-06 · W2（同步往返）
 
-## 2026-10-06 · W3（排程消费待办）—— 占位，完成后补
+- **做了什么**：
+  - `tests/syncContract.test.ts` **追加 2 条往返断言**（只增）：① 网页端建待办 PUT → 云端并集 → 读回仍在 + 移动端并发勾选（updatedAt 更新）不被覆盖；② 移动端待办 × 网页端补 note/tags/scheduledBlockId → 回写后 kind/createdAt 不丢、完成态不变。23→**25 条全绿**。
+  - `e2e/memo-smoke.spec.ts` **新增 2 条**（GUI 真实 + `/api/sync/state` 打桩模拟云端持久化）：① 网页端建待办 → PUT 契约体（schemaVer=2）→ 刷新后仍在；② 移动端写的待办 → 网页端读到 → 补长文本 note + 标签 → PUT 不丢移动端字段。**2/2 passed**。
+  - 排查记录：首跑全红，根因是 e2e 全新浏览器上下文落在欢迎页（`onboarded` 缺失，主界面不渲染）——预置最小 AppState 修复；测试 2 的初版断言拿「最后一次 PUT」当编辑结果，与挂载时面板自发的空 PUT 存在竞态——改为轮询「带 note 的待办出现在 PUT 体」。两处都是测试基建问题，非实现缺陷（trace 留存 test-results/）。
+- **单项操作口径（P2-1）**：无新服务端 API——`withCloudMemo(token, mutate)` = GET 最新云端 → 纯函数 mutate（只改目标条目、刷 `updatedAt`）→ PUT；并发安全由服务端 `MERGED_ARRAY_KEYS` 逐项 LWW 保证（`server/sync.py` 零改动）。
+- **证据命令**：`node --import ./scripts/register-alias.mjs --test tests/syncContract.test.ts`（25/25）；`npx playwright test e2e/memo-smoke.spec.ts`（2 passed）。
+
+## 2026-10-06 · W3（排程消费待办）
+
+- **BLOCKERS/契约**：`BuildWeekPlanInput.pendingTodos?: TodoLike[]` 契约扩展已在 W0 写入 BLOCKERS（P3-1 草案）并于 W1 commit 显式申报（AGENTS.md §二单人负责条款）。常量：recent→UserTask priority 70 / longterm→Commit priority 92、缺省 splittable=true。
+- **做了什么**：
+  - `src/lib/planner/schedule.ts`：`toPlanRequest` 把 `pendingTodos` 映射进两条**既有**引擎通道（recent→`UserTask`：durationMin=档位、weeks=[weekNo]；longterm→`Commit`：kind 'study'、effortMin、splittable、dueAt 直传）。**solver/construct/objective/model 零改动**。
+  - `src/features/week/WeekPlanView.tsx`：排程 effect 内 GET 云端待办（`fetchCloudTodos`，失败/未登录 → 空数组 = 旧行为）→ `todosToPendingTodos` 映射 → 进 `toPlanRequest`；排完 `registerPlanBlocks` + `syncScheduledBlockIds` 回填 `Todo.scheduledBlockId`（fire-and-forget，不阻塞排程）。
+  - 回显：待办卡显示「已排进周三 15:00」（内存有块位置时精确到时刻；刷新后 web 不存整周计划，退回「已排进周三」，由 block id 的 `-d{1-7}-` 段解析）。
+- **黄金口径零漂移（P3-3，🔴 关键）**：四重验证——
+  1. `git diff HEAD -- evals/golden/` 逐字节干净（金标文件未动，历史只增）；
+  2. 引擎 golden 快照随 `test:engine` 全绿（596/0，含 golden-lib）；
+  3. 结构保证：`pendingTodos` 缺省/空 ⇒ `tasks`/`commits` 与旧行为逐字段一致（测试④锁定）；
+  4. **在线评测**（2026-10-06 08:52，`python scripts/eval_plan_understand.py http://127.0.0.1:8001`，105 条金标）：action **F1=1.0**（TP35/FP0/FN0）、槽位 EM **0.987**≥0.90、dialog act 宏 F1 **0.972**≥0.90、非法输出拦截率 **1.0**——门槛 ✅ 全过，零漂移。报告已追加至 `docs/eval-libao-understand-2026-09-27.md`。
+- **诚实申报（契约缺口）**：Todo 契约无「预计投入分钟」字段（已定型不可改）→ longterm 用固定档位 60 分钟、recent 30 分钟（`memoLogic` 常量，BLOCKERS 已报 CY，待追认后续批扩契约）。
 
 ## 2026-10-06 · W4（门禁与反向验证）—— 占位，完成后补

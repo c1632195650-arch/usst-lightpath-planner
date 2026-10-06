@@ -25,6 +25,11 @@ import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { lifeModeExtrasOf } from '@/lib/planner/lifeModePolicy';
 import { toPlanRequest } from '@/lib/planner/schedule';
+// ── 任务四（M4-W3）：待办 → 排程约束（云同步闭环的最后一段）────────────
+import { todosToPendingTodos } from '@/features/memo/memoLogic';
+import { fetchCloudTodos, registerPlanBlocks, syncScheduledBlockIds } from '@/features/memo/webMemo';
+import { loadIdentity } from '@/features/mobile/lib/auth';
+import type { Todo } from '@/features/mobile/lib/memoTypes';
 import { planWeek } from '@/lib/planner/planWeek';
 import { fetchRouteBatch } from '@/lib/planner/transfer';
 import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
@@ -1250,6 +1255,21 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             note: `课程作业 —— 预计 ${a.estimatedMin} 分钟（你自己填的）`,
           })),
         ];
+        // ── 任务四（M4-W3）：待办 → 排程约束 ─────────────────────────
+        // 手机/网页待办工作区里**未完成**的待办参与排程（云同步闭环：
+        // 手机记 → 云端 SyncState → 网页排计划时带上）。
+        // recent → UserTask 通道、longterm → 可拆 Commit 通道（映射规则见
+        // `memoLogic.todosToPendingTodos`，确定且有测试）。
+        // 🔴 拉不到云端 / 未登录 → pendingTodos 为空 = 旧行为（不阻塞排程）。
+        const identity = loadIdentity();
+        let memoTodos: Todo[] = [];
+        if (identity?.token) {
+          try {
+            memoTodos = await fetchCloudTodos(identity.token);
+          } catch { /* 云端拉不到 → 本轮不带待办，诚实降级 */ }
+        }
+        const pendingTodos = todosToPendingTodos(memoTodos, schedule.termStart, weekNo);
+
         // ── P2：把「动态能力」的三组输入接进来 ────────────────────────
         //   · rolling / actualLoadByDow → 跨周疲劳（T2.2）
         //   · previousPlan              → 增量重排的脏区域基准（T2.1）
@@ -1288,6 +1308,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             // 批 4.3（1A-③）：完整画像进引擎 —— socialCap 与画像块级偏好的入口
             persona,
             tasks,
+            // 任务四（M4-W3）：待办约束（空数组 = 与旧行为逐字段一致）
+            pendingTodos,
           }),
           // 锁的两半都要传：
           //   · lockLevels     → improve 不主动移动 hard 块、churn 按锁加权
@@ -1379,6 +1401,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             uncovered: result.transferUncovered ?? [],
           });
           lastPlanRef.current = result.plan;
+          // 任务四（M4-W2-P2-3）：待办 → 已排块回填。注册块位置（「已排进周三 15:00」
+          // 的精确回显用）+ 把命中块 id 写回 Todo.scheduledBlockId（云端，单项 LWW）。
+          // 失败不影响排程主流程（fire-and-forget，台账留痕）。
+          registerPlanBlocks(fused);
+          if (identity?.token && memoTodos.length > 0) {
+            void syncScheduledBlockIds(identity.token, memoTodos, fused).catch(() => { /* 回填失败不阻塞 */ });
+          }
           // ── 补上 P1 留下的断链：把本次产物写回持久化状态 ──────────
           // 原先 `result.nextRolling` 产出来了却**没有任何地方接收** →
           // `planState.rolling` 永远是 null，跨周疲劳既传不下去也用不上。

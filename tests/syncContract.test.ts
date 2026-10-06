@@ -428,3 +428,66 @@ test('fmtMin：分钟 → HH:MM（含跨午夜回卷）', () => {
   assert.equal(fmtMin(1255), '20:55');
   assert.equal(fmtMin(1440 + 30), '00:30', '越界回卷');
 });
+
+/* ================= 任务四（M4-W2）· 网页端待办往返断言 ================= */
+import { patchTodoDetail } from '@/features/mobile/lib/memoStore.ts';
+import { setScheduledBlock } from '@/features/memo/memoLogic.ts';
+
+test('任务四·网页端建待办 PUT 往返：并入云端后读回仍在，移动端并发勾选不丢（逐项 LWW）', () => {
+  const T0 = '2026-10-06T00:00:00.000Z';
+  const T1 = '2026-10-06T01:00:00.000Z';
+  const T2 = '2026-10-06T02:00:00.000Z';
+  // 云端已有：移动端先前写的长期待办
+  const cloudStored: Todo[] = [
+    { id: 'td-m1', kind: 'longterm', title: '读完《学习之道》', createdAt: T0, updatedAt: T0, completion: null },
+  ];
+  // 网页端新建待办 → PUT 体（buildSyncPayload 口径，todos 键出现）
+  const webNew: Todo = {
+    id: 'td-w1', kind: 'recent', title: '买考研英语真题', createdAt: T1, updatedAt: T1, completion: null,
+  };
+  const payload = buildSyncPayload({
+    schedule: SCHEDULE, planState: null, userOverrides: null,
+    termStart: '2026-09-07', weekNo: 5, clientUpdatedAt: T1, todos: [webNew], goals: [],
+  });
+  assert.ok(Array.isArray(payload.todos) && payload.todos.length === 1, '新建待办必须上行');
+
+  // 服务端合并口径（sync.py _merge_array_by_id 同语义，TS 侧 mergeTodos 同构）：
+  // 并发期间移动端把 td-m1 勾选完成（updatedAt=T2 更新）→ 网页 PUT 不能覆盖掉它
+  const mobileChecked: Todo = { ...cloudStored[0], completion: 'done', plannedDone: '2026-10-中旬', actualDoneAt: T2, updatedAt: T2 };
+  const cloudAfterPut = mergeTodos(payload.todos ?? [], [mobileChecked]);
+  assert.deepEqual(cloudAfterPut.map((t) => t.id).sort(), ['td-m1', 'td-w1'], '并集：两端条目都在');
+  assert.equal(cloudAfterPut.find((t) => t.id === 'td-m1')?.completion, 'done', '移动端并发勾选胜（新版胜旧版）');
+  assert.equal(cloudAfterPut.find((t) => t.id === 'td-w1')?.title, '买考研英语真题');
+
+  // 网页端 GET 读回：云端两条都在（刷新后仍在的持久化语义）
+  const webAfterGet = mergeTodos([], cloudAfterPut);
+  assert.equal(webAfterGet.length, 2);
+});
+
+test('任务四·移动端待办 × 网页端补 note/tags/scheduledBlockId → 回写后移动端字段不丢', () => {
+  const T0 = '2026-10-05T02:00:00.000Z';
+  const T3 = '2026-10-06T03:00:00.000Z';
+  const T4 = '2026-10-06T04:00:00.000Z';
+  // 移动端写的原始待办（云端版）
+  const cloudStored: Todo[] = [
+    { id: 'td-m2', kind: 'longterm', title: '读完《学习之道》', createdAt: T0, updatedAt: T0, completion: null },
+  ];
+  // 网页端读到后补 detail（note/tags → updatedAt 刷新）+ 排程回填 scheduledBlockId
+  let webCopy: Todo = { ...cloudStored[0] };
+  webCopy = patchTodoDetail({ todos: [webCopy], goals: [] }, 'td-m2', {
+    note: '第 4 章最重要', tags: ['读书', '备考'],
+  }, T3).todos[0];
+  webCopy = setScheduledBlock({ todos: [webCopy], goals: [] }, 'td-m2', 'w5-d3-study-td-m2', T4).todos[0];
+  assert.equal(webCopy.updatedAt, T4);
+
+  // PUT 回写 → 服务端合并（云端旧版 stored 先入，网页新版 incoming 严格更新 → 胜）
+  const merged = mergeTodos([webCopy], cloudStored);
+  const round = merged.find((t) => t.id === 'td-m2');
+  assert.ok(round);
+  assert.equal(round.kind, 'longterm', '移动端字段不丢');
+  assert.equal(round.createdAt, T0, 'createdAt 不丢');
+  assert.equal(round.note, '第 4 章最重要');
+  assert.deepEqual(round.tags, ['读书', '备考']);
+  assert.equal(round.scheduledBlockId, 'w5-d3-study-td-m2');
+  assert.equal(round.completion, null, '网页端补 detail 不改变完成态');
+});
