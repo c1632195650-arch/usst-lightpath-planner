@@ -6,10 +6,11 @@
  *   /goal 的自动校验只认「实据」（命令输出 / 测试结果），不认计划和听起来像结论的回复。
  *   把四条判据压成一条命令，agent 每轮收尾跑一次即可自证，早上 CY 也只需跑同一条命令。
  *
- * 判据（基线为 2026-10-02 实测值 458/321，只增不减）：
+ * 判据（7.1 起：测试基线从测试源码动态推导，注册用例数只增不减）：
  *   1. tsc --noEmit         → 必须 0 错误
- *   2. npm run test:engine  → fail=0 且 pass ≥ 458
- *   3. npm run test:ui      → fail=0 且 pass ≥ 321
+ *   2. npm run test:engine  → fail=0 且 pass ≥ 动态基线（tests/ 下 test() 注册数）
+ *   3. npm run test:ui      → fail=0 且 pass ≥ 动态基线（scripts/ 下 test() 注册数）
+ *      另：出现 .skip/.only/.todo 直接判红（任务书红线 7 的机器判据）
  *   4. 禁区文件             → 名单已清空（2026-10-02 起单人负责，原 RAY 禁区条款作废，见 AGENTS.md §二/8.1）；
  *                             机制保留：日后需要重新圈禁区时往 FORBIDDEN 里加回即可
  *   5. 版本纪律（2026-06 新增）→ scripts/preflight.mjs：本地与 origin/dev 必须同源
@@ -24,12 +25,42 @@
  * 退出码：0 = 全绿；1 = 有门禁未过（输出会指明是哪一条）
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import os from 'node:os';
 
 // 2026-10-02：单人负责，原 RAY 禁区条款作废（AGENTS.md §二/8.1）→ 名单清空。
 // 机制保留：需要重新圈禁区时在此加回目录前缀即可。
-const BASELINE = { engine: 458, ui: 321 };
+//
+// 7.1（2026-10-06 收官批次）：基线不再手写常量（旧 { engine: 458, ui: 321 } 为
+// 2026-10-02 实测值，早已过期 —— 每加一批测试都得手改，忘改就误报「删测试」）。
+// 改为**从测试源码动态推导**「注册用例数」为下限 —— 「基线只增不减」的等价实现：
+// 新增用例自动抬高下限；删用例/删文件立刻跌破基线 → 红。
+// 历史：458/321（2026-10-02 实测）→ 608/432（2026-10-06 Second 夜批）→ 本日起动态推导。
+const BASELINE_DIRS = { engine: 'tests', ui: 'scripts' };
+
+/** 统计目录下 *.test.ts 的顶层 test(...) 注册数；skip/only/todo 单独计数（出现即红）。 */
+function deriveBaseline(dir) {
+  const files = [];
+  (function walk(d) {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.test.ts')) files.push(p);
+    }
+  })(dir);
+  let cases = 0;
+  const flagged = [];
+  for (const f of files) {
+    for (const line of readFileSync(f, 'utf8').split('\n')) {
+      const m = line.match(/^\s*test(\.\w+)?\s*\(/);
+      if (!m) continue;
+      if (m[1]) flagged.push(`${f}: ${line.trim().slice(0, 60)}`);
+      else cases++;
+    }
+  }
+  return { cases, flagged, files: files.length };
+}
 
 const FORBIDDEN = [];
 
@@ -83,14 +114,23 @@ const results = [];
 }
 
 // ---- 2 & 3. 两套测试 ----
-for (const [script, key, floor] of [
-  ['test:engine', 'engine', BASELINE.engine],
-  ['test:ui', 'ui', BASELINE.ui],
+for (const [script, key] of [
+  ['test:engine', 'engine'],
+  ['test:ui', 'ui'],
 ]) {
+  // 基线动态推导（见文件头 7.1 注）：注册用例数即下限；skip/only/todo 出现即红
+  // （任务书红线 7：测试无 .skip/.only/.todo —— 从「约定」升级成「机器判据」）。
+  let floor = 0;
+  let flagged = [];
+  try {
+    const d = deriveBaseline(BASELINE_DIRS[key]);
+    floor = d.cases;
+    flagged = d.flagged;
+  } catch { /* 目录读不到 → floor=0，退化为只查 fail=0（不比误报更糟） */ }
   const { code, out, envBlocked } = run(`npm run --silent ${script}`);
   const pass = num(out, 'pass');
   const fail = num(out, 'fail');
-  const ok = code === 0 && fail === 0 && pass !== null && pass >= floor;
+  const ok = code === 0 && fail === 0 && pass !== null && pass >= floor && flagged.length === 0;
   results.push({
     name: script,
     ok,
@@ -98,9 +138,11 @@ for (const [script, key, floor] of [
     detail:
       envBlocked
         ? '⚠️ 环境不可用，未能判定（不是失败）'
-        : pass === null
-          ? '无法解析测试计数（测试没跑起来？）'
-          : `pass=${pass} fail=${fail}（基线 ≥${floor}，只增不减）`,
+        : flagged.length
+          ? `出现 skip/only/todo ${flagged.length} 处（红线 7）：${flagged[0]}`
+          : pass === null
+            ? '无法解析测试计数（测试没跑起来？）'
+            : `pass=${pass} fail=${fail}（动态基线 ≥${floor}，注册用例数只增不减）`,
     raw: out,
   });
 }
