@@ -95,3 +95,9 @@ mobile/android/local.properties
 mobile/android/.idea/
 mobile/android/*.iml
 mobile/android/capacitor-cordova-android-plugins/
+
+# 本地运行库（serve.py 账号/KV/课表记录，含本机账号口令哈希）——运行态产物不入库
+# 2026-10-08：误入自 dc6d4a6 的 git add -A，本行 + git rm --cached 修正
+data/lightpath.db
+data/lightpath.db-wal
+data/lightpath.db-shm
