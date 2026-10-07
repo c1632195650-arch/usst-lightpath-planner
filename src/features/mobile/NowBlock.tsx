@@ -5,6 +5,7 @@
  * 传 prop 即可，无 tip 时整块不渲染（不出现空占位）。
  * 🔴 `m-now-banner` testid 是既有 e2e 契约，不得改名。
  */
+import { Icon } from '@/components/icons/Icon';
 import type { TimeBlock } from '@/types';
 import { fmtMin } from './lib/sync.ts';
 import BurnBar from './BurnBar.tsx';
@@ -41,19 +42,19 @@ export default function NowBlock({
       <BurnBar startMin={block.startMin} endMin={block.endMin} nowMin={nowMin} />
       {tip && (
         <div data-testid="m-now-tip" className="mt-3 rounded-xl bg-white/15 px-3 py-2">
-          <p className="text-xs font-semibold">💡 {tip.title}</p>
+          <p className="flex items-center gap-1 text-xs font-semibold"><Icon name="sparkle" size="xs" />{tip.title}</p>
           <p className="mt-0.5 text-xs leading-5 opacity-90">{tip.text}</p>
         </div>
       )}
       {done ? (
         <p className="mt-4 rounded-xl bg-ok px-4 py-3 text-center text-sm font-semibold">
-          ✓ 已完成
+          <span className="relative top-[2px] mr-1 inline-flex"><Icon name="check" size="sm" /></span>已完成
         </p>
       ) : (
         <div className="mt-4 flex gap-3">
           <button type="button" data-testid="m-now-done" onClick={onToggleDone}
             className="h-11 flex-1 rounded-xl bg-white text-sm font-bold text-brand shadow-sm active:scale-[0.98]">
-            ✓ 完成
+            <span className="relative top-[2px] mr-1 inline-flex"><Icon name="check" size="sm" /></span>完成
           </button>
           <button type="button" data-testid="m-now-shift" onClick={onShift15}
             className="h-11 flex-1 rounded-xl border border-white/60 text-sm font-bold text-white active:scale-[0.98]">

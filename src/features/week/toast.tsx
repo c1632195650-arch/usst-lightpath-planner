@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icons/Icon';
 /**
  * Toast 操作反馈（2026-09-19）
  * ============================================================
@@ -24,11 +25,11 @@ export interface ToastItem {
   duration?: number;
 }
 
-const STYLE: Record<ToastKind, { bg: string; icon: string }> = {
-  delete: { bg: 'bg-red-50 border-red-300 text-red-800', icon: '🗑' },
-  move: { bg: 'bg-blue-50 border-blue-300 text-blue-800', icon: '✏️' },
-  add: { bg: 'bg-green-50 border-green-300 text-green-800', icon: '➕' },
-  info: { bg: 'bg-slate-50 border-slate-300 text-ink-soft', icon: 'ℹ️' },
+const STYLE: Record<ToastKind, { bg: string; icon: 'trash' | 'sliders' | 'plus' | 'info' }> = {
+  delete: { bg: 'bg-red-50 border-red-300 text-red-800', icon: 'trash' },
+  move: { bg: 'bg-blue-50 border-blue-300 text-blue-800', icon: 'sliders' },
+  add: { bg: 'bg-green-50 border-green-300 text-green-800', icon: 'plus' },
+  info: { bg: 'bg-slate-50 border-slate-300 text-ink-soft', icon: 'info' },
 };
 
 export const DEFAULT_TOAST_MS: Record<ToastKind, number> = {
@@ -49,7 +50,7 @@ export function Toasts({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: 
             key={t.id}
             className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] leading-relaxed shadow-md ${s.bg}`}
           >
-            <span className="shrink-0">{s.icon}</span>
+            <span className="shrink-0"><Icon name={s.icon} size="sm" /></span>
             <span className="min-w-0 flex-1">{t.message}</span>
             {t.action && (
               <button

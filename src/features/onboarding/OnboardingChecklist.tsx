@@ -1,4 +1,5 @@
 import { checklistStatus, type ChecklistKey } from './checklist';
+import { Icon } from '@/components/icons/Icon';
 
 interface Props {
   hasSchedule: boolean;
@@ -32,7 +33,7 @@ export function OnboardingChecklist(props: Props) {
         {items.map((item) => (
           <li key={item.key} className="flex items-center justify-between gap-3">
             <span className={`min-w-0 text-[12.5px] leading-5 ${item.done ? 'text-ink-faint line-through' : 'text-ink'}`}>
-              <span aria-hidden="true">{item.done ? '✅' : '⬜'}</span> {item.label}
+              <span className="relative top-[2px] inline-flex ${item.done ? 'text-ok' : 'text-ink-faint'}" aria-hidden="true"><Icon name={item.done ? 'check-square' : 'mg-square'} size="xs" /></span> {item.label}
             </span>
             {!item.done && (
               <button

@@ -1,3 +1,5 @@
+import { Icon } from '@/components/icons/Icon';
+
 /**
  * 删除确认弹窗（2026-09-19）
  * ============================================================
@@ -49,7 +51,7 @@ export function DeleteAskDialog({
             onClick={onKeepGap}
             className="flex min-h-11 items-center gap-3 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-left text-[13px] font-medium text-ink transition-colors hover:border-brand/40 hover:bg-brand-light/45"
           >
-            <span className="text-base">⬜</span>
+            <span className="relative top-[2px] text-ink-faint"><Icon name="inbox" size="sm" /></span>
             <span>
               留出空白
               <span className="block text-[11px] font-normal text-ink-faint">
