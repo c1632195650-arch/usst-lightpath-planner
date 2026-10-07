@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 149,
-    "engineFiles": 112,
+    "testFiles": 150,
+    "engineFiles": 113,
     "uiFiles": 37,
-    "guardedSources": 142,
-    "reverseVerified": 89,
+    "guardedSources": 144,
+    "reverseVerified": 90,
     "orphans": 0
   },
   "domains": {
@@ -345,7 +345,7 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 13,
+      "testCount": 14,
       "tests": [
         "scripts/memo-web-workspace.test.ts",
         "tests/cloudAccount.test.ts",
@@ -359,12 +359,15 @@
         "tests/mobile/notify.test.ts",
         "tests/mobile/tipsSlot.test.ts",
         "tests/mobile/weekBoard.test.ts",
+        "tests/mobileEvalDemo.test.ts",
         "tests/syncContract.test.ts"
       ],
       "sources": [
+        "src/features/mobile/EvalSection",
         "src/features/mobile/eval/answerStore",
         "src/features/mobile/eval/behaviorLog",
         "src/features/mobile/eval/compute",
+        "src/features/mobile/eval/demoInput",
         "src/features/mobile/eval/model",
         "src/features/mobile/eval/questionBank",
         "src/features/mobile/eval/units",
@@ -1195,6 +1198,14 @@
       "suite": "engine",
       "guards": [
         "week-view",
+        "mobile"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
+    "tests/mobileEvalDemo.test.ts": {
+      "suite": "engine",
+      "guards": [
         "mobile"
       ],
       "guardCount": 3,
@@ -2097,7 +2108,8 @@
     "src/features/mobile/eval/compute": [
       "tests/eval-compute.test.ts",
       "tests/eval-tips.test.ts",
-      "tests/mobile/evalWiring.test.ts"
+      "tests/mobile/evalWiring.test.ts",
+      "tests/mobileEvalDemo.test.ts"
     ],
     "src/features/mobile/eval/model": [
       "tests/eval-compute.test.ts",
@@ -2254,6 +2266,12 @@
     ],
     "src/features/mobile/lib/weekBoard": [
       "tests/mobile/weekBoard.test.ts"
+    ],
+    "src/features/mobile/eval/demoInput": [
+      "tests/mobileEvalDemo.test.ts"
+    ],
+    "src/features/mobile/EvalSection": [
+      "tests/mobileEvalDemo.test.ts"
     ],
     "src/features/overview/ongoingTask": [
       "tests/ongoing-task.test.ts"

@@ -99,7 +99,9 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
       checks: toCheckRecords(behaviorEvents),
       answers: toSelfReportAnswers(shownRows),
     };
-  }, [plan, serverState, layer, evalDays, behaviorEvents, shownRows]);
+    // ⚠️ demo 必须在依赖里：2026-10-08 改成「可现场载入」后，漏了它就会出现
+    // 「角标出现、五维仍是数据累积中（0/7 天）」——evalInput 不重算，profile 拿旧空输入。
+  }, [plan, serverState, layer, evalDays, behaviorEvents, shownRows, demo]);
   const profile = useMemo(
     () => computeExecutionProfile(evalInput, demo ? DEMO_TODAY_KEY : todayKey),
     [evalInput, todayKey, demo],
