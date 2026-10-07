@@ -190,18 +190,28 @@ export function applyLockedPlacements(
   const restored: string[] = [];
   const conflicts: LockApplyResult['conflicts'] = [];
 
+  /**
+   * 块的可读指代 —— **绝不把内部 block id 露给用户**（RAY 2026-10-08 实测到
+   * 「你锁定的「w5-d1-study-study-zhanen-1」…」这种消息，那是内部标识，看不懂）。
+   * 有标题用标题；没有就退到「周X 的某一块」；连天都没有才用「某一块安排」。
+   */
+  const refOf = (p: { title?: string; dayOfWeek?: number }): string =>
+    p.title ?? (p.dayOfWeek ? `${DAY_NAME[p.dayOfWeek]}的某一块` : '某一块安排');
+
   for (const id of targets) {
     const idx = working.findIndex((b) => b.id === id);
     if (idx < 0) {
       // 这次没排出这个块。**不能静默跳过** —— 用户看到的是「我锁的那块不见了」，
       // 而界面上什么提示都没有。如实说，哪怕它可能只是任务被删了。
       // 用 info 而非 warn：这一条更可能是用户自己的改动造成的，不该和真冲突同等报警。
+      // `blockId` 带上：面板要按 code 合并同类，也需要能回查是哪一块。
       plan.issues.push({
         level: 'info',
         code: 'lock-conflict',
-        message: `你锁定的「${placements[id].title ?? id}」这次没能排进计划（可能被新课占掉了时间），解开锁定或调整那天的安排都可以`,
+        blockId: id,
+        message: `你锁定的「${refOf(placements[id])}」这次没能排进计划（可能被新课占掉了时间），解开锁定或调整那天的安排都可以`,
       });
-      conflicts.push({ id, title: placements[id].title ?? id, dayOfWeek: placements[id].dayOfWeek, reason: '这次没能排出来' });
+      conflicts.push({ id, title: refOf(placements[id]), dayOfWeek: placements[id].dayOfWeek, reason: '这次没能排出来' });
       continue;
     }
     const block = working[idx];
