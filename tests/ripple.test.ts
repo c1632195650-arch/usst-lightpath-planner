@@ -119,3 +119,59 @@ test('塞不下的那天 → 拒绝，并如实说明有几处被挤出', () => 
   assert.match(r.reason ?? '', /放不下/);
   assert.deepEqual(r.records, []);
 });
+
+/* ============================================================
+ * 2026-10-07 补：套用位置覆盖前先查碰撞
+ * ------------------------------------------------------------
+ * 起因（RAY 报）：屏幕上出现「16:05 跑步」与「16:10 长目标」互相压住，
+ * 而头部仍显示「硬约束违反 0」。根因是 `moves` 是**历史记录**，
+ * 重排后引擎产出新布局，一条旧改动可能正好压住新排出来的块 ——
+ * 且引擎的 hardViolations 看不见这里（它算的是自己那份 plan）。
+ * 口径：撞了就**不套用这一条**、退回引擎位置，并如实报一条 issue。
+ * ========================================================== */
+
+test('套用位置覆盖：与别的块撞了 → 这一条不套用，退回引擎位置并如实报 lock-conflict', () => {
+  const blocks = [
+    blk({ id: 'run', startMin: 965, endMin: 1010 }),   // 16:05–16:50，引擎排的
+    blk({ id: 'goal', startMin: 700, endMin: 760 }),   // 引擎原本给它 11:40–12:40
+  ];
+  const plan: WeekPlan = {
+    weekNo: 3, blocks, issues: [],
+    stats: { courseMin: 0, studyMin: 105, blankMin: 0, blockCount: 2 },
+  };
+  // 一条**旧**改动：把 goal 改到 16:10–16:30 —— 正好压在 run（16:05–16:50）上
+  const moves = new Map<string, MoveRecord>([
+    ['goal', { weekNo: 3, blockId: 'goal', dayOfWeek: 2, startMin: 970, endMin: 990, source: 'edit' }],
+  ]);
+  const out = applyPendingMoves(plan, moves);
+
+  const goal = out.blocks.find((b) => b.id === 'goal')!;
+  assert.deepEqual(
+    [goal.startMin, goal.endMin], [700, 760],
+    '撞了的改动不得套用 —— 否则屏幕上就是两块叠着，而引擎还报「违反 0」',
+  );
+  assert.equal(out.blocks.length, 2, '块数不变（只退回位置，不删块）');
+  const issues = out.issues.filter((i) => i.code === 'lock-conflict');
+  assert.equal(issues.length, 1, '必须如实报一条 lock-conflict（静默退回 = 用户以为白改了）');
+  assert.ok(issues[0].message.includes('goal') && issues[0].message.includes('run'),
+    '消息里要说清「谁和谁撞了」');
+});
+
+test('套用位置覆盖：相接（前者 end == 后者 start）不算撞，照常套用', () => {
+  const blocks = [
+    blk({ id: 'a', startMin: 600, endMin: 660 }),
+    blk({ id: 'b', startMin: 700, endMin: 760 }),
+  ];
+  const plan: WeekPlan = {
+    weekNo: 3, blocks, issues: [],
+    stats: { courseMin: 0, studyMin: 120, blankMin: 0, blockCount: 2 },
+  };
+  // a 改成 640–700：正好顶到 b 的起点，属于合法相邻
+  const moves = new Map<string, MoveRecord>([
+    ['a', { weekNo: 3, blockId: 'a', dayOfWeek: 2, startMin: 640, endMin: 700, source: 'edit' }],
+  ]);
+  const out = applyPendingMoves(plan, moves);
+  const a = out.blocks.find((b) => b.id === 'a')!;
+  assert.deepEqual([a.startMin, a.endMin], [640, 700], '半开区间判定：相接不冲突，应当套用');
+  assert.equal(out.issues.filter((i) => i.code === 'lock-conflict').length, 0, '不该误报');
+});

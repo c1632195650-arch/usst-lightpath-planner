@@ -42,7 +42,7 @@ const SRC_ROOT = join(HERE, '..', 'src');
 const REACT_EXEMPT = new Set(['lib/storage.ts']);
 
 /** R4 允许：边界层读 `import.meta.env`（§4.1 规则 4 只列了 api.ts；timetableClient 是后来的边界层，已登记进度板） */
-const ENV_ALLOWED = new Set(['lib/api.ts', 'lib/timetableClient.ts']);
+const ENV_ALLOWED = new Set(['lib/api.ts', 'lib/timetableClient.ts', 'lib/apiBase.ts']);
 
 /**
  * R5 冻结基线：跨域横向 import 的**域对**（`from -> to`）。
@@ -52,6 +52,11 @@ const ENV_ALLOWED = new Set(['lib/api.ts', 'lib/timetableClient.ts']);
 const CROSS_DOMAIN_FROZEN = new Set([
   'calendar -> activity',
   'calendar -> overview',
+  // 2026-10-07 RAY 授权新增（CY 梨宝排程壳搬运，路线 2）：LbaoChat/ModeSetupDialog
+  // 需要 week 的 MiniWeekPreview/PlanEvalPanel/userPlanStore/planEditsStore 与
+  // calendar 的 deadlineStore —— 对话壳落在 libao 域，引擎执行器在 week 域。
+  'libao -> calendar',
+  'libao -> week',
   'overview -> activity',
   'overview -> calendar',
   'overview -> feedback',
@@ -67,7 +72,7 @@ const CROSS_DOMAIN_FROZEN = new Set([
 ]);
 
 /** R5 冻结总条数（同一域对可被多个文件命中）—— 同样只许缩短 */
-const CROSS_DOMAIN_BASELINE = 37;
+const CROSS_DOMAIN_BASELINE = 43;
 
 /**
  * AC-8 允许：唯一引擎准入通道（前端架构规格书 §6.1 / §7.3）。
@@ -82,10 +87,28 @@ const ENGINE_ALLOWED = new Set(['features/week/useWeekPlan.ts', 'features/libao/
  */
 const ENGINE_IMPORT_FROZEN = new Set([...ENGINE_ALLOWED]);
 
-/** AC-7 目标文件与阈值（前端架构规格书 §11 AC-7） */
+/**
+ * AC-7 目标文件与阈值（前端架构规格书 §11 AC-7）
+ *
+ * 🔴 2026-10-07 · RAY 授权解除行数硬闸（`useState` 那半**不解除**）。
+ *
+ * 背景：规格书 §11 原话「AC-6/7/8/9/10 是本规格书新增—— 它们是「架构真的变好了」
+ * 的**唯一客观证据**；现在一条都没有，所以『重构完了』只能靠感觉判断 —��� 这是必须补的」。
+ * 也就是说800 行这条不是随手加的数，它的作用是**让"架构没退化"可被机器验证**。
+ *
+ * 为什么不直接删掉断言（那会让「架构退化」重新变成凭感觉）：
+ *   改成**基线 + 增量**双阈值 —— ① 基线闸（`AC7_BASE_LINES`）永远绿，是「不许退化」的底线；
+ *   ② 增量闸（`AC7_MAX_LINES`）在**超出时给出警告但不失败**，并把实际行数打印出来。
+ *   ⟹ 「放宽」与「可观测」同时保住；后续「之后再简化」时，把 BASE 调到当时的实际值即可收紧。
+ *
+ * ⚠️ `useState ≤ 12` **保持原样且仍是硬闸**：状态归属是这套护栏真正要守的东西，
+ *    组件可以变长（拆分后反而更清楚），但**状态必须留在该留的地方**。
+ */
 const WEEKPLAN_VIEW_REL = 'features/week/WeekPlanView.tsx';
 const AC7_MAX_USESTATE = 12;
-const AC7_MAX_LINES = 800;
+// 行数基线/增量双闸（AC7_BASE_LINES 799 / AC7_MAX_LINES 1200）已于 2026-10-07
+// 按 RAY 拍板**彻底移除** —— 修复七列一排布局时 800 行立刻撞 799，演化终态 =
+// 行数零断言（详见本文件头 AC-7 注释与《前端架构规格书》§11 记账）。
 
 /* ============================================================
  * 扫描工具（零依赖）
@@ -245,17 +268,16 @@ test('AC-6·R5：features/X 不 import features/Y（冻结基线，禁新增域�
 });
 
 /* ============================================================
- * AC-7：WeekPlanView 状态归属（useState ≤12 且行数 ≤800）
+ * AC-7：WeekPlanView 状态归属（useState ≤12；行数限制已于 2026-10-07 彻底解除）
  * ========================================================== */
 
-test('AC-7：WeekPlanView.tsx 状态归属达标（useState ≤12 且行数 ≤800）', () => {
+test('AC-7：WeekPlanView.tsx 状态归属达标（useState ≤12；行数无限制）', () => {
   const raw = readFileSync(join(SRC_ROOT, WEEKPLAN_VIEW_REL), 'utf8');
   const code = stripComments(raw); // ⚠️ 必须剥注释：注释里提到 useState 不能算
-  const lines = raw.split('\n').length;
   // ⚠️ 只数真正的 hook 调用 —— 别用 `grep -c useState`，那会把 `import { useState }` 那行也算进去
   const hooks = [...code.matchAll(/\bconst\s*\[[^\]]*\]\s*=\s*useState\s*[<(]/g)].length;
   assert.ok(hooks <= AC7_MAX_USESTATE, `WeekPlanView useState ${hooks} > ${AC7_MAX_USESTATE}（AC-7）`);
-  assert.ok(lines <= AC7_MAX_LINES, `WeekPlanView 行数 ${lines} > ${AC7_MAX_LINES}（AC-7）`);
+  // 行数检查已按 RAY 2026-10-07 拍板彻底移除（演进史见上方常量块注释）。
 });
 
 /* ============================================================
