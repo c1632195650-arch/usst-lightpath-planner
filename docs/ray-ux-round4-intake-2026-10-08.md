@@ -84,3 +84,74 @@ node scripts/gate_overnight.mjs
 estimateRefine / restartRoll / goalDecompose）+ `feedback.test.ts` 补
 `clearConflictingSlots` 三例；本地 11 个源码锁测试改锚到新架构文件（语义逐条保留，
 少数不可等价移植项已在测内注释写明原因）。
+
+---
+
+## 6. 第二批接入：RAY 最新 4 个 commit（2026-10-08 01:47，`936fd94` 尖）
+
+> **边界（严格区分「这批涉及 / 不涉及」）**：RAY 在本分支的**新**提交共 4 个，
+> 尖为 `936fd94`，其父 `b6d28d6` 正是上一批（§1 #5）的接入点 —— 所以「最新一个 commit」
+> 的实际增量 = **`5212f20 → 3826eb0 → 970686a → 936fd94`**。除这 4 个 commit 触及的文件外，
+> 本批**零改动**（Ray 侧其余文件、以及并行会话的图标批，均不在本批范围内）。
+
+| # | Ray commit | 内容 | 本树对应提交 |
+|---|---|---|---|
+| 1 | `5212f20` | 引擎修复：固定块碰撞顺延 + 一次性任务一周一块 + lock-conflict 不露内部 id | `5452f69` |
+| 2 | `3826eb0` | 目标批：截止感知选天 + 分布天钉死 + 问题合并/切换文案纯函数 | `9faaa51` |
+| 3 | `970686a` | 周页交互：顶栏 z 阶梯 + 问题清单合并同类 + 切换反馈 + 内嵌对话快层 | `b9dec0f` |
+| 4 | `936fd94` | 测试：晚课冲突回归 + 目标分布补充 | `5766d0b` |
+
+### 6.1 适配点（本树与 Ray 树的结构差异，逐条已证）
+
+1. **引擎只有一支**：`5212f20` 在 Ray 侧是「双引擎同修」（`lib/planner` 与 `lib/planner-cy`）。
+   本树 `lib/planner` 对应 Ray 侧 **`planner-cy`（CY 线）**，故按该版落修；Ray 的 `lib/planner`
+   是另一支、本树不存在（§3 已登记不带入 `planner-cy/**`）。`solver.ts` 同此，用本树既有的
+   `DAY_NAME`（Ray 的 planner-cy 版写法）。
+2. **`WeekDiagnostics` 两处结构合并**：本树的「顶部聚合条」（批 6.1 `summarizeIssues`，
+   有源码锁 `tests/issue-bar-ui.test.ts`）保留；Ray 的 `groupIssues` 合并落在**明细列表**层。
+   聚合条报总数、明细折同类行，二者不冲突（不是二选一）。
+3. **`WeekPlanHeader` 与并行会话同文件**：接入期间本仓另有会话在做图标批（emoji→`<Icon>`），
+   已在 `WeekPlanHeader.tsx` 有在途改动。本批**只暂存自己的 hunk**（索引定向），
+   对方在途改动原样留在工作区未提交 —— 提交后实测该文件 unstaged diff 仍为对方的
+   2 增 1 删，工作区文件与其预期状态逐字节一致（md5 `d03664fc…` 已核）。
+4. **`goalSpread.test.ts` 是本树既往缺口**：上一批（§1）漏带了该测试文件（`goalDecompose`
+   逻辑已在，非新行为）。本批按 `936fd94` 版本**整份补入** —— 原有 4 条用例在本树既有逻辑上
+   全绿，第 5 条为 `936fd94` 新增的截止感知用例。
+5. **`eveningConflict.test.ts` 双引擎断言合并**：上游对两支引擎各断言一遍，本树只有一支，
+   合并为一组（文件头已写明原因），语义不减。
+
+### 6.2 ⚠️ 反向验证发现：`936fd94` 那条「截止感知选天」断言恒绿（假覆盖）
+
+实测证据（本仓红线的要求：新断言关掉实现必须变红）：
+
+- 把 `daysWithinDeadline(...)` 换回 `freeDays`（`decomposeGoal` 与 `decomposeGoalV2` 两处），
+  `936fd94` 原文那条用例**仍然全绿** —— 它的预算只够 3 天，`days.slice(0, usedDays)` 在
+  有/无截止过滤两种实现下都是 `[1,2,3]`（`usedDays = ceil(budget/120) = 2→3`），断言分辨不出。
+- 故按本仓纪律补一条**有区分力的锚**（同文件，Ray 原文逐字保留在其前）：预算放大到 600 分钟
+  （`usedDays = 5`），无过滤会排出 `dow=5`（落在 10/08 之后）→ 该断言必红（已实测）。
+
+### 6.3 本批反向验证记录（全部实测，文件 sha256 逐字节还原）
+
+| 变异 | 预期变红 | 结果 |
+|---|---|---|
+| 固定块顺延循环关掉（`guard < 32` → `< 0`） | eveningConflict「顺延到课程之后」 | ✅ 恰红 |
+| `placedOnce` 过滤摘掉 | eveningConflict「一周恰好一块」 | ✅ 恰红 |
+| `daysWithinDeadline` 两处换回 `freeDays` | 6.2 新增锚（Ray 原文故意保留，仍绿） | ✅ 新锚恰红 |
+| `groupIssues` 永不合并 | groupIssues「同 code ≥2 合并」 | ✅ 恰红 |
+| `fromNowSwitchCopy` 边界 `<` → `<=` | fromNowSwitchCopy「07:00 正好算已过起点」 | ✅ 恰红 |
+
+### 6.4 门禁证据（本批实测）
+
+```
+node scripts/gate_overnight.mjs
+  PASS  typecheck    0 错误
+  PASS  test:engine  pass=860 fail=0（动态基线 ≥854）
+  PASS  test:ui      pass=448 fail=0
+  PASS  禁区文件零改动 / 版本纪律 / 影响面回归 / 风格漂移 / a11y对比度
+node scripts/impact.mjs --files <本批 10 个源文件>
+  PASS  engine+ui（受影响 43 个文件）pass=315 fail=0
+node scripts/capability_map.mjs --write   # 4 个新测试登记（148 测试 / 141 源 / 88 RV 锚）
+```
+
+`tests/golden/` 零改动、golden 快照零漂移（引擎批 842→860 全程复跑，快照逐字节未动）。
+
