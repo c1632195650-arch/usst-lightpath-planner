@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 133,
-    "engineFiles": 97,
+    "testFiles": 134,
+    "engineFiles": 98,
     "uiFiles": 36,
-    "guardedSources": 121,
-    "reverseVerified": 84,
+    "guardedSources": 122,
+    "reverseVerified": 85,
     "orphans": 1
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 59,
+      "testCount": 60,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -57,6 +57,7 @@
         "tests/method_params.test.ts",
         "tests/method_params_v2.test.ts",
         "tests/objective-evaluate.test.ts",
+        "tests/ongoing-task.test.ts",
         "tests/p2-convergence.test.ts",
         "tests/p2-essential-budget.test.ts",
         "tests/p2-incremental-rolling.test.ts",
@@ -1096,6 +1097,14 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/ongoing-task.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
     "tests/p2-convergence.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1692,6 +1701,7 @@
       "scripts/scheduler.test.ts",
       "tests/lifeModeAndSocial.test.ts",
       "tests/meal-canteen-rank.test.ts",
+      "tests/ongoing-task.test.ts",
       "tests/p2-essential-budget.test.ts",
       "tests/wp6.test.ts",
       "tests/wp9.test.ts"
@@ -2029,6 +2039,9 @@
     ],
     "src/features/mobile/lib/weekBoard": [
       "tests/mobile/weekBoard.test.ts"
+    ],
+    "src/features/overview/ongoingTask": [
+      "tests/ongoing-task.test.ts"
     ],
     "src/lib/planner/incremental": [
       "tests/p2-incremental-rolling.test.ts"

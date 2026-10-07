@@ -40,9 +40,11 @@ export function OverviewPage({
   }).length;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-      {onboardingCard}
-      <div className="flex flex-col gap-4">
+    /* UI v2 D3：12 列 Bento（跨度只用 4/6/8/12，设计稿 §10 容器纪律）——
+       左 8 右 4；onboardingCard 占整行 12。三档容器由 page-shell（1200px=default 档）承担。 */
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
+      {onboardingCard && <div className="lg:col-span-12">{onboardingCard}</div>}
+      <div className="flex flex-col gap-4 lg:col-span-8">
         <TodayCard
           schedule={schedule}
           todayIso={todayIso}
@@ -92,7 +94,7 @@ export function OverviewPage({
         </section>
       </div>
 
-      <aside className="lg:sticky lg:top-20">
+      <aside className="lg:col-span-4 lg:sticky lg:top-20">
         <DeadlineBoard />
       </aside>
     </div>

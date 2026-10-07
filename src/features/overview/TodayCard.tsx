@@ -1,9 +1,11 @@
 import type { PersonaProfile, Schedule } from '@/types';
 import { DEADLINES } from '@/data/usst';
-import { diffDays, shortCN, weekdayCN } from '@/lib/date';
-import { humanizeMinutes } from '@/constants/time';
+import { diffDays, shortCN, weekdayCN, weekdayOf } from '@/lib/date';
+import { humanizeMinutes, toHHmm } from '@/constants/time';
 import { categoryColor } from '@/constants/chartColors';
 import { lessonsOn, nextLessonAt, nowMinutes, type Lesson } from '@/lib/today';
+import { loadUserPlan } from '@/features/week/userPlanStore';
+import { ongoingUserTask } from './ongoingTask';
 
 interface Props {
   schedule: Schedule;
@@ -50,6 +52,12 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
   const lessons = lessonsOn(schedule, todayIso);
   const next = nextLessonAt(lessons, now);
 
+  /** UI v2 D3 深色焦点卡「Now · 进行中」：用户排程块（梨宝/自建）正在进行 → 顶部压一条。
+   *  无进行中事项（课程与任务都没有）→ 模块不渲染（「全页唯一重物」只在真有事时压上去）。 */
+  const todayDow = (() => { const wd = weekdayOf(todayIso); return wd === 0 ? 7 : wd; })();
+  const ongoingTask = ongoingUserTask(loadUserPlan().tasks, todayDow, now);
+  const ongoingCourse = next && next.status === 'ongoing' ? next.lesson : null;
+
   /** 今天没课时用最近的校园节点补位，避免首屏出现空面。 */
   const nearestDeadline = DEADLINES
     .filter((d) => diffDays(todayIso, d.date) >= 0)
@@ -72,6 +80,39 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
 
         <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-brand-bright">{kicker}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{headline}</h1>
+
+        {/* UI v2 D3：「Now · 进行中」焦点条——正在进行的排程任务（有才渲染，不做常驻占位） */}
+        {ongoingTask && (
+          <div data-testid="focus-now" className="mt-5 rounded-xl border border-white/15 bg-white/[0.07] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-white">
+                <span className="rounded-full bg-school-red px-2 py-0.5 text-[10px] font-bold tracking-wide">NOW</span>
+                <span className="truncate">{ongoingTask.task.emoji ? `${ongoingTask.task.emoji} ` : ''}{ongoingTask.task.title}</span>
+              </p>
+              <p className="shrink-0 font-mono text-xs text-white/70 tabular-nums">
+                {toHHmm(ongoingTask.startMin)}–{toHHmm(ongoingTask.endMin)} · 还有 {humanizeMinutes(ongoingTask.remainMin)}
+              </p>
+            </div>
+            {/* 细进度条：still-in-progress 的体感；纯装饰不承载精确数值 */}
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-school-red transition-[width] duration-base ease-out"
+                style={{ width: `${Math.round(ongoingTask.progress * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {ongoingCourse && !ongoingTask && (
+          <div data-testid="focus-now" className="mt-5 rounded-xl border border-white/15 bg-white/[0.07] px-4 py-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span className="rounded-full bg-school-red px-2 py-0.5 text-[10px] font-bold tracking-wide">NOW</span>
+              <span className="truncate">{ongoingCourse.course.name}</span>
+              <span className="shrink-0 font-mono text-xs font-normal text-white/70 tabular-nums">
+                {ongoingCourse.startTime}–{ongoingCourse.endTime}
+              </span>
+            </p>
+          </div>
+        )}
 
         {next ? (
           <p className="mt-4 text-sm leading-6 text-white/70">
