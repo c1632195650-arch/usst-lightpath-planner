@@ -1,19 +1,32 @@
-import type { Course, Schedule } from '@/types';
+import type { CalEvent, Course, LifeMode, Schedule } from '@/types';
+import { normalizeLifeModeId } from '@/lib/planner/lifeModePolicy';
 
 /* ============================================================
- * 上理工 · 生活模式（已移除，2026-09-30）
+ * 上理工 · 生活模式（2026-10-07 恢复，随 CY 排程壳搬运）
  * ============================================================
- * 这里原有一份 `LIFE_MODES`（平衡 / 摸鱼 / 猛攻 / 吃饭 / 健康 / 社交）。
- * 移除原因（实测定论）：六个模式最终只等价于**一个乘数** ——
- *   · 引擎侧只有 `dailyStudyMin`（乘数）与 `blankRatio`（增量，且只在容量吃紧时才有效）
- *     两个标量被写过，结构维度（排什么类别 / 块多长 / 什么时段 / 选哪些模板）一个都够不着；
- *   · 六个按钮只产出**四种**计划（吃饭≡平衡、健康≡社交，逐块相同）；
- *   · 梨宝侧那套"真有结构差异"的实现（`lib/lbao.ts::lbaoRecommend`）早已无人调用，随同清理。
- * 引擎**不消费**任何"模式"概念：`PlanRequest` / `PhasePolicy` / `construct` / `solver`
- * 全都不含它。`AppState.lifeMode` 字段保留，仅用于兼容已落盘的旧数据（见 `scripts/storage.test.ts`）。
- * 若日后要恢复"本周节奏"这类功能，先建**结构通道**（类别配额 / 时段锚点 / 模板偏置），
- * 再上 UI —— 顺序不能反，否则又是一次"按钮承诺了引擎不做的事"。
+ * 历史：这里原有一份 LIFE_MODES，2026-09-30 移除 —— 移除理由（六模式只等价于
+ * 一个乘数、六个按钮产出四种计划）针对的是**旧实现**，仍然成立。
+ * 恢复原因：CY 线 WP5 把模式参数化了（sportSessions/extraMeals/blankBlocks 三条
+ * 结构通道，见 lifeModePolicy.ts），其 LbaoChat 的 ModeSetupDialog（本次随排程壳
+ * 搬进来的「这一周想过什么节奏」六模式卡）消费这份数据。
+ * 🔴 诚实状态：本地引擎**暂不消费** `PlanRequest.lifeModeExtras`（字段已预留，
+ * construct 未接线）⟹ 模式预览目前只有展示意义；「lifeMode 去留」裁决仍 pending，
+ * 合流接线前不要对模式卡的实际排程效果做承诺。
  */
+/** color 取自光谱色板（constants/chartColors.ts 的 SPECTRUM），改色请两边同步。 */
+export const LIFE_MODES: LifeMode[] = [
+  { id: 'grind', name: '内卷模式', emoji: '🚀', color: '#C24B3A', tagline: '火力全开冲刺', desc: '空闲时间全部排满学习与复习，每周一练保持状态，适合考试周或赶 ddl。' },
+  { id: 'balance', name: '均衡模式', emoji: '⚖️', color: '#2B4C9B', tagline: '学习休息两不误', desc: '默认节奏：白天上课，午后学习，晚上留白，每周两次运动。' },
+  { id: 'faraway', name: '远方模式', emoji: '🫙', color: '#147A8B', tagline: '把时间留给诗和远方', desc: '大幅压缩任务密度，空档实体化成「自由格」，探索想去的任何地方。' },
+  { id: 'sport', name: '运动模式', emoji: '🏃', color: '#1E7A4F', tagline: '隔天一练，科学安排', desc: '按健康库指引每周四次锻炼，错开课程与饭点，给身体充能。' },
+  { id: 'snack', name: '小馋猫模式', emoji: '🧋', color: '#B9762A', tagline: '好好吃饭是大事', desc: '不与课程冲突的前提下，把下午茶和夜宵时刻也排进日程。' },
+  { id: 'mine', name: '我的模式', emoji: '🪞', color: '#6B4BA3', tagline: '按我的画像来', desc: '不套固定模板 —— 梨宝按你的画像、记忆与校正记录量身定制。' },
+];
+
+/** 旧模式 id 归一（localStorage 里可能还存着 slack/food/health/social） */
+export function normalizeLifeMode(id: string | null | undefined): string | null {
+  return normalizeLifeModeId(id);
+}
 
 /* ============================================================
  * 上理工 · 校历（2026–2027 学年第一学期，模拟）

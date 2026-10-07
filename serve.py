@@ -23,6 +23,8 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import urllib.error
+import urllib.request
 from urllib.parse import unquote
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +40,35 @@ PORT_DEFAULT = 8000
 SESSION_COOKIE = "lp_session"
 SESSION_TTL = 7 * 24 * 3600          # 7 天滑动过期
 PBKDF2_ROUNDS = 200_000
+
+# ============================================================
+# 🔴 梨宝脑转发（2026-10-07，B 会话按 RAY 指示添加）
+# ------------------------------------------------------------
+# ⚠️ 本文件所有权属 CY —— 本块是临时桥接，待 CY 审查；删除本块 +
+#    Handler 里两处 `if _is_cy_brain(path)` 调用 = 完全回退。
+#
+# 背景：CY 的梨宝「大脑」（LLM 对话 / 记忆 / 检索 / 路线，DeepSeek）
+# 部署在 http://101.35.253.143（FastAPI）。本地 serve.py 没有 /api/chat
+# 等端点（老前端问梨宝 404 =「回答不上来」的直接原因）。
+# 命中下列前缀的请求原样转发给 CY 服务器，其余路由（账号/课表/静态）
+# 完全不受影响。dev 模式下 vite 代理已做同样分流（vite.config.ts）。
+# ============================================================
+CY_API_TARGET = "http://101.35.253.143"
+CY_BRAIN_PREFIXES = (
+    "/api/chat",    # 梨宝对话（LLM 大脑；本地无此端点）
+    "/api/memory",  # 记忆系统 facts
+    "/api/plan",    # 计划理解 / 计划评估
+    "/api/search",  # 校园信息检索
+    "/api/health",  # LLM 在线状态（本地无此端点，转发后 lbaoHealth 才有真数据）
+    "/api/weather",
+    "/api/poi",
+    "/api/nearby",
+    "/api/route",   # 步行路线（含 /api/route/batch）
+)
+
+
+def _is_cy_brain(path: str) -> bool:
+    return any(path.startswith(p) for p in CY_BRAIN_PREFIXES)
 
 # 可写 kv key 白名单（与 src/lib/storageRegistry.ts 一致；legacy 两个 key 只迁不写）
 # ⚠️ 这张表是**手抄**的：加一个前端 key 必须同步加到这里，否则写入被 400 拒绝、
@@ -279,6 +310,27 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, {"ok": False, "error": "未登录或会话已过期"})
         return user
 
+    # ---- 梨宝脑转发（见文件头 CY_BRAIN_PREFIXES 块说明）----
+    def _proxy_cy(self) -> None:
+        """把梨宝脑请求原样转发给 CY 服务器；SSE 流式（/api/chat/stream）不支持。"""
+        url = CY_API_TARGET + self.path
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else None
+        req = urllib.request.Request(url, data=body, method=self.command)
+        req.add_header("Content-Type", self.headers.get("Content-Type") or "application/json")
+        req.add_header("Accept", self.headers.get("Accept") or "*/*")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = resp.read()
+                self._send(resp.status, data,
+                           resp.headers.get("Content-Type") or "application/json; charset=utf-8")
+        except urllib.error.HTTPError as e:
+            # 后端业务错（4xx/5xx）原样透传，前端按既有逻辑处理
+            self._send(e.code, e.read(),
+                       e.headers.get("Content-Type") or "application/json; charset=utf-8")
+        except Exception as e:  # 连不上 / 超时
+            self._send(502, {"ok": False, "error": f"梨宝脑转发失败（CY 服务器不可达）：{e}"})
+
     # ---- GET ----
     def do_GET(self):
         path = unquote(self.path.split("?", 1)[0])
@@ -286,6 +338,9 @@ class Handler(BaseHTTPRequestHandler):
         # 前端 timetableClient 的 BASE = '/timetable' → 剥掉前缀使其匹配下方路由
         if path.startswith('/timetable/'):
             path = path[len('/timetable'):]
+        if _is_cy_brain(path):
+            self._proxy_cy()
+            return
         if path == "/api/auth/me":
             con = db()
             try:
@@ -349,6 +404,9 @@ class Handler(BaseHTTPRequestHandler):
         # 生产模式：剥掉 /timetable 前缀（vite 代理在 dev 模式做了同样的事）
         if path.startswith('/timetable/'):
             path = path[len('/timetable'):]
+        if _is_cy_brain(path):
+            self._proxy_cy()
+            return
         if path == "/api/auth/register":
             self._auth_register()
             return
