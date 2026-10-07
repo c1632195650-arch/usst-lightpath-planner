@@ -26,6 +26,9 @@ interface Props {
   issues: PlanIssue[];
   /** 当前高亮天（默认今天） */
   todayDow: DayOfWeek;
+  /** 受控选中天（WeekBoard 点卡下潜时由父层给定；不传 = 内部自管） */
+  day?: DayOfWeek;
+  onDayChange?: (d: DayOfWeek) => void;
   /** 点块 → 既有详情抽屉（改时间路径与周网格同一条，WCAG 2.5.7 替代路径） */
   onOpenDetail: (b: TimeBlock) => void;
 }
@@ -36,8 +39,10 @@ function nowMinNow(): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-export function DayAgenda({ blocks, issues, todayDow, onOpenDetail }: Props) {
-  const [day, setDay] = useState<DayOfWeek>(todayDow);
+export function DayAgenda({ blocks, issues, todayDow, day: dayProp, onDayChange, onOpenDetail }: Props) {
+  const [dayInner, setDayInner] = useState<DayOfWeek>(todayDow);
+  const day = dayProp ?? dayInner;
+  const setDay = (d: DayOfWeek) => { setDayInner(d); onDayChange?.(d); };
   const [nowMin, setNowMin] = useState<number | null>(null);
 
   // nowline：60s 定时刷新；不做平滑动画（transition: none），reduced-motion 下静止

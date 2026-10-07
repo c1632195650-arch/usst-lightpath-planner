@@ -122,14 +122,19 @@ const run = async () => {
   await T(400);
 
   // 删除软块 → 选「留空白」→ 留白块出现（V1-5）
-  await page.locator('[data-testid="edit-mode-toggle"]').click(); // 编辑态才有 hover 工具
+  // 【D9 申报 2026-10-07】UI v2 D2 把块操作从 hover 浮现收进 ⋯ 菜单（设计稿 §4.3 ⑤，
+  // 触屏与桌面一致；通道/确认弹窗不变）：删除入口从
+  //   旧行129-132: card.hover() → button[title*="删除这块"]（hover 工具）
+  //   新行:        card 定位其 ⋯ 按钮 [data-testid^="block-menu-"] → 菜单项「删除（可撤销）」
+  // 确认弹窗与「留出空白」按钮未变。反向验证：回退到旧 hover 按钮结构时本段寻址失败（红）。
+  await page.locator('[data-testid="edit-mode-toggle"]').click(); // 编辑态才有操作菜单
   await T(400);
   const card = page.locator('[draggable="true"]').first();
   if (await card.count()) {
-    await card.hover(); // hover 工具（删除按钮）随 hover 才渲染
-    await T(300);
-    const delBtn = page.locator('button[title*="删除这块"]').first();
-    await delBtn.click({ force: true });
+    const kebab = card.locator('[data-testid^="block-menu-"]').first();
+    await kebab.click();
+    await T(400);
+    await page.getByRole('menuitem', { name: /删除/ }).click();
     await T(400);
     await page.getByRole('button', { name: /留出空白/ }).click();
     await T(1500);

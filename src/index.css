@@ -323,6 +323,20 @@
     background: linear-gradient(135deg, #f2d45c 0%, #9ed46b 100%);
   }
 
+  /* ⋯ 菜单行（UI v2 D2）：块操作菜单的行样式（Popover 面板内）。 */
+  .menu-row {
+    @apply min-h-9 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink transition-colors duration-fast ease-out hover:bg-brand-light/60 focus-visible:bg-brand-light/60 focus-visible:outline-none;
+  }
+
+  /* 周末斜纹（UI v2 D2 WeekBoard）：表示「可自由支配」，装饰性不承载信息。 */
+  .weekend-hatch {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      rgba(90, 99, 119, 0.055) 0 4px,
+      transparent 4px 8px
+    );
+  }
+
   /**
    * 「改动已写入 · 可撤销」提示条样式（UI v2 批次 B 交付，D6 梨宝常驻呼出接线）：
    * sparkle 图标位 + 文本 + 撤销动作位；金端点缀、绿色确认底。

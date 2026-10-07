@@ -61,7 +61,9 @@ import {
 import { dragTo } from '@/lib/planner/ripple';
 import { freeGapsOf, snap10, type TimeGap } from './timeScale';
 import { DayAgenda } from './DayAgenda';
+import { WeekBoard } from './WeekBoard';
 import { Segmented } from '@/components/ui/Segmented';
+import { Popover } from '@/components/ui/Popover';
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
@@ -146,15 +148,41 @@ interface Props {
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
-const KIND_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  course: { bg: 'bg-blue-100 border-blue-400', text: 'text-blue-900', label: '课' },
-  meal: { bg: 'bg-amber-100 border-amber-400', text: 'text-amber-900', label: '饭' },
-  study: { bg: 'bg-green-100 border-green-400', text: 'text-green-800', label: '学' },
-  activity: { bg: 'bg-purple-100 border-purple-400', text: 'text-purple-900', label: '动' },
-  user: { bg: 'bg-pink-100 border-pink-400', text: 'text-pink-900', label: '我' },
-  commute: { bg: 'bg-gray-100 border-gray-400', text: 'text-gray-700', label: '走' },
-  blank: { bg: 'bg-white border-gray-200', text: 'text-gray-400', label: '空' },
+/**
+ * UI v2 D2（设计稿 §7.6 六类色 + §7.7 色盲二重编码）：
+ *   色条/文字色 + 块底浅色 + 微型几何符三重编码——颜色不再是唯一编码
+ *   （红绿色盲男性约 8%，只靠 border-l-4 分辨课程性质是可达性缺陷）。
+ *   键保持 BlockKind 语义；值按设计稿实测对比度落地（表内 AAA/AA 全过）。
+ */
+const KIND_STYLE: Record<string, { bg: string; text: string; label: string; geo: GeoShape }> = {
+  course: { bg: 'bg-[#E5EAF6] border-l-[#1F3A78]', text: 'text-[#1F3A78]', label: '课', geo: 'tri' },
+  study: { bg: 'bg-[#FBF1E3] border-l-[#965C18]', text: 'text-[#965C18]', label: '学', geo: 'diamond' },
+  activity: { bg: 'bg-[#E6F2EC] border-l-[#14563A]', text: 'text-[#14563A]', label: '动', geo: 'circle' },
+  user: { bg: 'bg-[#E7F3F5] border-l-[#0D5560]', text: 'text-[#0D5560]', label: '我', geo: 'square' },
+  meal: { bg: 'bg-[#F3EEF9] border-l-[#4A3374]', text: 'text-[#4A3374]', label: '饭', geo: 'star' },
+  commute: { bg: 'bg-[#EDEFF5] border-l-[#5A6377]', text: 'text-[#5A6377]', label: '走', geo: 'circle' },
+  blank: { bg: 'bg-white border-l-gray-200', text: 'text-gray-400', label: '空', geo: 'star' },
 };
+
+/** 微几何符（§7.7 / §9 mg-*）：12×12，fill currentColor，随 KIND_STYLE.geo 取形 */
+type GeoShape = 'tri' | 'diamond' | 'circle' | 'square' | 'star' | 'hex';
+const GEO_PATHS: Record<GeoShape, string> = {
+  tri: 'M6 1.6l4.6 8.4H1.4z',
+  diamond: 'M6 .8l5.2 5.2L6 11.2.8 6z',
+  circle: '', // 特判 <circle>
+  square: 'M1.4 1.4h9.2v9.2H1.4z',
+  star: 'M6 1l1.5 3.2 3.5.4-2.6 2.4.7 3.4L6 8.7 2.9 10.4l.7-3.4L1 4.6l3.5-.4z',
+  hex: 'M6 .9l4.4 2.6v5L6 11.1 1.6 8.5v-5z',
+};
+function GeoMark({ shape, className = '' }: { shape: GeoShape; className?: string }) {
+  return (
+    <svg viewBox="0 0 12 12" width="12" height="12" fill="currentColor" aria-hidden="true" className={className}>
+      {shape === 'circle'
+        ? <circle cx="6" cy="6" r="4.6" />
+        : <path d={GEO_PATHS[shape]} />}
+    </svg>
+  );
+}
 
 const ISSUE_STYLE = {
   error: 'bg-red-50 border-red-300 text-red-800',
@@ -275,13 +303,18 @@ function BlockCard({
       onClick={() => { if (isNew && onDismissNew) onDismissNew(); }}
       className={`rounded-lg border-l-4 ${style.bg} px-2.5 py-2 ${isEvent ? 'ring-1 ring-purple-300' : ''} ${dragging ? 'opacity-50 ring-2 ring-brand' : ''} ${isNew ? 'ring-2 ring-green-400' : ''} ${block.kind !== 'course' && block.source !== 'course' ? 'cursor-grab' : ''}`}
     >
+      {/* UI v2 D2 五维分层：① 色条4px(左) ② 主标题 14.5/600 ③ 时间 等宽11.5 品牌色
+          ④ 地点 ⑤ 状态 tag；微几何符在课程名左侧 9px 处（§7.7 色盲二重编码） */}
       <div className="flex items-baseline justify-between gap-2">
-        <span className={`text-[13px] font-semibold ${style.text}`}>
-          {locked && <span title="已定住：重排时不动">🔒 </span>}
-          {block.emoji ? `${block.emoji} ` : ''}{block.title}
-          {isNew && <span className="ml-1 rounded bg-green-600 px-1 align-middle text-[9px] text-white">🆕 新</span>}
+        <span className={`flex min-w-0 items-baseline gap-1.5 text-[14.5px] font-semibold leading-snug ${style.text}`}>
+          <GeoMark shape={style.geo} className="relative top-[6px] h-3 w-3 shrink-0 self-start" />
+          <span className="min-w-0 truncate">
+            {locked && <span title="已定住：重排时不动">🔒 </span>}
+            {block.emoji ? `${block.emoji} ` : ''}{block.title}
+            {isNew && <span className="ml-1 rounded bg-green-600 px-1 align-middle text-[9px] text-white">🆕 新</span>}
+          </span>
         </span>
-        <span className="shrink-0 font-mono text-[11px] text-ink-faint">
+        <span className="shrink-0 font-mono text-[11.5px] font-medium text-brand tabular-nums">
           {toHHmm(block.startMin)}–{toHHmm(block.endMin)}
         </span>
       </div>
@@ -340,77 +373,49 @@ function BlockCard({
         </button>
       )}
 
-      {/* 操作按钮区（2026-09-19 改版）：
-          · 「做了 / 没做」执行标记**已下线**（用户确认不需要）——
-            行为记录的 UI 入口随之移除，历史数据仍在本地，actualLoad 通道不破坏。
-          · 「🗑 删除」沿用原「✕ 不做」的通道与 hover 浮现交互，只把文案改直白。 */}
+      {/* UI v2 D2：操作收进 ⋯ 菜单（设计稿 §4.3 ⑤——最多挤 5 个按钮靠 hover 浮现，
+          手机没有 hover；改为 ⋯ 后触屏与桌面行为一致，E2E 可点元素计数下降属预期改善）。
+          原「定住/删除/作业/改」四按钮的通道、语义与确认路径全部不变。 */}
       {editable && (
       <div className="group mt-1.5 flex items-center gap-1.5">
-        {/* 「定住」—— 把这块从「引擎可动的软块」变成「用户确认过的硬块」。
-            ⚠️ 已锁定时**常显**（否则用户看不出这块被锁了）；未锁时 hover 才出现。 */}
-        <button
-          type="button"
-          onClick={() => onToggleLock(block)}
-          title={locked ? '解除锁定，允许重排时挪动' : '定住：以后重排都保持这个时间与地点'}
-          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium transition-opacity ${
-            locked
-              ? 'bg-slate-800 text-white'
-              : 'bg-white/70 text-ink-soft opacity-0 hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100'
-          }`}
+        <Popover
+          trigger={({ open, toggle }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              aria-label="块操作菜单"
+              data-testid={`block-menu-${block.id}`}
+              className={`inline-flex min-h-8 items-center gap-1 rounded-lg border border-ink/10 bg-white px-2 text-[11px] font-medium text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1] ${open ? 'border-brand/40 bg-brand-light text-brand' : ''}`}
+            >
+              ⋯
+              {(edited || assignmentMin != null || locked) && (
+                <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+              )}
+            </button>
+          )}
         >
-          {locked ? '🔒 已定住' : '🔓 定住'}
-        </button>
-        {/* 「🗑 删除」—— 把块从计划里拿掉，重排也不会回来。
-            课程块不给：它是既成事实，改课走「调课」。
-            拖到右侧投放区是同一件事的另一条路径。 */}
-        {block.kind !== 'course' && block.source !== 'course' && (
-          <button
-            type="button"
-            onClick={() => onExclude(block)}
-            title="删除这块：从计划里拿掉，重排也不会回来（可在上方「全部恢复」撤销）"
-            className="rounded bg-white/70 px-1.5 py-0.5 text-[10.5px] font-medium text-ink-soft opacity-0 transition-opacity hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 focus-visible:opacity-100"
-          >
-            🗑 删除
-          </button>
-        )}
-        {/* T6：作业 —— 只对课程块有意义。
-            引擎不知道「这节课留了作业」，所以要用户说一句；时长也由用户填
-            （「高数作业」和「大物实验报告」能差三倍，引擎猜不准，猜了也是噪音）。
-            已标记时常显（让用户一眼看出这门课的作业已排进计划）。 */}
-        {block.kind === 'course' && block.courseId && (
-          <button
-            type="button"
-            onClick={() => setAsgOpen((v) => !v)}
-            title={assignmentMin != null
-              ? `已标记作业 ${assignmentMin} 分钟 —— 点一下可修改或取消`
-              : '这节课留了作业？记一下要多久，引擎会给你留时间'}
-            className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium transition-opacity ${
-              assignmentMin != null
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white/70 text-ink-soft opacity-0 hover:bg-indigo-50 hover:text-indigo-700 group-hover:opacity-100 focus-visible:opacity-100'
-            }`}
-          >
-            {assignmentMin != null ? `📝 ${assignmentMin}分` : '📝 作业'}
-          </button>
-        )}
-        {/* R2：「改」—— 改这块的时间/时长/地点（不用删掉重加）。
-            课程块不给：课程时间变动是「调课」（R3），走另一个入口，
-            语义不同（「只这周 / 以后都这样」），不能混。
-            已改过的块常显（让用户知道这块有自己的改动在身）。 */}
-        {block.kind !== 'course' && block.source !== 'course' && (
-          <button
-            type="button"
-            onClick={() => setEditOpen((v) => !v)}
-            title={edited ? '这块被你改过 —— 点一下可再改或恢复引擎安排' : '改这块的时间、时长或地点'}
-            className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium transition-opacity ${
-              edited
-                ? 'bg-teal-600 text-white'
-                : 'bg-white/70 text-ink-soft opacity-0 hover:bg-teal-50 hover:text-teal-700 group-hover:opacity-100 focus-visible:opacity-100'
-            }`}
-          >
-            {edited ? '✏️ 已改' : '✏️ 改'}
-          </button>
-        )}
+          <div className="flex flex-col" role="menu">
+            <button type="button" role="menuitem" onClick={() => onToggleLock(block)} className="menu-row">
+              {locked ? '🔓 解锁定住' : '🔒 定住（重排不动）'}
+            </button>
+            {block.kind !== 'course' && block.source !== 'course' && (
+              <button type="button" role="menuitem" onClick={() => setEditOpen(true)} className="menu-row">
+                ✏️ {edited ? '再改（这块被你改过）' : '改时间 / 时长 / 地点'}
+              </button>
+            )}
+            {block.kind === 'course' && block.courseId && (
+              <button type="button" role="menuitem" onClick={() => setAsgOpen((v) => !v)} className="menu-row">
+                📝 {assignmentMin != null ? `作业已记 ${assignmentMin} 分 —— 改一下` : '记一下作业时长'}
+              </button>
+            )}
+            {block.kind !== 'course' && block.source !== 'course' && (
+              <button type="button" role="menuitem" onClick={() => onExclude(block)} className="menu-row text-[#B0402F] hover:bg-danger-light">
+                🗑 删除（可撤销）
+              </button>
+            )}
+          </div>
+        </Popover>
       </div>
       )}
 
@@ -554,6 +559,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     try { return localStorage.getItem('usst.scheduleViewV2') === '1'; } catch { return false; }
   });
   const [agendaView, setAgendaView] = useState<boolean>(false);
+  /** 下潜选中的天（WeekBoard 点卡 → DayAgenda；null = 跟随今天） */
+  const [agendaDay, setAgendaDay] = useState<DayOfWeek | null>(null);
 
   // V2-2：梨宝「这段时间别排」确认后广播的重排请求 —— 收到就手动触发一次重排
   useEffect(() => {
@@ -2044,7 +2051,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         )}
       </details>
 
-      {/* UI v2 D1：日程双层切换（SCHEDULE_VIEW_V2 开才显示，默认层=周概览） */}
+      {/* UI v2 D1/D2：日程双层切换（SCHEDULE_VIEW_V2 开才显示，默认层=周概览） */}
       {scheduleV2 && (
         <div className="flex justify-end">
           <Segmented
@@ -2059,12 +2066,26 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       )}
 
-      {/* UI v2 D1：当日流水层（SCHEDULE_VIEW_V2 开 + 用户切到「当日流水」才渲染） */}
+      {/* UI v2 D2：上层 · 周概览七密度卡（节奏尺，不画课名；点卡下潜当日流水） */}
+      {scheduleV2 && (
+        <WeekBoard
+          blocks={(shownPlan ?? plan).blocks}
+          issues={plan.issues}
+          weekMonday={weekMonday}
+          todayDow={(todayDow ?? null) as DayOfWeek | null}
+          selectedDay={agendaView ? ((agendaDay ?? todayDow ?? 1) as DayOfWeek) : null}
+          onSelectDay={(d) => { setAgendaDay(d); setAgendaView(true); }}
+        />
+      )}
+
+      {/* UI v2 D1：下层 · 当日流水（SCHEDULE_VIEW_V2 开 + 下潜/切到「当日流水」才渲染） */}
       {scheduleV2 && agendaView && (
         <DayAgenda
           blocks={(shownPlan ?? plan).blocks}
           issues={plan.issues}
           todayDow={(todayDow ?? 1) as DayOfWeek}
+          day={(agendaDay ?? undefined) as DayOfWeek | undefined}
+          onDayChange={setAgendaDay}
           onOpenDetail={setDetailBlock}
         />
       )}

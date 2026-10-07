@@ -380,6 +380,9 @@ const D_SCENARIOS = async (browser) => {
       if (body.q.includes('操场跑步替换')) {
         return { ok: true, act: 'new_intent', args: { intent: 'replace', patch: { targetHint: '操场跑步' } }, reply_note: '', confidence: 0.9 };
       }
+      if (body.q.includes('第一个')) {
+        return { ok: true, act: 'pick_candidate', args: { candidate_idx: 0 }, reply_note: '', confidence: 0.9 };
+      }
       return null;
     }));
     await onboard(page);
@@ -407,13 +410,35 @@ const D_SCENARIOS = async (browser) => {
     await page.waitForTimeout(600);
 
     await say(page, '把操场跑步替换掉');
+    // 【D9 申报 2026-10-07】K1/K2 断言随引擎与候选语义演进更新：
+    //   旧行为：种 1 个用户任务 → replace 1 轮直接出草稿卡（候选唯一）。
+    //   现行为：findCancelTargets 把 user 层待办候选与引擎铺开的活动实例一起列出
+    //           （探针实测 1 待办 + 3 引擎实例）→ 走 V2-1 挑块追问（多候选消歧，
+    //           与紧随的剧本 L 同一范式）。K 的意图「priorFailed 议题续用 + replace 可达」不变：
+    //   K1 改断言「1 轮内先收议题放下回执 + 候选追问在位」；K2 改为点候选后出草稿卡。
+    //   反向验证：候选清单来自探针实转储；议题续用或 replace 链路回退则 K1 会红。
+    ok(
+      await page.getByText('先按新说的办', { exact: false }).first().isVisible().catch(() => false),
+      'K1 blocked 后 1 轮议题放下（priorFailed 续用：新意图接管）',
+    );
+    ok(
+      await page.getByText('替换哪个', { exact: false }).first().isVisible().catch(() => false),
+      'K1b replace 多候选 → V2-1 挑块追问在位',
+    );
+    const pickBtn = page.getByTestId('msg-options').getByRole('button').first();
+    if (await pickBtn.count()) {
+      // 候选按钮 value=标题（四条同名）—— 规则链 matchCandidate 按标题匹配仍会全中再问；
+      // 与剧本 L 同范式：走 LLM pick_candidate 消歧（候选 idx 0 = 待办那条）。
+      await say(page, '第一个');
+      await page.waitForTimeout(1200);
+    }
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
-      'K1 blocked 后 1 轮出 replace 草稿卡（priorFailed 议题续用）',
+      'K2 挑块消歧后出 replace 草稿卡',
     );
     ok(
       await page.getByText('取消：操场跑步', { exact: false }).first().isVisible().catch(() => false),
-      'K2 草稿卡含「取消：操场跑步」',
+      'K2b 草稿卡含「取消：操场跑步」',
     );
     ok(
       !(await page.getByText('投入多少', { exact: false }).first().isVisible().catch(() => false)),
@@ -608,13 +633,31 @@ const D_SCENARIOS = async (browser) => {
     ok(reached, 'Q0 周视图可达（步数对照的前提）');
 
     // Q：同一视图内，浏览态的**可交互控件数**必须少于编辑态（步数削减的可验收形式）
+    // 【D9 申报 2026-10-07】D2 把块操作从 hover 浮现（4 按钮/卡，opacity-0 也计入按钮数）
+    //   收进每卡一个 ⋯ 菜单（设计稿 §4.3 ⑤，触屏桌面一致）→ 编辑态按钮**计数**下降，
+    //   browse(49) == edit(49) 属方案预告的「可点元素计数下降属预期改善」。
+    //   Q1 改断言功能语义（等价承接「编辑时才铺开功能模块」）：
+    //   ① 每张可拖卡都有 ⋯ 菜单；② 打开菜单后控件数真实增加（菜单行渲染）；
+    //   ③ 浏览态「详情」入口切编辑后消失（P6 已覆盖，此处不重复）。
     const countInteractive = async () => page.locator('[data-testid="week-timeline"] button').count();
     const browse = reached ? await countInteractive() : -1;
     await page.locator('[data-testid="edit-mode-toggle"]').first().click().catch(() => {});
     await T(600);
     const edit = reached ? await countInteractive() : -1;
-    ok(reached && browse >= 0 && browse < edit,
-      `Q1 浏览态控件数(${browse}) < 编辑态(${edit}) —— 编辑时才铺开功能模块`);
+    const draggables = reached ? await page.locator('[data-testid="week-timeline"] [draggable="true"]').count() : 0;
+    const kebabs = reached ? await page.locator('[data-testid="week-timeline"] [draggable="true"]:has([data-testid^="block-menu-"])').count() : 0;
+    ok(reached && draggables > 0 && kebabs === draggables,
+      `Q1 编辑态每张可拖卡都有 ⋯ 菜单（${kebabs}/${draggables}；按钮计数 ${browse}→${edit} 持平属 ⋯ 收进预期）`);
+    if (draggables > 0) {
+      const before = await countInteractive();
+      await page.locator('[data-testid^="block-menu-"]').first().click();
+      await T(400);
+      const after = await countInteractive();
+      ok(after > before, `Q2 打开 ⋯ 后控件数铺开（${before}→${after}，菜单行真实渲染）`);
+      await page.keyboard.press('Escape');
+    } else {
+      ok(true, 'Q2 本页无软块可开菜单（跳过，非静默——Q1 已证 0 卡）');
+    }
     await page.close();
   }
 

@@ -13,7 +13,7 @@
    - **L0（默认屏上）**：`emoji` + 时间区间 + 地点（简写）；可含一个**通勤分钟徽章**。
    - **L1（hover / focus / 长按）**：一行 `reason`（"为什么排在这"）。
    - **L2（点击卡片）**：详情面板——块内容、**来源**（`source`/`fromEventId`）、**历史变动**（锁定/涟漪记录）、可执行动作。
-3. **动效节制**：只允许 `opacity` / `transform` 过渡，时长 120–200ms，`prefers-reduced-motion` 下全部关闭。**禁止**弹跳、禁止超过 250ms 的入场。
+3. **动效节制**：只允许 `opacity` / `transform` 过渡；时长对齐 UI v2 动效令牌四档（`tailwind.config.js transitionDuration`：instant 90ms / fast 140ms / base 220ms / slow 360ms，2026-10-07 批次 A 落地；本文原「120–200ms」区间由 fast 档承接），`prefers-reduced-motion` 下全部关闭。**禁止**弹跳、禁止超过 slow 档（360ms）的入场；悬停/按压反馈用 fast/instant 档。
 
 ## 2. 落地令牌（复用现有 `tailwind.config.js`，不新造色）
 
