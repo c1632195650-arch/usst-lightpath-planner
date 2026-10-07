@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { LightpathMark, LightpathWordmark } from '@/components/LightpathMark';
+import { Icon } from '@/components/icons/Icon';
 
 interface Props {
   onStart: () => void;
@@ -59,7 +60,7 @@ export function Welcome({ onStart, onSkip, footer }: Props) {
             <p className="kicker">USST · LIGHTPATH</p>
             <h2>
               让校园生活，
-              <em>有自己的节奏</em>。
+              <em>有自己的节奏</em>
             </h2>
             <p className="sub">
               从课表、校园节点和你的习惯出发，梳理学习、休息与日常生活。计划不必填满，重要的是能被执行。
@@ -91,7 +92,16 @@ export function Welcome({ onStart, onSkip, footer }: Props) {
             <span className="sp r" />
           </div>
 
-          <div className="relative z-[3] flex items-center justify-between gap-3 px-8 pb-5 pt-4 text-[10px] font-medium tracking-[0.14em] text-white/40">
+          {/* §9.6 I 组：页脚建筑剪影条 —— 密氏校门/湛恩图书馆/思晏堂/体育馆（指认层线描，
+              低透明度装饰，呼应「1906–2026」；不可点、不可独立放大） */}
+          <div className="relative z-[3] mt-1 flex items-end justify-center gap-8 text-white/50" aria-hidden="true">
+            <Icon name="men" size="lg" />
+            <Icon name="lib" size="lg" />
+            <Icon name="yates" size="lg" />
+            <Icon name="gym" size="lg" />
+          </div>
+
+          <div className="relative z-[3] flex items-center justify-between gap-3 px-8 pb-5 pt-3 text-[10px] font-medium tracking-[0.14em] text-white/40">
             <span>UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY</span>
             <span>1906–2026</span>
           </div>

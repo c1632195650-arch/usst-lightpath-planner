@@ -20,7 +20,9 @@ test('E1 sprite: 90 枚齐全 = 72 功能 + 12 上理建筑 + 6 微几何（RV-E
     assert.match(paths, new RegExp(`'${b}': \\{ viewBox:`), `建筑 ${b} 在列`);
   }
   for (const g of ['mg-tri', 'mg-diamond', 'mg-circle', 'mg-square', 'mg-star', 'mg-hex']) {
-    assert.match(paths, new RegExp(`'${g}': \\{ viewBox: '12`), `微几何 ${g} 12 viewBox`);
+    // 【D9 申报】锚随 viewBox 规范化更新：生成脚本曾错拼 '12 0 12 12'，修复后与设计稿同形
+    // '0 0 12 12'（12 0 12 12 会把内容整体裁出视口——图标不可见的根因）。
+    assert.match(paths, new RegExp(`'${g}': \\{ viewBox: '0 0 12 12'`), `微几何 ${g} 12 viewBox`);
   }
 });
 

@@ -7,6 +7,7 @@
 import { plannedDoneLabel, type Todo } from '@/features/mobile/lib/memoTypes.ts';
 import { scheduledLabel } from './memoLogic.ts';
 import { resolveBlock } from './webMemo.ts';
+import { Icon } from '@/components/icons/Icon';
 
 export interface TodoListProps {
   todos: readonly Todo[];
@@ -23,7 +24,12 @@ export interface TodoListProps {
 
 export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint, overdueIds }: TodoListProps) {
   if (todos.length === 0) {
-    return <p className="px-1 py-3 text-[12px] text-ink-faint">还没有待办。想起什么就记一条，办好打个勾就行。</p>;
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink/10 bg-white/60 px-4 py-8 text-center">
+        <Icon name="inbox" size="xl" className="text-ink-faint" />
+        <p className="text-[12px] text-ink-faint">还没有待办。想起什么就记一条，办好打个勾就行。</p>
+      </div>
+    );
   }
   return (
     <ul className="space-y-1.5" data-testid="todo-list">

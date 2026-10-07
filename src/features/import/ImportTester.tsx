@@ -16,6 +16,7 @@ import {
   type ScheduleImportResult,
 } from '@/lib/timetableClient';
 import { periodStartMin, periodEndMin, toHHmm } from '@/constants/time';
+import { Icon } from '@/components/icons/Icon';
 
 const DAY = ['', '一', '二', '三', '四', '五', '六', '日'];
 
@@ -64,6 +65,11 @@ export function ImportTester({ onApply }: Props) {
               online === null ? 'bg-ink-faint' : online ? 'bg-brand' : 'bg-red-500'
             }`}
           />
+          <Icon
+            name={online ? 'ok-circle' : 'warn-tri'}
+            size="sm"
+            className={online ? 'text-brand' : 'text-danger'}
+          />
           <h2 className="text-base font-semibold tracking-tight text-ink">课表解析服务</h2>
           <span className="text-xs text-ink-faint">
             {online === null ? '探测中…' : online ? '127.0.0.1:8765 已连通' : '未连通 —— 先跑 python server.py 8765'}
@@ -96,7 +102,14 @@ export function ImportTester({ onApply }: Props) {
             onClick={() => void run(() => fetchSchedule(meta))}
             className="button-primary px-4 py-2 text-[13px]"
           >
-            {busy ? '解析中…' : '拉取当前课表'}
+            <span className="inline-flex items-center gap-1.5">
+              <Icon
+                name="rotate"
+                size="sm"
+                className={busy ? 'animate-spin [animation-duration:1.2s]' : ''}
+              />
+              {busy ? '解析中…' : '拉取当前课表'}
+            </span>
           </button>
 
           <label
@@ -104,7 +117,10 @@ export function ImportTester({ onApply }: Props) {
               busy || !online ? 'pointer-events-none opacity-40' : 'cursor-pointer'
             }`}
           >
-            上传 PDF 课表
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="upload" size="sm" />
+              上传 PDF 课表
+            </span>
             <input
               type="file"
               accept="application/pdf,.pdf"

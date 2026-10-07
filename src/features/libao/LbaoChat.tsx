@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PersonaProfile, Schedule, TimeBlock, WeekPlan } from '@/types';
+import { Icon } from '@/components/icons/Icon';
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { lbaoChat, lbaoHealth, chatHistory, resetMemory, decideFact, planUnderstand, planReview, type ChatResult, type MemoryFact, type PlanReviewReport, type RagSource } from '@/lib/api';
@@ -2003,9 +2004,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                 key={question}
                 onClick={() => send(question)}
                 disabled={loading}
-                className="min-h-11 rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white/75 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="group flex min-h-11 items-center justify-between gap-2 rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white/75 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {question}
+                <span className="min-w-0 flex-1">{question}</span>
+                <Icon name="chevron-right" size="sm" className="shrink-0 text-white/40 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-white/80" />
               </button>
             ))}
           </div>
@@ -2017,7 +2019,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             onClick={() => setMemoryOpen(true)}
             className="mb-3 w-full rounded-xl border border-white/15 px-3 py-2 text-left text-xs text-white/70 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white"
           >
-            📓 梨宝记住了什么（查看 / 确认 / 删除）
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="notebook-pen" size="xs" className="shrink-0" />
+              梨宝记住了什么（查看 / 确认 / 删除）
+            </span>
           </button>
           {/* 清空对话（E8 配套）：恢复默认开启后给用户一个「从头开始」的出口。
               范围 = 本会话记录 + 本设备记忆（/api/memory/reset 的真实语义），文案不美化。 */}
@@ -2026,7 +2031,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
             disabled={loading}
             className="mb-3 w-full rounded-xl border border-white/15 px-3 py-2 text-left text-xs text-white/70 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            🗑 清空对话与记忆（本设备，不可恢复）
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="trash" size="xs" className="shrink-0" />
+              清空对话与记忆（本设备，不可恢复）
+            </span>
           </button>
           {/* 未连接用琥珀而不是品牌靛蓝：靛蓝在这套色板里代表「正常 / 可操作」，
               拿它表示服务不可用会把告警读成常态。 */}

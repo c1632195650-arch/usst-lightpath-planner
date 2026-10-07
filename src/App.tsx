@@ -5,6 +5,8 @@ import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, diffDays, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
 import { LightpathMark } from '@/components/LightpathMark';
+import { Icon } from '@/components/icons/Icon';
+import type { IconName } from '@/components/icons/Icon';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
@@ -42,6 +44,15 @@ const TAB_LABEL: Record<MainTab, string> = {
   memo: '待办',
   profile: '我的画像',
   import: '课表',
+};
+
+/** §9.6 B 组：导航每项配图标（md 档），当前项随激活态同色。 */
+const TAB_ICON: Record<MainTab, IconName> = {
+  calendar: 'dashboard',
+  libao: 'sparkle',
+  memo: 'inbox',
+  profile: 'user-round',
+  import: 'calendar-days',
 };
 
 function isoOf(d: Date): string {
@@ -258,8 +269,9 @@ export default function App() {
                   if (t === 'calendar') { setWeekMonday(null); setFocusedDay(null); }
                   else if (t === 'profile') setWeekMonday(null);
                 }}
-                className={`nav-item whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
+                className={`nav-item inline-flex items-center gap-1.5 whitespace-nowrap ${mainTab === t ? 'nav-item-active' : ''}`}
               >
+                <Icon name={TAB_ICON[t]} size="md" className="shrink-0" />
                 {TAB_LABEL[t]}
               </button>
             ))}
@@ -341,7 +353,12 @@ export default function App() {
                 <p className="section-label">PROFILE</p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
-                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
+                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">
+                  <span className="inline-flex items-center gap-1.5">
+                    开始画像测评
+                    <Icon name="arrow-right" size="sm" />
+                  </span>
+                </button>
               </div>
               {/* UI v2 D5：画像未完成时设置同样可达（真实状态源不依赖画像） */}
               <SettingsPanel />

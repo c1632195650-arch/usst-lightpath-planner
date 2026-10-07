@@ -35,7 +35,7 @@ export function Icon({ name, size = 'md', className = '', label }: Props) {
   const def = ICONS[name];
   if (!def) return null;
   const step = ICON_SIZE_STEPS[size];
-  const micro = def.viewBox.startsWith('12 ');
+  const micro = def.viewBox.endsWith(' 12 12');
   // 微几何符（12 viewBox）是实心 fill 形（§7.7 双编码），不吃线宽补偿
   return (
     <svg

@@ -5,6 +5,7 @@ import { humanizeMinutes, toHHmm } from '@/constants/time';
 import { categoryColor } from '@/constants/chartColors';
 import { lessonsOn, nextLessonAt, nowMinutes, type Lesson } from '@/lib/today';
 import { loadUserPlan } from '@/features/week/userPlanStore';
+import { Icon } from '@/components/icons/Icon';
 import { ongoingUserTask } from './ongoingTask';
 
 interface Props {
@@ -78,7 +79,11 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
           WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {shortCN(todayIso)} {weekdayCN(todayIso)}
         </p>
 
-        <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-brand-bright">{kicker}</p>
+        <p className="mt-6 flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-brand-bright">
+          {/* §9.6 B 组：焦点卡主图标 target（lg 档，装饰件） */}
+          <Icon name="target" size="lg" className="opacity-90" />
+          {kicker}
+        </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{headline}</h1>
 
         {/* UI v2 D3：「Now · 进行中」焦点条——正在进行的排程任务（有才渲染，不做常驻占位） */}
@@ -154,7 +159,11 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
             onClick={onOpenWeek}
             className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light"
           >
-            打开本周安排
+            <span className="inline-flex items-center gap-1.5">
+              打开本周安排
+              {/* §9.6 G 组：主 CTA 内 arrow-right（只给主按钮） */}
+              <Icon name="arrow-right" size="sm" />
+            </span>
           </button>
           {!persona && (
             <button

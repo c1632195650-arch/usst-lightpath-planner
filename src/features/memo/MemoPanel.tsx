@@ -24,6 +24,7 @@ import { readCachedMemo, withCloudMemo, writeCachedMemo } from './webMemo.ts';
 import TodoList from './TodoList.tsx';
 import TodoEditor, { type TodoDraft } from './TodoEditor.tsx';
 import GoalPanel from './GoalPanel.tsx';
+import { Icon } from '@/components/icons/Icon';
 import { monthOptions, periodLabel, periodValues, suggestPeriod } from './milestonePicker.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -230,15 +231,18 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
                 : sync === 'offline' ? 'bg-amber-50 text-amber-700 ring-amber-200'
                   : 'bg-paper text-ink-faint ring-ink/10'}`}
           >
+            <Icon name={sync === 'synced' ? 'cloud' : 'cloud-off'} size="xs" className="inline-block align-[-2px]" />
+            {' '}
             {sync === 'synced' ? '已同步' : sync === 'offline' ? '未同步（本地）' : '本地模式（未登录）'}
           </span>
           <button
             type="button"
             data-testid="memo-add"
             onClick={() => setEditorFor('new')}
-            className="button-primary px-3 py-1.5 text-[12px]"
+            className="button-primary inline-flex items-center gap-1 px-3 py-1.5 text-[12px]"
           >
-            + 新待办
+            <Icon name="plus" size="sm" />
+            新待办
           </button>
         </div>
       </div>

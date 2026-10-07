@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { loadBasicInfo } from '@/lib/identity';
+import { Icon, type IconName } from '@/components/icons/Icon';
 import { loadIdentity } from '@/features/mobile/lib/auth';
 import { LAST_SYNC_KEY, SWITCH_KEY } from '@/features/mobile/lib/webSync';
 
@@ -41,9 +42,12 @@ export function SettingsPanel() {
 
   const icsUrl = identity?.icsToken ? `${window.location.origin}/api/sync/plan.ics?token=${identity.icsToken}` : null;
 
-  const row = (label: string, value: React.ReactNode, key: string) => (
-    <div key={key} className="flex min-h-11 items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 first:border-t-0">
-      <span className="text-[13px] text-ink">{label}</span>
+  const row = (label: string, value: React.ReactNode, key: string, icon?: IconName) => (
+    <div key={key} className="flex min-h-11 items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 transition-colors duration-200 first:border-t-0 hover:bg-ink/[0.02]">
+      <span className="flex items-center gap-2 text-[13px] text-ink">
+        {icon && <Icon name={icon} size="md" className="shrink-0 text-ink-soft" />}
+        {label}
+      </span>
       <span className="text-right text-[12.5px] font-medium text-ink-soft" data-testid={`settings-value-${key}`}>{value}</span>
     </div>
   );
@@ -54,7 +58,7 @@ export function SettingsPanel() {
 
       <div className="mt-3">
         <p className="px-1 pb-1 text-[11px] font-semibold text-ink-faint">通用</p>
-        {row('校区', campus || '未设置（完成画像后带入）', 'campus')}
+        {row('校区', campus || '未设置（完成画像后带入）', 'campus', 'map-pin')}
         {row(
           '日程双层视图',
           <button
@@ -72,13 +76,14 @@ export function SettingsPanel() {
             <span className="sr-only">{v2Enabled ? '已开启' : '已关闭'}</span>
           </button>,
           'schedule-view',
+          'layers',
         )}
       </div>
 
       <div className="mt-4">
         <p className="px-1 pb-1 text-[11px] font-semibold text-ink-faint">同步与账户</p>
-        {row('云同步', syncOn ? `已开启${lastSync ? ` · 上次同步 ${lastSync}` : ' · 尚未同步'}` : '已关闭（默认关）', 'cloud-sync')}
-        {row('账户', identity ? `已登录 · ${identity.username}` : '未登录（移动端云同步与 ICS 订阅需要登录）', 'account')}
+        {row('云同步', syncOn ? `已开启${lastSync ? ` · 上次同步 ${lastSync}` : ' · 尚未同步'}` : '已关闭（默认关）', 'cloud-sync', syncOn ? 'cloud' : 'cloud-off')}
+        {row('账户', identity ? `已登录 · ${identity.username}` : '未登录（移动端云同步与 ICS 订阅需要登录）', 'account', 'lock')}
       </div>
 
       <div className="mt-4">
@@ -86,7 +91,7 @@ export function SettingsPanel() {
         {icsUrl ? (
           <div className="border-t border-ink/[0.06] px-1 py-2">
             <div className="flex min-h-11 items-center justify-between gap-3">
-              <span className="text-[13px] text-ink">ICS 订阅链接</span>
+              <span className="flex items-center gap-2 text-[13px] text-ink"><Icon name="download" size="md" className="shrink-0 text-ink-soft" />ICS 订阅链接</span>
               <button
                 type="button"
                 data-testid="settings-ics-copy"
@@ -104,7 +109,7 @@ export function SettingsPanel() {
             <p className="mt-1 break-all font-mono text-[10.5px] leading-4 text-ink-faint">{icsUrl}</p>
           </div>
         ) : (
-          row('ICS 订阅链接', '登录后生成（系统日历免备案提醒通道）', 'ics')
+          row('ICS 订阅链接', '登录后生成（系统日历免备案提醒通道）', 'ics', 'download')
         )}
       </div>
     </section>

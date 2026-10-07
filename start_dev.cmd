@@ -39,7 +39,7 @@ start "usst-backend" cmd /k "set PORT=8001 & C:\Users\CY\.workbuddy\binaries\pyt
 
 :be_done
 rem 前端：开一个独立窗口，API 指向 8001 后端
-start "usst-frontend" cmd /k "set VITE_API_BASE=http://127.0.0.1:8001 & C:\Users\CY\.workbuddy\binaries\node\versions\22.22.2-3\npm.cmd run dev"
+start "usst-frontend" cmd /k "set VITE_API_BASE=http://127.0.0.1:8001 & C:\Users\CY\.workbuddy\binaries\node\versions\24.14.0\npm.cmd run dev"
 
 rem 前端起得快（约 5 秒）；后端要加载向量模型（实测 30~90 秒），就绪后再开 /docs
 echo 前端窗口已启动，8 秒后打开前端页面...

@@ -1,16 +1,22 @@
 import { DEADLINES, type Deadline } from '@/data/usst';
 import { diffDays, todayISO, shortCN } from '@/lib/date';
 import { deadlineColor } from '@/constants/chartColors';
+import { Icon } from '@/components/icons/Icon';
 
 /** Single deadline row keeps the date and urgency scannable in the compact overview rail. */
 function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
   const urgent = days <= 7;
   return (
     <div className="flex items-center gap-3 py-3">
-      <div
-        className="h-9 w-1 shrink-0 rounded-full"
-        style={{ background: deadlineColor(d.tag) }}
-      />
+      <div className="relative shrink-0">
+        <div
+          className="h-9 w-1 rounded-full"
+          style={{ background: deadlineColor(d.tag) }}
+        />
+        {urgent && (
+          <Icon name="zap" size="xs" className="absolute -right-1.5 -top-1 text-danger" />
+        )}
+      </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -55,7 +61,10 @@ export function DeadlineBoard() {
     <section className="panel p-5 fade-item">
       <header className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <p className="section-label">UP NEXT</p>
+          <p className="section-label flex items-center gap-1.5">
+            <Icon name="milestone" size="sm" className="text-brand" />
+            UP NEXT
+          </p>
           <h3 className="mt-2 text-lg font-semibold tracking-tight text-ink">接下来的节点</h3>
         </div>
         <span className="text-xs text-ink-faint">{upcoming.length} 项</span>
