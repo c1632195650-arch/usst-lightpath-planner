@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 148,
-    "engineFiles": 111,
+    "testFiles": 149,
+    "engineFiles": 112,
     "uiFiles": 37,
-    "guardedSources": 141,
-    "reverseVerified": 88,
+    "guardedSources": 142,
+    "reverseVerified": 89,
     "orphans": 0
   },
   "domains": {
@@ -345,10 +345,11 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 12,
+      "testCount": 13,
       "tests": [
         "scripts/memo-web-workspace.test.ts",
         "tests/cloudAccount.test.ts",
+        "tests/cloudAdopt.test.ts",
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
         "tests/eval-tips.test.ts",
@@ -805,6 +806,14 @@
         "mobile"
       ],
       "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/cloudAdopt.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 2,
       "reverseVerified": true
     },
     "tests/construct.test.ts": {
@@ -2023,10 +2032,14 @@
     ],
     "src/features/mobile/lib/webSync": [
       "tests/cloudAccount.test.ts",
+      "tests/cloudAdopt.test.ts",
       "tests/syncContract.test.ts"
     ],
     "src/features/mobile/lib/types": [
       "tests/cloudAccount.test.ts"
+    ],
+    "src/features/cloudSync/cloudAdopt": [
+      "tests/cloudAdopt.test.ts"
     ],
     "src/lib/planner/construct": [
       "tests/construct.test.ts",

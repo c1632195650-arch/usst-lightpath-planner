@@ -46,7 +46,7 @@ export interface WebSyncDeps {
 export interface WebSyncTickResult {
   uploaded: boolean;
   reason: 'switch-off' | 'no-state' | 'unchanged' | 'bad-state' | 'no-schedule' | 'no-token'
-    | 'accepted' | 'rejected' | 'network-error';
+    | 'demo-state' | 'accepted' | 'rejected' | 'network-error';
   serverUpdatedAt?: string;
 }
 
@@ -70,8 +70,21 @@ export async function webSyncTick(deps: WebSyncDeps): Promise<WebSyncTickResult>
   } catch {
     return { uploaded: false, reason: 'bad-state' };
   }
-  const schedule = app.schedule as { termStart?: string } | null | undefined;
+  const schedule = app.schedule as { termStart?: string; source?: string } | null | undefined;
   if (!schedule?.termStart) return { uploaded: false, reason: 'no-schedule' };
+  /**
+   * 脚手架数据不上云（2026-10-08）。`source: 'demo'` 是 App 自带的示例课表，
+   * 不是用户的真实课表 —— 把它连同基于它的 planState（空锁、无滚动视野）推上云，
+   * 会把账号里的真实态**整片覆盖**。
+   *
+   * 立此 guard 的直接教训：网页端登录会自动开同步开关（`applyLoginSuccess`），
+   * 于是「打开网页 → 登录」就把浏览器本地的示例课表推了上去，云端 termStart 被换成
+   * 示例口径，与云端周计划副本的周次错位；移动端随后「以云端为准」拉到的是被污染的一份。
+   *
+   * 语义与签名无关：**内容变了也不传**（示例态是「还没开始用」，不是「用过的证据」）。
+   * 真实用户导入课表（source 变 'import'）后本 guard 自然放行。
+   */
+  if (schedule.source === 'demo') return { uploaded: false, reason: 'demo-state' };
 
   let layer: UserPlanLayer | null = null;
   try {

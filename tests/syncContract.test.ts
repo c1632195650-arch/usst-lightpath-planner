@@ -46,7 +46,11 @@ const SCHEDULE: Schedule = {
   semesterType: 'autumn',
   termStart: '2026-09-07',
   totalWeeks: 20,
-  source: 'demo',
+  /* 2026-10-08 数据修正（随产品语义变更，非改断言凑绿）：source 由 'demo' 改为 'pdf' ——
+     webSync 新增「示例课表不上云」guard 后，'demo' 态上传的**预期**就是被拦截（见专用用例），
+     而本常量是「真实导入后正常上传」场景的 fixture，取 'pdf'（导入流程实际写入值）才符合语义。
+     原断言（reason==='accepted'、请求体契约）一字未动。 */
+  source: 'pdf',
   courses: [{
     id: 'c1', name: '高等数学AI', credit: 4, category: '公共基础', campus: 'main',
     slots: [{ dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: [1, 2, 3] }],
@@ -420,6 +424,22 @@ test('webSyncTick：无 token / 无主状态 / schedule 缺 termStart → 都不
   noTerm.deps.write(WEB_STATE_KEY, JSON.stringify({ schedule: { semesterName: 'x' } }));
   assert.equal((await webSyncTick(noTerm.deps)).reason, 'no-schedule');
   assert.equal(noTerm.calls.length, 0);
+});
+
+test('webSyncTick：示例课表（source=demo）→ 不上云（2026-10-08 防覆盖 guard）', async () => {
+  // 背景：网页登录会自动开同步开关（applyLoginSuccess → setCloudSync(true)），
+  // 若本地还是 App 自带的示例课表，下一次 tick 就会把账号云端的真实态整片覆盖
+  // （实测：termStart 被换成示例口径、planState.rolling/锁被清空，移动端「以云端为准」拉到污染数据）。
+  // 反向验证锚点：删掉 webSyncTick 里的 demo-state 分支 → 本用例必红（reason 变 accepted、calls=1）。
+  const { deps, calls } = makeDeps();
+  deps.write(SWITCH_KEY, '1');
+  deps.write(WEB_STATE_KEY, JSON.stringify({
+    version: 4, schedule: { ...SCHEDULE, source: 'demo' }, planState: PLAN_STATE, persona: null,
+  }));
+  const r = await webSyncTick(deps);
+  assert.equal(r.reason, 'demo-state');
+  assert.equal(calls.length, 0, '示例态一次网络都不发');
+  assert.equal(deps.read(LAST_SIG_KEY), null, '不落签名 —— 等真实课表导入后内容变化照常上传');
 });
 
 /* ---------------- 小工具 ---------------- */

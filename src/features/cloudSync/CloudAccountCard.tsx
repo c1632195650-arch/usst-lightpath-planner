@@ -10,14 +10,28 @@
  * 纯逻辑全部在 `@/lib/cloudAccount.ts`（node --test 直测）；本组件只做呈现与回调。
  * 身份变化经 onIdentityChange 上抛，由 App 重装 webSync 钩子 ——
  * 修复审计断点 ⑤ 的隐藏坑：钩子原来是挂载时快照 token，登录后仍拿空 token。
+ *
+ * 2026-10-08（组件层批次四 · 收口）：五个控件全部换成组件库既有件 ——
+ *   · 昵称/密码 → `ui/FormControls` 的 `Input`（外置 label 双保险、占位符 #6E7688、
+ *     `#7A8292` 控件描边、聚焦双环、44px 命中区）；
+ *   · 「云同步」勾选框 → `ui/Switch`：**这是规范要求的语义修正** —— §10.2.4 写明
+ *     「开关 = 立即生效（拨一下就保存）；复选 = 攒着一起提交」，这个勾选框本来就是
+ *     一拨即写 `setCloudSync`，所以它该是开关而不是复选；顺带拿回 `role="switch"`；
+ *   · 登录/注册按钮 → `ui/Button`：把原先的 `…` 占位换成规范 loading（15px spinner，
+ *     **宽高不变**，§10.1 态 7）。
+ * data-testid 全部保留（含 `cloud-sync-switch`，落在原生 checkbox 上，`.check()` 仍可用）。
  */
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { apiLogin, apiRegister } from '@/features/mobile/lib/api';
 import { errText } from '@/features/mobile/LoginPage';
+import { adoptCloudStateIfScaffolded } from '@/features/cloudSync/cloudAdopt';
 import {
   applyLoginSuccess, logout, readCloudSyncOn, setCloudSync,
   type MobileIdentity,
 } from '@/lib/cloudAccount';
+import { Input } from '@/components/ui/FormControls';
+import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
   identity: MobileIdentity | null;
@@ -31,8 +45,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
   const [error, setError] = useState('');
   const [syncOn, setSyncOn] = useState(() => readCloudSyncOn());
 
-  async function submit(mode: 'login' | 'register', e: FormEvent) {
-    e.preventDefault();
+  async function submit(mode: 'login' | 'register') {
     if (busy) return;
     setBusy(true);
     setError('');
@@ -42,6 +55,23 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
         : await apiRegister(username.trim(), password);
       onIdentityChange(applyLoginSuccess(res, username.trim()));
       setSyncOn(true);
+      /* 2026-10-08：本地还是脚手架态（示例课表）→ 先采纳云端数据再刷新。
+         否则登录即上推（开关已自动打开），会把账号云端的真实态覆盖成示例数据
+         —— 详见 cloudAdopt.ts 文件头的实测记录。本地已有真实数据时本调用是 no-op。 */
+      const adopted = await adoptCloudStateIfScaffolded({
+        read: (k) => localStorage.getItem(k),
+        write: (k, v) => {
+          try {
+            localStorage.setItem(k, v);
+          } catch { /* 配额满：不打断登录流程 */ }
+        },
+        fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
+        token: res.token,
+      });
+      if (adopted.adopted) {
+        window.location.reload();
+        return; // 刷新后本组件不再渲染
+      }
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -69,15 +99,14 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
             退出登录
           </button>
         </div>
-        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[12px]">
-          <input
-            type="checkbox"
-            data-testid="cloud-sync-switch"
+        <div className="mt-2">
+          <Switch
+            testId="cloud-sync-switch"
             checked={syncOn}
-            onChange={(e) => { setCloudSync(e.target.checked); setSyncOn(e.target.checked); }}
+            onChange={(next) => { setCloudSync(next); setSyncOn(next); }}
+            label="云同步（排程 / 待办 / 画像 自动上行，手机端打开即见）"
           />
-          云同步（排程 / 待办 / 画像 自动上行，手机端打开即见）
-        </label>
+        </div>
       </div>
     );
   }
@@ -91,51 +120,52 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
       <p className="mt-1 text-[12px] leading-5 text-ink-soft">
         注册一个昵称+密码，网页端排好的计划、待办和画像会自动同步到手机（同一账号即可）。
       </p>
-      <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(e) => submit('login', e)}>
-        <label className="flex-1 min-w-[140px]">
-          <span className="text-[11px] text-ink-faint">昵称</span>
-          <input
-            data-testid="web-login-user"
-            className="mt-0.5 w-full rounded-lg border border-ink/10 bg-paper-card px-2.5 py-2 text-[13px] text-ink outline-none focus:border-brand"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            maxLength={24}
-            placeholder="2~24 位"
-          />
-        </label>
-        <label className="flex-1 min-w-[140px]">
-          <span className="text-[11px] text-ink-faint">密码</span>
-          <input
-            data-testid="web-login-pass"
-            type="password"
-            className="mt-0.5 w-full rounded-lg border border-ink/10 bg-paper-card px-2.5 py-2 text-[13px] text-ink outline-none focus:border-brand"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            maxLength={64}
-            placeholder="至少 6 位"
-          />
-        </label>
-        <button
+      <form className="mt-3 flex flex-wrap items-start gap-2" onSubmit={(e) => { e.preventDefault(); void submit('login'); }}>
+        <Input
+          label="昵称"
+          testId="web-login-user"
+          wrapClassName="flex-1 min-w-[140px]"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          maxLength={24}
+          placeholder="2~24 位"
+        />
+        <Input
+          label="密码"
+          testId="web-login-pass"
+          type="password"
+          wrapClassName="flex-1 min-w-[140px]"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          maxLength={64}
+          placeholder="至少 6 位"
+        />
+        {/* 按钮与输入框底部对齐：外层裹一层 pt 抵消 FieldShell 的 label 高度差 */}
+        <Button
           type="submit"
-          data-testid="web-login-submit"
+          variant="primary"
+          testId="web-login-submit"
           disabled={busy || !username.trim() || !password}
-          className="min-h-11 rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+          loading={busy}
         >
-          {busy ? '…' : '登录'}
-        </button>
-        <button
+          登录
+        </Button>
+        <Button
           type="button"
-          data-testid="web-register-submit"
+          variant="secondary"
+          testId="web-register-submit"
           disabled={busy || !username.trim() || !password}
-          onClick={(e) => submit('register', e)}
-          className="min-h-11 rounded-lg border border-ink/10 bg-paper-card px-4 py-2 text-[13px] font-semibold text-ink disabled:opacity-40"
+          loading={busy}
+          onClick={() => void submit('register')}
         >
           注册
-        </button>
+        </Button>
       </form>
-      {error && <p data-testid="web-login-error" className="mt-2 text-[12px] text-danger-text">{error}</p>}
+      {error && (
+        <p data-testid="web-login-error" role="alert" className="mt-2 text-[12px] text-danger-text">{error}</p>
+      )}
     </div>
   );
 }
