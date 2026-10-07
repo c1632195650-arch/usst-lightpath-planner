@@ -156,8 +156,9 @@ function StatCard({
         <b className="font-mono text-[22px] font-semibold leading-none tracking-tight text-ink">{value}</b>
         {unit && <span className="text-[11px] text-ink-soft">{unit}</span>}
       </span>
-      {/* `.dz` 迷你示意：26px 高、radius 7 —— 与数字同源，不是装饰 */}
-      <span className="mt-1.5 block h-[26px]" aria-hidden="true">{dz}</span>
+      {/* `.dz` 迷你示意：与数字同源，不是装饰。**可伸缩区** —— 卡片被行高拉高时，
+          多出来的高度由它吃掉（图形变高，而不是卡内留白）。下限 26px（§11.3 的档位）。 */}
+      <span className="mt-2 block min-h-[26px] flex-1" aria-hidden="true">{dz}</span>
       <span className="mt-1 block truncate text-[11px] text-ink-faint">{hint}</span>
     </>
   );
@@ -182,7 +183,7 @@ function StatCard({
 /** 迷你柱：课时逐日 7 根 / 画像各轴一根。 */
 function DzBars({ values }: { values: number[] }) {
   return (
-    <span className="flex h-full items-end gap-1">
+    <span className="flex h-full min-h-[26px] items-end gap-1">
       {values.map((v, i) => (
         <span
           key={i}
@@ -198,9 +199,11 @@ function DzBars({ values }: { values: number[] }) {
 function DzProgress({ value, tone = 'brand' }: { value: number; tone?: 'brand' | 'gold' }) {
   return (
     <span className="flex h-full items-center">
-      <span className="h-[9px] w-full overflow-hidden rounded-full bg-paper-sunken">
+      {/* 量表**不随卡高长粗**：上限 28px —— 试过 72px，值又是 0 时会变成一块空灰板。
+          多出来的高度留给上方空气（视觉上仍是 KPI 卡，不是进度条特写）。 */}
+      <span className="h-full max-h-[28px] min-h-[9px] w-full overflow-hidden rounded-xl bg-paper-sunken">
         <span
-          className={`block h-full rounded-full ${tone === 'gold' ? 'bg-gold' : 'bg-brand'}`}
+          className={`block h-full rounded-xl ${tone === 'gold' ? 'bg-gold' : 'bg-brand'}`}
           style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
         />
       </span>

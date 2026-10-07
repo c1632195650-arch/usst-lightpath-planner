@@ -128,8 +128,10 @@ export function OverviewPage({
         <DeadlineBoard />
       </div>
 
-      {/* 模块带第二行：一周节奏 span 4 + 状态 span 2（中间 6 列）。 */}
-      <div className="lg:col-span-4">
+      {/* 模块带第二行：一周节奏 span 4 + 状态 span 2（中间 6 列）。
+          节奏条本身是 34px 的固定高度（§11.3），所以让**卡片撑满行高、内容整体居中**，
+          而不是把条拉长 —— 子选择器是为了不动 WeekStrip 自己的类（那个文件有别的会话在改）。 */}
+      <div className="rhythm-tile flex flex-col lg:col-span-4">
         <WeekStrip
           schedule={schedule}
           weekNo={weekNo}

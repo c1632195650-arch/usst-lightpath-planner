@@ -456,8 +456,9 @@
  * 看到的正是「要滚动才看得到」；压紧上半部分后门槛降到 800：877 高时末行仍有 ~180px）。
  * 矮窗口**诚实地退回普通滚动页**，而不是把内容裁掉。
  *
- * 生效时：外壳锁视口高 + 裁溢出（页面不滚），栅格吃掉剩余高度，
- * 页脚不渲染（它会把页面顶出视口）；最后一行 `minmax(0,1fr)` 里两张卡各自内部滚。
+ * 生效时：外壳锁视口高 + 裁溢出（页面不滚），栅格吃掉剩余高度，页脚不渲染（它会把页面顶出视口）。
+ * 栅格形态（见下 `.overview-grid`）：焦点卡整行 + 模块带两行（1.35 : 0.65），
+ * 校历 / 接下来节点两根侧栏 row-span-2 贯穿模块带，各自内部滚动。
  */
 /** 总览用的 wide 容器（设计总成 §8.5：wide 1440 档就是给「总览页 Bento / 数据看板」的）。
  *  其余页仍走 `.page-shell` 的 default 1200 档。 */
@@ -482,10 +483,25 @@
   min-height: 0;
 }
 
-@media (min-width: 1024px) and (min-height: 900px) {
-  .overview-rail {
-    align-self: stretch;
-  }
+/**
+ * 「一周节奏」格：条本身是固定的 34px 高（§11.3 的横条），放进 273px 高的格里
+ * 上下会各空一大截。这里让卡片撑满、内容整体居中，并把条适度拉长到 56px
+ * （仍是「一条横条」，不是把课表竖柱搬回来）。
+ * ⚠️ 用包裹类而不是改 WeekStrip 自己的类：那个文件当时有另一会话的在途改动。
+ */
+.rhythm-tile > section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.rhythm-tile > section > div:last-child {
+  height: 56px;
+}
+
+.rhythm-tile > section > div:last-child > button {
+  height: 100%;
 }
 
 @media (min-width: 1024px) and (min-height: 800px) {
@@ -497,11 +513,13 @@
   .overview-pane .overview-grid {
     height: 100%;
     min-height: 0;
-    /* 焦点卡 auto；下面「模块带」两行等分剩余高度 —— 两侧栏 row-span-2 贯穿这两行。 */
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
-    /* 中间卡片按**自然高度**顶部对齐（拉满会让卡片内部出现大片空白），
-       两侧栏用 .overview-rail 单独拉伸到整个模块带高度。 */
-    align-items: start;
+    /* 焦点卡 auto；模块带两行 1.35 : 0.65 分剩余高度 ——
+       第一行是三张 KPI 卡（内容吃得住高度：柱 / 量表会长高），第二行是节奏条 + 状态
+       （内容更矮）—— 等分会让第二行明显偏空。两侧栏 row-span-2 贯穿这两行。 */
+    grid-template-rows: auto minmax(0, 1.35fr) minmax(0, 0.65fr);
+    /* 全部 stretch：中间卡片**填满各自行高**，多出来的高度由卡内的伸缩部分
+       （迷你图 `.dz`）吃掉 —— 留白从"背景缺口"变成"图形本身变高"，才不显得空。 */
+    align-items: stretch;
   }
 
   .overview-pane .overview-footer {
