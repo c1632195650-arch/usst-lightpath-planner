@@ -1,14 +1,15 @@
 /**
  * 梨宝后端 API 客户端
- * 后端默认跑在 http://127.0.0.1:8000（server/app.py）。
- * 部署时可用 VITE_API_BASE 环境变量覆盖。
+ * W4b-B（CY 拍板 2026-10-07）：基址统一走 `resolveApiBase()`（apiBase.ts），
+ * 无 env 时兜底**同源相对路径** —— dev/preview 由 vite 代理转 8001，
+ * 公网部署请求同源 `/api`，不再写死 127.0.0.1:8000。
  */
 import { resolveApiBase } from '@/lib/apiBase';
 
 // 任务四起对外导出（memo 云通道同源复用；原语义不变）
-// W4/P1-3a（2026-10-07）：基址解析统一走 resolveApiBase() —— 双端同源；
-// ⚠️ 兜底默认值暂维持写死 8000（P1-3b「默认改同源」是行为变更，未拍板前不动，见 BLOCKERS）。
-export const API_BASE = resolveApiBase() || 'http://127.0.0.1:8000';
+// W4b-B：兜底默认值已从写死 8000 改为同源 ''（resolveApiBase 的缺省）——
+// memo 云通道（webMemo.ts）与梨宝同吃这一个常量，收敛后「无 env 也自洽」。
+export const API_BASE = resolveApiBase();
 
 export interface RagSource {
   title: string;

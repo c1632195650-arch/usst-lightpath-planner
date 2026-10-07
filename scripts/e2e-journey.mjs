@@ -141,10 +141,18 @@ const run = async () => {
   // ⑫ 梨宝改期草稿卡
   await page.getByRole('button', { name: '梨宝' }).click();
   await T(800);
-  const lbaoInput = page.getByPlaceholder('问梨宝');
+  // W5a：placeholder 文案已去命令化（「问梨宝…」→「说一句话就行…」），改走稳定 testid
+  const lbaoInput = page.getByTestId('libao-input');
   await lbaoInput.fill('把自习挪到周五');
   await lbaoInput.press('Enter');
   await T(4000);
+  // D0 双模式（2026-09-27 起）：问答模式听到排程意图 → 出切换卡（W5d 后按钮文案「好，去排」，
+  // testid 仍 switch-to-sched）—— 须点它进排程流草稿卡才会出现。此前本步骤停留在
+  // D 批之前的行为（直接出草稿卡），自 D 批起已陈旧、从未重跑 —— 本次随 W4b 复跑一并修正。
+  if (await page.getByTestId('switch-to-sched').count()) {
+    await page.getByTestId('switch-to-sched').click();
+    await T(4000);
+  }
   // 多命中 → 梨宝追问「挪哪个？」（V2-1）→ 从候选 planPoints 提取第一个块名回复 → 草稿卡
   const picking = await page.getByText(/对上好几块，挪哪个/).first().isVisible().catch(() => false);
   if (picking) {
@@ -176,6 +184,11 @@ const run = async () => {
     await lbaoInput.fill('周三下午别排东西');
     await lbaoInput.press('Enter');
     await T(3500);
+    // D0：问答模式 → 切换卡先出（同 ⑫）；点「好，去排」原句重发进排程流
+    if (await page.getByTestId('switch-to-sched').count()) {
+      await page.getByTestId('switch-to-sched').click();
+      await T(3500);
+    }
     if (await page.getByRole('button', { name: '就这么排' }).count()) break;
     if (await page.getByText(/对上好几块|哪段时间/).count()) {
       await lbaoInput.fill('周三下午');

@@ -15,10 +15,12 @@
  */
 import type { UserTask } from '@/lib/planner/templates';
 import { currentWeekNo, weekdayOf } from '@/lib/date';
+// W4b-B（CY 拍板 2026-10-07）：天气走统一基址解析 —— 原来自读
+// VITE_API_BASE ?? 'http://127.0.0.1:8000'，是 MOSS 验收清单 §3.1 揪出的第 4 处
+// 写死（原方案只算 3 处漏了这处）。
+import { resolveApiBase } from '@/lib/apiBase';
 
-const API_BASE =
-  (import.meta as unknown as { env?: { VITE_API_BASE?: string } }).env?.VITE_API_BASE
-  ?? 'http://127.0.0.1:8000';
+const API_BASE = resolveApiBase();
 
 /* ---------------- 数据结构（与后端 /api/weather 对应） ---------------- */
 

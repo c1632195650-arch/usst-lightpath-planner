@@ -66,6 +66,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p: string) => p.replace(/^\/timetable/, ''),
       },
+      // W4b-B（CY 拍板 2026-10-07「B 全收敛 + 补 preview 代理」）：API 基址兜底改
+      // 同源 '' 后，preview / 纯静态托管必须有这条代理 —— 否则同源 /api 会 404。
+      // 目标与 dev 代理同口（127.0.0.1:8001）。
+      '/api': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
     },
   },
   // 光溯移动端（2026-10-03）：m.html 独立入口 —— index.html 主流程零改动，
