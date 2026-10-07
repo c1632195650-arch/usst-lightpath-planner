@@ -60,6 +60,8 @@ import {
 } from './userPlanStore';
 import { dragTo } from '@/lib/planner/ripple';
 import { freeGapsOf, snap10, type TimeGap } from './timeScale';
+import { DayAgenda } from './DayAgenda';
+import { Segmented } from '@/components/ui/Segmented';
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
@@ -544,6 +546,14 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const setEditModePersisted = (v: boolean) => {    setEditMode(v);
     try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
   };
+
+  /* ---------- UI v2 D1：日程双层开关（SCHEDULE_VIEW_V2，默认关） ----------
+   * localStorage `usst.scheduleViewV2` = '1' 时显示「周概览 / 当日流水」分段；
+   * 第一阶段只上 DayAgenda（当日流水），周网格仍是默认层。 */
+  const [scheduleV2] = useState<boolean>(() => {
+    try { return localStorage.getItem('usst.scheduleViewV2') === '1'; } catch { return false; }
+  });
+  const [agendaView, setAgendaView] = useState<boolean>(false);
 
   // V2-2：梨宝「这段时间别排」确认后广播的重排请求 —— 收到就手动触发一次重排
   useEffect(() => {
@@ -2034,6 +2044,33 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         )}
       </details>
 
+      {/* UI v2 D1：日程双层切换（SCHEDULE_VIEW_V2 开才显示，默认层=周概览） */}
+      {scheduleV2 && (
+        <div className="flex justify-end">
+          <Segmented
+            label="日程视图"
+            options={[
+              { value: 'week', label: '周概览' },
+              { value: 'day', label: '当日流水' },
+            ]}
+            value={agendaView ? 'day' : 'week'}
+            onChange={(v) => setAgendaView(v === 'day')}
+          />
+        </div>
+      )}
+
+      {/* UI v2 D1：当日流水层（SCHEDULE_VIEW_V2 开 + 用户切到「当日流水」才渲染） */}
+      {scheduleV2 && agendaView && (
+        <DayAgenda
+          blocks={(shownPlan ?? plan).blocks}
+          issues={plan.issues}
+          todayDow={(todayDow ?? 1) as DayOfWeek}
+          onOpenDetail={setDetailBlock}
+        />
+      )}
+
+      {!agendaView && (
+      <>
       {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
           E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
           让「时间轴是主角、其他都是注脚」（docs/week-view-design.md §2.1）。
@@ -2238,6 +2275,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         })}
         </div>
       </div>
+      </>
+      )}
 
       {/* 拖拽删除投放区 —— 只在拖动时浮现（侧边固定，不随页面滚动）。
           松手 = 删除（与块上「🗑 删除」同通道，可「全部恢复」撤销）。 */}

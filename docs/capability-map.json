@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 132,
-    "engineFiles": 96,
+    "testFiles": 133,
+    "engineFiles": 97,
     "uiFiles": 36,
-    "guardedSources": 120,
-    "reverseVerified": 83,
+    "guardedSources": 121,
+    "reverseVerified": 84,
     "orphans": 1
   },
   "domains": {
@@ -123,9 +123,10 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 36,
+      "testCount": 37,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
+        "tests/agenda-model.test.ts",
         "tests/assignment.test.ts",
         "tests/d-batch.test.ts",
         "tests/h1-eval-panel.test.ts",
@@ -180,6 +181,7 @@
         "src/components/ui/toastModel",
         "src/features/week/PlanEvalPanel",
         "src/features/week/WeekPlanView",
+        "src/features/week/agendaModel",
         "src/features/week/assignmentStore",
         "src/features/week/dragPreview",
         "src/features/week/miniWeekPreviewModel",
@@ -716,6 +718,14 @@
       ],
       "guardCount": 6,
       "reverseVerified": false
+    },
+    "tests/agenda-model.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
     },
     "tests/assignment.test.ts": {
       "suite": "engine",
@@ -1586,6 +1596,7 @@
       "scripts/rollingState.test.ts",
       "scripts/storage.test.ts",
       "tests/activityAndLocalized.test.ts",
+      "tests/agenda-model.test.ts",
       "tests/campus-vocab.test.ts",
       "tests/churn.test.ts",
       "tests/construct.test.ts",
@@ -1789,6 +1800,9 @@
     ],
     "src/features/activity/goalStore": [
       "tests/activityAndLocalized.test.ts"
+    ],
+    "src/features/week/agendaModel": [
+      "tests/agenda-model.test.ts"
     ],
     "src/features/week/assignmentStore": [
       "tests/assignment.test.ts"
