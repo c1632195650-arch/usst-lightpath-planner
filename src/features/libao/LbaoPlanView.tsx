@@ -11,7 +11,7 @@ export function LbaoPlanView({ plan }: { plan: LbaoPlan }) {
       {/* The plan header names the selected pace first, keeping recommendation content easy to scan. */}
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 rounded-full" style={{ background: plan.mode.color }} />
-        <span className="text-sm font-semibold text-ink">{plan.mode.name}</span>
+        <span className="font-display text-sm font-semibold text-ink">{plan.mode.name}</span>
       </div>
       <p className="-mt-2 text-sm leading-6 text-ink-soft">{plan.headline}</p>
 
@@ -31,7 +31,7 @@ export function LbaoPlanView({ plan }: { plan: LbaoPlan }) {
               <div key={i} className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white px-3 py-3">
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-paper text-sm">{b.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold leading-tight text-ink">{b.title}</div>
+                  <div className="font-display text-sm font-semibold leading-tight text-ink">{b.title}</div>
                   <div className="mt-1 text-xs leading-4 text-ink-faint">{b.note}</div>
                 </div>
                 <span className="shrink-0 text-xs font-medium text-ink-faint tabular-nums">{b.time}</span>

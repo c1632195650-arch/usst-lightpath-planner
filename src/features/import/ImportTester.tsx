@@ -184,7 +184,7 @@ export function ImportTester({ onApply }: Props) {
           {result.schedule.courses.map((c) => (
             <section key={c.id} className="panel p-5">
               <div className="flex flex-wrap items-baseline gap-2">
-                <span className="text-[14px] font-semibold text-ink">{c.name}</span>
+                <span className="font-display text-[14px] font-semibold text-ink">{c.name}</span>
                 <span className="text-[11.5px] text-ink-faint">{c.credit} 学分 · {c.teacher ?? '—'}</span>
                 <span className="ml-auto text-[11.5px] text-ink-faint">
                   {c.campus}

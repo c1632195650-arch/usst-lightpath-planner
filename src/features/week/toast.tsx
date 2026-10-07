@@ -48,7 +48,7 @@ export function Toasts({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: 
         return (
           <div
             key={t.id}
-            className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] leading-relaxed shadow-md ${s.bg}`}
+            className={`toast-in flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] leading-relaxed shadow-md ${s.bg}`}
           >
             <span className="shrink-0"><Icon name={s.icon} size="sm" /></span>
             <span className="min-w-0 flex-1">{t.message}</span>

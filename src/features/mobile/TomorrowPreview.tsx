@@ -25,7 +25,7 @@ export default function TomorrowPreview({
       )}
       {!loading && blocks && blocks.length > 0 && (
         <p className="mt-1 text-sm text-ink" data-testid="m-tomorrow-summary">
-          共 {blocks.length} 块 · 第一块 {fmtMin(blocks[0].startMin)} {blocks[0].emoji ?? ''}
+          共 {blocks.length} 块 · 第一块 {fmtMin(blocks[0].startMin)}{' '}
           {blocks[0].title}
         </p>
       )}

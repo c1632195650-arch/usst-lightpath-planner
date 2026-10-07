@@ -20,6 +20,7 @@
  *   顶部 + 列头吸顶，正是「回到今天」该有的落点；挂泳道会滚得莫名其妙。
  */
 import { useEffect, useRef } from 'react';
+import { adviceIcon } from '@/components/icons/semanticIcons';
 import type { PlanPersistState, TimeBlock } from '@/types';
 import type { WeatherAdvice, WeatherDay } from '@/features/weather/weather';
 import { DAY_LABELS, TODAY_COL_BG } from './weekViewUtils';
@@ -222,7 +223,7 @@ export function WeekTimelineGrid({
             const wd = weatherByDate.get(dateISO);
             const adv = adviceByDate.get(dateISO);
             const range = wd && wd.tMin != null && wd.tMax != null ? `${wd.tMin}–${wd.tMax}℃` : '';
-            const emoji = wd ? (wd.rainProb >= 50 ? '🌧️' : wd.rainProb >= 20 ? '⛅' : '☀️') : '';
+            const wetHint = (wd?.rainProb ?? 0) >= 20;
             return (
               <div
                 key={name}
@@ -265,11 +266,11 @@ export function WeekTimelineGrid({
                         : 'border-ink/15 bg-paper text-ink-soft'
                     }`}
                   >
-                    {adv.emoji} {adv.label}
+                    <span className="inline-flex items-center gap-1"><Icon name={adviceIcon(adv.severity)} size="xs" className="shrink-0" />{adv.label}</span>
                   </div>
                 ) : wd ? (
                   <div title={`${wd.text} ${range}`} className="mt-0.5 truncate text-[10px] text-ink-soft">
-                    {emoji} {wd.text} {range}
+                    {wetHint ? <Icon name="water" size="xs" className="mr-0.5 inline-flex align-[-2px]" /> : null}{wd.text} {range}
                   </div>
                 ) : (
                   <div className="mt-0.5 text-[10px]">&nbsp;</div>

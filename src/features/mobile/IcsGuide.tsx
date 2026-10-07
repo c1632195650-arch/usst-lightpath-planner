@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 /**
  * 光溯移动端 · ICS 订阅引导（F6）
  * ============================================================
@@ -5,7 +7,6 @@
  * iOS / 鸿蒙 / 小米等系统日历都能订阅；安卓可选 ICSx⁵（GPL-3.0 ——
  * **仅作为用户侧推荐组件口头提及，一行代码/资源不进本仓**，防 GPL 传染）。
  */
-import { useState } from 'react';
 
 export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
   const [copied, setCopied] = useState(false);
@@ -39,7 +40,7 @@ export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
            同步一次才有 ICS 副本 —— 空值不许静默不渲染，要告诉用户怎么把链接变出来。 */
         <p data-testid="m-ics-empty" className="mt-2 text-[11px] leading-5 text-ink-faint">
           还没有订阅链接 —— 先去网页端排好计划，然后在手机上点一次同步
-          （顶栏「已同步 ✓」就行），这里就会生成你的日历订阅链接。
+          （顶栏「已同步」就行），这里就会生成你的日历订阅链接。
         </p>
       )}
       {open && icsToken && (
@@ -57,7 +58,14 @@ export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
             onClick={copy}
             className="mt-2 w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white"
           >
-            {copied ? '已复制 ✓' : '复制订阅链接'}
+            {copied ? (
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <Icon name="check" size="sm" className="shrink-0" />
+                已复制
+              </span>
+            ) : (
+              '复制订阅链接'
+            )}
           </button>
           <p className="mt-2 text-[11px] leading-5 text-ink-faint">
             系统日历 → 添加账户/订阅日历 → 粘贴这个链接。课表有变会自动跟着更新。

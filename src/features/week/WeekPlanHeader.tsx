@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { PlanPersistState, Phase } from '@/types';
+import { deadlineIcon } from '@/components/icons/semanticIcons';
 import type { Diagnostics } from '@/lib/planner/model';
 import type { Deadline } from '@/data/usst';
 import { lockCount } from '@/features/plan/planLock';
@@ -190,7 +191,7 @@ export function NearEventsPanel({ events }: { events: Deadline[] }) {
           const left = diffDays(todayISO(), d.date);
           return (
             <li key={d.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
-              <span>{d.emoji}</span>
+              <span className="inline-flex align-[-2px] text-ink-soft"><Icon name={deadlineIcon(d.tag)} size="xs" /></span>
               <span className="font-medium text-ink">{d.title}</span>
               <span className="font-mono text-[11px] text-ink-faint">{d.date}</span>
               <span className={left >= 0 && left <= 7 ? 'text-danger-text' : 'text-ink-soft'}>

@@ -5,6 +5,7 @@
  * 🔴 `m-next-banner` testid 是既有 e2e 契约，不得改名。
  */
 import type { TimeBlock } from '@/types';
+import { KindIcon } from '@/components/icons/KindIcon';
 import { fmtMin } from './lib/sync.ts';
 
 export default function NextList({ next, nowMin }: { next: TimeBlock | null; nowMin: number }) {
@@ -21,7 +22,7 @@ export default function NextList({ next, nowMin }: { next: TimeBlock | null; now
         接下来 {fmtMin(next.startMin)}（还有 {Math.max(0, next.startMin - nowMin)} 分钟）
       </p>
       <p className="text-xs font-medium text-ink">
-        {next.emoji ?? ''}{next.title}{next.place ? ` · ${next.place}` : ''}
+        <KindIcon kind={next.kind} />{next.title}{next.place ? ` · ${next.place}` : ''}
       </p>
     </div>
   );

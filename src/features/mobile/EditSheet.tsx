@@ -1,9 +1,10 @@
+import type { TimeBlock } from '@/types';
+import { Icon } from '@/components/icons/Icon';
+import { fmtMin } from './lib/sync.ts';
 /**
  * 光溯移动端 · 轻编辑底部抽屉（F4：完成勾选 / 顺延 ±15·30·60 = 换时段快捷片）
  * 映射见方案 §7.3：全部落在 userPlanStore 覆盖层（唯一写法），不直改计划。
  */
-import type { TimeBlock } from '@/types';
-import { fmtMin } from './lib/sync.ts';
 
 export type EditAction = { type: 'toggleDone' } | { type: 'shift'; deltaMin: number };
 
@@ -48,7 +49,10 @@ export default function EditSheet({
             + (done ? 'bg-ok text-white' : 'bg-paper-sunken text-ink')
           }
         >
-          {done ? '✓ 已完成（点这里取消）' : '✓ 标记完成'}
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <Icon name="check" size="sm" className="shrink-0" />
+            {done ? '已完成（点这里取消）' : '标记完成'}
+          </span>
         </button>
 
         <p className="mt-4 text-xs text-ink-soft">顺延 / 提前（换时段）</p>

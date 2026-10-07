@@ -40,7 +40,7 @@ export default function BottomNav({ tab, onTab, onLbao }: {
           data-testid="m-lbao-toggle"
           onClick={onLbao}
           aria-label="问梨宝"
-          className="mx-auto -mt-5 flex h-14 w-14 flex-col items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/30 transition-transform active:scale-95"
+          className="mx-auto -mt-5 flex h-14 w-14 flex-col items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/30 transition-transform duration-fast active:scale-[0.985]"
         >
           <Icon name="sparkle" size="lg" />
         </button>
@@ -62,7 +62,7 @@ function NavItem({ t, tab, onTab }: {
       data-testid={`m-tab-${t.id}`}
       aria-current={active ? 'page' : undefined}
       onClick={() => onTab(t.id)}
-      className={`mx-auto flex min-h-11 w-full flex-col items-center justify-end gap-0.5 rounded-lg pb-0.5 text-[11px] font-medium transition-colors ${
+      className={`mx-auto flex min-h-11 w-full flex-col items-center justify-end gap-0.5 rounded-lg pb-0.5 text-[11px] font-medium transition-colors active:scale-[0.985] ${
         active ? 'text-brand' : 'text-ink-faint'
       }`}
     >

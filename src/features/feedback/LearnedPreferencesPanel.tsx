@@ -52,7 +52,7 @@ export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemove
         onClick={() => setOpen((v) => !v)}
         className="flex w-full flex-wrap items-baseline gap-x-2 text-left"
       >
-        <span className="text-[13.5px] font-semibold text-ink">
+        <span className="font-display text-[13.5px] font-semibold text-ink">
           {open ? '▾' : '▸'} 引擎从你这里学到了什么
         </span>
         <span className="text-[11.5px] text-ink-faint">

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type Tone = 'neutral' | 'brand' | 'ok' | 'warn' | 'danger' | 'gold' | 'school';
+type Tone = 'neutral' | 'brand' | 'ok' | 'warn' | 'danger' | 'gold' | 'school' | 'dark' | 'line';
 
 interface Props {
   children: ReactNode;
@@ -20,6 +20,10 @@ const TONES: Record<Tone, string> = {
   danger: 'border-danger/20 bg-danger-light text-[#B0402F]',
   gold: 'border-gold/30 bg-gold/10 text-[#7A5A1E]',
   school: 'border-school-red/20 bg-school-light text-school-red',
+  /** §10.2.5 的 dark：实底深靛，只给深色面或强烈状态（一律自带白字，别再叠 tone）。 */
+  dark: 'border-ink-strong bg-ink-strong text-white',
+  /** §10.2.5 的 line：透明底 + 1px 边，用于不需要底色的场合。 */
+  line: 'border-ink/15 bg-transparent text-ink-soft',
 };
 
 /**

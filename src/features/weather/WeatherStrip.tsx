@@ -8,6 +8,8 @@
  * 那恰恰是最需要它的时候。所以提醒条必须独立于排程存在。
  */
 import { WEEKDAY_CN, currentWeekNo } from '@/lib/date';
+import { Icon } from '@/components/icons/Icon';
+import { adviceIcon } from '@/components/icons/semanticIcons';
 import { isoToDayOfWeek, judgeDay } from './weather';
 import type { WeatherReport } from './weather';
 
@@ -62,12 +64,12 @@ export function WeatherStrip({ report, weekNo, termStart }: {
               </div>
               {d.rainProb > 0 && (
                 <div className="mt-0.5 text-[10.5px] text-brand">
-                  💧{d.rainProb}%{wet ? '（下午）' : ''}
+                  <Icon name="water" size="xs" className="mr-0.5 inline-flex align-[-2px]" />{d.rainProb}%{wet ? '（下午）' : ''}
                 </div>
               )}
               {advice && (
                 <div className="mt-1 truncate text-[10.5px] font-medium text-warn-text" title={advice.detail}>
-                  {advice.emoji}{advice.label}
+                  <span className="inline-flex items-center gap-1"><Icon name={adviceIcon(advice.severity)} size="xs" className="shrink-0" />{advice.label}</span>
                 </div>
               )}
             </div>

@@ -64,7 +64,7 @@ export default function EvalPanel({ profile, series, demoBadge }: {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
-        <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <span className="font-display flex items-center gap-2 text-sm font-semibold text-ink">
           我的执行状态
           {demoBadge && (
             <span data-testid="m-eval-demo-badge" className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-semibold text-ink-soft">
@@ -86,7 +86,7 @@ export default function EvalPanel({ profile, series, demoBadge }: {
                   {r.confident && <DimSpark dim={dim} series={series} />}
                 </div>
                 {r.confident ? (
-                  <span className="text-sm font-semibold text-ink">{valueText(dim, r)}</span>
+                  <span className="font-display text-sm font-semibold text-ink">{valueText(dim, r)}</span>
                 ) : (
                   <span className="text-xs text-ink-faint">数据累积中（{r.sampleSize}/7 天）</span>
                 )}

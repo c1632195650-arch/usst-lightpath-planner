@@ -1,8 +1,10 @@
+import type { TimeBlock } from '@/types';
+import { Icon } from '@/components/icons/Icon';
+import { KindIcon } from '@/components/icons/KindIcon';
+import { fmtMin } from './lib/sync.ts';
 /**
  * 光溯移动端 · 单块卡片（F2/F3：时间轴块 + 详情 + 当前块高亮）
  */
-import type { TimeBlock } from '@/types';
-import { fmtMin } from './lib/sync.ts';
 
 export default function BlockCard({
   block,
@@ -54,7 +56,7 @@ export default function BlockCard({
         )}
       </div>
       <div className="mt-1 flex items-center gap-1.5">
-        <span aria-hidden>{block.emoji ?? ''}</span>
+        <KindIcon kind={block.kind} className="mr-0" />
         <span data-testid="m-block-title" className="text-base font-semibold text-ink">
           {block.title}
         </span>
@@ -62,7 +64,10 @@ export default function BlockCard({
       </div>
       {(block.place || block.room) && (
         <div data-testid="m-block-place" className="mt-1 text-sm text-ink-soft">
-          📍{[block.place, block.room].filter(Boolean).join(' · ')}
+          <span className="inline-flex items-center gap-1">
+            <Icon name="map-pin" size="xs" className="shrink-0" />
+            {[block.place, block.room].filter(Boolean).join(' · ')}
+          </span>
         </div>
       )}
       {block.reason && (

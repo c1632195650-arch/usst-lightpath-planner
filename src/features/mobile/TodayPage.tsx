@@ -60,7 +60,7 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
             {d.weekNo && <span data-testid="m-weekno">第 {d.weekNo} 周</span>}
             <span data-testid="m-sync-status">
               {d.syncStatus === 'syncing' && '同步中…'}
-              {d.syncStatus === 'saved' && '已同步 ✓'}
+              {d.syncStatus === 'saved' && '已同步'}
               {d.syncStatus === 'error' && '同步失败'}
             </span>
           </div>

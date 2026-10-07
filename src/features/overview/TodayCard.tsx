@@ -1,4 +1,5 @@
 import type { PersonaProfile, Schedule } from '@/types';
+import { KindIcon } from '@/components/icons/KindIcon';
 import { DEADLINES } from '@/data/usst';
 import { diffDays, shortCN, weekdayCN, weekdayOf } from '@/lib/date';
 import { humanizeMinutes, toHHmm } from '@/constants/time';
@@ -92,7 +93,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
             <div className="flex items-center justify-between gap-3">
               <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-white">
                 <span className="rounded-full bg-school-red px-2 py-0.5 text-[10px] font-bold tracking-wide">NOW</span>
-                <span className="truncate">{ongoingTask.task.emoji ? `${ongoingTask.task.emoji} ` : ''}{ongoingTask.task.title}</span>
+                <span className="flex min-w-0 items-center truncate"><KindIcon kind={ongoingTask.task.kind} /><span className="truncate">{ongoingTask.task.title}</span></span>
               </p>
               <p className="shrink-0 font-mono text-xs text-white/70 tabular-nums">
                 {toHHmm(ongoingTask.startMin)}–{toHHmm(ongoingTask.endMin)} · 还有 {humanizeMinutes(ongoingTask.remainMin)}

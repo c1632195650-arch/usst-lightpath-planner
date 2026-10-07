@@ -135,7 +135,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit, onSkipAll }
           <div className="hidden h-5 w-px bg-ink/10 sm:block" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-4">
-              <p className="truncate text-sm font-semibold text-ink">校园画像 · 你的排程起点</p>
+              <p className="font-display truncate text-sm font-semibold text-ink">校园画像 · 你的排程起点</p>
               <p className="shrink-0 text-sm font-medium text-ink-faint tabular-nums">已完成 {answeredTotal} / {total}</p>
             </div>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-ink/10" role="progressbar" aria-label="测评进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>

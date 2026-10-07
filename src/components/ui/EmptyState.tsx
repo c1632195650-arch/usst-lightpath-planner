@@ -22,7 +22,7 @@ export function EmptyState({ icon = 'inbox', title, description, action }: Props
       <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-light text-brand">
         <Icon name={icon} size="xl" />
       </div>
-      <p className="text-base font-semibold tracking-tight text-ink">{title}</p>
+      <p className="font-display text-base font-semibold tracking-tight text-ink">{title}</p>
       {description && (
         <p className="mt-2 max-w-[280px] text-sm leading-6 text-ink-faint">{description}</p>
       )}

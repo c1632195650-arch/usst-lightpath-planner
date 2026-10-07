@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
+import { lifeModeIcon } from '@/components/icons/semanticIcons';
 import type { PersonaProfile, Schedule } from '@/types';
+import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import {
   MODE_OPTIONS,
   modePreview,
   modeSetupRequest,
   type ModePreviewResult,
 } from './modeSetup';
-import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 
 interface Props {
   schedule: Schedule;
@@ -56,8 +58,9 @@ export function ModeSetupDialog({ schedule, profile, weekNo, currentMode, onConf
                   active ? 'border-brand bg-brand-light/45' : 'border-ink/10 bg-paper hover:border-brand/40'
                 }`}
               >
-                <p className="text-sm font-semibold text-ink">
-                  {m.emoji} {m.name}
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <Icon name={lifeModeIcon(m.id)} size="sm" className="shrink-0 text-brand" />
+                  {m.name}
                   {isCurrent && <span className="ml-1 text-[10px] text-ink-faint">（当前）</span>}
                 </p>
                 <p className="mt-0.5 text-[11.5px] leading-5 text-ink-soft">{m.tagline}</p>

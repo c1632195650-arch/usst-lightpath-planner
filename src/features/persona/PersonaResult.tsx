@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
@@ -214,10 +215,10 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
           const items = explainProfile(profile, profile.scenarios ?? null);
           return (
             <details data-testid="profile-explain-panel" className="panel mt-6 px-5 py-4 sm:px-7">
-              <summary className="cursor-pointer text-[15px] font-semibold text-ink">
+              <summary className="flex cursor-pointer items-center gap-1 text-[15px] font-semibold text-ink">
                 这会如何影响你的排程
                 <span className="ml-2 text-[11px] font-normal text-ink-faint">点开展开</span>
-              </summary>
+              <Icon name="chevron-down" size="xs" className="chev ml-1 shrink-0" /></summary>
               {items.length === 0 ? (
                 <p className="mt-3 text-sm leading-6 text-ink-soft">
                   目前画像里没有命中会改变排程的强偏好 —— 正常排程已按人群底线进行。

@@ -49,7 +49,7 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
       {/* Small previous/next controls leave the calendar grid as the primary reading surface. */}
       <div className="mb-5 flex items-center justify-between">
         <button onClick={() => shift(-1)} className="icon-button" aria-label="上个月">‹</button>
-        <div className="text-lg font-semibold tracking-tight text-ink">{monthLabel}</div>
+        <div className="font-display text-lg font-semibold tracking-tight text-ink">{monthLabel}</div>
         <button onClick={() => shift(1)} className="icon-button" aria-label="下个月">›</button>
       </div>
 

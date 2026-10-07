@@ -15,6 +15,7 @@
  * 空值的餐次块与 T2 的行为完全一致。
  */
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import { DEFAULT_TEMPLATES } from '@/lib/planner/templates';
 import type { MealPlaces } from './userPlanStore.ts';
 import { setMealPlace } from './userPlanStore.ts';
@@ -26,10 +27,12 @@ const MEAL_PLACES: string[] = [...new Set(
     .map((t) => t.place as string),
 )];
 
-const ROWS: Array<{ key: keyof MealPlaces; label: string; emoji: string }> = [
-  { key: 'breakfast', label: '早餐', emoji: '🥣' },
-  { key: 'lunch', label: '午餐', emoji: '🍚' },
-  { key: 'dinner', label: '晚餐', emoji: '🍜' },
+/** 餐次行。2026-10-08 收口批：原 emoji（🥣🍚🍜）换成一枚餐具图鉴 —— 三餐是同一类事，
+ *  给三个不同字形不增加信息，反而让设置面板看起来像表情面板。 */
+const ROWS: Array<{ key: keyof MealPlaces; label: string }> = [
+  { key: 'breakfast', label: '早餐' },
+  { key: 'lunch', label: '午餐' },
+  { key: 'dinner', label: '晚餐' },
 ];
 
 interface Props {
@@ -50,7 +53,7 @@ export function MealPlaceSetting({ value, onChange, defaultOpen = false }: Props
         onClick={() => setOpen((v) => !v)}
         className="flex w-full flex-wrap items-baseline gap-x-2 text-left"
       >
-        <span className="text-[13.5px] font-semibold text-ink">
+        <span className="font-display text-[13.5px] font-semibold text-ink">
           {open ? '▾' : '▸'} 我常去的食堂
         </span>
         <span className="text-[11.5px] text-ink-faint">
@@ -63,9 +66,12 @@ export function MealPlaceSetting({ value, onChange, defaultOpen = false }: Props
           <p className="text-[11px] leading-relaxed text-ink-faint">
             指定后，那一餐会标上食堂名。**不指定也完全可以** —— 引擎不会替你猜。
           </p>
-          {ROWS.map(({ key, label, emoji }) => (
+          {ROWS.map(({ key, label }) => (
             <div key={key} className="flex flex-wrap items-center gap-2 text-[12px]">
-              <span className="w-14 shrink-0 text-ink-soft">{emoji} {label}</span>
+              <span className="flex w-14 shrink-0 items-center gap-1 text-ink-soft">
+                <Icon name="utensils" size="xs" className="shrink-0" />
+                {label}
+              </span>
               <select
                 value={value[key] ?? ''}
                 onChange={(e) => onChange(setMealPlace(value, key, e.target.value || undefined))}

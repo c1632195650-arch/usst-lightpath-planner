@@ -65,6 +65,7 @@ export function HardBoundaryCard() {
           <summary className="flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-ink">
             <Icon name="bed" size="sm" className="shrink-0 text-brand" />
             我的作息
+            <Icon name="chevron-down" size="xs" className="chev shrink-0" />
             <span className="ml-2 text-[11px] font-normal text-ink-faint">
               起床/就寝决定引擎给你排事的时段（不排「你还没起床」的块）
             </span>

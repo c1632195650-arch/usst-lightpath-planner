@@ -10,13 +10,6 @@ import { useState } from 'react';
 import type { Schedule } from '@/types';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { Icon } from '@/components/icons/Icon';
-import {
-  loadGoals, saveGoals, makeGoalId,
-  CATEGORY_TO_KIND,
-  categoryOf, isSchedulable,
-  type Goal, type GoalCategory, type GoalStatus,
-  GOAL_CATEGORY_LABEL, GOAL_STATUS_LABEL,
-} from './goalStore';
 import { AchievementPanel } from './GoalEditor';
 import { GoalQuickInput } from './GoalQuickInput';
 import { EXPERIENCE_HOURS, deadlineProximity } from './goalDecompose';
@@ -28,6 +21,13 @@ import { PriorityStrip } from './PriorityStrip';
 import { orderGoalsByPriority } from './priorityOrder';
 import { loadRecords, goalDebtByGoal } from '@/lib/behaviorLog';
 import { resolveSkeleton } from './resolveSkeleton';import { EmptyState } from '@/components/ui/EmptyState';
+import {
+  loadGoals, saveGoals, makeGoalId,
+  CATEGORY_TO_KIND,
+  categoryOf, isSchedulable,
+  type Goal, type GoalCategory, type GoalStatus,
+  GOAL_CATEGORY_LABEL, GOAL_STATUS_LABEL,
+} from './goalStore';
 
 const CATEGORIES: GoalCategory[] = ['contest', 'academic', 'skill', 'growth', 'health', 'social'];
 
@@ -116,7 +116,10 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
             <span className={`text-[11.5px] ${(goalDebtByGoal(records, weekNo - 1).size ?? 0) > 0 ? 'text-danger-text' : 'text-ink-faint'}`}>
               上周欠账目标 {goalDebtByGoal(records, weekNo - 1).size} 个
             </span>
-            <span className="ml-auto text-[11px] text-ink-faint">{overviewOpen ? '▲ 收起' : '▼ 展开全部监测'}</span>
+            <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-faint">
+              {overviewOpen ? '收起' : '展开全部监测'}
+              <Icon name="chevron-down" size="xs" className="chev shrink-0" />
+            </span>
           </button>
           {overviewOpen && (
             <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">

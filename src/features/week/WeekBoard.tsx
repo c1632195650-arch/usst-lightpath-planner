@@ -61,7 +61,7 @@ export function WeekBoard({ blocks, issues, weekMonday, todayDow, selectedDay, o
             aria-pressed={isSelected}
             onClick={() => onSelectDay(day)}
             className={[
-              'rounded-xl border bg-white p-2.5 text-left transition-[border-color,box-shadow,background-color] duration-fast ease-out',
+              'lift rounded-xl border bg-white p-2.5 text-left',
               'focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1]',
               'hover:border-brand/30 hover:bg-brand-light/25',
               isToday ? 'border-school-red/60 shadow-[inset_0_0_0_1px_rgba(158,27,50,0.35)]' : 'border-ink/10',

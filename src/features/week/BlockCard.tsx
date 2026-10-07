@@ -39,6 +39,7 @@
  *    会同时出现在块下方打架。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { KindIcon } from '@/components/icons/KindIcon';
 import type { TimeBlock } from '@/types';
 import { toHHmm } from '@/constants/time';
 import { kindCls, paletteOf, KIND_PALETTE } from '@/constants/chartColors';
@@ -385,7 +386,7 @@ export function BlockCard({
                 正好放得下这两行，是「一眼可读」的底线。 */}
             <div title={block.title} className={`min-w-0 truncate text-[12px] font-semibold leading-tight ${style.text}`}>
               {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
-              {block.emoji ? `${block.emoji} ` : ''}{block.title}
+              <KindIcon kind={block.kind} />{block.title}
               {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">新</span>}
             </div>
             {/* 时间行 + ⋯（右键菜单的「看得见的入口」，见文件头 T3 改造 ⑤）。
@@ -449,7 +450,7 @@ export function BlockCard({
             )}
             {t && (
               <div className={`mt-0.5 text-[10.5px] leading-tight ${t.tight ? 'rounded bg-white/70 px-1 py-px text-danger-text' : 'text-ink-soft'}`}>
-                🚶 {t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
+                <Icon name="map-pin" size="xs" className="mr-0.5 inline-flex align-[-2px]" />{t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
                 （余 {t.slackMin}{t.tight ? ' · 紧' : ''}）
               </div>
             )}
@@ -498,7 +499,7 @@ export function BlockCard({
           </div>
           <div className={`text-[12px] font-semibold leading-snug ${style.text}`}>
             {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
-            {block.emoji ? `${block.emoji} ` : ''}{block.title}
+            <KindIcon kind={block.kind} />{block.title}
             {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">新</span>}
           </div>
           <div className="font-mono text-[10.5px] leading-tight text-ink-faint">
@@ -516,7 +517,7 @@ export function BlockCard({
           )}
           {t && (
             <div className={`mt-0.5 text-[10.5px] leading-snug ${t.tight ? 'rounded bg-white/70 px-1 py-px text-danger-text' : 'text-ink-soft'}`}>
-              🚶 {t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
+              <Icon name="map-pin" size="xs" className="mr-0.5 inline-flex align-[-2px]" />{t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
               （余 {t.slackMin}{t.tight ? ' · 紧' : ''}）
             </div>
           )}

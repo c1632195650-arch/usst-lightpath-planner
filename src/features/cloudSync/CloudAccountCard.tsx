@@ -87,7 +87,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
       data-testid="cloud-account-card"
       className="rounded-xl border border-ink/10 bg-white px-4 py-3"
     >
-      <div className="text-[13px] font-semibold text-ink">连接手机端</div>
+      <div className="font-display text-[13px] font-semibold text-ink">连接手机端</div>
       <p className="mt-1 text-[12px] leading-5 text-ink-soft">
         注册一个昵称+密码，网页端排好的计划、待办和画像会自动同步到手机（同一账号即可）。
       </p>

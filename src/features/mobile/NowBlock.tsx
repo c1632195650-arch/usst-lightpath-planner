@@ -33,11 +33,11 @@ export default function NowBlock({
       className="rounded-card bg-brand px-5 py-5 text-white shadow-md">
       <p className="text-xs font-medium tracking-wide opacity-80">正在进行</p>
       <p className="mt-1 break-words text-[28px] font-bold leading-snug" data-testid="m-now-title">
-        {block.emoji ?? ''}{block.title}
+{block.title}
       </p>
       <p className="mt-1 text-base opacity-95" data-testid="m-now-place">
         {fmtMin(block.startMin)}–{fmtMin(block.endMin)}
-        {block.place ? ` · 📍${block.place}` : ''}
+        {block.place ? ` · ${block.place}` : ''}
       </p>
       <BurnBar startMin={block.startMin} endMin={block.endMin} nowMin={nowMin} />
       {tip && (

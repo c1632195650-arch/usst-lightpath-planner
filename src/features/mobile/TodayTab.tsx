@@ -70,7 +70,7 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
       )}
       {d.phase === 'empty-cloud' && (
         <div data-testid="m-empty-cloud" className="rounded-card bg-paper-card p-6 text-center shadow-sm">
-          <p className="text-base font-semibold text-ink">云端还没有你的计划</p>
+          <p className="font-display text-base font-semibold text-ink">云端还没有你的计划</p>
           <p className="mt-2 text-sm leading-6 text-ink-soft">先去网页端导入课表、生成周计划，回来点一下同步，这里就能看了。</p>
           <button type="button" onClick={() => void d.retry()} className="mt-4 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">我排好了，刷新</button>
         </div>
@@ -100,7 +100,7 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
           <section className="space-y-2" data-testid="m-today-list">
             {displayed && displayed.blocks.length === 0 && (
               <div data-testid="m-empty" className="rounded-card bg-paper-card p-6 text-center shadow-sm">
-                <p className="text-base font-semibold text-ink">今天还没有安排</p>
+                <p className="font-display text-base font-semibold text-ink">今天还没有安排</p>
                 <p className="mt-2 text-sm leading-6 text-ink-soft">去网页端「周计划」把今天排上，或者把手机上的偏好告诉梨宝。</p>
               </div>
             )}

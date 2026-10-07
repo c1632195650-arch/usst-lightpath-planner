@@ -74,7 +74,14 @@ function TodoRow({ todo, onPressDone, onArchive, feedback }: {
         {feedback?.id === todo.id && (
           <span data-testid="m-todo-feedback"
             className={`shrink-0 text-[11px] font-semibold ${feedback.kind === 'ok' ? 'text-ok' : 'text-danger'}`}>
-            {feedback.kind === 'ok' ? '✓ 办完一桩心事' : '要填完成时间'}
+            {feedback.kind === 'ok' ? (
+              <span className="inline-flex items-center gap-1">
+                <Icon name="check" size="xs" className="shrink-0" />
+                办完一桩心事
+              </span>
+            ) : (
+              '要填完成时间'
+            )}
           </span>
         )}
         {/* M1c：排程状态回显（与网页端 S3a 同口径）—— 已排进才显示，不制造噪音 */}
@@ -195,7 +202,10 @@ export default function GoalTodoCard({ data, attention, syncError, h }: {
                 {(g.milestones ?? []).map((m) => (
                   <button key={m.id} type="button" onClick={() => h.onToggleMilestone(g.id, m.id)}
                     className={`mt-0.5 block text-left text-[11px] ${m.done ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>
-                    {m.done ? '✓' : '○'} {m.title}
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name={m.done ? 'check-square' : 'mg-square'} size="xs" className="shrink-0" />
+                      {m.title}
+                    </span>
                   </button>
                 ))}
                 {(g.milestones ?? []).length === 0 && (

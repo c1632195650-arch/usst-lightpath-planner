@@ -33,7 +33,7 @@ export function ToastStack({ queue, onDismiss, testId = 'toast-stack' }: StackPr
         <div
           key={t.id}
           data-tone={t.tone ?? 'info'}
-          className={`pointer-events-auto relative flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm shadow-card ${TONE_CLASS[t.tone ?? 'info']}`}
+          className={`overlay-in-panel pointer-events-auto relative flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm shadow-card ${TONE_CLASS[t.tone ?? 'info']}`}
         >
           {/* 状态点：ok/error 前置色点，info 无点 */}
           {t.tone === 'ok' && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ok" aria-hidden="true" />}
