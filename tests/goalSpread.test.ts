@@ -62,3 +62,13 @@ test('多目标错开天（2026-10-07 RAY「只排最优先的目标」）', () 
   assert.ok(aDays.length > 0 && bDays.length > 0, '两个目标都应有任务');
   assert.ok(bDays.every((d) => !aDays.includes(d)), `低优先目标应避开高优先的天（A=${aDays} B=${bDays}）`);
 });
+
+test('截止感知选天（2026-10-07 RAY：光电杯 10/08 截止被排到 10/10-11）', () => {
+  // 光电杯：10/08（第 6 周周四 = dow 4）截止、3 小时
+  const gd: Goal = { id: 'gd', title: '光电杯', emoji: '🏆', kind: 'contest', category: 'contest', priority: 4, dueAt: '2026-10-08', totalHours: 3 };
+  const { tasks } = goalTasksOf([gd], 6, TERM, prefs, {}, undefined, null, null);
+  const dayOf = (t: { id: string }) => { const m = /-d(\d+)$/.exec(t.id); return m ? Number(m[1]) : -1; };
+  const days = tasks.map(dayOf);
+  assert.ok(days.length > 0, '应有任务');
+  for (const d of days) assert.ok(d <= 4, `任务排在 dow=${d}（10/08 之后）—— 截止后不该有块`);
+});
