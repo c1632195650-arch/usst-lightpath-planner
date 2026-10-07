@@ -15,15 +15,25 @@ import { useState } from 'react';
 import type { CorrectionRule } from '@/lib/planner/corrections';
 import { summarizeCorrections, countCorrections } from '@/lib/planner/corrections';
 import { setActive, removeRule } from './store.ts';
+import { Icon } from '@/components/icons/Icon';
+
+interface UnavailItem {
+  id: string;
+  label: string;
+  sub?: string;
+}
 
 interface Props {
   rules: CorrectionRule[];
   onChange: (rules: CorrectionRule[]) => void;
-  /** 默认是否展开 */
+  /** 不可时段（layer.slots）—— 梨宝「X 不排」与手动画的都落在这条硬通道上，
+   *  2026-10-07 起也在这里展示（RAY：找不到记到哪了）。 */
+  unavailable?: UnavailItem[];
+  onRemoveSlot?: (id: string) => void;
   defaultOpen?: boolean;
 }
 
-export function LearnedPreferencesPanel({ rules, onChange, defaultOpen = false }: Props) {
+export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemoveSlot, defaultOpen = false }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const items = summarizeCorrections(rules);
   const stat = countCorrections(rules);
@@ -56,11 +66,35 @@ export function LearnedPreferencesPanel({ rules, onChange, defaultOpen = false }
         <div className="mt-2">
           {/* 诚实说明：本期只记录，不反哺排程 */}
           <div className="rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
-            这些是你提过的要求，引擎已经记下来了。**当前版本只做记录与展示，还不会改变排程结果** ——
-            等校验确认理解无误后才会生效。
+            这些是你提过的要求。其中「不可时段」类**已经真实生效**（重排时硬排除）；
+            其余记录类要求会随重排逐步体现。
           </div>
 
-          {items.length === 0 ? (
+          {unavailable && unavailable.length > 0 && onRemoveSlot && (
+            <div className="mt-2">
+              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink">
+                <Icon name="x-circle" size="xs" />
+                不可时段（真实生效）
+              </div>
+              <ul className="mt-1 space-y-1.5">
+                {unavailable.map((u) => (
+                  <li key={u.id} className="flex flex-wrap items-baseline gap-x-2 rounded-md bg-white px-2.5 py-1.5 ring-1 ring-ink/10">
+                    <span className="text-[12.5px] font-medium text-ink">{u.label}</span>
+                    {u.sub && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-ink-soft">{u.sub}</span>}
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSlot(u.id)}
+                      className="ml-auto rounded bg-white px-2 py-0.5 text-[11px] text-red-600 ring-1 ring-red-200 hover:bg-red-50"
+                    >
+                      删除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {items.length === 0 && !(unavailable && unavailable.length > 0) ? (
             <p className="mt-2 text-[12px] leading-relaxed text-ink-faint">
               还没有从你这里学到什么。在上面的「提个要求」里说一句试试，
               内容会慢慢累积在这里，你可以随时撤销。

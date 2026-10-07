@@ -21,6 +21,7 @@ import type { BlockKind, DayOfWeek } from '@/types';
 import type { CorrectionRule, TimeWindow } from '@/lib/planner/corrections';
 import { summarizeCorrections } from '@/lib/planner/corrections';
 import { parsePlanIntent, INTENT_HINTS, type PlanIntent, type TaskDraft } from './planIntent.ts';
+import { todayISO } from '@/lib/date';
 import { asNoteDraft, PARSE_HINTS, type CorrectionDraft } from './parseCorrection.ts';
 import { makeRuleId } from './store.ts';
 import { toMinutes } from '@/constants/time';
@@ -44,10 +45,12 @@ interface Props {
   /** 加一件事 */
   onAddTask: (task: TaskDraft) => void;
   /** 拿掉某几天（可限类型）的安排 */
-  onRemoveBlocks: (days: DayOfWeek[], blockKind?: BlockKind) => void;
+  onRemoveBlocks: (days: DayOfWeek[], blockKind?: BlockKind, titleKw?: string) => void;
+  /** 规则解析搞不定的句子 → 原句跳梨宝页排程模式（2026-10-07） */
+  onAskSched?: (q: string) => void;
 }
 
-export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks }: Props) {
+export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks, onAskSched }: Props) {
   const [text, setText] = useState('');
   const [intent, setIntent] = useState<PlanIntent | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -64,7 +67,7 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks }: Props) {
   }
 
   function handleParse() {
-    setIntent(parsePlanIntent(text));
+    setIntent(parsePlanIntent(text, todayISO()));
   }
 
   function commitDraft(d: CorrectionDraft, utterance?: string) {
@@ -130,6 +133,19 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks }: Props) {
         >
           解析
         </button>
+        {/* 2026-10-07（RAY）：一句话搞不定就交给排程模式 —— 原句跳梨宝页，
+            直进排程对话（LLM 理解 → 追问 → 草稿卡确认 → 执行），不靠关键词 */}
+        {onAskSched && (
+          <button
+            type="button"
+            onClick={() => { const q = text.trim(); if (!q) return; onAskSched(q); reset(); }}
+            disabled={!text.trim()}
+            title="跳到梨宝页，以排程模式处理这句话（会追问细节、出草稿让你确认）"
+            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-brand ring-1 ring-brand/30 transition hover:bg-brand/5 disabled:opacity-40"
+          >
+            排程模式接手
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setManualOpen((v) => !v)}
@@ -192,11 +208,17 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks }: Props) {
         <div className="mt-2 rounded-md bg-rose-50 px-2.5 py-2 text-[11.5px] text-rose-900">
           <div>
             <span className="font-medium">我理解成：</span>
-            拿掉{intent.days.map((d) => `周${DAY_CN[d - 1]}`).join('、')}
-            {intent.blockKind ? '的部分安排' : '的安排'}
+            {intent.titleKw ? (
+              <span>拿掉所有「{intent.titleKw}」（包括没挂星期的）</span>
+            ) : (
+              <>
+                拿掉{intent.days.map((d) => `周${DAY_CN[d - 1]}`).join('、')}
+                {intent.blockKind ? '的部分安排' : '的安排'}
+              </>
+            )}
           </div>
           <div className="mt-1.5 flex gap-2">
-            <button type="button" onClick={() => { onRemoveBlocks(intent.days, intent.blockKind); reset(); }}
+            <button type="button" onClick={() => { onRemoveBlocks(intent.days, intent.blockKind, intent.titleKw); reset(); }}
               className="rounded bg-rose-700 px-2.5 py-1 text-[11.5px] font-medium text-white">
               就这么办
             </button>
