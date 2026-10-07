@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- 光溯品牌深蓝（LightpathMark plate 底色 #1F3A78，2026-10-07 换皮） -->
+    <color name="ic_launcher_background">#1F3A78</color>
 </resources>

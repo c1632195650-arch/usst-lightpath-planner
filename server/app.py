@@ -72,7 +72,12 @@ app.include_router(_sync_router)
 # 例：LIBAO_CORS_ORIGINS=http://localhost:5173,http://192.168.1.100:5173
 # 5174 = integration-full 融合版演示口（2026-10-02 强化计划 F：换端口演示时
 # 页内 fetch 被 CORS 拒 →「校园资料服务未连接」误报）
-_CORS_DEFAULT = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
+# https://localhost = 光溯 APK 的 webview origin（capacitor androidScheme=https 且
+# hostname=localhost，2026-10-07 双端联通演示加进默认白名单 —— APK 是自家客户端，
+# 直连局域网/公网后端都该放行；设 LIBAO_CORS_ORIGINS 时须整体替换、记得带上它）。
+_CORS_DEFAULT = ("https://localhost,"
+                 "http://localhost:5173,http://127.0.0.1:5173,"
+                 "http://localhost:5174,http://127.0.0.1:5174")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in os.environ.get("LIBAO_CORS_ORIGINS", _CORS_DEFAULT).split(",") if o.strip()],
@@ -1267,4 +1272,6 @@ def api_delete_fact(fact_id: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8000")))
+    # LIBAO_HOST：默认 127.0.0.1（不暴露）；双端演示时设 0.0.0.0 让手机连局域网后端
+    uvicorn.run(app, host=os.environ.get("LIBAO_HOST", "127.0.0.1"),
+                port=int(os.environ.get("PORT", "8000")))
