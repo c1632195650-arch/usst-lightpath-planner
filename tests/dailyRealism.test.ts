@@ -4,7 +4,8 @@
  * 守的规则：
  *   1. 图书馆类自习 ≥ 60 分钟（要搬书过去，学太短不划算）；其余自习 ≥ 30 分钟
  *   2. 同地点相邻自习块必须合并（含 ≤5 分钟软缓冲的缝）
- *   3. 三餐块后面紧跟「饭后消食·散步」（放得下就必须有）
+ *   3. 午晚餐块后面紧跟「饭后消食·散步」（放得下就必须有）；
+ *      🔴 2026-10-07（RAY 拍板）：早餐后**不排**消食 —— 早餐豁免本断言
  *   4. 运动起点距最近一餐结束 ≥ 120 分钟
  *   5. 运动结束后 40 分钟是恢复带：引擎自排的软块不进（课程/用户块不受限）
  *   6. 注水法（weighted max-min fairness）：小需求先满足、盈余按权重分
@@ -77,7 +78,7 @@ test('同地点相邻自习块已合并（不留 ≤5 分钟的缝）', () => {
  * 二、三餐拆两块 + 饭后运动冷却
  * ========================================================== */
 
-test('放得下的三餐后面必须紧跟饭后消食块', () => {
+test('放得下的午晚餐后面必须紧跟饭后消食块（早餐除外，2026-10-07 RAY）', () => {
   const overlaps = (
     a: { startMin: number; endMin: number },
     b: { startMin: number; endMin: number },
@@ -86,6 +87,8 @@ test('放得下的三餐后面必须紧跟饭后消食块', () => {
     const meals = plan.blocks.filter((b) => b.kind === 'meal');
     assert.ok(meals.length > 0, `${name} 应该有三餐块（语料本身的问题）`);
     for (const meal of meals) {
+      // 2026-10-07（RAY）：早餐后不排消食（只保留午/晚餐后）—— 早餐豁免本断言
+      if (meal.title === '早餐') continue;
       const span = { startMin: meal.endMin, endMin: meal.endMin + 25 };
       const digest = plan.blocks.find(
         (b) => b.title === DIGEST_TITLE && b.dayOfWeek === meal.dayOfWeek && b.startMin === meal.endMin,

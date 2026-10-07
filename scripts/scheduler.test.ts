@@ -158,12 +158,14 @@ test('午饭点被课占住时会自动顺延，不会硬压在课里', () => {
   assert.equal(overlapCount([lunch], blocksOf(p2, 2).filter((b) => b.kind === 'course')), 0);
 });
 
-test('没早课的日子不排早餐（不硬叫早）', () => {
+/* 🔴 2026-10-07（RAY 拍板）：早餐改为**每天都排** —— 原断言「没早课的日子不排早餐
+ *    （不硬叫早）」已废止。对应改动：src/lib/planner/construct.ts 6.3 段
+ *    （删掉 firstStart ≤ 10:00 的早课条件）。 */
+test('每天都排早餐（不再区分有没有早课）', () => {
   const plan = build({ weekNo: 4 });
-  for (const day of [1, 2, 4]) {
+  for (const day of [1, 2, 3, 4, 5, 6, 7]) {
     const has = blocksOf(plan, day).some((b) => b.title.includes('早餐'));
-    const early = blocksOf(plan, day).some((b) => b.kind === 'course' && b.startMin <= toMinutes('10:00'));
-    assert.equal(has, early, `周${day}：早餐与早课应对应`);
+    assert.equal(has, true, `周${day}：应每天都有早餐`);
   }
 });
 
@@ -244,8 +246,13 @@ test('自习地点跟随画像偏好（宿舍 vs 图书馆）', () => {
 test('自习地点在画像给的池子里轮换，而不是永远同一个', () => {
   // 「说喜欢去图书馆就一直推荐同一个图书馆」的修复：
   // 偏好现在是一个池子，引擎按天轮换 —— 但**只在池内**轮换，不会轮到宿舍去。
+  // ⚠️ 2026-10-07：这里刻意**关掉自排运动**（with_others 不触发）——运动排上后会切出
+  //    「池内点装不下最小时长」的碎片 gap，引擎按既有设计启用同校区**兜底点**（空教室，
+  //    见 construct.ts `studyCandidates` 的 fallback：接在队尾、不参与轮换）。
+  //    那是兜底、不是轮换，会让本测试的「全部池内」断言失焦。运动自身的契约由
+  //    「运动块只在画像说『自己按计划去』时主动排」覆盖。
   const pool = ['图书馆（图文信息中心）', '湛恩纪念图书馆', '老图书馆'];
-  const plan = build({ policy: policy({ studyPlaces: pool }) });
+  const plan = build({ scenarios: scen({ exercise_trigger: 'with_others' }), policy: policy({ studyPlaces: pool }) });
   const study = plan.blocks.filter((b) => b.kind === 'study');
   assert.ok(study.length >= 2, `应至少排出两个自习块才能谈轮换，实际 ${study.length}`);
 

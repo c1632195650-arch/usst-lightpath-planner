@@ -28,6 +28,8 @@ import {
 import { campusOfPlace, resolvePlace } from './places.ts';
 import { campusFallbackTransfer, campusOfName, type TransferProvider } from './campusLookup.ts';
 import { blockId, type Commit, type PlanRequest } from './model.ts';
+import { scoreFor } from './blockScore.ts';
+import { curveAt } from './energyCurve.ts';
 import { capacityFactorOn, dayCapacityFactors, rollingNotes, type DayLoadDecision, type LoadSource } from './roll.ts';
 import { effectiveEffortMin, sortCommits } from './objective.ts';
 import {
@@ -65,7 +67,9 @@ const SOFT_BUFFER_MIN = 5;
  *   · 宿舍/空教室等「就地」自习点成本低 → 最少 30 分钟；
  *   · 饭后至少 2 小时才能运动；
  *   · 运动后留 40 分钟恢复带（洗澡/洗衣），引擎自排的软块不进；
- *   · 三餐块后面紧跟 25 分钟「饭后消食·散步」，把饭后的第一段时间占住。
+ *   · 午晚餐块后面紧跟 25 分钟「饭后消食·散步」，把饭后的第一段时间占住。
+ *     🔴 2026-10-07（RAY 拍板）两项修订：① 早餐**每天都排**（原「只在上午有早课的
+ *     日子排」已推翻）；② **早餐后不排消食**（午晚保留）。
  */
 const LIBRARY_STUDY_MIN = 60;
 const ON_SITE_STUDY_MIN = 30;
@@ -439,10 +443,10 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     /* --- 6.3 三餐（按地点就近 + 营业时段 + 走路时间） --- */
     let digestMin = 0;
     if (withMeals) {
-      const firstStart = daySlots.length ? daySlots[0].startMin : null;
+      // 🔴 2026-10-07（RAY 拍板）：早餐改为**每天**都排 —— 原规则「只在上午有早课的
+      //     日子排（没早课就不必硬叫早）」已推翻，周末/无课日也保留早餐时间。
+      //     （原实现以 `firstStart ≤ 10:00` 判定，firstStart 变量随之删除。）
       for (const meal of MEAL_SLOTS) {
-        // 早餐只在上午有早课的日子排（没早课就不必硬叫早）
-        if (meal.id === 'breakfast' && !(firstStart != null && firstStart <= toMinutes('10:00'))) continue;
         const res = placeMeal({
           // 三餐同属软块：`fromNow` 之后不再「补排」已经过去的饭点
           day, meal, placed, dayStartMin: softFloorMin, dayEndMin, mkId,
@@ -451,7 +455,11 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         });
         if (res.block) {
           placed = [...placed, res.block];
-          if (res.digest) {
+          // 🔴 2026-10-07（RAY 拍板）：**早餐后不排消食**（午/晚保留）。
+          //     为什么在消费端过滤而不是 placeMeal 里：消食的「生成」保持通用，
+          //     「哪几餐要」是构造策略（本段）的职责。语义键 `{mealId}-digest`
+          //     对 lunch/dinner 不变。
+          if (res.digest && meal.id !== 'breakfast') {
             placed = [...placed, {
               // §6.4 语义键：{mealId}-digest（跟吃饭块同一逻辑身份族）
               id: mkId(day, 'activity', `${meal.id}-digest`),
@@ -512,6 +520,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day);
     const perCat: Record<string, number> = {};
     let activityMin = 0;
+    /** 学习类任务（goal 等 custom-study）占的时长 —— 从自习预算里扣，不占活动预算 */
+    let studyTaskMin = 0;
     /**
      * 运动后恢复带（2026-09-28）：跑完步要洗澡/洗衣/喘口气，
      * 引擎自排的软块（活动/自习）在这段时间不落位。课程与用户钉死的块不受限
@@ -532,7 +542,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       const cat = tpl.category as ActivityCategory;
       const cap = cat === 'social' ? socialCap : (CATEGORY_PER_DAY[cat] ?? 1);
       if ((perCat[cat] ?? 0) >= cap) continue;
-      if (activityMin + Math.min(...tpl.durations) > activityBudget) continue;
+      /**
+       * 预算归属（🔴 2026-10-07 修复）：**学习类任务不占「活动预算」**。
+       * 活动预算护的是运动/午休/夜宵/社交这类生活容量；而 goal 等学习任务
+       * （`kind: 'study'` 的 custom）此前按 `category: 'custom'` 被算进活动预算 ——
+       * 目标一多，活动预算被吃光，运动被整体拒之门外（真机实测：无 goals 时
+       * 12 个运动块、有 goals 时 0 个；测试夹具不带 goals，故长期不可见）。
+       * 学习任务改记 `studyTaskMin`，从自习预算里扣 —— 它们本就是同一池学习时间。
+       */
+      const usesActivityBudget = tpl.kind !== 'study';
+      if (usesActivityBudget && activityMin + Math.min(...tpl.durations) > activityBudget) continue;
       const block = placeTemplate({
         tpl, day, placed, dayCampus, mkId, policy, transfer, dayStartMin: softFloorMin, dayEndMin,
         homeBaseName: req.homeBase?.name,
@@ -541,7 +560,9 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       if (block) {
         placed = [...placed, block];
         perCat[cat] = (perCat[cat] ?? 0) + 1;
-        activityMin += block.endMin - block.startMin;
+        const dur = block.endMin - block.startMin;
+        if (usesActivityBudget) activityMin += dur;
+        else studyTaskMin += dur;
         if (tpl.category === 'sport') {
           recoveryUntil = Math.max(recoveryUntil, block.endMin + RECOVERY_AFTER_SPORT_MIN);
         }
@@ -549,10 +570,12 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     }
 
     /* --- 6.6 学习块（按阶段策略填充） --- */
-    const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin));
+    // studyTaskMin：学习类任务（goal 等）也从自习预算里扣 —— 同一池学习时间
+    const studyBudget = Math.min(policy.dailyStudyMin, Math.max(0, usable - activityMin - studyTaskMin));
     const studyBlocks = fillStudy({
       day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
       dayStartMin: softFloorMin, dayEndMin, recoveryUntil,
+      energyCurve: req.energyCurve,
     });
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
@@ -609,10 +632,15 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   );
   const finalBlocks = mergeAdjacentStudy(afterExclusion, lockedIds);
 
+  // 逐块排程置信度（长计划增强计划书 §1.2）：转场/合并**之后**统一附加 ——
+  // 缓冲因子按最终相邻关系算。只描述质量、不影响排程决策（见 blockScore.ts 头注）。
+  const sortedFinal = sortBlocks(finalBlocks);
+  const scores = scoreFor(sortedFinal, { dayStartMin, dayEndMin, energyCurve: req.energyCurve });
+
   return {
     plan: {
       weekNo,
-      blocks: sortBlocks(finalBlocks),
+      blocks: sortedFinal.map((b) => ({ ...b, score: scores[b.id] })),
       stats: {
         courseMin,
         studyMin,
@@ -707,6 +735,8 @@ function placeMeal(args: {
   }
 
   // 饭后消食·散步（2026-09-28）：紧跟吃饭块。贴着下一件事放不下就不排。
+  // ⚠️ 2026-10-07 起**早餐的 digest 由调用方（6.3 段）跳过**——本函数仍照常返回，
+  //    「哪几餐要消食」是构造策略，别藏进这里。
   const dStart = start + dur;
   const dEnd = dStart + DIGEST_WALK_MIN;
   const digest = dEnd <= dayEndMin && !placed.some((b) => overlaps(b, { startMin: dStart, endMin: dEnd }))
@@ -809,15 +839,26 @@ function placeTemplate(args: {
       // 两头都要留走路时间：从上个块走过来 + 待会儿还要走到下一个块
       const prev = lastBlockBefore(placed, floor);
       const need = travelNeed(transfer, prev?.place, tpl.place);
-      const s = prev ? Math.max(floor, prev.endMin + need + SOFT_BUFFER_MIN) : floor;
-      if (s < args.recoveryUntil) continue; // 运动后恢复带：软块不进
+      let s = prev ? Math.max(floor, prev.endMin + need + SOFT_BUFFER_MIN) : floor;
+      // 运动后恢复带（2026-09-28）：软块不得早于 recoveryUntil 开始。
+      // 🔴 2026-10-07 修复：只在「空档整体位于运动之后」时推后 —— 原实现无条件
+      //   `continue` 会把「运动之前」的空档（早晨/午间）也一并跳过；运动一排上，
+      //   自习/午休/夜宵就在这些空档成片消失（scripts 测试 98/103 抓到的回归）。
+      const sportEndMin = args.recoveryUntil > 0 ? args.recoveryUntil - RECOVERY_AFTER_SPORT_MIN : -1;
+      if (s < args.recoveryUntil && gap.startMin >= sportEndMin) s = args.recoveryUntil;
       if (tpl.category === 'sport') {
         // 饭后冷却（2026-09-28）：运动起点必须离最近一餐结束 ≥ 2 小时。
-        // 只看「运动之前」的餐 —— 运动之后再吃饭不在此列。
+        // 只看「运动之前」的餐 ——「餐前跑」本来就合法（空档尾部由 ceiling /
+        // 转场约束保证不与餐块重叠）。
+        // 🔴 2026-10-07（RAY 拍板「吃饭优先；运动要么在餐前、要么餐后满 2 小时」）：
+        //   贴餐落点不再**直接放弃**这个空档 —— 改为**推后到餐后 2 小时**再试。
+        //   推过头（超出空档 / 时长截断为 0）由下面的 pickDuration 兜底 → 放弃本空档。
         const lastMealEnd = placed
           .filter((b) => b.kind === 'meal' && b.endMin <= s)
           .reduce((m, b) => Math.max(m, b.endMin), -1);
-        if (lastMealEnd >= 0 && s - lastMealEnd < MEAL_TO_SPORT_GAP_MIN) continue;
+        if (lastMealEnd >= 0 && s - lastMealEnd < MEAL_TO_SPORT_GAP_MIN) {
+          s = lastMealEnd + MEAL_TO_SPORT_GAP_MIN;
+        }
       }
       if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
       const tail = travelNeed(transfer, tpl.place, nextBlockOnOrAfter(placed, ceiling)?.place);
@@ -904,6 +945,12 @@ function fillStudy(args: {
   dayEndMin: number;
   /** 运动后恢复带的上界（2026-09-28）：自习块不得早于这个时刻开始 */
   recoveryUntil: number;
+  /**
+   * 日内精力曲线（长计划增强计划书 §2.3，RAY 拍板「精力高峰优先」）。
+   * 给了就改变空档的**挑选顺序**：优先把自习放进高精力时段（差 ≥0.05 才算占优，
+   * 避免为微小差值打乱「从大到小」的容量口径）；不传 = 行为与引入前完全一致。
+   */
+  energyCurve?: number[];
 }): TimeBlock[] {
   const { day, placed: placedIn, budget, policy, templates, dayCampus, mkId, transfer, dayStartMin, dayEndMin } = args;
   let placed = placedIn;
@@ -915,6 +962,9 @@ function fillStudy(args: {
   const { preferred, fallback } = studyCandidates(policy, dayCampus, templates);
   const blocks: TimeBlock[] = [];
   let remaining = budget;
+  // 运动结束时刻（由 recoveryUntil 反推）——恢复带只在「空档位于运动之后」时生效
+  // （见下方 2026-10-07 修复注释；与 placeTemplate 同款判据）
+  const sportEndMin = args.recoveryUntil > 0 ? args.recoveryUntil - RECOVERY_AFTER_SPORT_MIN : -1;
 
   /**
    * 轮换**只在画像偏好池内**做 —— 兜底点（同校区其它自习点）接在**队尾**，
@@ -933,8 +983,18 @@ function fillStudy(args: {
   //   · 候选按轮换顺序过一遍，第一个「开门 + 装得下最小时长」的胜出
   //     （旧逻辑是第一个开门的就上，时长只看空档大小）。
   while (remaining >= MIN_CHUNK) {
+    // 空档排序（§2.3 精力高峰优先）：给了精力曲线时，高精力空档先挑
+    //（差 ≥0.05 才算占优，否则维持「从大到小」的容量口径）。
+    const energyOf = (g: { startMin: number }) =>
+      curveAt(args.energyCurve, g.startMin) ?? 0.5;
     const gaps = [...freeGaps(dayStartMin, dayEndMin, placed)]
-      .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
+      .sort((a, b) => {
+        if (args.energyCurve) {
+          const diff = energyOf(b) - energyOf(a);
+          if (Math.abs(diff) >= 0.05) return diff;
+        }
+        return (b.endMin - b.startMin) - (a.endMin - a.startMin);
+      });
     let best: { start: number; dur: number; tpl: ActivityTemplate } | null = null;
     const cands = rotated();
 
@@ -949,7 +1009,11 @@ function fillStudy(args: {
           && !openAt(tpl, gap.endMin - MIN_CHUNK, gap.endMin)) continue;
         const need = travelNeed(transfer, prev?.place, tpl.place);
         let s = prev ? Math.max(gap.startMin, prev.endMin + need + SOFT_BUFFER_MIN) : gap.startMin;
-        s = Math.max(s, args.recoveryUntil); // 运动后恢复带：自习不紧贴运动
+        // 运动后恢复带：自习不紧贴运动 —— 但只在「空档整体位于运动之后」时抬起点。
+        // 🔴 2026-10-07 修复：原实现无条件 `max(s, recoveryUntil)`，会把「运动之前」
+        //   的空档起点也抬到恢复带之后 → 该空档直接装不下任何自习（连同兜底点），
+        //   运动排上后白天自习整片消失。与 placeTemplate 同款判据。
+        if (s < args.recoveryUntil && gap.startMin >= sportEndMin) s = args.recoveryUntil;
         if (!policy.eveningAllowed && s >= EVENING_FROM) continue;
         const tail = nextAfter
           ? travelNeed(transfer, tpl.place, nextAfter.place) + SOFT_BUFFER_MIN

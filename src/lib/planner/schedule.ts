@@ -47,6 +47,12 @@ export interface BuildWeekPlanInput {
   policy: PhasePolicy;
   /** 画像场景字段 —— 决定运动 / 夜宵等模块是否参与 */
   scenarios?: ScenarioFields | null;
+  /**
+   * 完整画像（批 4.3，随 CY 排程壳搬运 2026-10-07）：引擎读它算 socialCap
+   * 与块级偏好。**本地引擎暂不消费**（可选字段，缺省 = 旧行为零漂移）；
+   * 契约与 CY lib/planner/schedule.ts 对齐，待合流后点亮。
+   */
+  persona?: import('@/types').PersonaProfile | null;
   /** 用户自定义模块 */
   tasks?: UserTask[];
   /** 模块库，默认 DEFAULT_TEMPLATES */
@@ -58,6 +64,11 @@ export interface BuildWeekPlanInput {
   dayEnd?: string;
   /** 是否排三餐（默认 true） */
   withMeals?: boolean;
+  /**
+   * P1-5（CY 契约，随排程壳搬运 2026-10-07）：每周活动量下限（分钟）。
+   * **本地引擎暂不消费**（可选字段，缺省 undefined = 旧行为零漂移）。
+   */
+  weeklyActivityMin?: number;
   /** 用户住处（2026-09-20）：宿舍类模板（午休/宿舍自习）地点跟随；未设置 = 地点留空 */
   homeBase?: { name: string; campus: string } | null;
 

@@ -67,6 +67,10 @@ export interface ActivityTemplate {
    * 不加这个限制时，引擎会按「最大空档优先」把四六级真题排到 07:00（还没起床）。
    */
   notBeforeMin?: number;
+  /** D4：时段窗上界（随 CY 排程壳搬运 2026-10-07；本地引擎暂不消费，可选 = 零漂移） */
+  notAfterMin?: number;
+  /** D4：用户点名块豁免活动预算（随 CY 排程壳搬运；同上，暂不消费） */
+  budgetExempt?: boolean;
 }
 
 /** "06:30-09:30" / "10:45-13:30,16:30-19:30" → 时段数组 */
@@ -341,6 +345,13 @@ export interface UserTask {
   fromEventId?: string;
   /** 最早可开始分钟（如 540 = 09:00）；不设 = 随时可排 */
   notBeforeMin?: number;
+  /** D4：最晚必须结束的分钟 —— 「晚上」这类时段窗的上界（随 CY 排程壳搬运 2026-10-07） */
+  notAfterMin?: number;
+  /**
+   * D4：用户点名块豁免活动预算（随 CY 排程壳搬运 2026-10-07）。豁免 = 不参与
+   * 活动预算闸与每日上限闸；本地引擎暂不消费（可选字段，缺省 = 旧行为零漂移）。
+   */
+  budgetExempt?: boolean;
 }
 
 /** 由用户输入构造一个可排程的模块 */
@@ -360,6 +371,8 @@ export function customTemplate(task: UserTask): ActivityTemplate {
     verified: true,
     fromEventId: task.fromEventId,
     notBeforeMin: task.notBeforeMin,
+    notAfterMin: task.notAfterMin,
+    budgetExempt: task.budgetExempt,
   };
 }
 

@@ -248,8 +248,25 @@ export interface PlanRequest {
   dayStart?: string;
   /** 一天的可排程区间，默认 23:00 */
   dayEnd?: string;
+  /**
+   * 日内精力曲线（24 个小时锚点，0–1）—— 长计划增强计划书 §2.3。
+   * 由组装层（useWeekPlan）从作息 + 画像轴 + 用户高峰微调推断后注入；
+   * 不传 = 引擎用缺省曲线（评分器行为与引入前一致）。
+   */
+  energyCurve?: number[];
   /** 是否排三餐（默认 true） */
   withMeals?: boolean;
+  /**
+   * WP5：生活模式的引擎附加参数（sportSessions/extraMeals/blankBlocks）——
+   * 随 CY 排程壳搬运（2026-10-07）。由调用方从 `lifeModeExtrasOf(lifeMode)` 取得后
+   * 下发；**本地引擎暂不消费**，缺省 undefined = 不生效（golden 语料不带此字段 →
+   * 零漂移，opt-in 纪律同 CY 线）。语义详见 `lifeModePolicy.ts` 的 `LifeModeExtras`。
+   */
+  lifeModeExtras?: {
+    sportSessions?: number;
+    extraMeals?: number;
+    blankBlocks?: number;
+  } | null;
 
   // —— 增量 / 动态（P2，P0 仅预留字段）——
   /**

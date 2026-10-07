@@ -5,8 +5,8 @@
     "engine": "src/lib/planner/schedule.ts::buildWeekPlan",
     "engineKind": "greedy-golden",
     "spec": "docs/scheduler-v2-spec.md#T1.6",
-    "gitRev": "54b624caaedab72fa949d717f766e652085818fd",
-    "capturedAt": "2026-09-28T05:56:02.291Z"
+    "gitRev": null,
+    "capturedAt": "2026-10-07T05:07:00.588Z"
   },
   "input": {
     "name": "week-12-crosscampus",
@@ -58,14 +58,6 @@
     },
     {
       "dayOfWeek": 1,
-      "startMin": 450,
-      "endMin": 475,
-      "kind": "activity",
-      "title": "饭后消食",
-      "place": null
-    },
-    {
-      "dayOfWeek": 1,
       "startMin": 480,
       "endMin": 565,
       "kind": "course",
@@ -107,7 +99,7 @@
     {
       "dayOfWeek": 1,
       "startMin": 830,
-      "endMin": 890,
+      "endMin": 955,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -130,19 +122,19 @@
     },
     {
       "dayOfWeek": 1,
-      "startMin": 1110,
-      "endMin": 1150,
+      "startMin": 1190,
+      "endMin": 1250,
       "kind": "activity",
-      "title": "夜宵",
-      "place": "咪昵餐厅"
+      "title": "操场跑步",
+      "place": "运动场"
     },
     {
       "dayOfWeek": 1,
-      "startMin": 1155,
-      "endMin": 1215,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
+      "startMin": 1290,
+      "endMin": 1320,
+      "kind": "activity",
+      "title": "夜宵",
+      "place": "咪昵餐厅"
     },
     {
       "dayOfWeek": 2,
@@ -154,11 +146,11 @@
     },
     {
       "dayOfWeek": 2,
-      "startMin": 450,
-      "endMin": 475,
-      "kind": "activity",
-      "title": "饭后消食",
-      "place": null
+      "startMin": 455,
+      "endMin": 515,
+      "kind": "study",
+      "title": "图书馆自习",
+      "place": "图书馆（图文信息中心）"
     },
     {
       "dayOfWeek": 2,
@@ -218,31 +210,31 @@
     },
     {
       "dayOfWeek": 2,
-      "startMin": 1110,
-      "endMin": 1150,
-      "kind": "activity",
-      "title": "夜宵",
-      "place": "咪昵餐厅"
-    },
-    {
-      "dayOfWeek": 2,
-      "startMin": 1155,
-      "endMin": 1215,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
-    },
-    {
-      "dayOfWeek": 3,
-      "startMin": 420,
-      "endMin": 480,
+      "startMin": 1190,
+      "endMin": 1250,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
     },
     {
+      "dayOfWeek": 2,
+      "startMin": 1290,
+      "endMin": 1320,
+      "kind": "activity",
+      "title": "夜宵",
+      "place": "咪昵餐厅"
+    },
+    {
       "dayOfWeek": 3,
-      "startMin": 520,
+      "startMin": 420,
+      "endMin": 450,
+      "kind": "meal",
+      "title": "早餐",
+      "place": null
+    },
+    {
+      "dayOfWeek": 3,
+      "startMin": 455,
       "endMin": 580,
       "kind": "study",
       "title": "图书馆自习",
@@ -290,31 +282,31 @@
     },
     {
       "dayOfWeek": 3,
-      "startMin": 1110,
-      "endMin": 1150,
-      "kind": "activity",
-      "title": "夜宵",
-      "place": "咪昵餐厅"
-    },
-    {
-      "dayOfWeek": 3,
-      "startMin": 1155,
-      "endMin": 1215,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
-    },
-    {
-      "dayOfWeek": 4,
-      "startMin": 420,
-      "endMin": 480,
+      "startMin": 1190,
+      "endMin": 1250,
       "kind": "activity",
       "title": "操场跑步",
       "place": "运动场"
     },
     {
+      "dayOfWeek": 3,
+      "startMin": 1290,
+      "endMin": 1320,
+      "kind": "activity",
+      "title": "夜宵",
+      "place": "咪昵餐厅"
+    },
+    {
       "dayOfWeek": 4,
-      "startMin": 520,
+      "startMin": 420,
+      "endMin": 450,
+      "kind": "meal",
+      "title": "早餐",
+      "place": null
+    },
+    {
+      "dayOfWeek": 4,
+      "startMin": 455,
       "endMin": 580,
       "kind": "study",
       "title": "图书馆自习",
@@ -354,32 +346,32 @@
     },
     {
       "dayOfWeek": 4,
-      "startMin": 1110,
-      "endMin": 1150,
+      "startMin": 1190,
+      "endMin": 1250,
+      "kind": "activity",
+      "title": "操场跑步",
+      "place": "运动场"
+    },
+    {
+      "dayOfWeek": 4,
+      "startMin": 1290,
+      "endMin": 1320,
       "kind": "activity",
       "title": "夜宵",
       "place": "咪昵餐厅"
     },
     {
-      "dayOfWeek": 4,
-      "startMin": 1155,
-      "endMin": 1215,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
-    },
-    {
       "dayOfWeek": 5,
       "startMin": 420,
-      "endMin": 465,
-      "kind": "activity",
-      "title": "南校区操场",
-      "place": "南校区操场"
+      "endMin": 450,
+      "kind": "meal",
+      "title": "早餐",
+      "place": null
     },
     {
       "dayOfWeek": 5,
-      "startMin": 505,
-      "endMin": 565,
+      "startMin": 455,
+      "endMin": 580,
       "kind": "study",
       "title": "图书馆自习",
       "place": "图书馆（图文信息中心）"
@@ -418,19 +410,19 @@
     },
     {
       "dayOfWeek": 5,
-      "startMin": 1100,
-      "endMin": 1160,
-      "kind": "study",
-      "title": "图书馆自习",
-      "place": "图书馆（图文信息中心）"
+      "startMin": 1190,
+      "endMin": 1235,
+      "kind": "activity",
+      "title": "南校区操场",
+      "place": "南校区操场"
     },
     {
       "dayOfWeek": 6,
       "startMin": 420,
-      "endMin": 480,
-      "kind": "activity",
-      "title": "操场跑步",
-      "place": "运动场"
+      "endMin": 450,
+      "kind": "meal",
+      "title": "早餐",
+      "place": null
     },
     {
       "dayOfWeek": 6,
@@ -474,8 +466,16 @@
     },
     {
       "dayOfWeek": 6,
-      "startMin": 1110,
-      "endMin": 1150,
+      "startMin": 1190,
+      "endMin": 1250,
+      "kind": "activity",
+      "title": "操场跑步",
+      "place": "运动场"
+    },
+    {
+      "dayOfWeek": 6,
+      "startMin": 1290,
+      "endMin": 1320,
       "kind": "activity",
       "title": "夜宵",
       "place": "咪昵餐厅"
@@ -483,10 +483,10 @@
     {
       "dayOfWeek": 7,
       "startMin": 420,
-      "endMin": 480,
-      "kind": "activity",
-      "title": "操场跑步",
-      "place": "运动场"
+      "endMin": 450,
+      "kind": "meal",
+      "title": "早餐",
+      "place": null
     },
     {
       "dayOfWeek": 7,
@@ -530,8 +530,16 @@
     },
     {
       "dayOfWeek": 7,
-      "startMin": 1110,
-      "endMin": 1150,
+      "startMin": 1190,
+      "endMin": 1250,
+      "kind": "activity",
+      "title": "操场跑步",
+      "place": "运动场"
+    },
+    {
+      "dayOfWeek": 7,
+      "startMin": 1290,
+      "endMin": 1320,
       "kind": "activity",
       "title": "夜宵",
       "place": "咪昵餐厅"
@@ -539,27 +547,27 @@
   ],
   "metrics": {
     "weekNo": 12,
-    "blockCount": 61,
+    "blockCount": 62,
     "courseMin": 515,
-    "studyMin": 600,
-    "cost": 93.75,
+    "studyMin": 620,
+    "cost": 95,
     "costBreakdown": {
       "studyShortfall": 0,
       "blankDeficit": 0,
-      "switchCost": 7.75,
-      "transferRisk": 80,
+      "switchCost": 8,
+      "transferRisk": 84,
       "dueOverdue": 0,
       "churn": 0,
-      "placeMismatch": 6,
-      "total": 93.75,
+      "placeMismatch": 3,
+      "total": 95,
       "raw": {
-        "studyMin": 600,
+        "studyMin": 620,
         "targetStudyMin": 600,
-        "blankMin": 2460,
+        "blankMin": 2320,
         "requiredBlankMin": 1200,
         "overdueUnits": 0,
         "churnMin": 0,
-        "mismatchedBlocks": 2,
+        "mismatchedBlocks": 1,
         "unknownCampusBlocks": 0
       }
     },
@@ -578,6 +586,6 @@
     "infoIssues": 8
   },
   "timing": {
-    "elapsedMs": 0.776
+    "elapsedMs": 0.821
   }
 }
