@@ -312,13 +312,26 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- 梨宝脑转发（见文件头 CY_BRAIN_PREFIXES 块说明）----
     def _proxy_cy(self) -> None:
-        """把梨宝脑请求原样转发给 CY 服务器；SSE 流式（/api/chat/stream）不支持。"""
+        """把梨宝脑请求原样转发给 CY 服务器；SSE 流式（/api/chat/stream）不支持。
+        2026-10-07 加固：①透传浏览器 UA（CY 侧 18:3x 起对非浏览器 UA 间歇性 403，
+        Python-urllib 默认 UA 被拒）；②全路径 try/except —— 连 403 错误流的读取
+        被远端重置也不能炸掉工作线程。"""
         url = CY_API_TARGET + self.path
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else None
         req = urllib.request.Request(url, data=body, method=self.command)
         req.add_header("Content-Type", self.headers.get("Content-Type") or "application/json")
         req.add_header("Accept", self.headers.get("Accept") or "*/*")
+        # UA 透传：浏览器原样带上；没有（curl 直打本地）则给一个浏览器样 UA
+        ua = self.headers.get("User-Agent")
+        req.add_header("User-Agent", ua or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
+
+        def _err(code: int, msg: str) -> None:
+            try:
+                self._send(code, {"ok": False, "error": msg})
+            except Exception:
+                pass
+
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 data = resp.read()
@@ -326,10 +339,17 @@ class Handler(BaseHTTPRequestHandler):
                            resp.headers.get("Content-Type") or "application/json; charset=utf-8")
         except urllib.error.HTTPError as e:
             # 后端业务错（4xx/5xx）原样透传，前端按既有逻辑处理
-            self._send(e.code, e.read(),
-                       e.headers.get("Content-Type") or "application/json; charset=utf-8")
-        except Exception as e:  # 连不上 / 超时
-            self._send(502, {"ok": False, "error": f"梨宝脑转发失败（CY 服务器不可达）：{e}"})
+            try:
+                payload = e.read()
+            except Exception:
+                payload = b'{"ok":false,"error":"upstream error"}'
+            try:
+                self._send(e.code, payload,
+                           e.headers.get("Content-Type") or "application/json; charset=utf-8")
+            except Exception:
+                pass
+        except Exception as e:  # 连不上 / 超时 / 远端重置
+            _err(502, f"梨宝脑转发失败（CY 服务器不可达）：{e}")
 
     # ---- GET ----
     def do_GET(self):
