@@ -9,6 +9,7 @@ import { Icon } from '@/components/icons/Icon';
 import type { IconName } from '@/components/icons/Icon';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
+import { ImportScheduleStep } from '@/features/welcome/ImportScheduleStep';
 import { initialView } from '@/features/welcome/basicInfo';
 import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { addTimetableFacts } from '@/lib/api';
@@ -28,11 +29,12 @@ import { WeekTimetable } from '@/features/week/WeekTimetable';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { LbaoLauncher } from '@/features/libao/LbaoLauncher';
 import { ImportTester } from '@/features/import/ImportTester';
+import { GoalsPage } from '@/features/activity/GoalsPage';
 import MemoPanel from '@/features/memo/MemoPanel';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
 
-type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
-type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
+type View = 'welcome' | 'basicinfo' | 'import' | 'persona' | 'result' | 'main';
+type MainTab = 'calendar' | 'libao' | 'memo' | 'goals' | 'profile' | 'import';
 
 /** WP12-H7：导入入口正式化 —— 正式构建也常驻（解析服务缺席时 ImportTester 自带降级提示，不白屏） */
 const SHOW_IMPORT = true;
@@ -42,6 +44,7 @@ const TAB_LABEL: Record<MainTab, string> = {
   calendar: '总览',
   libao: '梨宝',
   memo: '待办',
+  goals: '目标',
   profile: '我的画像',
   import: '课表',
 };
@@ -51,6 +54,7 @@ const TAB_ICON: Record<MainTab, IconName> = {
   calendar: 'dashboard',
   libao: 'sparkle',
   memo: 'inbox',
+  goals: 'target',
   profile: 'user-round',
   import: 'calendar-days',
 };
@@ -196,7 +200,32 @@ export default function App() {
   }
 
   if (view === 'basicinfo') {
-    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('persona')} />;
+    // 全新用户 → 先给一次导入课表的机会（可跳过），再进问卷（2026-10-07 RAY 新增引导步）。
+    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('import')} />;
+  }
+
+  /**
+   * 导入课表（2026-10-07 RAY 新增引导步，本树接入）。
+   * 位置 = 基础信息之后、问卷之前 —— 课表不依赖画像，越早进来，
+   * 画像结果页 / 总览 / 周计划就越早围绕真实上课时间安排（原先要进主界面
+   * 看到样例后才能绕到「课表」页）。整步**可跳过不阻塞**：跳过与完成同去问卷；
+   * 解析服务不在时界面明说 + 保留跳过出口（ImportScheduleStep 内部处理）。
+   */
+  if (view === 'import') {
+    return (
+      <ImportScheduleStep
+        existingCourseCount={
+          state.schedule && state.schedule.source !== 'demo' ? state.schedule.courses.length : 0
+        }
+        onApply={(s) => {
+          patchState({ schedule: s });
+          // WP12-C2：课表事实回写（与「课表」页导入同一条通道）；失败静默 —— 不挡引导流
+          addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
+        }}
+        onNext={() => setView('persona')}
+        onBack={() => setView('basicinfo')}
+      />
+    );
   }
 
   if (view === 'persona') {
@@ -206,6 +235,15 @@ export default function App() {
         onAnswer={setAnswer}
         onComplete={handleComplete}
         onExit={() => setView('welcome')}
+        // 「暂时跳过测评」= **跳过整份问卷**，直接进入 App（2026-10-07 RAY 拍板）。
+        // 必须**落 `onboarded`**：冷启动闸门 `initialView` 在 !onboarded 时永远回欢迎页，
+        // 只切视图的话刷新一次就被弹回去（用户会以为"跳过根本没生效"）。
+        // 画像留空 —— 引擎本就支持（保守默认值），画像页随时可用「开始画像测评」补测。
+        onSkipAll={() => {
+          patchState({ onboarded: true });
+          setView('main');
+          setMainTab(state.schedule && state.schedule !== MOCK_SCHEDULE ? 'calendar' : 'import');
+        }}
       />
     );
   }
@@ -257,7 +295,7 @@ export default function App() {
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
             <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
-            {((SHOW_IMPORT ? ['calendar', 'libao', 'memo', 'profile', 'import'] : ['calendar', 'libao', 'memo', 'profile']) as MainTab[]).map((t) => (
+            {((SHOW_IMPORT ? ['calendar', 'libao', 'memo', 'goals', 'profile', 'import'] : ['calendar', 'libao', 'memo', 'goals', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
                 // 验收修正（2026-09-27）：「总览」tab 回归字面语义 —— 进入过周计划后
@@ -313,6 +351,10 @@ export default function App() {
             // WP12-C2：课表事实回写（pending 态，MemoryPanel 可拒）；失败静默 —— 不挡导入主流程
             addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
           }} />
+        ) : mainTab === 'goals' ? (
+          /* 目标页（Ray c5295b9 批次落点）：一句话输入 + 目标卡片 + 后补截止日期（分段输入）
+             + 里程碑/监控/优先级 + 成就统计。本树此前无目标管理页，随批接入。 */
+          <GoalsPage schedule={schedule} />
         ) : mainTab === 'libao' ? (
           <LbaoChat
             key={libaoSeed?.nonce ?? 'chat'}

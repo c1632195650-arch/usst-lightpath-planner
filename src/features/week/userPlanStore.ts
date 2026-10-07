@@ -246,22 +246,89 @@ export function removeOverride(list: readonly CourseOverride[], id: string): Cou
  *
  * ⚠️ `blockId` 一律**原样保留**：拖到别的天也只改 `dayOfWeek` 字段，
  * 不重写 id —— 否则引擎会认成「删一个 + 新增一个」（见 `MoveRecord` 注释）。
+ *
+ * ── 2026-10-07 补（Ray e7df736）：**套用前先查碰撞** ──────────────
+ * 原实现是「盲写」：`moves` 里每一条都无条件盖到计划上。问题在于
+ * `moves` 是**历史记录**，引擎每次重排都会产出**新的**布局 ——
+ * 一条当初合法的改动，可能在重排后正好压住新排出来的块。
+ * 而且引擎的 `diagnostics.hardViolations` 是在**它自己那份 plan** 上算的，
+ * 看不见这里的套用结果 ⟹ 屏幕上真叠着，头部却仍报「硬约束违反 0」。
+ * （RAY 2026-10-07 报的「周二 16:05 跑步 + 16:10 长目标」正是这一类。）
+ *
+ * 现在的口径（与拖拽「放不下就不让放」一致）：**撞了就不套用这一条**，
+ * 退回引擎排的位置，并**如实报一条 `lock-conflict`** 让用户知道该去改哪一块。
+ * 宁可回到合法位置，也不要在屏幕上叠着两块。
  */
 export function applyPendingMoves(
   plan: import('@/types').WeekPlan,
   moves: ReadonlyMap<string, MoveRecord>,
 ): import('@/types').WeekPlan {
   if (moves.size === 0) return plan;
-  const blocks = plan.blocks.map((b) => {
-    const m = moves.get(b.id);
-    if (!m) return b;
+  const blocks = [...plan.blocks];
+  const issues = [...plan.issues];
+  const idxOf = new Map(blocks.map((b, i) => [b.id, i] as const));
+
+  // 按 blockId 排序处理：同样的输入必须得到同样的输出（纯函数纪律，测试可复现）
+  for (const id of [...moves.keys()].sort()) {
+    const i = idxOf.get(id);
+    if (i === undefined) continue; // 这次没排出这个块（被删/被排除）—— 交给别处如实报
+    const m = moves.get(id) as MoveRecord;
+    const b = blocks[i];
     const dur = m.endMin - m.startMin;
-    const next = { ...b, dayOfWeek: m.dayOfWeek as import('@/types').DayOfWeek, startMin: m.startMin, endMin: m.startMin + dur };
-    if (m.place === undefined) delete next.place; else next.place = m.place;
-    if (m.room === undefined) delete next.room; else next.room = m.room;
-    return next;
-  });
-  return { ...plan, blocks };
+    const moved = {
+      ...b,
+      dayOfWeek: m.dayOfWeek as import('@/types').DayOfWeek,
+      startMin: m.startMin,
+      endMin: m.startMin + dur,
+    };
+    if (m.place === undefined) delete moved.place; else moved.place = m.place;
+    if (m.room === undefined) delete moved.room; else moved.room = m.room;
+
+    // 半开区间 [start, end) 判交：相接（前一块的 end == 后一块的 start）不算撞
+    const clash = blocks.find(
+      (x, j) => j !== i && x.dayOfWeek === moved.dayOfWeek
+        && moved.startMin < x.endMin && x.startMin < moved.endMin,
+    );
+    if (clash) {
+      issues.push({
+        level: 'warn',
+        code: 'lock-conflict',
+        blockId: b.id,
+        message: `你之前改动的「${b.title}」现在和「${clash.title}」撞了，这一处先按引擎排的位置显示 `
+          + `—— 在那个块上右键改时间重设一次`,
+      });
+      continue;
+    }
+    blocks[i] = moved;
+  }
+  return { ...plan, blocks, issues };
+}
+
+/**
+ * 「最新要求优先」（2026-10-07，Ray e7df736）：新加的任务**显式指定了**星期+时段，
+ * 而该时段被不可时段硬排除 —— 冲突时以更晚的要求为准，自动解除冲突的禁排
+ * （整条解除，undo 可回退）。
+ * 只认「显式指定了开始时间」的任务：引擎自选位置的浮动任务不解除任何限制。
+ * 纯函数。
+ */
+export function clearConflictingSlots(
+  slots: readonly UnavailableSlot[],
+  tasks: readonly { dayOfWeek?: number; startMin?: number; durationMin?: number }[],
+  weekNo: number,
+): { slots: UnavailableSlot[]; removed: UnavailableSlot[] } {
+  const active = (s: UnavailableSlot) =>
+    s.scope === 'long' ? s.createdAtWeek <= weekNo : s.weeks.includes(weekNo);
+  const conflicts = (s: UnavailableSlot) =>
+    active(s) &&
+    tasks.some((t) =>
+      t.dayOfWeek != null && t.startMin != null &&
+      s.days.includes(t.dayOfWeek) &&
+      s.fromMin < t.startMin + (t.durationMin ?? 60) &&
+      s.toMin > t.startMin,
+    );
+  const removed = slots.filter(conflicts);
+  if (removed.length === 0) return { slots: [...slots], removed };
+  return { slots: slots.filter((s) => !conflicts(s)), removed };
 }
 
 /* ---------- 作业 ---- */

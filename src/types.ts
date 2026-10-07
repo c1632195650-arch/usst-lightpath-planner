@@ -301,6 +301,13 @@ export interface TimeBlock {
    * 与 Phase.reasons 同一哲学：可解释、可反驳，不是黑箱。
    */
   reason?: string;
+  /**
+   * 排程置信度（0–1，两位小数）——「这个块排在这儿有多顺势」。
+   * 长计划增强计划书-2026-10-07 §1.2：由 construct 组装末尾统一计算附加，
+   * **只描述安排质量、不参与排程决策**（避免「为分而排」的自指）。
+   * 可选字段：旧数据 / 手工构造的块没有它 = 界面不显示分数，行为不变。
+   */
+  score?: number;
   transfer?: TransferHint;
   /** 用户确认过的块：重排时锁定不动 */
   locked?: boolean;

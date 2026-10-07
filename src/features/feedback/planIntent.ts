@@ -20,7 +20,8 @@
  * 生成 id / 时间戳是**调用方**的事（本模块只产出草稿）。
  */
 import type { BlockKind, DayOfWeek } from '@/types';
-import { matchDays, matchWindow, parseCorrection, type CorrectionDraft } from './parseCorrection.ts';
+import { matchDays, matchWindow, parseCorrection, relDayOffsets, type CorrectionDraft } from './parseCorrection.ts';
+import { weekdayOf } from '@/lib/date';
 import { toMinutes } from '@/constants/time';
 
 /** 「加一件事」的草稿（还没有 id） */
@@ -42,7 +43,7 @@ export interface TaskDraft {
 export type PlanIntent =
   | { type: 'constraint'; draft: CorrectionDraft }
   | { type: 'add-task'; task: TaskDraft }
-  | { type: 'remove-block'; days: DayOfWeek[]; blockKind?: BlockKind }
+  | { type: 'remove-block'; days: DayOfWeek[]; blockKind?: BlockKind; titleKw?: string }
   | { type: 'explain'; topic: string }
   | { type: 'unknown'; text: string };
 
@@ -50,10 +51,11 @@ export type PlanIntent =
 const EXPLAIN = /(为什么|为啥|怎么|为何|啥原因|什么原因)/;
 
 /** 删除类意图的触发词 */
-const REMOVE = /(删掉|删除|去掉|取消|不要这|拿掉|移除)/;
+const REMOVE = /(删掉|删除|删去|删了|去掉|取消|不要这|拿掉|移除)/;
 
-/** 添加类意图的触发词 */
-const ADD = /(?:帮我)?(?:加|添加|安排|加上|加个|加一个|添)/;
+/** 添加类意图的触发词（2026-10-07 补「填」族 —— UI 示例 chip 自己就在用「帮我填个晚上自习」；
+ *  18:36 再补「要玩/想玩/要打/想打」愿望句族 —— 「我周四下午要玩两个小时游戏」之前三处全漏） */
+const ADD = /(?:帮我)?(?:加|添加|安排|安排上|加上|加个|加一个|添|填个|填上|填进|填满|填|要玩|想玩|要打|想打|玩会|玩会儿|玩一下|玩一局)/;
 
 /**
  * 从「加一个 X」里把 X 抠出来。
@@ -65,35 +67,52 @@ const ADD = /(?:帮我)?(?:加|添加|安排|加上|加个|加一个|添)/;
  * 最终答案由 UI 回显给用户确认，这里只是预填。
  */
 function extractTitle(t: string): string {
-  const m = t.match(/(?:帮我)?(?:加|添加|安排|加上|加个|加一个|添)\s*(?:一个|一件|个)?\s*(.+)$/);
+  const m = t.match(/(?:帮我)?(?:加|添加|安排|安排上|加上|加个|加一个|添|填个|填上|填进|填满|填|要玩|想玩|要打|想打|玩会|玩会儿|玩一下|玩一局)\s*(?:一个|一件|个)?\s*(.+)$/);
   if (!m) return '';
   const raw = m[1].trim();
 
   const DAY = '(?:周|星期|礼拜)[一二三四五六日天]';
   const PERIOD = '(?:早上|早晨|上午|中午|下午|傍晚|晚上|夜里|晚间)';
   const SEPS = '[，,。.、\\s]*';
+  // 时长短语（含中文数字）——「玩两个小时游戏」的标题里不该带着「两个小时」
+  const DUR = '[\\d一两二三四五六七八九十]+\\s*(?:个)?\\s*(?:小时|钟头|分钟|分)';
 
   const stripped = raw
     // 头部：日期、时段（`周X` 不吃后面的字，避免把事件名一起吃掉）
     .replace(new RegExp(`^${SEPS}(?:到|在)?\\s*${DAY}${SEPS}`), '')
     .replace(new RegExp(`^${SEPS}(?:到|在)?\\s*${PERIOD}(?:\\d{1,2}\\s*点)?${SEPS}`), '')
+    .replace(new RegExp(`^${SEPS}${DUR}${SEPS}`), '')
     .replace(/^的\s*/, '')
+    // 2026-10-07：动词落在句中时（「周四下午没安排，帮我填个晚上自习」），
+    // 头部会残留「帮我填个」这类二次动词短语 —— 剥掉，别让它混进标题。
+    .replace(new RegExp(`^${SEPS}帮我(?:填|加|排|添)?[个上]?${SEPS}`), '')
     // 尾部：再说一遍日期/时段
     .replace(new RegExp(`${SEPS}(?:到|在)?\\s*${DAY}.*$`), '')
     .replace(new RegExp(`${SEPS}(?:到|在)?\\s*${PERIOD}.*$`), '')
     .replace(/[，,。.、\s]+$/, '')
     .trim();
 
-  return stripped || raw;
+  // 2026-10-07：兜底前的二次清理 —— 「晚上自习」里的「晚上」会被尾部时段
+  // 剥离误吃成空（时间词与标题词重叠），此时退回的 raw 若还挂着「帮我填个」
+  // 这类动词前缀就太难看。先剥前缀再兜底，标题至少是干净的内容词。
+  const cleanedRaw = raw.replace(new RegExp(`^${SEPS}帮我(?:填|加|排|添)?[个上]?${SEPS}`), '');
+
+  return stripped || cleanedRaw || raw;
 }
 
-/** 从句子里提时长；提不到给默认值 */
+/** 从句子里提时长；提不到给默认值。中文数字（两个小时/三小时）也认 ——
+ *  2026-10-07：之前只认阿拉伯数字，「要玩两个小时游戏」会静默退回 60 分钟。 */
+const CN_NUM: Record<string, number> = {
+  一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 半: 0.5,
+};
 function extractDuration(t: string, fallback = 60): number {
   const half = t.match(/半\s*(?:个)?\s*小时/);
   if (half) return 30;
-  const m = t.match(/(\d+(?:\.\d+)?)\s*(?:个)?\s*(小时|钟头|分钟|分|h|min)/i);
+  const m = t.match(/([\d一两二三四五六七八九十]+(?:\.\d+)?)\s*(?:个)?\s*(小时|钟头|分钟|分|h|min)/i);
   if (!m) return fallback;
-  const n = Number(m[1]);
+  const tok = m[1];
+  const n = /^[\d.]/.test(tok) ? Number(tok) : CN_NUM[tok];
+  if (n == null || !Number.isFinite(n)) return fallback;
   const unit = m[2];
   const isHour = unit === '小时' || unit === '钟头' || unit.toLowerCase() === 'h';
   const min = Math.round(isHour ? n * 60 : n);
@@ -124,6 +143,25 @@ function extractClock(t: string): number | null {
   return null;
 }
 
+/**
+ * 删除句的**标题关键词**：「删除所有德语自习」→「德语自习」。
+ * 剥掉 量词前缀（所有/全部/都/把）与头部日期/时段、尾部「的安排」类词。
+ * 空串 = 没有可用的标题词（调用方退回 天数+类型 匹配）。
+ */
+function removeTitleKw(t: string): string {
+  const m = t.match(/(?:删掉|删除|删去|删了|去掉|取消|不要这|拿掉|移除)\s*(?:所有|全部|都|把)?\s*(.+)$/);
+  if (!m) return '';
+  let kw = m[1].trim();
+  kw = kw
+    .replace(/^(?:周|星期|礼拜)[一二三四五六日天]的?/, '')
+    .replace(/^(?:早上|早晨|上午|中午|下午|傍晚|晚上|夜里|晚间)的?/, '')
+    .replace(/(的)?(安排|块|日程)$/, '');
+  kw = kw.trim();
+  // 模糊指代（「删掉一些东西」）不是标题 —— 交回调用方要求补充，而不是乱删
+  if (!kw || /^(?:一些)?(?:东西|它们|他们|这[些个]|那[些个]|全部)$/.test(kw)) return '';
+  return kw;
+}
+
 /** 识别块类型（与 parseCorrection 的词表保持一致的语义） */
 function kindOf(t: string): BlockKind | undefined {
   if (/实验|报告|作业|复习|预习|学习|自习|看书/.test(t)) return 'study';
@@ -137,31 +175,44 @@ function kindOf(t: string): BlockKind | undefined {
  * 解析一句自然语言。**永不抛错**：认不出就返回 `unknown`，
  * 由 UI 决定是退回表单还是记为备注（信号不丢）。
  */
-export function parsePlanIntent(text: string): PlanIntent {
+export function parsePlanIntent(text: string, today?: string): PlanIntent {
   const t = (text ?? '').trim();
   if (!t) return { type: 'unknown', text: '' };
+
+  /* 相对日（今天/明天/后天/大后天）→ 星期几。today 由调用方注入
+   * （CorrectionCapture 传 todayISO()），纯函数不读时钟。 */
+  const rels = relDayOffsets(t);
+  const withRel = (base: DayOfWeek[]): DayOfWeek[] => {
+    if (base.length > 0 || !today || rels.length === 0) return base;
+    return rels.map((o) => ((((weekdayOf(today) - 1) + o) % 7) + 1) as DayOfWeek);
+  };
 
   /* ① 解释类 —— 问「为什么」不是要改计划，优先识别，免得被当成约束 */
   if (EXPLAIN.test(t)) {
     return { type: 'explain', topic: t };
   }
 
-  /* ② 删除类 */
+  /* ② 删除类。2026-10-07 补 titleKw：「删除所有德语自习」是**按标题**删
+   *    （含没挂星期的任务），光靠 天数+类型 匹配不到 —— 抽出标题关键词。 */
   if (REMOVE.test(t)) {
-    const days = matchDays(t);
+    const days = withRel(matchDays(t));
     const win = matchWindow(t);
     const kind = kindOf(t);
+    const kw = removeTitleKw(t);
     // 完全说不出删什么 → 交给上层追问（不猜）
-    if (days.length === 0 && !kind) return { type: 'unknown', text: t };
-    void win; // 时段可留待下一步细化；本版先按「哪几天 + 哪类」删
-    return kind ? { type: 'remove-block', days, blockKind: kind } : { type: 'remove-block', days };
+    if (days.length === 0 && !kind && !kw) return { type: 'unknown', text: t };
+    void win; // 时段可留待下一步细化；本版先按「哪几天 + 哪类 + 标题」删
+    return {
+      type: 'remove-block', days, ...(kind ? { blockKind: kind } : {}),
+      ...(kw ? { titleKw: kw } : {}),
+    } as PlanIntent;
   }
 
   /* ③ 添加类 */
   if (ADD.test(t)) {
     const title = extractTitle(t);
     if (title) {
-      const days = matchDays(t);
+      const days = withRel(matchDays(t));
       const clock = extractClock(t);
       const win = matchWindow(t);
       const dayOfWeek = days[0];
@@ -183,7 +234,7 @@ export function parsePlanIntent(text: string): PlanIntent {
   }
 
   /* ④ 约束类（复用阶段 B 的解析器） */
-  const draft = parseCorrection(t);
+  const draft = parseCorrection(t, today);
   if (draft) return { type: 'constraint', draft };
 
   /* ⑤ 认不出 —— 不猜 */
@@ -213,6 +264,10 @@ export function describeIntent(intent: PlanIntent): string {
       return `加一件事：「${intent.task.title}」${dayCn}${when} · ${intent.task.durationMin} 分钟`;
     }
     case 'remove-block': {
+      if (intent.titleKw) {
+        const days = intent.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('、');
+        return `删掉${days ? `${days}的` : '所有'}「${intent.titleKw}」`;
+      }
       const days = intent.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('、');
       return `拿掉${days}${intent.blockKind ? '的部分安排' : '的安排'}`;
     }

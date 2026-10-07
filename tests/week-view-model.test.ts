@@ -156,21 +156,24 @@ test('E5 零依赖闸门: 详情抽屉用原生 dialog，未引入任何组件�
   for (const dep of ['radix', 'vaul', 'base-ui', '@headlessui', 'framer-motion', '@formkit']) {
     assert.ok(!all.includes(dep), `package.json 不得新增 ${dep}`);
   }
-  assert.match(src('/src/features/week/WeekPlanView.tsx'), /data-testid=\{`block-detail-\$\{block\.id\}`\}/, '详情入口 testid 在位');
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：详情入口从「按钮 + DetailDrawer」改为
+  //    块卡悬停浮卡（peek）——零依赖闸门的实质（不引组件库、原生实现）不变；
+  //    详情入口锚点改为 BlockCard 的 peek 机制。
+  assert.match(src('/src/features/week/BlockCard.tsx'), /setPeek\(true\)/, '悬停详情（peek）入口在位');
 });
 
 /* ---------------- ⑤ 源码锁（接线形状） ---------------- */
 
-test('E4 源码锁: BlockCard 走渲染模型，散文式转场行已下线；时间轴有视觉重心与量测锚', () => {
-  const wv = src('/src/features/week/WeekPlanView.tsx');
-  // 【锁随实现演进，2026-10-02 申报】批 6.1 在同一 import 里追加了 summarizeIssues
-  // （规范 §3.2 聚合条接线）—— 锁放宽为可选尾项，三条模型接线断言保持原样。
-  assert.match(wv, /import \{ blockChip, blockDetail(, summarizeIssues)? \} from '@\/features\/week\/weekViewModel'/, '模型已接线');
-  assert.match(wv, /const chip = blockChip\(block\)/, '卡片用 chip');
-  assert.ok(!wv.includes('🚶 {t.fromPlace}'), '旧的散文式转场行必须下线');
-  assert.match(wv, /data-testid="week-timeline"/, '时间轴量测锚在位');
-  assert.match(wv, /style=\{\{ minHeight: 'calc\(100vh - 280px\)' \}\}/, '浏览态时间轴撑满主体高度（视觉重心，内联 style 不碰既有类名断言）');
-  assert.match(wv, /\{!editable && chip\.hasDetail && onOpenDetail && \(/, '详情入口三条件闸');
-  assert.match(wv, /<DetailDrawer/, '抽屉已接线');
-  assert.match(wv, /blockDetail\(detailBlock\)/, '详情数据来自纯函数装配');
+test('E4/E5 源码锁（改锚版）: 块卡走统一色板与悬停详情；时间轴有量测锚与高度重心', () => {
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：七列时间轴版块卡自成一体的渲染模型 ——
+  //   · 「统一色板」= chartColors.KIND_PALETTE（本树去双真相源的实质）；
+  //   · 「L0 减字」由块内滚动 + 装不下才浮卡（peek）承担；旧「散文转场行下线」断言
+  //     随旧卡片下线（转场行本身保留在块内/浮卡，E4 意图 = 不截断、可兜底）；
+  //   · week-timeline 量测锚与「撑满主体高度」照旧（表达式随新网格更新）。
+  const card = src('/src/features/week/BlockCard.tsx');
+  assert.match(card, /KIND_PALETTE/, '块卡色板必须走统一真源（chartColors）');
+  assert.match(card, /setPeek\(true\)/, '悬停详情（L2）在位');
+  const grid = src('/src/features/week/WeekTimelineGrid.tsx');
+  assert.match(grid, /data-testid="week-timeline"/, '时间轴量测锚在位');
+  assert.match(grid, /style=\{\{ maxHeight: 'max\(20rem, calc\(100vh - 6\.5rem\)\)' \}\}/, '时间轴用满窗口剩余高度（视觉重心）');
 });

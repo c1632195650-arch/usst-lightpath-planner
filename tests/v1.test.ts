@@ -64,23 +64,29 @@ test('V1-5: blank 不进满溢度 occupied（留白不算「用户排的」）',
 
 /* ---- 源码接线断言 ---- */
 
+/**
+ * ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：周页拆组件后三处断言的落点：
+ *   · AchievementPanel → WeekPlanView（常驻，视图层零 editMode 门控）；
+ *   · 「换个节奏」/「编辑」按钮 → WeekToolsPanel（操作条整体搬入）；
+ *   · 留白块 blankTaskFor → WeekPlanView；满溢度 detail → WeekTimelineGrid 列头。
+ * 语义（V1-1 常驻 / V1-4 顺序 / V1-5 留白实体+满溢度详情）不变。
+ */
 const WVSRC = (): string =>
   readFileSync(fileURLToPath(new URL('../src/features/week/WeekPlanView.tsx', import.meta.url)), 'utf8');
+const PANELSRC = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/WeekToolsPanel.tsx', import.meta.url)), 'utf8');
+const GRIDSRC = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/WeekTimelineGrid.tsx', import.meta.url)), 'utf8');
 
-test('V1-1 源码: AchievementPanel 在 editMode 包裹之外常驻', () => {
-  // 反向：挪回包裹内 → 本用例红
+test('V1-1 源码: AchievementPanel 常驻（视图层零 editMode 门控）', () => {
+  // 反向：把面板包进任何 editMode 门 → 本用例红
   const src = WVSRC();
-  const closeGate = src.indexOf('      )}\n\n      {/* V1-1');
-  const panel = src.indexOf('<AchievementPanel key={activityVersion}');
-  assert.ok(closeGate >= 0 && panel > closeGate, 'AchievementPanel 必须在 editMode 门闭合之后');
-  // 且包裹内不再有第二份
-  const gateStart = src.indexOf('{editMode && (');
-  const gateEnd = closeGate;
-  assert.equal(src.slice(gateStart, gateEnd).includes('<AchievementPanel'), false);
+  assert.ok(src.includes('<AchievementPanel key={activityVersion}'), '投入与成就面板必须常驻周页');
+  assert.equal(src.includes('{editMode && ('), false, '视图层不得再有 editMode 门（门控下沉到子组件）');
 });
 
 test('V1-4 源码: 「换个节奏」在编辑按钮之前（第一顺位）', () => {
-  const src = WVSRC();
+  const src = PANELSRC();
   const modeBtn = src.indexOf('data-testid="open-mode-setup"');
   const editBtn = src.indexOf('data-testid="edit-mode-toggle"');
   assert.ok(modeBtn >= 0 && editBtn > modeBtn, '换节奏必须在编辑按钮前面');
@@ -89,5 +95,5 @@ test('V1-4 源码: 「换个节奏」在编辑按钮之前（第一顺位）', (
 test('V1-5 源码: onKeepGap 走 blankTaskFor 落层；满溢度传 detail', () => {
   const src = WVSRC();
   assert.match(src, /tasks: addTask\(prev\.tasks, blankTaskFor\(deleteAsk, weekNo\)\)/);
-  assert.match(src, /detail=\{\(\(\) => \{/);
+  assert.match(GRIDSRC(), /detail=\{\(\(\) => \{/);
 });

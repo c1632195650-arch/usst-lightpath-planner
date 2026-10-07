@@ -9,6 +9,7 @@
  * 「草稿 · 未落盘」是 caption 承载的**语义**，不是另一个数据形状。
  */
 import type { TimeBlock, WeekPlan } from '@/types';
+import { DAY_LABELS } from '@/lib/date';
 
 export interface MiniBlockItem {
   id: string;
@@ -34,8 +35,6 @@ export interface MiniWeekViewModel {
   totalBlocks: number;
   empty: boolean;
 }
-
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 function toHHMM(min: number): string {
   const m = ((min % 1440) + 1440) % 1440;

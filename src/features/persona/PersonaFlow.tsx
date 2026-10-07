@@ -9,6 +9,17 @@ interface Props {
   onAnswer: (id: string, value: AnswerEntry) => void;
   onComplete: () => void;
   onExit: () => void;
+  /**
+   * **跳过整份测评**，直接进入 App（2026-10-07 RAY 拍板新增）。
+   *
+   * 为什么需要它：原先底部那颗叫「暂时跳过」的按钮走的是 `goNext`，**只跳一道题** ——
+   * 而「暂时跳过」这个词读起来是"这问卷我先不测了"，语义对不上（RAY 指出「不合理」）。
+   * 更麻烦的是闸门：`initialView` 在 `!onboarded` 时永远回欢迎页，而 `onboarded`
+   * **只有答完问卷才置真** ⟹ 左上角那个「退出测评」只是把人送回欢迎页、再绕回问卷，
+   * **不答完就进不了 App**。而产品其实是**允许没画像的**（引擎明写
+   * 「还没有画像，先用保守的默认值」；画像页也留了「开始画像测评」补测入口）。
+   */
+  onSkipAll: () => void;
 }
 
 /** 五级题的端点文字，数字本身保持为快速扫读锚点。 */
@@ -24,7 +35,7 @@ const SECTION_LABELS: Record<string, string> = {
 };
 
 /** 将 35 道画像题组织为单一、可回看的决策流程。 */
-export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
+export function PersonaFlow({ answers, onAnswer, onComplete, onExit, onSkipAll }: Props) {
   /** 按年级出卷（WP2）：基础信息里没年级（跳过引导）→ 全库出卷，与分层前一致。 */
   const items = useMemo(() => buildPersonaSequence(loadBasicInfo().grade), []);
   const [idx, setIdx] = useState(0);
@@ -273,13 +284,27 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
             </div>
 
             <footer className="flex flex-wrap items-center gap-3 border-t border-white/10 px-5 py-4 sm:px-8">
-              {item.type === 'SORT' ? (
+              {/*
+                整份问卷的出口（2026-10-07 RAY 拍板改）。
+                原来是「暂时跳过」→ `goNext`（**只跳一道题**），与这个词的读法不符；
+                现在改成**真的跳过整份**：直接进入 App，画像留空（引擎走保守默认值，
+                理由里会写明「还没有画像，先用保守的默认值」），之后随时可以在
+                「我的画像」页用「开始画像测评」补测 —— 不是死路。
+                ⚠️ 仍叫「暂时」是因为**已答的题会保留**，回来能接着答（`answers` 不动）。
+                放在**所有题型**上都有：逃生口不该只在某几题里出现。
+              */}
+              <button
+                type="button"
+                onClick={onSkipAll}
+                disabled={advancing}
+                title="跳过整份测评，直接进入 App。已答的题会保留，之后在「我的画像」里可以随时补测。"
+                className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                暂时跳过测评
+              </button>
+              {item.type === 'SORT' && (
                 <button onClick={resetSort} disabled={sortPick.length === 0 || advancing} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35">
                   清空排序
-                </button>
-              ) : (
-                <button onClick={goNext} disabled={advancing} className="min-h-10 px-2 text-sm font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35">
-                  暂时跳过
                 </button>
               )}
               <div className="flex-1" />
