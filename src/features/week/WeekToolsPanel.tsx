@@ -2,26 +2,32 @@
  * 周计划页 · 工具面板栈（F2d/A5 拆出的第 ⑤ 组纯展示子组件 · 架构规格书 §8.1）
  * ============================================================
  * 从 `WeekPlanView.tsx` 原样搬出：操作条（回到今天/撤销/重做/重新排一遍/**⚙️ 调整**）
- * 与高频用户干预面板（住处/作息/偏好校正采集/容量预警）。
+ * 与高频用户干预面板（偏好校正采集/容量预警）。
  *
  * 2026-09-28：低频面板（加一件事 / 指定食堂 / 不可时段 / 调课停课 / 偏好校正清单）
  * 全部收进「⚙️ 调整」抽屉（`AdjustDrawer`）——本组件只留那个**触发按钮**，
  * 按钮与上面四个操作同级，抽屉本体由 `WeekPlanView` 渲染。
- * 纯展示：不取数、不落库 —— 所有变更经 `updateLayer` / 回调上抛（T3 攒批语义不变）。
+ *
+ * 2026-10-07：**「🏠 我的住处」「⏰ 我的作息」搬去「我的画像」页**
+ * （`features/week/HardBoundaryCard.tsx`，经组合根注入 `PersonaResult`）——
+ * 它们不是「这周临时调一下」的干预项，而是长期硬边界，放画像页语义更顺；
+ * 本面板因此不再接收 `layer` / `updateLayer` 两个 props。
+ *
+ * 纯展示：不取数、不落库 —— 所有变更经回调上抛（T3 攒批语义不变）。
  */
 import type { UserTask } from '@/lib/planner/templates';
 import type { CorrectionRule } from '@/lib/planner/corrections';
 import type { Goal } from '@/features/activity/goalStore';
 import { saveGoals } from '@/features/activity/goalStore';
 import { addDays } from '@/lib/date';
-import { HomeBaseSetting } from './HomeBaseSetting';
-import { RoutineSetting } from './RoutineSetting';
+import { engineLabel } from '@/lib/engineMode';
+import { useEngineMode } from './useEngineMode';
 import { SlotEditor } from './SlotEditor';
 import { CourseOverrideEditor } from './CourseOverrideEditor';
+import { PendingEditsBar, countPendingEdits } from './PendingEditsBar';
 import { CorrectionCapture } from '@/features/feedback/CorrectionCapture';
 import { LearnedPreferencesPanel } from '@/features/feedback/LearnedPreferencesPanel';
 import { AchievementPanel } from '@/features/activity/GoalEditor';
-import { setHomeBase, type UserPlanLayer } from './userPlanStore';
 import type { CorrectionRule as CorrectionRuleT } from '@/lib/planner/corrections';
 
 /** 目标分解容量预警（useWeekPlan 产出） */
@@ -33,8 +39,6 @@ export interface GoalWarningLike {
 export interface WeekToolsPanelProps {
   weekNo: number;
   goals: readonly Goal[];
-  layer: UserPlanLayer;
-  updateLayer: (fn: (prev: UserPlanLayer) => UserPlanLayer) => void;
   rules: CorrectionRule[];
   /** 目标变更（视图持有 goals state；store 落库在回调里完成） */
   onGoalsChange: (next: Goal[]) => void;
@@ -48,7 +52,11 @@ export interface WeekToolsPanelProps {
   setReplanToken: (next: number | ((v: number) => number)) => void;
   /** 打开「⚙️ 调整」抽屉（按钮在操作条那一排；抽屉状态归 WeekPlanView） */
   onOpenAdjust: () => void;
+  /* T3「攒批」标记：视图层已记下改动但尚未应用 */
   pendingEdits: boolean;
+  /** 本周被改过时间/地点的块 id —— 待生效状态条数「改了 N 处」的来源 */
+  editedBlockIds: ReadonlySet<string>;
+  /** 「已跳过 N 块」的判定仍要看它（状态条的"查看改动"接的是「全部恢复」） */
   edits: { userTasks: UserTask[]; excludedBlockIds: string[] };
   handleRestoreAll: () => void;
   /* 面板回调 */
@@ -64,14 +72,25 @@ export interface WeekToolsPanelProps {
 }
 
 export function WeekToolsPanel({
-  weekNo, goals, layer, updateLayer, onGoalsChange, notify,
+  weekNo, goals, onGoalsChange, notify,
   onGoToToday, handleUndo, handleRedo, undoDepth, redoDepth, setReplanToken,
   onOpenAdjust,
-  pendingEdits, edits, handleRestoreAll,
+  pendingEdits, editedBlockIds, edits, handleRestoreAll,
   timeAskNote,
   handleAddRule, handleAddTaskFromDraft, handleRemoveBlocks,
   dragNote, goalWarnings, dismissedWarnings, setDismissedWarnings,
 }: WeekToolsPanelProps) {
+  /* 引擎切换（2026-10-06）：全局单例，读同一份真源 —— 见 `@/lib/engineMode` */
+  const [engineMode, setEngineMode] = useEngineMode();
+
+  /* 待生效计数（提案第 7 条）。纯函数 `countPendingEdits`，口径与 BlockCard 的
+     「✏️ 已改」同源（都取 `editedBlockIds`），不另立一套判断。 */
+  const pendingItems = countPendingEdits({
+    pendingEdits,
+    excludedCount: edits.excludedBlockIds.length,
+    userTaskCount: edits.userTasks.length,
+    editedIds: editedBlockIds,
+  });
   return (
     <>
       {/* 操作条：回到今天 / 撤销 / 重做 / 重新排一遍 */}
@@ -139,39 +158,52 @@ export function WeekToolsPanel({
         >
           ⚙️ 调整
         </button>
-        {/* T3：改动不再自动应用 —— 必须**明说**还没生效，否则用户会以为按钮坏了 */}
-        {pendingEdits && (
-          <span className="rounded-md bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900 ring-1 ring-amber-700/20">
-            改动已记下，点左边「重新排一遍」才会生效
-          </span>
-        )}
-        {edits.userTasks.length > 0 && (
-          <span className="text-[11.5px] text-ink-faint">你加了 {edits.userTasks.length} 件事</span>
-        )}
-        {edits.excludedBlockIds.length > 0 && (
-          <span className="text-[11.5px] text-ink-faint">
-            已跳过 {edits.excludedBlockIds.length} 块
+        {/* 引擎切换（2026-10-06）：本地引擎 vs 移植进来的 CY 引擎。
+            同一份输入、两套算法 —— 切完周计划会自动重排，直接对比产出差异。
+            开关是全局单例（`@/lib/engineMode`），本机专属、不上云。 */}
+        <div
+          className="ml-auto flex items-center gap-0.5 rounded-lg border border-ink/10 bg-white p-0.5"
+          title={`当前引擎：${engineLabel(engineMode)}`}
+        >
+          <span className="px-1.5 text-[11px] text-ink-faint">引擎</span>
+          {(['ours', 'cy'] as const).map((m) => (
             <button
+              key={m}
               type="button"
-              onClick={handleRestoreAll}
-              className="ml-1.5 rounded bg-white px-2 py-0.5 text-[11px] text-brand ring-1 ring-brand/25 hover:bg-brand/5"
+              onClick={() => setEngineMode(m)}
+              aria-pressed={engineMode === m}
+              title={m === 'cy' ? 'CY 线（beta-v2 @ 950f2ace）移植版引擎' : '本地线（feat/ux-round4）引擎'}
+              className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
+                engineMode === m
+                  ? 'bg-brand text-white'
+                  : 'text-ink-soft hover:bg-brand-light hover:text-brand'
+              }`}
             >
-              全部恢复
+              {m === 'cy' ? 'CY' : '本地'}
             </button>
-          </span>
-        )}
+          ))}
+        </div>
+        {/* T3：改动不再自动应用 —— 必须**明说**还没生效，否则用户会以为按钮坏了。
+            ⚠️ 2026-10-07：原先这里是两个小字（"你加了 N 件事"/"已跳过 N 块"）+
+            一句"点左边「重新排一遍」才会生效"，全和四个操作按钮并排在同一个
+            flex-wrap 里 ⟹ **位置随窗口宽度漂移**，"点左边"在换行后还会指错地方。
+            现在统一交给下方那条**独立状态条**（带摘要 + 就地主 CTA + 全部恢复）。 */}
       </div>
 
-      <HomeBaseSetting
-        value={layer.homeBase ?? null}
-        onChange={(next) => updateLayer((prev) => setHomeBase(prev, next))}
-      />
+      {/* 「有改动待生效」独立状态条（提案第 7 条）。放操作条**之后**、日列之前：
+          它是「操作条的下文」，用户读完按钮就往下看到"那这些改动还没生效"。
+          🔑 计数用纯函数 `countPendingEdits`，口径与 BlockCard 的「✏️ 已改」同源。 */}
+      {pendingEdits && pendingItems.length > 0 && (
+        <PendingEditsBar
+          edits={pendingItems}
+          onReplan={() => setReplanToken((v) => v + 1)}
+          onInspect={edits.excludedBlockIds.length > 0 ? handleRestoreAll : undefined}
+        />
+      )}
 
-      {/* Q1b：作息边界（起床 / 入睡）—— 与住处并列的「独立配置的硬边界」。
-          它不进覆盖层、也不触发重排：改完点上面的「重新排一遍」才生效。 */}
-      <RoutineSetting />
-
-      {/* ⚙️ 调整抽屉承接：不可时段/调课停课/指定食堂/偏好校正清单（N3） */}
+      {/* 🏠 我的住处 / ⏰ 我的作息 已于 2026-10-07 搬到「我的画像」页
+          （`features/week/HardBoundaryCard.tsx`，由组合根 App.tsx 注入 `PersonaResult`）。
+          本面板不再重复挂载 —— 两处入口同一份 store 的老口径不变，只是位置换了。 */}
 
       {timeAskNote && (
         <div className="rounded-md bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">

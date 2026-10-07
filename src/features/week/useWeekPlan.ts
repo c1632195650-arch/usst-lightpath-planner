@@ -26,7 +26,10 @@ import type { PersonaProfile, PlanPersistState, Schedule, WeekPlan } from '@/typ
 import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { toPlanRequest } from '@/lib/planner/schedule';
-import { planWeek } from '@/lib/planner/planWeek';
+import { planWeek as planWeekOurs } from '@/lib/planner/planWeek';
+// 2026-10-06：CY 线引擎（移植版 `@/lib/planner-cy`，与本地引擎并存）—— 前端一键切换
+import { planWeekCy } from '@/lib/planner-cy';
+import { useEngineMode } from './useEngineMode';
 import { fetchRouteBatch } from '@/lib/planner/transfer';
 import { expandDeadlines } from '@/lib/planner/events';
 import { DEADLINES } from '@/data/usst';
@@ -44,7 +47,11 @@ import { goalTasksOf, type DecomposeWarning } from '@/features/activity/goalDeco
 import { loadGoalPrefs } from '@/features/activity/goalPrefs';
 import { periodStartMin, periodEndMin } from '@/constants/time';
 import type { Goal } from '@/features/activity/goalStore';
-import { loadRecords, actualLoadByDow, summarizeWeek } from '@/features/behavior/behaviorLog';
+import { loadRecords, actualLoadByDow, summarizeWeek, goalDebtByGoal } from '@/features/behavior/behaviorLog';
+import { refineTaskDurations } from '@/features/behavior/refine';
+import { restartTasks } from '@/features/activity/restartTasks';
+import { inferEnergyCurve } from '@/lib/planner/energyCurve';
+import { loadEnergyPeak } from './energyStore';
 import { fetchWeather } from '@/features/weather/weather';
 import type { WeatherReport } from '@/features/weather/weather';
 import type { CorrectionRule } from '@/lib/planner/corrections';
@@ -188,6 +195,9 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
     () => actualLoadByDow(records, addDays(weekMonday, -7 * 4), 4),
     [records, weekMonday],
   );
+  /* 引擎开关（2026-10-06）：切了要立刻重排 —— 故 engineMode 进下面那个 effect 的依赖 */
+  const [engineMode] = useEngineMode();
+
   const prevRolling = useMemo(
     () => rollingForWeek(planState, weekNo),
     [planState, weekNo],
@@ -222,12 +232,25 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
         const prevWeek = summarizeWeek(behaviorRecords, weekNo - 1);
         const adherence = prevWeek.marked > 0 ? prevWeek.doneMin / prevWeek.markedMin : null;
         const decomp = goalTasksOf(curGoals, weekNo, schedule.termStart, loadGoalPrefs(), courseMinByDay, freeMinutes, adherence, persona);
-        if (!cancelled) setGoalWarnings(decomp.warnings);
+        // 二期 2.1（长计划增强计划书）：最小重启 —— 上周欠账目标注入一个 25 分钟补课块。
+        // 欠账表在调用方算（本域已消费 behaviorLog），activity 侧保持零新域对（R5）。
+        const restart = restartTasks(
+          goalDebtByGoal(behaviorRecords, weekNo - 1),
+          weekNo - 2 >= 1 ? goalDebtByGoal(behaviorRecords, weekNo - 2) : new Map(),
+          curGoals,
+          weekNo,
+        );
+        // 二期 2.2：执行回流估时 —— 近 4 次实际用时中位数修正任务估时
+        //（±20% 封顶、偏差 ≤15% 不动；用户显式编辑走 planEdits 在构造后覆盖，恒胜）
+        const refinedTasks = refineTaskDurations(decomp.tasks, behaviorRecords);
+        if (!cancelled) setGoalWarnings([...restart.warnings, ...decomp.warnings]);
         const tasks: UserTask[] = [
           ...eventTasks,
           ...userTasks,
           // R5：目标 → 排程任务（goals 攒着语义见上方 ref 注释）
-          ...decomp.tasks,
+          ...refinedTasks,
+          // 二期 2.1：最小重启补课块（上周欠账的目标，每目标 ≤1 块）
+          ...restart.tasks,
           // T6：作业 → UserTask（攒着语义同上）
           ...assignmentsOfWeek(curLayer.assignments, weekNo).map((a): UserTask => ({
             id: a.id,
@@ -281,13 +304,26 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
           })),
           rolling: prevRolling,
           actualLoadByDow: actualLoad,
+          // 二期 2.3：日内精力曲线（作息 + 画像轴 + 用户高峰微调 → 24 锚点）。
+          // 不传 = 引擎用缺省曲线（golden / 无作息用户行为不变）。
+          energyCurve: inferEnergyCurve({
+            wakeMin: loadRoutine().wakeMin,
+            sleepMin: loadRoutine().sleepMin,
+            peakHour: loadEnergyPeak(),
+            axes: persona?.axes ?? null,
+          }),
           previousPlan: lastPlanRef.current,
           fromNow: nowMin,
           fromNowDay: nowMin != null ? (todayDow as never) : null,
           excludedBlockIds: curLayer.excluded,
           corrections: [...rulesRef.current],
         };
-        const result = await planWeek(req, {
+        // 引擎选择（2026-10-06）：**同一份 req**，两条独立实现 ——
+        //   · `ours` = 本地线 `@/lib/planner/planWeek`
+        //   · `cy`   = CY 线 `@/lib/planner-cy`（beta-v2 @ 950f2ace 移植版）
+        // 两者签名一致，故可直接替换；产出差异即「两套算法的差异」。
+        const runEngine = engineMode === 'cy' ? planWeekCy : planWeekOurs;
+        const result = await runEngine(req, {
           fetchRoutes: async (pairs) => {
             const routes = await fetchRouteBatch(pairs);
             if (!cancelled && pairs.length > 0) {
@@ -338,7 +374,7 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
     // 依赖与原 effect 逐项对应：layer/goals/rules 走 ref（T3 攒着），planState 在依赖里
     // （点「定住」要立刻重排）。rules 经 phase 传播。weather 保持原重排时机。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken]);
+  }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken, engineMode]);
 
   return { plan, notes, loading, backendOk, diag, transferInfo, goalWarnings, weather };
 }
