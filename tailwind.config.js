@@ -28,9 +28,23 @@ export default {
           light: '#E5EAF6', // 选中底
           bright: '#4A73D1', // 深色面上的强调
         },
+        /**
+         * @deprecated UI v2 批次 A（2026-10-07）：accent 退役中，值已临时指向 gold 主色
+         * #E8B44E（旧琥珀 #D98324 不再使用）。仍在用 accent-* 的 9 个文件由该映射零改动换色，
+         * 批次 E 逐文件替换为 gold-* 后删除本键。新代码一律用 gold。
+         */
         accent: {
-          DEFAULT: '#D98324', // 琥珀，光谱暖端
+          DEFAULT: '#E8B44E',
           light: '#FBF0DF',
+        },
+        /**
+         * UI v2 金色板（设计总成 v2 §7）：光谱暖端的新主色。
+         * DEFAULT 承操作点缀，light 承浅底，deep 承小字文字色。
+         */
+        gold: {
+          DEFAULT: '#E8B44E',
+          light: '#F2C879',
+          deep: '#C08A45',
         },
         ok: { DEFAULT: '#1E7A4F', light: '#E6F2EC' },
         warn: { DEFAULT: '#B9762A', light: '#FBF1E3' },
@@ -66,8 +80,36 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', 'sans-serif'],
-        display: ['"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
+        /**
+         * UI v2（批次 A）：正文西文前置 Inter；硬性版权要求——全栈禁止 Microsoft YaHei。
+         * 中文回退 PingFang SC（macOS/iOS）→ HarmonyOS Sans SC / Source Han Sans SC → 系统。
+         */
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'HarmonyOS Sans SC', 'Source Han Sans SC', 'system-ui', 'sans-serif'],
+        /** 标题层：霞鹜文楷 Screen（本地分片，见 index.css 顶部 @import）。 */
+        display: ['"LXGW WenKai Screen"', '"PingFang SC"', 'HarmonyOS Sans SC', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
+      },
+      /**
+       * 动效令牌四档（UI v2 §05：instant 反馈 / fast 微移 / base 面板 / slow 场景）。
+       * 组件动画一律引用这四档，不再手写时长。
+       */
+      transitionDuration: {
+        instant: '90ms',
+        fast: '140ms',
+        base: '220ms',
+        slow: '360ms',
+      },
+      transitionTimingFunction: {
+        out: 'cubic-bezier(.16,.84,.44,1)',
+        in: 'cubic-bezier(.55,0,1,.45)',
+        standard: 'cubic-bezier(.4,0,.2,1)',
+        spring: 'cubic-bezier(.34,1.56,.64,1)',
+      },
+      /** 容器三档（UI v2 §10）：narrow 表单/详情，default 常规页，wide 数据密集页。 */
+      maxWidth: {
+        narrow: '720px',
+        default: '1200px',
+        wide: '1440px',
       },
       borderRadius: { card: '16px' },
       /**

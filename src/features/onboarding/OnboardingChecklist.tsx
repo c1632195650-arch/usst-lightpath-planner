@@ -25,7 +25,7 @@ export function OnboardingChecklist(props: Props) {
   return (
     <div className="panel px-4 py-3.5 sm:px-5" data-testid="onboarding-checklist">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="section-label">开始使用</p>
+        <p className="section-label-zh">开始使用</p>
         <span className="text-[11px] text-ink-faint tabular-nums">{doneCount} / {items.length} 完成</span>
       </div>
       <ul className="mt-2 grid gap-1.5">

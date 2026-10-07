@@ -1607,7 +1607,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
           只提醒，不替用户改日程（L4）。 */}
       {upcoming.length > 0 && (
         <div className="panel px-4 py-3 sm:px-5" data-testid="upcoming-deadlines">
-          <p className="section-label">接下来</p>
+          <p className="section-label-zh">接下来</p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {upcoming.map(({ deadline: d, daysLeft }) => {
               const urgency = daysLeft <= 3
