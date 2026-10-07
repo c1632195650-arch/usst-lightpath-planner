@@ -144,7 +144,11 @@ const run = async () => {
   }
 
   // ⑫ 梨宝改期草稿卡
-  await page.getByRole('button', { name: '梨宝' }).click();
+  // 【D9 申报 2026-10-07】D6 上线右下常驻 launcher（aria-label=呼出梨宝）后
+  //   getByRole(name:'梨宝') 双命中（nav + launcher）；入口唯一化到 launcher——
+  //   这正是 D6 的用户路径。旧行147: getByRole('button',{name:'梨宝'}) →
+  //   新行: getByTestId('libao-launcher')。断言不变（libao-input 出现）。
+  await page.getByTestId('libao-launcher').click();
   await T(800);
   // W5a：placeholder 文案已去命令化（「问梨宝…」→「说一句话就行…」），改走稳定 testid
   const lbaoInput = page.getByTestId('libao-input');
@@ -182,7 +186,7 @@ const run = async () => {
   ok(await page.locator('#root').isVisible(), 'F5 刷新后应用可用');
 
   // V2-2 hold：自然语言「别排」→ 草稿卡 → 确认 → 落 unavailableSlots
-  await page.getByRole('button', { name: '梨宝' }).click();
+  await page.getByTestId('libao-launcher').click();
   await T(1200);
   // F5 恢复期间 loading 可能未就绪（send 静默 no-op）→ 带重试发送
   for (let i = 0; i < 3; i++) {

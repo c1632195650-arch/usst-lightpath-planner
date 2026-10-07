@@ -26,6 +26,9 @@ function ok(cond, label) {
   else { failed += 1; console.log(`  ✗ ${label}`); }
 }
 
+/* 【D9 申报 2026-10-07】D6 上线右下常驻 launcher 后，进梨宝对话的入口统一改为
+   getByTestId('libao-launcher')（原 getByRole(name:/梨宝/).first() 会在 nav 与 launcher 间
+   产生歧义匹配）；行为等价（都切到梨宝 Tab），对话链路断言不变。 */
 const SEED = '我要报名数学建模，帮我规划备赛';
 const BADGE = '[data-testid="sched-badge"]';
 
@@ -65,7 +68,7 @@ async function onboard(page) {
 
   await page.getByRole('button', { name: /进入|看看/ }).first().click().catch(() => {});
   await T(900);
-  await page.getByRole('button', { name: /梨宝/ }).first().click();
+  await page.getByTestId('libao-launcher').click();
   await T(600);
   // D0 双模式：输入框默认落「问答」模式 —— A-J 全是排程剧本，先进排程模式再说话。
   // （问答模式下排程句会出「切到排程模式」提示卡而不自动排，剧本 N 专门验证它。）
@@ -298,7 +301,7 @@ const run = async () => {  const browser = await chromium.launch();
     await page.reload();
     await page.waitForTimeout(1500);
     // 刷新后落在默认 tab —— 先切回梨宝再看会话恢复
-    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.getByTestId('libao-launcher').click().catch(() => {});
     await page.waitForTimeout(600);
     ok(
       await page.getByText('可以用分号一起答', { exact: false }).first().isVisible().catch(() => false),
@@ -406,7 +409,7 @@ const D_SCENARIOS = async (browser) => {
     }, [{ role: 'lbao', text: '「出去玩」我排不进去：' }]);
     await page.reload();
     await page.waitForTimeout(1200);
-    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.getByTestId('libao-launcher').click().catch(() => {});
     await page.waitForTimeout(600);
 
     await say(page, '把操场跑步替换掉');
@@ -469,7 +472,7 @@ const D_SCENARIOS = async (browser) => {
     await seedUserPlan(page, [mkRun('u-run-mon', tm.dow), mkRun('u-run-fri', tm.dow === 5 ? 4 : 5)]);
     await page.reload();
     await page.waitForTimeout(1200);
-    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.getByTestId('libao-launcher').click().catch(() => {});
     await page.waitForTimeout(600);
 
     await say(page, '把操场跑步替换掉');
@@ -521,7 +524,7 @@ const D_SCENARIOS = async (browser) => {
     }, [{ role: 'lbao', text: '「出去玩」我排不进去：' }]);
     await page.reload();
     await page.waitForTimeout(1200);
-    await page.getByRole('button', { name: /梨宝/ }).first().click().catch(() => {});
+    await page.getByTestId('libao-launcher').click().catch(() => {});
     await page.waitForTimeout(600);
 
     await say(page, '那怎么办');

@@ -24,6 +24,7 @@ import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { FocusDaysPanel } from '@/features/week/FocusDaysPanel';
 import { WeekTimetable } from '@/features/week/WeekTimetable';
 import { LbaoChat } from '@/features/libao/LbaoChat';
+import { LbaoLauncher } from '@/features/libao/LbaoLauncher';
 import { ImportTester } from '@/features/import/ImportTester';
 import MemoPanel from '@/features/memo/MemoPanel';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
@@ -427,6 +428,10 @@ export default function App() {
           </span>
         </footer>
       )}
+
+      {/* UI v2 D6：梨宝常驻呼出（主界面任意 Tab 右下角；点击 = 切梨宝 Tab=全屏态，
+          复用既有对话壳；梨宝 Tab 自身不显示 launcher——已在全屏态） */}
+      {isLbaoTab ? null : <LbaoLauncher onClick={() => setMainTab('libao')} />}
     </div>
   );
 }
