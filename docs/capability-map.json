@@ -7,12 +7,12 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 136,
-    "engineFiles": 100,
-    "uiFiles": 36,
+    "testFiles": 138,
+    "engineFiles": 101,
+    "uiFiles": 37,
     "guardedSources": 124,
-    "reverseVerified": 87,
-    "orphans": 1
+    "reverseVerified": 88,
+    "orphans": 0
   },
   "domains": {
     "planner-engine": {
@@ -124,7 +124,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 38,
+      "testCount": 39,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/agenda-model.test.ts",
@@ -152,6 +152,7 @@
         "tests/ui-cmp-tag.test.ts",
         "tests/ui-cmp-toast.test.ts",
         "tests/ui-icons.test.ts",
+        "tests/userPlanRestore.test.ts",
         "tests/userPlanStore.test.ts",
         "tests/userPlanUndo.test.ts",
         "tests/v1.test.ts",
@@ -203,7 +204,7 @@
         "src/lib/lbao.ts",
         "src/lib/api.ts"
       ],
-      "testCount": 29,
+      "testCount": 31,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/day-replan-intent.test.ts",
@@ -212,6 +213,7 @@
         "scripts/goal-pace.test.ts",
         "scripts/goalPlan.test.ts",
         "scripts/lbaoPlan.test.ts",
+        "scripts/libao-copy-guard.test.ts",
         "scripts/libao-intent-clock.test.ts",
         "scripts/libao-intent-fn-fix.test.ts",
         "scripts/libao-intent-month.test.ts",
@@ -220,6 +222,7 @@
         "scripts/libao-intent-weekno.test.ts",
         "scripts/libao-interact.test.ts",
         "scripts/libao-taxonomy.test.ts",
+        "scripts/libao-time-locator.test.ts",
         "scripts/libao-understand-retry.test.ts",
         "scripts/libao.test.ts",
         "scripts/libaoIntent.test.ts",
@@ -516,8 +519,10 @@
     },
     "scripts/libao-copy-guard.test.ts": {
       "suite": "ui",
-      "guards": [],
-      "guardCount": 0,
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
       "reverseVerified": false
     },
     "scripts/libao-intent-clock.test.ts": {
@@ -525,7 +530,7 @@
       "guards": [
         "libao-chat"
       ],
-      "guardCount": 3,
+      "guardCount": 4,
       "reverseVerified": true
     },
     "scripts/libao-intent-fn-fix.test.ts": {
@@ -573,7 +578,7 @@
       "guards": [
         "libao-chat"
       ],
-      "guardCount": 2,
+      "guardCount": 3,
       "reverseVerified": true
     },
     "scripts/libao-taxonomy.test.ts": {
@@ -583,6 +588,14 @@
         "planner-engine"
       ],
       "guardCount": 5,
+      "reverseVerified": true
+    },
+    "scripts/libao-time-locator.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "libao-chat"
+      ],
+      "guardCount": 1,
       "reverseVerified": true
     },
     "scripts/libao-understand-retry.test.ts": {
@@ -1383,6 +1396,14 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/userPlanRestore.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
     "tests/userPlanStore.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1573,6 +1594,7 @@
       "scripts/libao-intent-weekno.test.ts",
       "scripts/libao-interact.test.ts",
       "scripts/libao-taxonomy.test.ts",
+      "scripts/libao-time-locator.test.ts",
       "scripts/libao-understand-retry.test.ts",
       "scripts/libaoIntent.test.ts",
       "tests/libao-regression-anchor.test.ts",
@@ -1657,6 +1679,7 @@
       "tests/solver.test.ts",
       "tests/syncContract.test.ts",
       "tests/timeScale.test.ts",
+      "tests/userPlanRestore.test.ts",
       "tests/v1.test.ts",
       "tests/week-view-model.test.ts",
       "tests/wp10.test.ts",
@@ -1709,6 +1732,17 @@
     ],
     "src/features/libao/lbaoPlanFromEngine": [
       "scripts/lbaoPlan.test.ts"
+    ],
+    "src/features/libao/LbaoChat": [
+      "scripts/libao-copy-guard.test.ts",
+      "scripts/libao-intent-clock.test.ts",
+      "scripts/libao-interact.test.ts",
+      "tests/d-batch.test.ts",
+      "tests/libao-eval-entry.test.ts",
+      "tests/v0.test.ts",
+      "tests/v2.test.ts",
+      "tests/v3.test.ts",
+      "tests/wp12.test.ts"
     ],
     "src/features/libao/taxonomy": [
       "scripts/libao-taxonomy.test.ts"
@@ -1778,7 +1812,8 @@
     ],
     "src/features/plan/planLock": [
       "scripts/planLock.test.ts",
-      "scripts/rollingState.test.ts"
+      "scripts/rollingState.test.ts",
+      "tests/userPlanRestore.test.ts"
     ],
     "src/features/plan/rollingState": [
       "scripts/rollingState.test.ts"
@@ -1894,14 +1929,6 @@
     "src/features/libao/dialogManager": [
       "tests/d-batch.test.ts",
       "tests/libao-copy-freeze.test.ts"
-    ],
-    "src/features/libao/LbaoChat": [
-      "tests/d-batch.test.ts",
-      "tests/libao-eval-entry.test.ts",
-      "tests/v0.test.ts",
-      "tests/v2.test.ts",
-      "tests/v3.test.ts",
-      "tests/wp12.test.ts"
     ],
     "src/features/week/WeekPlanView": [
       "tests/d-batch.test.ts",
@@ -2030,6 +2057,7 @@
       "tests/mobile/weekBoard.test.ts",
       "tests/ripple.test.ts",
       "tests/syncContract.test.ts",
+      "tests/userPlanRestore.test.ts",
       "tests/userPlanStore.test.ts",
       "tests/userPlanUndo.test.ts",
       "tests/v1.test.ts",
@@ -2160,7 +2188,5 @@
       "tests/wp6.test.ts"
     ]
   },
-  "orphans": [
-    "scripts/libao-copy-guard.test.ts"
-  ]
+  "orphans": []
 }

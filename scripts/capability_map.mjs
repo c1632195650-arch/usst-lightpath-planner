@@ -99,17 +99,26 @@ function extractDeps(content) {
     const norm = normalizeSpec(m[1]);
     if (norm) deps.add(norm);
   }
-  // 源码锁通道：直接读源码文本做正则断言（RV 反向验证锚点常用）。项目里并存三种写法：
+  // 源码锁通道：直接读源码文本做正则断言（RV 反向验证锚点常用）。项目里并存四种写法：
   //   ① readFileSync(fileURLToPath(new URL('..' + rel, ...)))  —— rel 变量传入
   //   ② readFileSync('...src/xxx.ts')                            —— 字面量直接传
   //   ③ src('/src/App.tsx')                                       —— 自定义包装函数
   //      （见 tests/v3.test.ts：整份旅程锁只靠这个 helper 读源码）
-  // 漏掉 ③ 会把 v3 误判为「孤立」，进而永远不进影响面分析 → 假阴性，最危险。
+  //   ④ join(here, '..', 'src', 'features', 'libao', 'LbaoChat.tsx')
+  //      —— 路径拆成多个字符串段（见 scripts/libao-copy-guard.test.ts，2026-10-07 补）：
+  //         单字面量正则看不到，会被误判孤立 → 永远不进影响面分析 → 假阴性，最危险。
+  // 漏掉 ③ 会把 v3 误判为「孤立」，漏掉 ④ 会让 W5c 口吻守卫脱网。
   const reLock = /['"]((?:\.\.\/)*\/?(?:src\/)[^'"]+\.(?:ts|tsx))['"]/g;
   while ((m = reLock.exec(content))) {
     srcLocks.add(
       m[1].replace(/^\.\.\//, '').replace(/^\//, '').replace(/\.(ts|tsx)$/, '')
     );
+  }
+  const reJoin = /['"]src['"]\s*,\s*((?:['"][^'"]+['"]\s*,\s*)*['"][^'"]+['"])/g;
+  while ((m = reJoin.exec(content))) {
+    const segs = [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]).filter((s) => s !== '..');
+    const rel = 'src/' + segs.join('/');
+    if (/\.(ts|tsx)$/.test(rel)) srcLocks.add(rel.replace(/\.(ts|tsx)$/, ''));
   }
   return { deps, srcLocks };
 }
