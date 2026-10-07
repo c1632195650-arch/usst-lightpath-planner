@@ -29,11 +29,12 @@ import { WeekTimetable } from '@/features/week/WeekTimetable';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { LbaoLauncher } from '@/features/libao/LbaoLauncher';
 import { ImportTester } from '@/features/import/ImportTester';
+import { GoalsPage } from '@/features/activity/GoalsPage';
 import MemoPanel from '@/features/memo/MemoPanel';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
 
 type View = 'welcome' | 'basicinfo' | 'import' | 'persona' | 'result' | 'main';
-type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
+type MainTab = 'calendar' | 'libao' | 'memo' | 'goals' | 'profile' | 'import';
 
 /** WP12-H7：导入入口正式化 —— 正式构建也常驻（解析服务缺席时 ImportTester 自带降级提示，不白屏） */
 const SHOW_IMPORT = true;
@@ -43,6 +44,7 @@ const TAB_LABEL: Record<MainTab, string> = {
   calendar: '总览',
   libao: '梨宝',
   memo: '待办',
+  goals: '目标',
   profile: '我的画像',
   import: '课表',
 };
@@ -52,6 +54,7 @@ const TAB_ICON: Record<MainTab, IconName> = {
   calendar: 'dashboard',
   libao: 'sparkle',
   memo: 'inbox',
+  goals: 'target',
   profile: 'user-round',
   import: 'calendar-days',
 };
@@ -292,7 +295,7 @@ export default function App() {
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
             <div className="flex min-w-max items-center gap-1 rounded-xl border border-ink/10 bg-white p-1">
-            {((SHOW_IMPORT ? ['calendar', 'libao', 'memo', 'profile', 'import'] : ['calendar', 'libao', 'memo', 'profile']) as MainTab[]).map((t) => (
+            {((SHOW_IMPORT ? ['calendar', 'libao', 'memo', 'goals', 'profile', 'import'] : ['calendar', 'libao', 'memo', 'goals', 'profile']) as MainTab[]).map((t) => (
               <button
                 key={t}
                 // 验收修正（2026-09-27）：「总览」tab 回归字面语义 —— 进入过周计划后
@@ -348,6 +351,10 @@ export default function App() {
             // WP12-C2：课表事实回写（pending 态，MemoryPanel 可拒）；失败静默 —— 不挡导入主流程
             addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
           }} />
+        ) : mainTab === 'goals' ? (
+          /* 目标页（Ray c5295b9 批次落点）：一句话输入 + 目标卡片 + 后补截止日期（分段输入）
+             + 里程碑/监控/优先级 + 成就统计。本树此前无目标管理页，随批接入。 */
+          <GoalsPage schedule={schedule} />
         ) : mainTab === 'libao' ? (
           <LbaoChat
             key={libaoSeed?.nonce ?? 'chat'}

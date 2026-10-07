@@ -7,10 +7,10 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 143,
-    "engineFiles": 106,
+    "testFiles": 144,
+    "engineFiles": 107,
     "uiFiles": 37,
-    "guardedSources": 138,
+    "guardedSources": 139,
     "reverseVerified": 88,
     "orphans": 0
   },
@@ -308,13 +308,14 @@
         "src/features/activity/",
         "src/features/feedback/"
       ],
-      "testCount": 6,
+      "testCount": 7,
       "tests": [
         "tests/activityAndLocalized.test.ts",
         "tests/courseOverride.test.ts",
         "tests/feedback.test.ts",
         "tests/goalDecompose.test.ts",
         "tests/planIntent.test.ts",
+        "tests/quickGoalParse.test.ts",
         "tests/restartRoll.test.ts"
       ],
       "sources": [
@@ -323,6 +324,7 @@
         "src/features/activity/goalDecompose",
         "src/features/activity/goalPrefs",
         "src/features/activity/goalStore",
+        "src/features/activity/quickGoalParse",
         "src/features/activity/restartTasks",
         "src/features/feedback/parseCorrection",
         "src/features/feedback/planIntent",
@@ -1272,6 +1274,14 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/quickGoalParse.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
     "tests/restartRoll.test.ts": {
       "suite": "engine",
       "guards": [
@@ -2202,6 +2212,9 @@
     ],
     "src/features/persona/PersonaResult": [
       "tests/profile-explain.test.ts"
+    ],
+    "src/features/activity/quickGoalParse": [
+      "tests/quickGoalParse.test.ts"
     ],
     "src/features/activity/restartTasks": [
       "tests/restartRoll.test.ts"
