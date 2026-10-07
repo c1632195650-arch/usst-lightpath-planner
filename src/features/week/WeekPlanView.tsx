@@ -552,11 +552,12 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
   };
 
-  /* ---------- UI v2 D1：日程双层开关（SCHEDULE_VIEW_V2，默认关） ----------
-   * localStorage `usst.scheduleViewV2` = '1' 时显示「周概览 / 当日流水」分段；
-   * 第一阶段只上 DayAgenda（当日流水），周网格仍是默认层。 */
+  /* ---------- UI v2 D1/D2：日程双层开关（SCHEDULE_VIEW_V2，默认开） ----------
+   * localStorage `usst.scheduleViewV2`：'0' 显式退出双层视图；无键/其他 = 开。
+   * 上层 WeekBoard（周概览节奏尺）+ 下层 DayAgenda（当日流水）；回退：本 commit
+   * 单独 revert 即回到默认关（WEEK_VIEW_V3 旧回退机制不受影响）。 */
   const [scheduleV2] = useState<boolean>(() => {
-    try { return localStorage.getItem('usst.scheduleViewV2') === '1'; } catch { return false; }
+    try { return localStorage.getItem('usst.scheduleViewV2') !== '0'; } catch { return true; }
   });
   const [agendaView, setAgendaView] = useState<boolean>(false);
   /** 下潜选中的天（WeekBoard 点卡 → DayAgenda；null = 跟随今天） */

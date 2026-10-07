@@ -24,11 +24,10 @@ function ok(cond, label) {
 
 const T = (page, ms = 6000) => page.waitForTimeout(ms);
 
-/** 与 e2e-journey 同一段成熟登船路径（清 storage → 问卷 → 主界面） */
+/** 与 e2e-journey 同一段成熟登船路径（清 storage → 问卷 → 主界面）；D2 起默认开，不再显式置 '1' */
 async function onboard(page) {
   await page.goto(BASE);
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-  await page.evaluate(() => localStorage.setItem('usst.scheduleViewV2', '1'));
   await page.reload();
   await T(page, 800);
   await page.getByRole('button', { name: '开始画像测评' }).click();
@@ -79,9 +78,16 @@ const run = async () => {
     await T(page, 800);
     await page.getByRole('button', { name: '开始画像测评' }).click();
     await T(page, 400);
-    // 只验首屏（未登船也可以看欢迎页无分段——分段在周计划内，这里验「默认关」的源头）
+    // 只验首屏（未登船也可以看欢迎页无分段——分段在周计划内，这里验「默认开」的源头）
     const stored = await page.evaluate(() => localStorage.getItem('usst.scheduleViewV2'));
-    ok(stored === null, 'A1 默认无 usst.scheduleViewV2 键（默认关）');
+    // 【D9 申报 2026-10-07】D2 默认值翻开的配套更新：无键 = 开（显式 '0' 才关）。
+    //   键本身仍不由页面写入（用户没碰过开关时保持无键），断言无键仍然成立。
+    ok(stored === null, 'A1 默认无 usst.scheduleViewV2 键（默认开：无键即开，显式 \'0\' 关）');
+    // A2 显式退出：'0' → 双层视图关（周网格独占，与旧行为一致）
+    await page.evaluate(() => localStorage.setItem('usst.scheduleViewV2', '0'));
+    await page.reload();
+    await T(page, 800);
+    ok((await page.evaluate(() => localStorage.getItem('usst.scheduleViewV2'))) === '0', 'A2 显式 \'0\' 已落');
     await page.close();
   }
 
