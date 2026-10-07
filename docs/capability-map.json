@@ -7,8 +7,8 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 144,
-    "engineFiles": 107,
+    "testFiles": 148,
+    "engineFiles": 111,
     "uiFiles": 37,
     "guardedSources": 141,
     "reverseVerified": 88,
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 61,
+      "testCount": 62,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -37,6 +37,7 @@
         "tests/correctionsPolicy.test.ts",
         "tests/courseOverride.test.ts",
         "tests/estimateRefine.test.ts",
+        "tests/eveningConflict.test.ts",
         "tests/explain.test.ts",
         "tests/fatigue.test.ts",
         "tests/feedback.test.ts",
@@ -125,14 +126,16 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 42,
+      "testCount": 44,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/agenda-model.test.ts",
         "tests/assignment.test.ts",
         "tests/d-batch.test.ts",
         "tests/feedback.test.ts",
+        "tests/fromNowSwitchCopy.test.ts",
         "tests/gapAdd.test.ts",
+        "tests/groupIssues.test.ts",
         "tests/h1-eval-panel.test.ts",
         "tests/h3h4-eval.test.ts",
         "tests/issue-bar-ui.test.ts",
@@ -309,12 +312,13 @@
         "src/features/activity/",
         "src/features/feedback/"
       ],
-      "testCount": 8,
+      "testCount": 9,
       "tests": [
         "tests/activityAndLocalized.test.ts",
         "tests/courseOverride.test.ts",
         "tests/feedback.test.ts",
         "tests/goalDecompose.test.ts",
+        "tests/goalSpread.test.ts",
         "tests/planIntent.test.ts",
         "tests/quickGoalParse.test.ts",
         "tests/restartRoll.test.ts",
@@ -875,6 +879,14 @@
       "guardCount": 3,
       "reverseVerified": true
     },
+    "tests/eveningConflict.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
+    },
     "tests/explain.test.ts": {
       "suite": "engine",
       "guards": [
@@ -917,6 +929,14 @@
       "guardCount": 1,
       "reverseVerified": true
     },
+    "tests/fromNowSwitchCopy.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": false
+    },
     "tests/gapAdd.test.ts": {
       "suite": "engine",
       "guards": [
@@ -933,12 +953,28 @@
       "guardCount": 3,
       "reverseVerified": false
     },
+    "tests/goalSpread.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
     "tests/golden-lib.test.ts": {
       "suite": "engine",
       "guards": [
         "planner-engine"
       ],
       "guardCount": 3,
+      "reverseVerified": false
+    },
+    "tests/groupIssues.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
       "reverseVerified": false
     },
     "tests/h1-eval-panel.test.ts": {
@@ -1728,6 +1764,7 @@
       "tests/construct.test.ts",
       "tests/courseOverride.test.ts",
       "tests/d-batch.test.ts",
+      "tests/eveningConflict.test.ts",
       "tests/explain.test.ts",
       "tests/fatigue.test.ts",
       "tests/fillGap.test.ts",
@@ -1782,6 +1819,7 @@
       "tests/campus-vocab.test.ts",
       "tests/churn.test.ts",
       "tests/construct.test.ts",
+      "tests/eveningConflict.test.ts",
       "tests/explain.test.ts",
       "tests/fatigue.test.ts",
       "tests/focus-days.test.ts",
@@ -1829,6 +1867,7 @@
       "scripts/libao-taxonomy.test.ts",
       "scripts/scheduler.test.ts",
       "tests/estimateRefine.test.ts",
+      "tests/eveningConflict.test.ts",
       "tests/lifeModeAndSocial.test.ts",
       "tests/meal-canteen-rank.test.ts",
       "tests/ongoing-task.test.ts",
@@ -1844,6 +1883,7 @@
       "scripts/rollingState.test.ts",
       "tests/churn.test.ts",
       "tests/construct.test.ts",
+      "tests/eveningConflict.test.ts",
       "tests/fatigue.test.ts",
       "tests/improve-live.test.ts",
       "tests/improve-transfer.test.ts",
@@ -1944,6 +1984,7 @@
     "src/features/activity/goalStore": [
       "tests/activityAndLocalized.test.ts",
       "tests/goalDecompose.test.ts",
+      "tests/goalSpread.test.ts",
       "tests/restartRoll.test.ts"
     ],
     "src/features/week/agendaModel": [
@@ -2107,6 +2148,11 @@
       "tests/wp10.test.ts",
       "tests/wp4a.test.ts"
     ],
+    "src/features/week/weekViewUtils": [
+      "tests/fromNowSwitchCopy.test.ts",
+      "tests/groupIssues.test.ts",
+      "tests/weekViewUtils.test.ts"
+    ],
     "src/features/week/gapAdd": [
       "tests/gapAdd.test.ts"
     ],
@@ -2114,7 +2160,8 @@
       "tests/goalDecompose.test.ts"
     ],
     "src/features/activity/goalDecompose": [
-      "tests/goalDecompose.test.ts"
+      "tests/goalDecompose.test.ts",
+      "tests/goalSpread.test.ts"
     ],
     "src/lib/planner/planDigest": [
       "tests/h1-eval-panel.test.ts",
@@ -2314,9 +2361,6 @@
     "src/features/week/BlockCard": [
       "tests/week-view-model.test.ts",
       "tests/wp7.test.ts"
-    ],
-    "src/features/week/weekViewUtils": [
-      "tests/weekViewUtils.test.ts"
     ],
     "src/features/week/dragPreview": [
       "tests/wp4b.test.ts"
