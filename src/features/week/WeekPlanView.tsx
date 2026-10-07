@@ -41,6 +41,7 @@ import type { BehaviorRecord } from '@/features/behavior/behaviorLog';
 import {
   isLockedThisWeek, lockCount, lockedPlacementsOf, lockLevelsOf, longLockKey,
   rollingForWeek, withLongLock, withRolling, withoutLock, withoutLongLock,
+  weekLockCount, withoutWeekLocks,
 } from '@/features/plan/planLock';
 import { TERM_CALENDAR } from '@/constants/term';
 import { toHHmm, humanizeMinutes } from '@/constants/time';
@@ -52,9 +53,9 @@ import { AddTaskPanel } from './AddTaskPanel';
 import { EditBlockPanel } from './EditBlockPanel';
 // ── R2：用户覆盖层（一次性收口所有用户改动）────────────────────
 import {
-  addTask, applyPendingMoves, canUndo, clearRedo, diffPlanEvents, excludeBlock, includeBlock, loadUserPlan,
+  addTask, applyPendingMoves, canUndo, clearRedo, diffPlanEvents, engineRestoreCount, excludeBlock, includeBlock, loadUserPlan,
   makeLayerId, movesOfWeek, popRedo, popUndo, pushPlanEvents, pushRedoSnapshot, pushUndoSnapshot,
-  removeAssignment, removeMove, saveUserPlan, undoDepth, redoDepth,
+  removeAssignment, removeMove, restoreEngineWeek, saveUserPlan, undoDepth, redoDepth,
   upsertAssignment, upsertMove,
   type Assignment, type UserPlanLayer,
 } from './userPlanStore';
@@ -64,6 +65,7 @@ import { DayAgenda } from './DayAgenda';
 import { WeekBoard } from './WeekBoard';
 import { Segmented } from '@/components/ui/Segmented';
 import { Popover } from '@/components/ui/Popover';
+import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/icons/Icon';
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
@@ -973,6 +975,24 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     updateLayer((prev) => ({ ...prev, excluded: [] }));
   }, [updateLayer]);
 
+  /* ---------- 一键还原（2026-10-07）：回到引擎最初版 ----------
+   * 清：本周拖拽/改时/顺延（moves）、本周删除（excluded）、本周一次性新加（tasks）、本周块锁；
+   * 留：长期任务、不可时段、调课停课、作业时长、长期锁 —— 那些是事实声明，不是对这版的排布。
+   * 走 updateLayer → 整层快照进撤销栈，一次 Ctrl+Z 可整体回到还原前（锁的解除除外）。 */
+  const [restoreAsk, setRestoreAsk] = useState(false);
+  const restoreCount = engineRestoreCount(layer, weekNo) + weekLockCount(planState, weekNo);
+  const handleRestoreEngine = useCallback(() => {
+    const now = new Date().toISOString();
+    updateLayer((prev) => restoreEngineWeek(prev, weekNo));
+    if (weekLockCount(planState, weekNo) > 0) {
+      onPlanStateChange(withoutWeekLocks(planState, weekNo, now));
+    }
+    setRecentTaskIds([]);
+    setRestoreAsk(false);
+    setReplanToken((v) => v + 1);
+    notify('info', '已回到引擎最初版 —— 手动改动已全部清空，Ctrl+Z 可整体撤销');
+  }, [updateLayer, weekNo, planState, onPlanStateChange, notify]);
+
   /** 🆕 新日程标注：新加任务的任务 id 列表（块的 id 以 `-{taskId}` 结尾，可可靠匹配） */
   const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
 
@@ -1850,6 +1870,64 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         >
           重新排一遍
         </button>
+        <button
+          type="button"
+          onClick={() => setRestoreAsk(true)}
+          disabled={restoreCount === 0}
+          data-testid="week-restore-engine"
+          title="清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎排的最初版"
+          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
+            restoreCount > 0
+              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+              : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
+          }`}
+        >
+          ↺ 回到最初版{restoreCount > 0 ? `（${restoreCount}）` : ''}
+        </button>
+        <Modal
+          open={restoreAsk}
+          onClose={() => setRestoreAsk(false)}
+          title="回到引擎最初版？"
+          testId="week-restore-engine-dialog"
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => setRestoreAsk(false)}
+                className="rounded-md px-3 py-1.5 text-[12.5px] font-medium text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+              >
+                先不了
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreEngine}
+                data-testid="week-restore-engine-confirm"
+                className="rounded-md bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-red-700"
+              >
+                还原并重排
+              </button>
+            </>
+          }
+        >
+          <ul className="list-disc space-y-0.5 pl-4">
+            {layer.moves.filter((m) => m.weekNo === weekNo).length > 0 && (
+              <li>挪动 / 改时 {layer.moves.filter((m) => m.weekNo === weekNo).length} 处</li>
+            )}
+            {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length > 0 && (
+              <li>已跳过的 {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length} 块会回来</li>
+            )}
+            {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length > 0 && (
+              <li>本周新加的 {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length} 件事会拿掉</li>
+            )}
+            {weekLockCount(planState, weekNo) > 0 && (
+              <li>本周定住的 {weekLockCount(planState, weekNo)} 块会解锁</li>
+            )}
+          </ul>
+          <p className="mt-2">
+            保留不动：长期任务、不可时段、调课停课、作业时长与长期锁。
+            还原后马上重排；按 Ctrl+Z 可整体撤销（定住的解除除外）。
+          </p>
+        </Modal>
         {/* T3：改动不再自动应用 —— 必须**明说**还没生效，否则用户会以为按钮坏了 */}
         {pendingEdits && (
           <span className="rounded-md bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900 ring-1 ring-amber-700/20">

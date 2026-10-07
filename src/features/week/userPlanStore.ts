@@ -431,6 +431,44 @@ export function clearUserPlan(): void {
   }
 }
 
+/* ============================================================
+ * 一键还原（2026-10-07）：清掉本周所有「对块位置的干预」，回到引擎最初版
+ * ========================================================== */
+
+/**
+ * 「回到引擎最初版」的边界 —— 什么算干预、什么算事实：
+ *
+ * **清（对排布的干预）**：
+ *   · `moves`（本周）        —— 拖拽 / 改时间 / 被顺延，全是「对引擎位置的覆盖」
+ *   · `excluded`（本周）      —— 删掉的块回来（`w{周}-` 前缀的 blockId 才是本周的）
+ *   · `tasks`（一次性）       —— 本周手动塞进去的块（含「⬚ 留白」，weeks 含本周）
+ *
+ * **留（事实声明与跨周数据，还原不该殃及）**：
+ *   · 长期 tasks（`weeks` 空 = 全学期）—— 清了会波及别的周
+ *   · `slots` 不可时段 / `courseOverrides` 调课停课 / `assignments` 作业时长
+ *     —— 这些是用户声明的**事实**（别排 / 课改了 / 作业要多久），不是「这版怎么排」
+ *   · 长期锁在 `planState` 里，由 `planLock.withoutWeekLocks` 单独清块锁、保留长期锁
+ */
+export function restoreEngineWeek(layer: UserPlanLayer, weekNo: number): UserPlanLayer {
+  const prefix = `w${weekNo}-`;
+  return {
+    ...layer,
+    moves: layer.moves.filter((m) => m.weekNo !== weekNo),
+    excluded: layer.excluded.filter((id) => !id.startsWith(prefix)),
+    tasks: layer.tasks.filter((t) => !(t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo))),
+  };
+}
+
+/** 本周有多少「可还原」的干预（按钮启用与确认弹窗文案共用一个口径） */
+export function engineRestoreCount(layer: UserPlanLayer, weekNo: number): number {
+  const prefix = `w${weekNo}-`;
+  return (
+    layer.moves.filter((m) => m.weekNo === weekNo).length +
+    layer.excluded.filter((id) => id.startsWith(prefix)).length +
+    layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length
+  );
+}
+
 /* ---------- 供测试用 ---------- */
 export const STORAGE_KEY = KEY;
 export const LEGACY_KEYS = { edits: LEGACY_EDITS_KEY, assignments: LEGACY_ASSIGNMENTS_KEY } as const;

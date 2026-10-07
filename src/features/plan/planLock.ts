@@ -177,6 +177,38 @@ export function withoutLongLock(
   return { ...base, locks, lockedPlacements, updatedAt: now || base.updatedAt };
 }
 
+/**
+ * 一键还原（2026-10-07）：清掉**本周的块锁**（key 以 `w{weekNo}-` 开头），
+ * 保留长期锁（`odd-` / `even-` 前缀）与跨周滚动状态。
+ *
+ * 「回到引擎最初版」若不清块锁，被钉死的块会把旧位置带回来 —— 最初版排不出来。
+ * 两半（locks + lockedPlacements）必须同删，与 `withoutLock` 同一纪律。
+ * 前缀自带 `-`，`w1-` 不会误匹配 `w11-`。
+ */
+export function withoutWeekLocks(
+  state: PlanPersistState | null,
+  weekNo: number,
+  now = '',
+): PlanPersistState {
+  const base = normalizePlanState(state) ?? emptyPlanState(now);
+  const prefix = `w${weekNo}-`;
+  const locks: Record<string, LockLevel> = {};
+  for (const [k, v] of Object.entries(base.locks)) {
+    if (!k.startsWith(prefix)) locks[k] = v;
+  }
+  const lockedPlacements: Record<string, LockedPlacement> = {};
+  for (const [k, v] of Object.entries(base.lockedPlacements)) {
+    if (!k.startsWith(prefix)) lockedPlacements[k] = v;
+  }
+  return { ...base, locks, lockedPlacements, updatedAt: now || base.updatedAt };
+}
+
+/** 本周块锁数量（还原按钮启用判定用；长期锁不计入） */
+export function weekLockCount(state: PlanPersistState | null, weekNo: number): number {
+  const prefix = `w${weekNo}-`;
+  return Object.keys(lockLevelsOf(state)).filter((k) => k.startsWith(prefix)).length;
+}
+
 /** 这块是否被长期定住（只看长期锁 key，不碰块锁） */
 export function isLongLocked(
   state: PlanPersistState | null,
