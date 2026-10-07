@@ -9,6 +9,9 @@ import { loadUserPlan } from '@/features/week/userPlanStore';
 import { Icon } from '@/components/icons/Icon';
 import { ongoingUserTask } from './ongoingTask';
 
+/** 总览只预览这么多节今天的课（§11.3：总览不搬完整课表）。 */
+const LESSON_PREVIEW_MAX = 3;
+
 interface Props {
   schedule: Schedule;
   todayIso: string;
@@ -23,7 +26,7 @@ function LessonRow({ lesson, state }: { lesson: Lesson; state: 'done' | 'now' | 
   const place = [lesson.course.building, lesson.course.room].filter(Boolean).join(' ');
   return (
     <li
-      className={`flex items-center gap-3 py-2.5 transition-opacity ${state === 'done' ? 'opacity-45' : ''}`}
+      className={`flex items-center gap-3 py-2 transition-opacity ${state === 'done' ? 'opacity-45' : ''}`}
     >
       <span
         className="h-8 w-1 shrink-0 rounded-full"
@@ -75,17 +78,17 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
 
   return (
     <section className="hero-surface overflow-hidden rounded-2xl text-white shadow-card-dark">
-      <div className="px-5 py-7 sm:px-8 sm:py-8">
+      <div className="px-5 py-5 sm:px-6 sm:py-5">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
           WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {shortCN(todayIso)} {weekdayCN(todayIso)}
         </p>
 
-        <p className="mt-6 flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-brand-bright">
+        <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-brand-bright">
           {/* §9.6 B 组：焦点卡主图标 target（lg 档，装饰件） */}
           <Icon name="target" size="lg" className="opacity-90" />
           {kicker}
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{headline}</h1>
+        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{headline}</h1>
 
         {/* UI v2 D3：「Now · 进行中」焦点条——正在进行的排程任务（有才渲染，不做常驻占位） */}
         {ongoingTask && (
@@ -121,7 +124,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
         )}
 
         {next ? (
-          <p className="mt-4 text-sm leading-6 text-white/70">
+          <p className="mt-3 text-sm leading-6 text-white/70">
             {next.lesson.startTime}–{next.lesson.endTime}
             {next.lesson.course.building ? ` · ${next.lesson.course.building}` : ''}
             {next.lesson.course.room ? ` ${next.lesson.course.room}` : ''}
@@ -130,7 +133,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
             )}
           </p>
         ) : (
-          <p className="mt-4 max-w-xl text-sm leading-6 text-white/70">
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/70">
             {nearestDeadline
               ? diffDays(todayIso, nearestDeadline.date) === 0
                 ? `「${nearestDeadline.title}」就是今天。`
@@ -140,8 +143,8 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
         )}
 
         {lessons.length > 0 && (
-          <ul className="mt-7 divide-y divide-white/10 border-t border-white/10 pt-1">
-            {lessons.map((lesson, index) => (
+          <ul className="mt-4 divide-y divide-white/10 border-t border-white/10">
+            {lessons.slice(0, LESSON_PREVIEW_MAX).map((lesson, index) => (
               <LessonRow
                 key={`${lesson.course.id}-${index}`}
                 lesson={lesson}
@@ -154,8 +157,18 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
             ))}
           </ul>
         )}
+        {/* §11.3 反例纪律：总览不搬完整课表 —— 只预览前几节，其余给一条计数指引 */}
+        {lessons.length > LESSON_PREVIEW_MAX && (
+          <button
+            type="button"
+            onClick={onOpenWeek}
+            className="mt-2 w-full rounded-lg py-1.5 text-left text-xs text-white/55 transition-colors hover:text-white/80"
+          >
+            今天还有 {lessons.length - LESSON_PREVIEW_MAX} 节课 —— 点开本周安排看全部
+          </button>
+        )}
 
-        <div className="mt-7 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-wrap gap-3">
           <button
             onClick={onOpenWeek}
             className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-brand-light"
@@ -177,7 +190,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
         </div>
 
         {persona && (
-          <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-white/45">
+          <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-white/45">
             当前建议参考「{persona.archetype.primary?.name ?? '你的画像'}」的节奏。
           </p>
         )}

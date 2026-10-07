@@ -279,9 +279,17 @@ export default function App() {
     : [];
   /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
   const isLbaoTab = mainTab === 'libao';
+  /**
+   * 总览仪表盘：**一屏不滚动**（CY 2026-10-08 指令「第一个界面就搞成不可滑动的一页」）。
+   * 只在宽屏（lg+）生效 —— 窄窗口/小屏下列高不够，硬撑会把内容裁掉，那时退回普通滚动页。
+   * 三处联动：外壳高度（lg:h-dvh + 裁溢出）、main 允许收缩（min-h-0）、页脚不渲染。
+   */
+  const isOverviewDash = mainTab === 'calendar' && !weekMonday;
 
   return (
-    <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
+    <div
+      className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : ''} ${isOverviewDash ? 'overview-pane' : ''} ${!isLbaoTab && !isOverviewDash ? 'min-h-screen' : ''}`}
+    >
       {/* 紧凑导航把主要空间留给日程与对话内容。 */}
       {/*
         顶栏（「今天 / 周计划 / 目标 / 我的画像 / 梨宝」）—— 应用外壳，必须**盖住一切页面内容**。
@@ -335,7 +343,9 @@ export default function App() {
           加 key 不会额外重置任何状态；换周/换视图不走这里，避免打断周计划的会话状态。 */}
       <main
         key={mainTab}
-        className={`page-shell view-enter flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}
+        className={`page-shell view-enter flex-1 px-4 sm:px-6 ${
+          isLbaoTab || isOverviewDash ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'
+        }`}
       >
         {/* 2026-10-08（CY 指令「这个也去掉」）：**示例课表横幅已下线** ——
             原先 ray 反馈第 8 项加的「你现在的课表是示例数据…」提示条不再占首屏。
@@ -492,8 +502,10 @@ export default function App() {
         />
       )}
 
-      {!isLbaoTab && (
-        <footer className="page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
+      {/* 总览仪表盘（lg+）不渲染页脚：它要「一屏不滚动」，页脚会把页面顶出视口。
+          页脚是装饰性签名，其余页与窄屏仍在。 */}
+      {!isLbaoTab && !isOverviewDash && (
+        <footer className="overview-footer page-shell px-4 pb-8 pt-2 text-center text-[11px] font-medium tracking-[0.12em] text-ink-faint sm:px-6">
           UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY · 1906–2026
           {/* B2 彩蛋：校训小字，装饰性、纯事实（上理校训），可整体拔掉 */}
           <span className="mt-1 block text-[11px] font-normal tracking-[0.18em] text-ink-faint">

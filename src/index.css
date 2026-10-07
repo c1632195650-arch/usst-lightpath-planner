@@ -447,6 +447,47 @@
   }
 }
 
+/**
+ * 总览「一屏仪表盘」（2026-10-08，CY 指令「第一个界面就搞成不可滑动的一页」）。
+ *
+ * 为什么带**高度**条件：四行栅格（焦点卡 / 三个数字卡 / 节奏+状态 / 校历+节点）在
+ * 1024×900 以上才装得下；只说  的话，1280×720 这类矮窗口会让最后一行
+ * 被压成 0 高度（实测 1280×720：三行 auto 吃掉全部空间，1fr 行塌成 0；实测 1280×960 / 1440×900：末行分别拿到 201 / 141px，四行都在）。
+ * 矮窗口**诚实地退回普通滚动页**，而不是把内容裁掉。
+ *
+ * 生效时：外壳锁视口高 + 裁溢出（页面不滚），栅格吃掉剩余高度，
+ * 页脚不渲染（它会把页面顶出视口）；最后一行 `minmax(0,1fr)` 里两张卡各自内部滚。
+ */
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.875rem;
+}
+
+@media (min-width: 1024px) {
+  .overview-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 900px) {
+  .overview-pane {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .overview-pane .overview-grid {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .overview-pane .overview-footer {
+    display: none;
+  }
+}
+
 @layer utilities {
   /* UI v2 §05：入场统一 slow 档 360ms（原 450ms 超「入场禁超 slow」上限）。 */
   .fade-item {

@@ -48,7 +48,9 @@ function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
   );
 }
 
-/** 时间节点 / 倒计时面板 */
+/** 时间节点 / 倒计时面板。
+ *  2026-10-08（一屏仪表盘批）：卡片改成 `flex flex-col` + 列表内部滚动 —— 总览在 lg+
+ *  是不滚动的整屏栅格，本卡与「校历」分掉最后一行的高度，超出部分在自己内部滚。 */
 export function DeadlineBoard() {
   const today = todayISO();
   const upcoming = DEADLINES
@@ -58,8 +60,8 @@ export function DeadlineBoard() {
   if (upcoming.length === 0) return null;
 
   return (
-    <section className="panel p-5 fade-item">
-      <header className="mb-4 flex items-end justify-between gap-3">
+    <section className="panel flex h-full min-h-0 flex-col p-5 fade-item">
+      <header className="mb-3 flex shrink-0 items-end justify-between gap-3">
         <div>
           <p className="section-label flex items-center gap-1.5">
             <Icon name="milestone" size="sm" className="text-brand" />
@@ -70,7 +72,7 @@ export function DeadlineBoard() {
         <span className="text-xs text-ink-faint">{upcoming.length} 项</span>
       </header>
 
-      <ul className="divide-y divide-ink/10">
+      <ul className="min-h-0 flex-1 divide-y divide-ink/10 overflow-y-auto">
         {upcoming.map((d) => (
           <li key={d.id}>
             <DeadlineRow d={d} days={diffDays(today, d.date)} />

@@ -57,8 +57,11 @@ export function OverviewPage({
   }).length;
 
   return (
-    /* 三档容器由 page-shell（1200px = default 档）承担。 */
-    <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 lg:items-start">
+    /* 三档容器由 page-shell（1200px = default 档）承担。
+       lg+ 是一屏仪表盘：四行栅格 + 最后一行吃掉剩余高度（`minmax(0,1fr)`），
+       所以页面本身不滚动，只有「校历 / 接下来节点」两张卡在各自内部滚动。
+       窄屏（<lg）退回单列普通流 —— 那时行高不够，硬撑会裁内容。 */
+    <div className="overview-grid">
       <div className="lg:col-span-12">
         <TodayCard
           schedule={schedule}
@@ -92,7 +95,8 @@ export function OverviewPage({
 
       <PersonaStatusCard persona={persona} onGotoProfile={onGotoProfile} />
 
-      <section className="panel p-4 sm:p-5 lg:col-span-6">
+      {/* 最后一行：校历在左、接下来的节点在右，两张卡分掉剩余高度、各自内部滚动 */}
+      <section className="panel flex min-h-0 flex-col p-4 sm:p-5 lg:col-span-6">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h2 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ink">
@@ -115,7 +119,7 @@ export function OverviewPage({
         </div>
 
         {calendarOpen && (
-          <div className="mt-4 border-t border-ink/10 pt-4">
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto border-t border-ink/10 pt-3">
             <MonthCalendar
               events={CAL_EVENTS}
               selectedDate={selectedDate}
@@ -125,7 +129,7 @@ export function OverviewPage({
         )}
       </section>
 
-      <div className="lg:col-span-6">
+      <div className="min-h-0 lg:col-span-6">
         <DeadlineBoard />
       </div>
     </div>
