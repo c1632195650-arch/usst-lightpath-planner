@@ -18,7 +18,7 @@ const FIELD_BASE = [
   'focus-visible:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1,0_0_0_7px_rgba(74,115,209,0.18)]',
 ].join(' ');
 
-const FIELD_OK = 'border-[#8C95A6] focus:border-brand focus:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1,0_0_0_7px_rgba(74,115,209,0.18)]';
+const FIELD_OK = 'border-[#7A8292] focus:border-brand focus:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1,0_0_0_7px_rgba(74,115,209,0.18)]';
 const FIELD_ERR = 'border-[#B0402F] focus:border-[#B0402F] focus:shadow-[0_0_0_2px_#fff,0_0_0_4px_#B0402F,0_0_0_7px_rgba(176,64,47,0.16)]';
 
 interface FieldShellProps {

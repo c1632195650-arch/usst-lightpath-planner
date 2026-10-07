@@ -42,7 +42,7 @@ export const DEFAULT_TOAST_MS: Record<ToastKind, number> = {
 export function Toasts({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed right-4 top-4 z-[60] flex w-72 flex-col gap-2">
+    <div aria-live="polite" aria-atomic="false" className="fixed right-4 top-4 z-[60] flex w-72 flex-col gap-2">
       {toasts.slice(-4).map((t) => {
         const s = STYLE[t.kind];
         return (

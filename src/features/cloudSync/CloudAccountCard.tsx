@@ -121,7 +121,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
           type="submit"
           data-testid="web-login-submit"
           disabled={busy || !username.trim() || !password}
-          className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+          className="min-h-11 rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
         >
           {busy ? '…' : '登录'}
         </button>
@@ -130,7 +130,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
           data-testid="web-register-submit"
           disabled={busy || !username.trim() || !password}
           onClick={(e) => submit('register', e)}
-          className="rounded-lg border border-ink/10 bg-paper-card px-4 py-2 text-[13px] font-semibold text-ink disabled:opacity-40"
+          className="min-h-11 rounded-lg border border-ink/10 bg-paper-card px-4 py-2 text-[13px] font-semibold text-ink disabled:opacity-40"
         >
           注册
         </button>

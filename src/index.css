@@ -28,6 +28,9 @@
     /* UI v2 墨色（设计总成 §7.1）：正文一律此色，paper 底对比度 ≥13:1。 */
     color: #1f2a44;
     background: #f6f7fa;
+    /* UI v2 E2（§13）：产品只设计了浅色——显式钉住 light，
+       防系统深色模式下浏览器把表单控件/滚动条渲染成深色。 */
+    color-scheme: light;
     font-family: "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif;
 
     /*
@@ -39,9 +42,12 @@
      * Tailwind 色板里的同名语义色仍承担徽章底色等非正文场景。
      */
     --ph: #6e7688;
-    --border-control: #8c95a6;
+    /* E3 门禁实测：#8C95A6 对 paper 只有 2.81:1 <3 —— 加深一档 #7A8292（3.61:1）。 */
+    --border-control: #7a8292;
     --warn-text: #965c18;
     --danger-text: #b0402f;
+    /* 双环焦点环的品牌亮端（tailwind brand.bright 同源） */
+    --brand-bright: #4a73d1;
   }
 
   html {
@@ -68,8 +74,17 @@
 
   button:focus-visible,
   a:focus-visible,
-  input:focus-visible {
-    @apply outline-none ring-2 ring-brand/40 ring-offset-2 ring-offset-paper;
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role='button']:focus-visible,
+  [role='switch']:focus-visible,
+  [role='menuitem']:focus-visible,
+  [tabindex]:focus-visible {
+    /* UI v2 E2（§10.1 态 3 / WCAG 2.4.13）：2px 白隔离圈 + 2px 品牌亮环。
+       outline:none + box-shadow 双环；组件自定义 focus-visible:shadow 会按类名覆盖。 */
+    @apply outline-none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--brand-bright, #4a73d1);
   }
 
   .tabular-nums {
@@ -399,5 +414,18 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* UI v2 E2（§13）：用户系统要求更高对比 → 控件描边与弱文字加深一档。
+   进度斜纹保留（信息承载），动画由 reduced-motion 查询压停。 */
+@media (prefers-contrast: more) {
+  :root {
+    --border-control: #5a6377;
+  }
+
+  .section-label,
+  .section-label-zh {
+    @apply text-ink-soft;
   }
 }

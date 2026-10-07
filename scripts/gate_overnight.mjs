@@ -286,6 +286,18 @@ const ALLOW_DIRTY = !!process.env.GATE_ALLOW_DIRTY;
   });
 }
 
+// ---- 8. a11y 对比度门禁（UI v2 E3 新增；基线 0 FAIL，只增不减）----
+{
+  const { code, out } = run('node scripts/a11y-check.mjs');
+  const tail = out.split('\n').filter(Boolean).slice(-1).join(' | ');
+  results.push({
+    name: 'a11y对比度',
+    ok: code === 0,
+    detail: code === 0 ? '令牌对比度 0 FAIL（a11y-check A 部分）' : tail,
+    raw: out,
+  });
+}
+
 // ---- 汇总 ----
 console.log('\n================ 通宵批次门禁 ================');
 for (const r of results) {
