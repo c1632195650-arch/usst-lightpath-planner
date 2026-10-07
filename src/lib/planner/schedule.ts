@@ -114,6 +114,14 @@ export interface BuildWeekPlanInput {
    * 契约: BuildWeekPlanInput/PlanRequest 增 mealWalkBudgetMin?（可选字段，opt-in）。
    */
   mealWalkBudgetMin?: number;
+  /**
+   * W6-A（2026-10-08，CY 拍板「A 硬约束」）：FOCUS DAYS 硬约束（星期几 1-7）。
+   * 语义与零漂移口径见 `PlanRequest.activeDays`（model.ts）：只在选中天排软块
+   * （自习/活动/浮动任务/浮动提交项/自由格），未选中天只留课程、三餐与用户钉死的
+   * 固定块。契约: BuildWeekPlanInput/PlanRequest 增 activeDays?（可选字段，opt-in）——
+   * 结构性新增按 §二契约纪律在此显式申报；缺省 undefined = 旧行为逐字段一致。
+   */
+  activeDays?: DayOfWeek[];
 }
 
 export interface BuildWeekPlanResult {
@@ -179,6 +187,8 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     // P1-5/P1-7：条件展开 —— 不传的字段不出现，保持与旧行为逐字段一致（零漂移）
     ...(input.weeklyActivityMin != null ? { weeklyActivityMin: input.weeklyActivityMin } : {}),
     ...(input.mealWalkBudgetMin != null ? { mealWalkBudgetMin: input.mealWalkBudgetMin } : {}),
+    // W6-A：FOCUS DAYS 硬约束（空数组与 undefined 同义 = 不生效，零漂移）
+    ...(input.activeDays?.length ? { activeDays: input.activeDays } : {}),
   };
 }
 

@@ -132,6 +132,14 @@ interface Props {
   onShiftWeek?: (d: number) => void;
   /** W3/P1-5b.2（2026-10-07）：「返回总览」—— WeekView 单窗口化后从那边搬来的出口 */
   onBack?: () => void;
+  /**
+   * W6-A（2026-10-08，CY 拍板「A 硬约束」）：FOCUS DAYS 硬约束（星期几 1-7）。
+   * 由 App 把 `selectedDays`（ISO）∩ 当前查看周换算而来；透传引擎
+   * `BuildWeekPlanInput.activeDays` —— 只在选中天排软块，未选中天只留课程与三餐。
+   * 缺省/空 = 不生效（golden 零漂移）。改动即重排（进 effect 依赖）——
+   * 「点了真的会变」是本功能的全部意义。
+   */
+  activeDays?: import('@/types').DayOfWeek[];
 }
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -455,7 +463,7 @@ function BlockCard({
   );
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek, onBack }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek, onBack, activeDays }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1428,6 +1436,8 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
             tasks,
             // 任务四（M4-W3）：待办约束（空数组 = 与旧行为逐字段一致）
             pendingTodos,
+            // W6-A：FOCUS DAYS 硬约束（toPlanRequest 对空数组/undefined 原样吞掉 = 不生效）
+            activeDays,
           }),
           // 裁决 R2（2026-10-06 收官批次·批次 2）：作息设置真源 → 引擎日窗。
           // 走 PlanRequest **已有**字段 dayStart/dayEnd（model.ts），零契约改动；
@@ -1576,7 +1586,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     //
     //    `assignments` 同理（T6）：标记作业也只是**攒着**，
     //    点「重新排一遍」时本 effect 会在新一轮渲染里读到最新的 `assignments`。
-  }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken]);
+  }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken, activeDays]);
 
   if (loading) {
     return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;

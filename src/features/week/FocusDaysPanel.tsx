@@ -36,6 +36,10 @@ export function FocusDaysPanel({ weekMonday, selectedDays, focusedDay, onToggleD
           <button onClick={onClearDays} className="font-medium text-ink-faint transition-colors hover:text-ink">清空</button>
         </div>
       </div>
+      {/* W6-A（CY 拍板「A 硬约束」）：诚实说明约束语义 —— 这排不再是装饰 */}
+      <p className="-mt-2 mb-3 text-[11.5px] leading-5 text-ink-soft" data-testid="focus-days-hint">
+        选中的天会真的排上自习与任务；没选的天只留课程和三餐。全不选 = 整周照常。
+      </p>
       <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {days.map((d, i) => {
           const sel = selectedSet.has(d);

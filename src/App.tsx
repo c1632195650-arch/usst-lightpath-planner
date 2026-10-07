@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { AnswerEntry, AppState, Schedule } from '@/types';
+import type { AnswerEntry, AppState, DayOfWeek, Schedule } from '@/types';
 import { MOCK_SCHEDULE, normalizeLifeMode } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
-import { currentWeekNo, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
+import { currentWeekNo, diffDays, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
 import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
@@ -217,6 +217,14 @@ export default function App() {
 
   // 主界面
   const weekNo = weekMonday ? currentWeekNo(schedule.termStart, weekMonday) : currentWeekNo(schedule.termStart);
+  // W6-A（CY 拍板「A 硬约束」）：FOCUS DAYS 从「只上色」变成真约束 ——
+  // 选中日（ISO）∩ 当前查看周 → 星期几 1-7 传引擎；本周外的日期不误伤（S3）。
+  // 空选中 = 无约束（整周照常，S1）。
+  const focusDays: DayOfWeek[] = weekMonday
+    ? [...new Set(state.selectedDays
+        .map((iso) => diffDays(weekMonday, iso) + 1)
+        .filter((n): n is DayOfWeek => n >= 1 && n <= 7))]
+    : [];
   /** 梨宝对话固定在视口内，只让消息列表承担滚动。 */
   const isLbaoTab = mainTab === 'libao';
 
@@ -353,6 +361,7 @@ export default function App() {
               onOpenModeSetup={() => setModeSetupOpen(true)}
               onShiftWeek={shiftWeekBy}
               onBack={() => setWeekMonday(null)}
+              activeDays={focusDays}
             />
             {/* P1-5b.3：本块是单点可删的 —— CY 若说连折叠块也不要，删这一个 <details> 即可 */}
             <details data-testid="week-timetable-details" className="panel px-4 py-3 sm:px-5">

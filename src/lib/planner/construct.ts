@@ -358,6 +358,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const fixedCommits = activeCommits.filter((c) => c.pinned);
   const floatingCommits = activeCommits.filter((c) => !c.pinned);
 
+  /**
+   * W6-A（2026-10-08，CY 拍板「A 硬约束」）：FOCUS DAYS 硬约束。
+   * 「想安排的日期」= 引擎的排软块白名单：只在选中的天排自习 / 活动模板 /
+   * 浮动任务 / 浮动提交项 / 自由格；未选中天只留课程、三餐与用户钉死的固定块
+   * （fixedTasks / pinned commits 是用户的显式落点，等同既成事实，不裁）。
+   * **缺省 undefined / 空数组 = 不生效**（整周照常）—— golden 语料不带此字段，
+   * 默认路径零漂移；生效时在 notes 里如实说明（诚实纪律）。
+   */
+  const activeDaySet = req.activeDays?.length ? new Set(req.activeDays) : null;
+
   let totalFree = 0;
   let studyMin = 0;
   let courseMin = 0;
@@ -381,6 +391,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
 
   for (const day of DAY_ORDER) {
     const dayName = DAY_NAME[day];
+    // W6-A：这一天在不在「想安排的日期」里。null = 没启用硬约束（天天都算激活）。
+    const dayActive = activeDaySet == null || activeDaySet.has(day);
     const daySlots = slotsOn(schedule, weekNo, day);
     const dayCampus = dominantCampus(daySlots);
 
@@ -539,11 +551,14 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const activityBudget = Math.min(ACTIVITY_CAP_MIN, Math.round(usable * 0.4)) + essentialMin;
 
     /* --- 6.4b 提交项填充（EDF × urgency 择序，贪心填空档）--- */
-    const commitBlocks = placeCommits({
-      day, dayName, commits: floatingCommits, placed, policy, transfer,
-      // 提交项是软块，同样受 `fromNow` 约束
-      dayStartMin: softFloorMin, dayEndMin, mkId, commitEnd,
-    });
+    // W6-A：非选中天不排**浮动**提交项（用户钉死的已在 6.2b 保留）
+    const commitBlocks = dayActive
+      ? placeCommits({
+          day, dayName, commits: floatingCommits, placed, policy, transfer,
+          // 提交项是软块，同样受 `fromNow` 约束
+          dayStartMin: softFloorMin, dayEndMin, mkId, commitEnd,
+        })
+      : [];
     if (commitBlocks.length) {
       placed = [...placed, ...commitBlocks];
       for (const b of commitBlocks) commitMin += b.endMin - b.startMin;
@@ -556,11 +571,14 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     const sportRemaining = weeklyActivityTarget != null
       ? Math.max(0, weeklyActivityTarget - weeklySportMin)
       : 0;
-    const candidates = buildCandidates(templates, scenarios, floatingTasks, taskActive, day, {
-      // WP5 运动模式：sportQuota 生效时绕过画像触发（模式本身就是对运动的显式表达）
-      // P1-5：周下限未达标同样强制出运动候选（缺口按天均摊的真实需求）
-      forceSport: sportQuota != null || sportRemaining > 0,
-    });
+    // W6-A：非选中天不出活动候选（运动/午休/取快递/自定义…都算「可安排块」）
+    const candidates = dayActive
+      ? buildCandidates(templates, scenarios, floatingTasks, taskActive, day, {
+          // WP5 运动模式：sportQuota 生效时绕过画像触发（模式本身就是对运动的显式表达）
+          // P1-5：周下限未达标同样强制出运动候选（缺口按天均摊的真实需求）
+          forceSport: sportQuota != null || sportRemaining > 0,
+        })
+      : [];
     const perCat: Record<string, number> = {};
     let activityMin = 0;
     /**
@@ -603,15 +621,20 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
     /* --- 6.6 学习块（按阶段策略填充） --- */
     // 目标取**有效**值（已含疲劳 / 逐日可行性）：`objective` 与 `explain` 用的是同一个
     // `effectiveStudyMin()`，三处同口径才不会「按 96 排、按 120 扣分」。
-    const studyBudget = Math.min(
-      effectiveStudyMin(fatigue, day),
-      Math.max(0, usable - activityMin),
-    );
-    const studyBlocks = fillStudy({
-      day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
-      dayStartMin: softFloorMin, dayEndMin,
-      prefs: blockPrefsOf(req),
-    });
+    // W6-A：非选中天自习预算归零、直接跳过（硬约束 —— 只留课程与三餐）
+    const studyBudget = dayActive
+      ? Math.min(
+          effectiveStudyMin(fatigue, day),
+          Math.max(0, usable - activityMin),
+        )
+      : 0;
+    const studyBlocks = studyBudget > 0
+      ? fillStudy({
+          day, placed, budget: studyBudget, policy, templates, dayCampus, mkId, transfer,
+          dayStartMin: softFloorMin, dayEndMin,
+          prefs: blockPrefsOf(req),
+        })
+      : [];
     placed = [...placed, ...studyBlocks];
     for (const b of studyBlocks) studyMin += b.endMin - b.startMin;
 
@@ -623,7 +646,8 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
      * 在 attachTransfers **之后**插入：blank 无地点，若先插会被转场检查当成
      * 「缺地点盲区」刷 info。挤进去的空档本来就是留白预算的一部分，
      * stats.blankMin 的口径不受影响（filled 的三项都不含 blank）。 */
-    if (extras?.blankBlocks && blankPlaced < extras.blankBlocks) {
+    // W6-A：非选中天不实体化自由格（只留课程与三餐的口径；blank 也算「可安排块」）
+    if (dayActive && extras?.blankBlocks && blankPlaced < extras.blankBlocks) {
       const gaps = freeGaps(softFloorMin, dayEndMin, placed)
         .filter((g) => g.endMin - g.startMin >= 60)
         .sort((a, b) => (b.endMin - b.startMin) - (a.endMin - a.startMin));
@@ -658,7 +682,11 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   }
 
   /* --- 6.8 汇总 --- */
-  const shortfall = summaryStudyIssue(studyMin, weeklyStudyTarget(policy, fatigue), weekNo);
+  // W6-A：硬约束生效时自习目标天然达不到（未选中天不排是用户的主动选择，不是
+  // 引擎排不下）→ 不发「没排满」issue，改由上面的诚实 note 说明。
+  const shortfall = activeDaySet
+    ? null
+    : summaryStudyIssue(studyMin, weeklyStudyTarget(policy, fatigue), weekNo);
   if (shortfall) issues.push(shortfall);
 
   notes.push(...buildWeekNotes({
@@ -678,6 +706,13 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   if (sportQuota != null) notes.push(`运动安排：本周为你铺开 ${sportPlaced} 次锻炼（隔天一次）`);
   if (extras?.extraMeals) notes.push('加餐窗口：下午茶与夜宵已避开课程排入');
   if (extras?.blankBlocks) notes.push(`自由格：本周留出 ${blankPlaced} 大格空白，想去哪自己填`);
+  // W6-A：硬约束生效了就要说出来（诚实纪律）——否则用户不知道「为什么那几天是空的」
+  if (activeDaySet) {
+    const skippedDays = DAY_ORDER.filter((d) => !activeDaySet.has(d)).map((d) => DAY_NAME[d]).join('、');
+    if (skippedDays) {
+      notes.push(`按你选的日期，${skippedDays}没有排自习与任务 —— 只留了课程和三餐；想恢复就在「日程」页重新勾选。`);
+    }
+  }
 
   /* --- 6.9 用户明确排除的块（阶段 A：用户干预） --- */
   /**

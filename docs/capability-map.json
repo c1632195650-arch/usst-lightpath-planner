@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 118,
-    "engineFiles": 82,
+    "testFiles": 119,
+    "engineFiles": 83,
     "uiFiles": 36,
     "guardedSources": 106,
-    "reverseVerified": 69,
+    "reverseVerified": 70,
     "orphans": 1
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 58,
+      "testCount": 59,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -40,6 +40,7 @@
         "tests/fatigue.test.ts",
         "tests/feedback.test.ts",
         "tests/fillGap.test.ts",
+        "tests/focus-days.test.ts",
         "tests/golden-lib.test.ts",
         "tests/h1-eval-panel.test.ts",
         "tests/h1-plan-eval.test.ts",
@@ -818,6 +819,14 @@
       "guardCount": 2,
       "reverseVerified": false
     },
+    "tests/focus-days.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
     "tests/golden-lib.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1502,6 +1511,7 @@
       "tests/construct.test.ts",
       "tests/explain.test.ts",
       "tests/fatigue.test.ts",
+      "tests/focus-days.test.ts",
       "tests/golden-lib.test.ts",
       "tests/improve-live.test.ts",
       "tests/improve.test.ts",

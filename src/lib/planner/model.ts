@@ -441,6 +441,18 @@ export interface PlanRequest {
    * 夜猫子作息问卷题按 R3/R8 另批，本字段只承载步行预算。
    */
   mealWalkBudgetMin?: number;
+
+  /**
+   * W6-A（2026-10-08，CY 拍板「A 硬约束」）：FOCUS DAYS 硬约束 —— 用户点选的
+   * 「想安排的日期」（星期几 1-7）。**只在这些天排软块**（自习 / 活动模板 /
+   * 浮动任务 / 浮动提交项 / 自由格）；未选中的天只留课程、三餐与**用户钉死的
+   * 固定块**（fixedTasks / pinned commits —— 用户显式落点等同既成事实，不裁）。
+   *
+   * **缺省 undefined / 空数组 = 不生效**（整周照常，golden 语料不带此字段 →
+   * 默认路径零漂移，opt-in 纪律同 `lifeModeExtras` / `weeklyActivityMin`）。
+   * 生效时 construct 会推一条诚实 note 说明「哪几天没排」。
+   */
+  activeDays?: DayOfWeek[];
 }
 
 /**
