@@ -1,7 +1,7 @@
 /**
  * 课表导入联调页（开发用）
  *
- * 用途：验证「浏览器 → Vite 代理 /timetable → 127.0.0.1:8765 课表解析服务 → 适配层 → Schedule」整条链路。
+ * 用途：验证「浏览器 → 同源 /timetable → 后端（server/app.py，解析包在库内）→ 适配层 → Schedule」整条链路。
  * 只在 dev 环境的顶栏出现，不影响正式流程。
  *
  * 这里允许 fetch 和读文件 —— 真正的纯函数在 src/lib/parseSchedule.ts，测试逻辑不掺进去。
@@ -72,25 +72,24 @@ export function ImportTester({ onApply }: Props) {
           />
           <h2 className="text-base font-semibold tracking-tight text-ink">课表解析服务</h2>
           <span className="text-xs text-ink-faint">
-            {online === null ? '探测中…' : online ? '127.0.0.1:8765 已连通' : '未连通 —— 先跑 python server.py 8765'}
+            {online === null ? '探测中…' : online ? '解析服务已连通（随后端提供）' : '未连通 —— 先启动后端（python server/app.py）'}
           </span>
           <button onClick={() => void probe()} className="ml-auto text-xs font-semibold text-brand transition-colors hover:text-brand-dark">
             重试
           </button>
         </div>
         <div className="text-xs leading-relaxed text-ink-faint">
-          浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite 转发到 8765，所以没有跨域问题。
+          浏览器走同源代理 <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">/timetable</code>，Vite/dev 转发到后端 8001（serve.py 部署版同源直连），没有跨域问题。
         </div>
         {online === false && (
-          /* 服务没起来时，光说「先跑 server.py」是不够的 —— 它是个**独立仓库**，
-             没装的人（比如答辩现场的这台机器）照着做也跑不起来。
-             这里把「不依赖它的两条替代路径」摆出来，免得现场卡住。 */
+          /* 2026-10-08：解析包已归拢进主仓库并由后端进程内调用 —— 服务 = 后端本身，
+             随手起后端即可；现场还起不来就走两条替代路径（下）。 */
           <div className="mt-3 rounded-xl bg-paper px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-faint">
-            <strong className="text-ink-soft">没有这个服务也能用真实课表</strong>：课表解析器是**独立仓库**，
-            不在本仓库内。两条替代路径 ——
+            <strong className="text-ink-soft">服务没起来？</strong>解析随后端一起提供（dev：
+            <code className="rounded bg-paper px-1 text-ink-soft">python server/app.py</code>；部署：serve.py / uvicorn 自带）。
+            两条不依赖它的替代路径 ——
             <br />① 把导出的课表 JSON 放到 <code className="rounded bg-paper px-1 text-ink-soft">public/my_schedule.json</code>，首页会自动加载（该文件已 gitignore，不进仓库）；
             <br />② 什么都不放时，界面用 <code className="rounded bg-paper px-1 text-ink-soft">MOCK_SCHEDULE</code> 演示课表跑通全流程 —— 排程、周计划、梨宝都照常工作。
-            <br />本页的「上传 PDF 导入」是**依赖该服务**的增强功能，服务不在时无法演示（按钮已置灰），不影响其余功能。
           </div>
         )}
       </section>

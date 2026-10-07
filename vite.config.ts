@@ -29,12 +29,13 @@ export default defineConfig({
     port: 5173,
     // ⚠️ 关掉自动开浏览器：CY 常用手机连本机调试（LAN IP），自动弹浏览器会抢窗口。
     open: false,
-    // 课表解析服务（timetable_parser/server.py，默认跑在 127.0.0.1:8765）。
-    // 走代理后浏览器看到的是同源 /timetable/*，天然绕开 CORS 与 OPTIONS 预检，
-    // 不用给 Python 端加任何跨域头。想直连就设 VITE_TIMETABLE_BASE。
+    // 课表解析（2026-10-08 接线）：解析包已归拢进主仓库（server/timetable_parser/），
+    // 由 FastAPI（server/app.py，dev 下与 /api 同一个 8001 实例）提供 /courses 与
+    // /api/import_pdf —— 不再需要另跑一个独立的 8765 服务。
+    // 走代理后浏览器看到的是同源 /timetable/*，天然绕开 CORS 与 OPTIONS 预检。
     proxy: {
       '/timetable': {
-        target: 'http://127.0.0.1:8765',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         rewrite: (p: string) => p.replace(/^\/timetable/, ''),
       },
@@ -62,7 +63,7 @@ export default defineConfig({
     port: 4173,
     proxy: {
       '/timetable': {
-        target: 'http://127.0.0.1:8765',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         rewrite: (p: string) => p.replace(/^\/timetable/, ''),
       },

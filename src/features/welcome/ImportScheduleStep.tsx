@@ -80,8 +80,8 @@ export function ImportScheduleStep({ onApply, onNext, onBack, existingCourseCoun
           {online === false && (
             <div className="mt-8 rounded-xl border border-warn/30 bg-warn/5 px-4 py-3 text-sm leading-6 text-ink-soft">
               <strong className="text-warn">课表解析服务没连上。</strong>
-              它是独立服务（默认 127.0.0.1:8765，仓库根跑{' '}
-              <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">python server.py 8765</code>
+              解析随后端一起提供（先启动后端即可：{' '}
+              <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">python server/app.py</code>
               ）；先跳过也不影响继续设置，之后在服务连上时随时回「课表」页导入。
             </div>
           )}

@@ -25,6 +25,8 @@
   GET  /api/route?from=&to=&mode=         两点步行路径（排程引擎的转场时间）
   POST /api/route/batch  {pairs:[[a,b],...]}  批量问路
   GET  /api/weather?days=7                未来天气（Open-Meteo · 分时段摘要）
+  GET  /courses                            课表解析：当前已解析的总课表（data/course_records.json）
+  POST /api/import_pdf                     上传 PDF 课表 → 解析 → 落 course_records.json（timetable_parser）
 
 🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
    真实坐标只用于后端算路与排序，不出现在任何响应体里。
@@ -57,6 +59,8 @@ import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand（LLM 听懂，规则兜底在前端）
+# 课表解析包（2026-10-08：独立包已归拢进主仓库 server/timetable_parser/；serve.py 同源实现）
+from timetable_parser import parse_pdf
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 app.include_router(plan_dialog.router)
@@ -1269,6 +1273,63 @@ def api_undo_fact(fact_id: int):
 @app.delete("/api/memory/facts/{fact_id}")
 def api_delete_fact(fact_id: int):
     return {"ok": memory.delete_fact(fact_id)}
+
+# ═══════════════════════════════════════════════════════════════
+# 课表解析（2026-10-08 接线）：POST 上传 PDF → timetable_parser 解析 → 落盘；
+# GET 回读当前课表。响应形状与 serve.py / 旧独立服务逐字段兼容：
+#   /courses            → [ {课名, 类型, 节次, 周次原文, 周次[…], 校区, 教室, 教师, …}, … ]
+#   /api/import_pdf     → {ok:true,count,records} | {ok:false,error}（业务失败不当 HTTP 错）
+# 路径同时登记裸路径与 /timetable 前缀别名（dev 代理直连 / nginx 剥前缀，两种跳法都通）。
+# ═══════════════════════════════════════════════════════════════
+_COURSE_RECORDS_PATH = os.path.join(_HERE, "..", "data", "course_records.json")
+
+
+@app.get("/courses")
+@app.get("/timetable/courses")
+def course_records_list():
+    try:
+        with open(_COURSE_RECORDS_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+@app.post("/api/import_pdf")
+@app.post("/timetable/api/import_pdf")
+async def import_pdf_route(request: Request):
+    raw = await request.body()
+    if not raw:
+        return {"ok": False, "error": "没有收到文件内容"}
+    import tempfile
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(raw)
+            tmp_path = tmp.name
+        records = parse_pdf(tmp_path) or []
+    except Exception as e:  # 解析器异常 → 业务失败（原课表不动）
+        return {"ok": False, "error": f"解析失败：{e}"}
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+    if not records:
+        return {"ok": False, "error": (
+            "未解析到任何课程。请确认上传的是『每周课表』格式的 PDF"
+            "(表格含 星期一~星期日)。原课表数据已保留。")}
+    try:
+        os.makedirs(os.path.dirname(_COURSE_RECORDS_PATH), exist_ok=True)
+        with open(_COURSE_RECORDS_PATH, "w", encoding="utf-8") as fh:
+            json.dump(records, fh, ensure_ascii=False)
+    except Exception as e:
+        return {"ok": False, "error": f"课表已解析但写入失败：{e}"}
+    return {"ok": True, "count": len(records), "records": records}
+
 
 if __name__ == "__main__":
     import uvicorn
