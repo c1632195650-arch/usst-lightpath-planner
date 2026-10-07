@@ -1,5 +1,5 @@
 {
-  "version": "0.3.1",
-  "apkUrl": "http://101.35.253.143/apk/lightpath-0.3.1.apk",
-  "notes": "修复 0.3.0 在手机上「连不上服务器」：Android 9+ 默认禁明文 HTTP，已声明 usesCleartextTraffic + networkSecurityConfig（只放行后端域名）"
+  "version": "0.3.2",
+  "apkUrl": "http://101.35.253.143/apk/lightpath-0.3.2.apk",
+  "notes": "UI v2 全站升级：品牌符号与欢迎页改版、90 枚图标实装、日程双层视图（周概览+当日流水）、梨宝常驻呼出、动效与无障碍补齐、移动端登录页改版"
 }
