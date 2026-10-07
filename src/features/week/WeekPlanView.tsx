@@ -64,6 +64,7 @@ import { DayAgenda } from './DayAgenda';
 import { WeekBoard } from './WeekBoard';
 import { Segmented } from '@/components/ui/Segmented';
 import { Popover } from '@/components/ui/Popover';
+import { Icon } from '@/components/icons/Icon';
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
@@ -352,14 +353,14 @@ function BlockCard({
           E5：浏览态再给一个**显式「详情」入口** —— 渐进式披露的第二层（来源/完整转场/锁定/事件）。
           刻意不做「整卡可点」：卡片已有拖拽与「🆕 消失」两种点击语义，再叠加会互相打架。 */}
       {block.reason && (editable ? (
-        <div className="mt-1 text-[11px] leading-snug text-ink-faint">💡 {block.reason}</div>
+        <div className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-ink-faint"><Icon name="sparkle" size="xs" className="relative top-[2px] shrink-0" />{block.reason}</div>
       ) : (
         <span
           title={block.reason}
           aria-label="为什么排在这"
-          className="mt-1 inline-block align-middle text-[11px] text-ink-faint"
+          className="relative top-[2px] mt-1 inline-block align-middle text-ink-faint"
         >
-          ⓘ
+          <Icon name="info" size="xs" />
         </span>
       ))}
       {!editable && chip.hasDetail && onOpenDetail && (
@@ -397,21 +398,21 @@ function BlockCard({
         >
           <div className="flex flex-col" role="menu">
             <button type="button" role="menuitem" onClick={() => onToggleLock(block)} className="menu-row">
-              {locked ? '🔓 解锁定住' : '🔒 定住（重排不动）'}
+              <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="lock" size="xs" /></span>{locked ? '解锁定住' : '定住（重排不动）'}
             </button>
             {block.kind !== 'course' && block.source !== 'course' && (
               <button type="button" role="menuitem" onClick={() => setEditOpen(true)} className="menu-row">
-                ✏️ {edited ? '再改（这块被你改过）' : '改时间 / 时长 / 地点'}
+                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="sliders" size="xs" /></span>{edited ? '再改（这块被你改过）' : '改时间 / 时长 / 地点'}
               </button>
             )}
             {block.kind === 'course' && block.courseId && (
               <button type="button" role="menuitem" onClick={() => setAsgOpen((v) => !v)} className="menu-row">
-                📝 {assignmentMin != null ? `作业已记 ${assignmentMin} 分 —— 改一下` : '记一下作业时长'}
+                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="notebook-pen" size="xs" /></span>{assignmentMin != null ? `作业已记 ${assignmentMin} 分 —— 改一下` : '记一下作业时长'}
               </button>
             )}
             {block.kind !== 'course' && block.source !== 'course' && (
               <button type="button" role="menuitem" onClick={() => onExclude(block)} className="menu-row text-[#B0402F] hover:bg-danger-light">
-                🗑 删除（可撤销）
+                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="trash" size="xs" /></span>删除（可撤销）
               </button>
             )}
           </div>
@@ -1710,7 +1711,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
               editMode ? 'bg-brand text-white' : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
             }`}
           >
-            {editMode ? '✏️ 编辑中' : '✏️ 编辑'}
+            <span className="relative top-[2px] mr-1 inline-flex"><Icon name="notebook-pen" size="xs" /></span>{editMode ? '编辑中' : '编辑'}
           </button>
           {!editMode && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
         </div>
@@ -2250,7 +2251,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                           {...ghostProps}
                           className="rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-2.5 py-2 text-[12.5px] font-medium text-red-700"
                         >
-                          🚫 放不到这里 —— {g.reason ?? '放不下'}
+                          <span className="relative top-[3px] mr-1 inline-flex"><Icon name="x-circle" size="xs" /></span>放不到这里 —— {g.reason ?? '放不下'}
                         </div>
                       );
                     }
@@ -2260,7 +2261,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                           key={`gap-${item.gap.startMin}`}
                           className="rounded-lg border border-dashed border-ink/20 bg-paper/60 px-2.5 py-1.5 text-[11px] text-ink-faint"
                         >
-                          ⬜ 空闲 {toHHmm(item.gap.startMin)}–{toHHmm(item.gap.endMin)}
+                          <span className="relative top-[3px] mr-1 inline-flex"><Icon name="inbox" size="xs" /></span>空闲 {toHHmm(item.gap.startMin)}–{toHHmm(item.gap.endMin)}
                           （{humanizeMinutes(item.gap.endMin - item.gap.startMin)}）
                         </div>
                       );
@@ -2313,7 +2314,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
               : 'border-red-300 bg-white/95 text-red-600'
           }`}
         >
-          🗑<br />拖到这里<br />删除
+          <span className="relative top-[3px] mx-auto inline-flex"><Icon name="trash" size="md" /></span><br />拖到这里<br />删除
         </div>
       )}
 
