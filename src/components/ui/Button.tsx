@@ -13,6 +13,8 @@ interface Props {
   type?: 'button' | 'submit';
   /** UI v2 §10.1 态 7：加载中——文字转透明、内嵌 15px spinner，宽高不变以防跳版。 */
   loading?: boolean;
+  /** 测试锚点（data-testid） */
+  testId?: string;
   className?: string;
 }
 
@@ -54,7 +56,7 @@ function Spinner() {
 
 export function Button({
   children, onClick, variant = 'primary', size = 'md',
-  disabled = false, full = false, type = 'button', loading = false, className = '',
+  disabled = false, full = false, type = 'button', loading = false, testId, className = '',
 }: Props) {
   const busy = loading || false;
   return (
@@ -63,6 +65,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
+      data-testid={testId}
       className={[
         'relative rounded-xl font-semibold transition-[background-color,border-color,color,filter,transform]',
         'duration-fast ease-out',

@@ -53,18 +53,21 @@ export function FieldShell({ label, required = false, hint, error = false, htmlF
 }
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  /** 测试锚点（data-testid，落到原生控件上） */
+  testId?: string;
   label: string;
   hint?: ReactNode;
   error?: boolean;
   wrapClassName?: string;
 }
 
-export function Input({ label, hint, error = false, wrapClassName = '', id, required, ...rest }: InputProps) {
+export function Input({ label, hint, error = false, wrapClassName = '', id, required, testId, ...rest }: InputProps) {
   const fieldId = id ?? rest.name ?? undefined;
   return (
     <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
       <input
         id={fieldId}
+        data-testid={testId}
         {...rest}
         required={required}
         aria-invalid={error || undefined}
@@ -75,18 +78,21 @@ export function Input({ label, hint, error = false, wrapClassName = '', id, requ
 }
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  /** 测试锚点（data-testid，落到原生控件上） */
+  testId?: string;
   label: string;
   hint?: ReactNode;
   error?: boolean;
   wrapClassName?: string;
 }
 
-export function Select({ label, hint, error = false, wrapClassName = '', id, required, children, ...rest }: SelectProps) {
+export function Select({ label, hint, error = false, wrapClassName = '', id, required, testId, children, ...rest }: SelectProps) {
   const fieldId = id ?? rest.name ?? undefined;
   return (
     <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
       <select
         id={fieldId}
+        data-testid={testId}
         {...rest}
         required={required}
         aria-invalid={error || undefined}
@@ -99,6 +105,8 @@ export function Select({ label, hint, error = false, wrapClassName = '', id, req
 }
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  /** 测试锚点（data-testid，落到原生控件上） */
+  testId?: string;
   label: string;
   hint?: ReactNode;
   error?: boolean;
@@ -106,12 +114,13 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 /** 文本域：默认两行可见高度，超出内部滚动。 */
-export function Textarea({ label, hint, error = false, wrapClassName = '', id, required, ...rest }: TextareaProps) {
+export function Textarea({ label, hint, error = false, wrapClassName = '', id, required, testId, ...rest }: TextareaProps) {
   const fieldId = id ?? rest.name ?? undefined;
   return (
     <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
       <textarea
         id={fieldId}
+        data-testid={testId}
         {...rest}
         required={required}
         aria-invalid={error || undefined}
