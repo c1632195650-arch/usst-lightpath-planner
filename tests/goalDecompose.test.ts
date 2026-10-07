@@ -59,8 +59,11 @@ test('steady：80h/10 周 → 本周预算 480min，拆 5 块 × 95min（40min �
 });
 
 test('sprint：临近截止的周预算显著高于早期', () => {
-  const g = goal({ id: 'g2', title: '冲刺目标', totalHours: 60, dueAt: '2026-10-05', pace: 'sprint' });
-  // 10/05 在第 5 周 → 第 1 周 weeksLeft = 4
+  // 🔴 截止日必须**晚于第 5 周末**，否则会被「截止感知选天」剔到只剩 1 天
+  //    （10/05 是第 5 周周一 ⟹ 周内只剩 dow=1 可选 ⟹ 临期周反而比早期少）。
+  //    10/11 = 第 5 周周日，整周可选，才能干净地验证 sprint 的临期加权。
+  const g = goal({ id: 'g2', title: '冲刺目标', totalHours: 60, dueAt: '2026-10-11', pace: 'sprint' });
+  // 10/11 在第 5 周末 → 第 1 周 weeksLeft = 4
   const early = decomposeGoal(g, 1, TERM, prefs());
   const last = decomposeGoal(g, 5, TERM, prefs());
   const earlyMin = early.tasks.reduce((n, t) => n + (t.durationMin ?? 0), 0);

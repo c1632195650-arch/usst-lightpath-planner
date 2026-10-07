@@ -1,6 +1,7 @@
 /**
  * 周计划视图的模块级工具（F2d/A5 从 WeekPlanView 拆出，纯函数可单测）
  */
+import { toHHmm } from '@/constants/time';
 import { unionAffectedDays } from '@/lib/planner/localizedReplan';
 
 /**
@@ -103,3 +104,96 @@ export function localizedDaysFor(
  * 值 = 原型真机实测 rgb(159,173,208)；对比度跟进项见 `_T3落地设计-2026-10-07.md` §4.4。
  */
 export const TODAY_COL_BG = '#9fadd0';
+
+/** 今天可排区间的起点（与引擎 `construct` 的 `dayStartMin` 同口径：07:00） */
+export const DAY_START_MIN = 7 * 60;
+
+/* ═══════════════════════════════════════════════════════════════
+   「这一周的情况」的问题清单：合并同类
+   ═══════════════════════════════════════════════════════════════
+   RAY 2026-10-08：「这一周的情况那么多信息都是在说什么，能否简化」——
+   实测现场：**同一类提示（锁定的块没排进去）一连刷了 7 条**，每条都是
+   一整句「你锁定的「X」这次没能排进计划（可能被新课占掉了时间），解开锁定或调整
+   那天的安排都可以」，面板被淹；而且 `X` 在拿不到标题时会**退回原始 block id**
+   （`w5-d1-study-study-zhanen-1`）—— 那是内部标识，用户看不懂。
+
+   口径：**同 code 且 ≥2 条的合成一行**（摘要 + 可展开看是哪些），单条原样显示。
+   纯函数放这里（不是 `.tsx`）才有单测 —— 见 `fromNowSwitchCopy` 的同款理由。
+*/
+export interface IssueLike {
+  level: 'error' | 'warn' | 'info';
+  message: string;
+  code?: string;
+}
+
+export interface IssueGroup {
+  /** 渲染用 key（同类合并时=code） */
+  key: string;
+  level: IssueLike['level'];
+  /** 合并组的摘要；单条组就是原消息 */
+  message: string;
+  /** 展开后逐条列出的短标签（取消息里「…」的内容） */
+  refs: string[];
+  /** true = 已合并成一行，需要「展开」 */
+  grouped: boolean;
+}
+
+/** 同 code 的摘要抬头（拿不到就用消息本身的前半句兜底） */
+const CODE_TITLE: Record<string, string> = {
+  'lock-conflict': '你锁定的块这次没能排进计划（可能被新课占掉了时间）',
+};
+
+/** 从消息里取「…」中的那块（引擎把块名放在中文引号里）；取不到就整条截断 */
+export function issueRef(message: string): string {
+  const m = message.match(/「([^」]{1,40})」/);
+  if (m) return m[1];
+  return message.length > 40 ? `${message.slice(0, 40)}…` : message;
+}
+
+/** 合并同类问题：同 code 且 ≥2 条 ⟹ 折成一行 */
+export function groupIssues(issues: readonly IssueLike[]): IssueGroup[] {
+  const out: IssueGroup[] = [];
+  const byCode = new Map<string, IssueGroup>();
+  for (const iss of issues) {
+    const code = iss.code ?? '';
+    if (!code) {
+      out.push({ key: `solo-${out.length}`, level: iss.level, message: iss.message, refs: [issueRef(iss.message)], grouped: false });
+      continue;
+    }
+    const hit = byCode.get(code);
+    if (hit) { hit.refs.push(issueRef(iss.message)); continue; }
+    const g: IssueGroup = { key: code, level: iss.level, message: iss.message, refs: [issueRef(iss.message)], grouped: false };
+    byCode.set(code, g);
+    out.push(g);
+  }
+  for (const g of out) {
+    if (g.refs.length < 2) continue;
+    const head = CODE_TITLE[g.key] ?? `${issueRef(g.message)} 等同类问题`;
+    g.grouped = true;
+    g.message = `${head} —— 共 ${g.refs.length} 处`;
+  }
+  return out;
+}
+
+/**
+ * 「从此刻开始排」切换后的反馈文案（纯函数，可单测）。
+ *
+ * 🔴 为什么必须给反馈（RAY 2026-10-08 凌晨问「切了之后没有重排选项、也没明确的重排需求」）：
+ *    这个开关走的是**立即生效**通道（`fromNowOn` 在引擎重算依赖里），
+ *    所以没有「重新排一遍」按钮是**设计使然**；但它原先**零反馈** ——
+ *    用户既看不到变化、也找不到入口，无法区分"已生效"和"坏了"。
+ *    最坏的情况是**凌晨**：`softFloor = max(07:00, 现在)`，凌晨切它等于把下界
+ *    从 07:00 抬到 07:00 ⟹ **计划一模一样**（实测块数 94→94）⟹ 看着就像没反应。
+ *    所以「现在还没到今天的起点」这件事必须**说出来**，不能留白。
+ *
+ * 放在本模块（而不是 `WeekPlanHeader.tsx`）的原因：那个文件是 `.tsx`，
+ * Node 测试直接 import 会因 JSX 挂掉 —— 纯函数要可单测就得待在纯 `.ts` 里。
+ */
+export function fromNowSwitchCopy(next: boolean, now: number): string {
+  if (!next) return '已切回「完整排满这一周」—— 今天恢复成完整安排';
+  if (now < DAY_START_MIN) {
+    return `已切到「只排剩下的时间」。现在还没到今天的起点（${toHHmm(DAY_START_MIN)}），`
+      + '今天暂时没有可砍的时段 —— 过了这个点再看就有区别了';
+  }
+  return `已切到「只排剩下的时间」—— 今天 ${toHHmm(now)} 之前不再安排，其余六天不受影响`;
+}

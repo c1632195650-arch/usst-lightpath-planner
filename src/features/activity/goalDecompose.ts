@@ -57,6 +57,24 @@ export function paceWeights(pace: Goal['pace'], W: number): number[] {
   return Array(W).fill(1); // steady / 未选
 }
 
+/**
+ * 截止感知选天（2026-10-07 RAY 实测：光电杯 10/08 截止却被排到 10/10-11）：
+ * 分布天只取**截止当天（含）之前**的有空天 —— 排到截止之后的块毫无意义。
+ * 截止早于本周所有有空天 → 返回空数组，由调用方诚实预警。
+ */
+function daysWithinDeadline(
+  days: number[], weekNo: number, termStart: string, dueAt: string | undefined,
+): number[] {
+  if (!dueAt) return days;
+  const weekStartMs = Date.parse(`${termStart}T00:00:00Z`);
+  const dueMs = Date.parse(`${dueAt}T00:00:00Z`);
+  if (Number.isNaN(weekStartMs) || Number.isNaN(dueMs)) return days;
+  return days.filter((dow) => {
+    const dayMs = weekStartMs + ((weekNo - 1) * 7 + (dow - 1)) * 86_400_000;
+    return dayMs <= dueMs;
+  });
+}
+
 function snap5(min: number): number {
   return Math.round(min / 5) * 5;
 }
@@ -116,12 +134,27 @@ export function decomposeGoal(
     (a, b) => ((courseMinByDay?.[a] ?? 0) + (goalLoadByDay?.[a] ?? 0))
       - ((courseMinByDay?.[b] ?? 0) + (goalLoadByDay?.[b] ?? 0)),
   );
-  const days = freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5];
+  const days = daysWithinDeadline(
+    freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5], weekNo, termStart, goal.dueAt,
+  );
+  if (days.length === 0) {
+    return {
+      tasks: [],
+      warning: {
+        goalId: goal.id, title: goal.title,
+        message: `「${goal.title}」截止（${goal.dueAt}）早于本周剩余的有空天 —— 截止前来不及安排，建议延后截止或手动加块`,
+      },
+    };
+  }
   const usedDays = Math.max(1, Math.min(days.length, Math.ceil(budgetMin / MAX_BLOCK)));
   const perBlock = Math.max(MIN_BLOCK, Math.min(MAX_BLOCK, snap5(budgetMin / usedDays)));
 
   const tasks: UserTask[] = days.slice(0, usedDays).map((dow) => ({
     id: `goal-${goal.id}-w${weekNo}-d${dow}`,
+    // 🔴 dayOfWeek 必须设（2026-10-07 RAY「只排最优先的目标」）：construct 的
+    //   buildCandidates 只按 dayOfWeek 过滤浮动任务 —— 不设 = 每天都是候选 =
+    //   「截止前每天一块」（一周里天天出现，高优先目标把每周空档全吃光）。
+    dayOfWeek: dow,
     title: goal.title,
     emoji: goal.emoji,
     kind: blockKind,
@@ -518,13 +551,27 @@ function decomposeGoalV2(
     (a, b) => ((courseMinByDay?.[a] ?? 0) + (goalLoadByDay?.[a] ?? 0))
       - ((courseMinByDay?.[b] ?? 0) + (goalLoadByDay?.[b] ?? 0)),
   );
-  const days = freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5];
+  const days = daysWithinDeadline(
+    freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5], weekNo, termStart, goal.dueAt,
+  );
+  if (days.length === 0) {
+    return {
+      tasks: [],
+      warning: {
+        goalId: goal.id, title: goal.title,
+        message: `「${goal.title}」截止（${goal.dueAt}）早于本周剩余的有空天 —— 截止前来不及安排，建议延后截止或手动加块`,
+      },
+    };
+  }
   const pr = goal.priority ?? 3;
   const basePriority = 60 + (pr - 1) * 5;
 
   const tasks: UserTask[] = [];
   let seq = 0;
   const mkId = () => `goal-${goal.id}-t${++seq}`;
+  // 🔴 天游标：任务按序轮转分配到分布天（不设 dayOfWeek = 每天都是候选 = 天天重复）
+  let dayCursor = 0;
+  const pickDay = () => days[dayCursor++ % days.length];
   // 🔥 画像推断专注时长（替代手动 focusMinutes）
   const focusMin = inferFocusMinutes(persona?.axes);
 
@@ -537,6 +584,7 @@ function decomposeGoalV2(
       const n = Math.max(1, Math.min(days.length, Math.round(slotBudget / focusMin)));
       for (let i = 0; i < n; i++) {
         tasks.push({
+          dayOfWeek: pickDay(),
           id: mkId(),
           title: `${goal.title} · ${slot.name}`,
           emoji: goal.emoji,
@@ -553,6 +601,7 @@ function decomposeGoalV2(
       const n = Math.min(days.length, Math.max(1, Math.round(slotBudget / 20)));
       for (let i = 0; i < n; i++) {
         tasks.push({
+          dayOfWeek: pickDay(),
           id: mkId(),
           title: `${goal.title} · ${slot.name}`,
           emoji: goal.emoji,
@@ -567,6 +616,7 @@ function decomposeGoalV2(
       const n = Math.max(1, Math.round(slotBudget / 40));
       for (let i = 0; i < n; i++) {
         tasks.push({
+          dayOfWeek: pickDay(),
           id: mkId(),
           title: `${goal.title} · ${slot.name}`,
           emoji: goal.emoji,
@@ -610,6 +660,8 @@ function decomposeQ4FirstWeek(
   const mainSlot = slots.find((s) => s.slot === 'main') ?? slots[0];
   const closeSlot = slots.find((s) => s.slot === 'close') ?? slots[slots.length - 1];
 
+  // Q4 定向/复盘各占一个有空天（不设 dayOfWeek 会天天重复，同上）
+  const q4Days = prefs.freeDays.length > 0 ? prefs.freeDays : [1, 2, 3, 4, 5];
   const tasks: UserTask[] = [
     {
       id: `goal-${goal.id}-w${weekNo}-dir`,
@@ -618,6 +670,7 @@ function decomposeQ4FirstWeek(
       kind: 'study',
       category: 'custom',
       weeks: [weekNo],
+      dayOfWeek: q4Days[0],
       durations: [20, 25, 30],
       priority: 65,
       note: '定向周 · 本周目标 = 想清楚下一步做什么（写完进复盘）',
@@ -629,6 +682,7 @@ function decomposeQ4FirstWeek(
       kind: 'study',
       category: 'custom',
       weeks: [weekNo],
+      dayOfWeek: q4Days[1] ?? q4Days[0],
       durationMin: 20,
       priority: 60,
       note: '本周复盘 · 你想出了什么方向？写下来告诉系统',
