@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react';
 
 /**
@@ -11,7 +12,8 @@ import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes,
  */
 
 const FIELD_BASE = [
-  'w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-ink outline-none',
+  /* §10.2.3：min-height 44px（实测原样仅 41px —— 规范与 §12.5.8 命中区都要 44） */
+  'w-full min-h-11 rounded-xl border bg-white px-3.5 py-2.5 text-sm text-ink outline-none',
   'transition-[border-color,box-shadow] duration-fast ease-out',
   'placeholder:text-[#6E7688]',
   'disabled:cursor-not-allowed disabled:bg-paper disabled:opacity-60',
@@ -62,9 +64,12 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input({ label, hint, error = false, wrapClassName = '', id, required, testId, ...rest }: InputProps) {
-  const fieldId = id ?? rest.name ?? undefined;
+  /** §12.2-2.4.6「每个输入框都要有外置 label」：调用方没给 id/name 时**自动生成**一个，
+      否则 htmlFor 为空串 —— label 与输入框不关联，读屏念不出字段名、点标签也不聚焦。 */
+  const autoId = useId();
+  const fieldId = id ?? rest.name ?? autoId;
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
+    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId} className={wrapClassName}>
       <input
         id={fieldId}
         data-testid={testId}
@@ -87,9 +92,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export function Select({ label, hint, error = false, wrapClassName = '', id, required, testId, children, ...rest }: SelectProps) {
-  const fieldId = id ?? rest.name ?? undefined;
+  const autoId = useId();
+  const fieldId = id ?? rest.name ?? autoId;
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
+    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId} className={wrapClassName}>
       <select
         id={fieldId}
         data-testid={testId}
@@ -115,9 +121,10 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 /** 文本域：默认两行可见高度，超出内部滚动。 */
 export function Textarea({ label, hint, error = false, wrapClassName = '', id, required, testId, ...rest }: TextareaProps) {
-  const fieldId = id ?? rest.name ?? undefined;
+  const autoId = useId();
+  const fieldId = id ?? rest.name ?? autoId;
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId ?? ''} className={wrapClassName}>
+    <FieldShell label={label} required={required} hint={hint} error={error} htmlFor={fieldId} className={wrapClassName}>
       <textarea
         id={fieldId}
         data-testid={testId}

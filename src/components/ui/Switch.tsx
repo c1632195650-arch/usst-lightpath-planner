@@ -15,16 +15,19 @@ interface SwitchProps {
   disabled?: boolean;
   /** 关联表单字段名（随原生 input 提交时用） */
   name?: string;
+  /** 测试锚点（data-testid，落到原生 input 上）——与其余 ui 组件同规。 */
+  testId?: string;
 }
 
 /** 拨杆开关：native checkbox + accent-brand 视觉拨杆，键盘可达。 */
-export function Switch({ label, checked, onChange, disabled = false, name }: SwitchProps) {
+export function Switch({ label, checked, onChange, disabled = false, name, testId }: SwitchProps) {
   return (
     <label className={`inline-flex items-center justify-between gap-3 ${disabled ? 'opacity-40' : ''}`}>
       <span className="text-sm text-ink">{label}</span>
       <input
         type="checkbox"
         name={name}
+        data-testid={testId}
         role="switch"
         checked={checked}
         disabled={disabled}
