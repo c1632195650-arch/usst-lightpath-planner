@@ -1,49 +1,15 @@
 import { useEffect, useState } from 'react';
+import { pushToast, sweepToasts, visibleToast, TOAST_AUTO_MS, type ToastItem, type ToastTone } from './toastModel';
+
+export { pushToast, sweepToasts, visibleToast, TOAST_AUTO_MS };
+export type { ToastItem, ToastTone };
 
 /**
- * Toast（UI v2 §10.4.1）三规矩：
- *   ① 自动消失 2.4s，但带操作按钮的必须等用户点（不自动退）；
- *   ② 顶部居中或右下，不遮住正在操作的位置（本实现取右下）；
- *   ③ 一次最多 1 条，第 2 条排队而不是堆叠。
- * 时序逻辑抽成纯函数（pushToast/sweepToasts/visibleToast），可单测；
- * 交互态（弹出/退场动画）由调用方 hook useToastQueue 驱动。
+ * Toast 渲染层（UI v2 §10.4.1）：
+ *   ② 右下角，不遮住正在操作的位置；
+ *   aria-live=polite 对读屏播报。
+ * 时序纯逻辑在 ./toastModel.ts（零依赖可测）。
  */
-
-export type ToastTone = 'info' | 'ok' | 'error';
-
-export interface ToastItem {
-  id: number;
-  text: string;
-  tone?: ToastTone;
-  /** 带操作按钮：永不自动退场（规矩①） */
-  actionLabel?: string;
-  onAction?: () => void;
-  createdAt: number;
-}
-
-/** 规矩①：自动退场 2.4s */
-export const TOAST_AUTO_MS = 2400;
-
-/** 规矩③：队列只进不出（渲染时只露队首），硬顶防内存涨 */
-export const TOAST_QUEUE_CAP = 8;
-
-let nextId = 1;
-
-/** 入队：一次最多露 1 条，后续排队；带 action 的同样排队。 */
-export function pushToast(queue: ToastItem[], t: Omit<ToastItem, 'id' | 'createdAt'>, now: number): ToastItem[] {
-  const next = [...queue, { ...t, id: nextId++, createdAt: now }];
-  return next.length > TOAST_QUEUE_CAP ? next.slice(next.length - TOAST_QUEUE_CAP) : next;
-}
-
-/** 清扫：超 2.4s 且无操作按钮的出队（带按钮的等用户点）。 */
-export function sweepToasts(queue: ToastItem[], now: number): ToastItem[] {
-  return queue.filter((t) => (t.actionLabel != null) || now - t.createdAt < TOAST_AUTO_MS);
-}
-
-/** 规矩③：只露队首一条。 */
-export function visibleToast(queue: ToastItem[]): ToastItem | null {
-  return queue[0] ?? null;
-}
 
 const TONE_CLASS: Record<ToastTone, string> = {
   info: 'border-ink/10 bg-white text-ink',

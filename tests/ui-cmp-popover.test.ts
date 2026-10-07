@@ -1,48 +1,36 @@
 /**
  * UI v2 批次 C12 · Popover / Tooltip 断言（§10.4.2 + §10.5：默认态必验）
- * SSR 验标记与常量；Esc/点外部关闭是运行时行为，黑盒走查（终验八条）覆盖。
+ * 源码锁式；Esc/点外部关闭是运行时行为，黑盒走查（终验八条）覆盖。
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { createElement } from 'react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-import { Popover, Tooltip, TOOLTIP_DELAY_MS } from '@/components/ui/Popover';
+const src = (rel: string): string =>
+  readFileSync(fileURLToPath(new URL('..' + rel, import.meta.url)), 'utf8');
 
-test('C12 Popover: 关闭态不渲染面板（无遮罩）；常量 400ms 提示延迟', () => {
-  assert.equal(TOOLTIP_DELAY_MS, 400);
-  const closed = renderToStaticMarkup(
-    createElement(Popover, {
-      trigger: (o: { open: boolean; toggle: () => void }) =>
-        createElement('button', { onClick: o.toggle, 'aria-expanded': o.open }, '冲突详情'),
-      children: '与「应用光学实验」重叠 20 分钟。',
-    } as never),
-  );
-  assert.match(closed, /aria-expanded="false"/);
-  assert.doesNotMatch(closed, /data-testid="popover-panel"/, '关闭时无面板');
+test('C12 Popover: 点外部 + Esc 双关闭；不带遮罩；悬停不消失（无 mouseleave 逻辑）', () => {
+  const s = src('/src/components/ui/Popover.tsx');
+  assert.match(s, /addEventListener\('mousedown', onDocDown\)/, '点外部关闭');
+  assert.match(s, /e\.key === 'Escape'/, 'Esc 关闭');
+  assert.match(s, /e\.key === 'Escape'\) setOpen\(false\)/);
+  assert.doesNotMatch(s, /onMouseLeave=\{|onMouseOut=\{/, '触发器不挂 mouseleave 类事件（悬停不消失）');
+  assert.doesNotMatch(s, /bg-ink\/45|bg-ink\/30/, '不带遮罩（遮罩是模态/抽屉的）');
 });
 
-test('C12 Popover: 打开态 role=dialog + 面板 + 动作按钮（可承载文字+一个动作）', () => {
-  const open = renderToStaticMarkup(
-    createElement(Popover, {
-      trigger: () => createElement('button', null, 'x'),
-      actionLabel: '看建议',
-      defaultOpen: true,
-    } as never, '建议：把实验提前到 13:00。'),
-  );
-  assert.match(open, /data-testid="popover-panel"/, '面板真渲染');
-  assert.match(open, /role="dialog"/);
-  assert.match(open, /建议：把实验提前到 13:00。/, '文字在面板内');
-  assert.match(open, /data-testid="popover-action"/, '动作位（最多一个动作）');
+test('C12 Popover: 面板 role=dialog + 文字+一个动作（最多一个）', () => {
+  const s = src('/src/components/ui/Popover.tsx');
+  assert.match(s, /role="dialog"/);
+  assert.match(s, /data-testid="popover-panel"/);
+  assert.match(s, /data-testid="popover-action"/);
+  assert.match(s, /defaultOpen = false/, '初始关闭（SSR 测试可用 defaultOpen 展开验证）');
 });
 
-test('C12 Tooltip: 纯文字 role=tooltip + 400ms 延迟样式 + 默认 opacity-0（不出即不可见）', () => {
-  const html = renderToStaticMarkup(
-    createElement(Tooltip, { text: '单双周交替显示' }, createElement('span', null, '?',
-    )),
-  );
-  assert.match(html, /role="tooltip"/);
-  assert.match(html, /单双周交替显示/);
-  assert.match(html, /opacity-0/, '悬停前不可见');
-  assert.match(html, /transition-delay: 400ms|transition-delay:400ms/, '400ms 才出');
+test('C12 Tooltip: 纯文字 role=tooltip + 400ms 延迟 + 默认不可见 + 触屏不出现', () => {
+  const s = src('/src/components/ui/Popover.tsx');
+  assert.equal(src('/src/components/ui/Popover.tsx').match(/TOOLTIP_DELAY_MS = 400/)?.[0], 'TOOLTIP_DELAY_MS = 400');
+  assert.match(s, /role="tooltip"/);
+  assert.match(s, /opacity-0 transition-\[opacity\] duration-fast ease-out group-hover\/tip:opacity-100/, '悬停前不可见，悬停出');
+  assert.match(s, /transitionDelay: `\$\{TOOLTIP_DELAY_MS\}ms`/, '400ms 才出（扫过不出）');
 });

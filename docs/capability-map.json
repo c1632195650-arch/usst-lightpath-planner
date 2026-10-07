@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 120,
-    "engineFiles": 84,
+    "testFiles": 132,
+    "engineFiles": 96,
     "uiFiles": 36,
-    "guardedSources": 106,
-    "reverseVerified": 71,
+    "guardedSources": 120,
+    "reverseVerified": 83,
     "orphans": 1
   },
   "domains": {
@@ -123,7 +123,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 24,
+      "testCount": 36,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/assignment.test.ts",
@@ -137,6 +137,18 @@
         "tests/routineStore.test.ts",
         "tests/syncContract.test.ts",
         "tests/timeScale.test.ts",
+        "tests/ui-cmp-avatar.test.ts",
+        "tests/ui-cmp-button.test.ts",
+        "tests/ui-cmp-form-controls.test.ts",
+        "tests/ui-cmp-icon-button.test.ts",
+        "tests/ui-cmp-list-row-skeleton.test.ts",
+        "tests/ui-cmp-modal.test.ts",
+        "tests/ui-cmp-popover.test.ts",
+        "tests/ui-cmp-progress.test.ts",
+        "tests/ui-cmp-segmented.test.ts",
+        "tests/ui-cmp-switch.test.ts",
+        "tests/ui-cmp-tag.test.ts",
+        "tests/ui-cmp-toast.test.ts",
         "tests/userPlanStore.test.ts",
         "tests/userPlanUndo.test.ts",
         "tests/v1.test.ts",
@@ -151,7 +163,21 @@
         "tests/wp9.test.ts"
       ],
       "sources": [
+        "src/components/ui/Avatar",
+        "src/components/ui/Button",
         "src/components/ui/DetailDrawer",
+        "src/components/ui/FormControls",
+        "src/components/ui/IconButton",
+        "src/components/ui/ListRow",
+        "src/components/ui/Modal",
+        "src/components/ui/Popover",
+        "src/components/ui/Progress",
+        "src/components/ui/Segmented",
+        "src/components/ui/Skeleton",
+        "src/components/ui/Switch",
+        "src/components/ui/Tag",
+        "src/components/ui/Toast",
+        "src/components/ui/toastModel",
         "src/features/week/PlanEvalPanel",
         "src/features/week/WeekPlanView",
         "src/features/week/assignmentStore",
@@ -1225,6 +1251,102 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/ui-cmp-avatar.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-button.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-form-controls.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-icon-button.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-list-row-skeleton.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-modal.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-popover.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-progress.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-segmented.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-switch.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-tag.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/ui-cmp-toast.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
     "tests/userPlanStore.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1921,6 +2043,48 @@
     ],
     "src/features/week/timeScale": [
       "tests/timeScale.test.ts"
+    ],
+    "src/components/ui/Avatar": [
+      "tests/ui-cmp-avatar.test.ts"
+    ],
+    "src/components/ui/Button": [
+      "tests/ui-cmp-button.test.ts"
+    ],
+    "src/components/ui/FormControls": [
+      "tests/ui-cmp-form-controls.test.ts"
+    ],
+    "src/components/ui/IconButton": [
+      "tests/ui-cmp-icon-button.test.ts"
+    ],
+    "src/components/ui/ListRow": [
+      "tests/ui-cmp-list-row-skeleton.test.ts"
+    ],
+    "src/components/ui/Skeleton": [
+      "tests/ui-cmp-list-row-skeleton.test.ts"
+    ],
+    "src/components/ui/Modal": [
+      "tests/ui-cmp-modal.test.ts"
+    ],
+    "src/components/ui/Popover": [
+      "tests/ui-cmp-popover.test.ts"
+    ],
+    "src/components/ui/Progress": [
+      "tests/ui-cmp-progress.test.ts"
+    ],
+    "src/components/ui/Segmented": [
+      "tests/ui-cmp-segmented.test.ts"
+    ],
+    "src/components/ui/Switch": [
+      "tests/ui-cmp-switch.test.ts"
+    ],
+    "src/components/ui/Tag": [
+      "tests/ui-cmp-tag.test.ts"
+    ],
+    "src/components/ui/toastModel": [
+      "tests/ui-cmp-toast.test.ts"
+    ],
+    "src/components/ui/Toast": [
+      "tests/ui-cmp-toast.test.ts"
     ],
     "src/features/onboarding/checklist": [
       "tests/v0.test.ts"
