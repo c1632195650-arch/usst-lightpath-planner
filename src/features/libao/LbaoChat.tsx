@@ -64,6 +64,7 @@ import {
   evaluatePlanForChat,
   holdSlotFrom,
   holdToUnavailableSlot,
+  type TargetLocator,
   matchCandidate,
   proposeReplanOptions,
   type CancelTarget,
@@ -202,7 +203,27 @@ function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']
     };
   }
   if (p.targetHint) patch.targetHint = p.targetHint;
+  // 按时间定位（2026-10-07）：端点的 targetWeekday/targetStartMin/targetEndMin
+  // → target*（要动的那块的旧时间；与 when/clock 的新时间分开）
+  if (p.targetWeekday != null) patch.targetDay = p.targetWeekday;
+  if (p.targetStartMin != null || p.targetEndMin != null) {
+    patch.targetClock = {
+      ...(p.targetStartMin != null ? { startMin: p.targetStartMin } : {}),
+      ...(p.targetEndMin != null ? { endMin: p.targetEndMin } : {}),
+      text: '要动的那个时间',
+    };
+  }
   return patch;
+}
+
+/** 槽位的 target*（要动的旧时间）→ 执行器 locator（2026-10-07，按确切时间定位）。 */
+function cancelLocatorOf(s: IntentSlots): TargetLocator | undefined {
+  if (s.targetDay == null && !s.targetClock) return undefined;
+  return {
+    ...(s.targetDay != null ? { dayOfWeek: s.targetDay } : {}),
+    ...(s.targetClock?.startMin != null ? { startMin: s.targetClock.startMin } : {}),
+    ...(s.targetClock?.endMin != null ? { endMin: s.targetClock.endMin } : {}),
+  };
 }
 
 /** 对话初始说明，明确问答与排程两个能力（W5a：自然陈述版话术）。 */
@@ -862,11 +883,12 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     }
   };
 
-  /** WP9·cancel 执行器：按名匹配（先待办后日程 activity/study 块）。
-   *  找不到说清楚；命中多个走追问通道；唯一命中才出确认卡（还没动手）。 */
+  /** WP9·cancel 执行器：按名匹配（先待办后日程 activity/study 块）；
+   *  2026-10-07 起支持纯时间定位（targetDay/targetClock）—— 没说名字只说时间也能删。 */
   const runCancel = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
-    if (!q) {
+    const locator = cancelLocatorOf(slots);
+    if (!q && !locator) {
       setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, ['target'])); setMissStreak(0);
       setMessages((current) => [...current, { role: 'lbao', text: '好，取消哪件事？说个名字我好找到它。' }]);
       setLoading(false);
@@ -875,12 +897,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     const blocks = await blocksForMatching(today);
     const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
       termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
-    });
+    }, locator);
     if (targets.length === 0) {
       setTopic(null);
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: `日程和待办里都没找到「${q}」。可能不在这周，或者叫法不一样；你也可以去周计划直接删。`,
+        text: q
+          ? `日程和待办里都没找到「${q}」。可能不在这周，或者叫法不一样；你也可以去周计划直接删。`
+          : '这个时间点上没找到能取消的安排（课程不算）。要不换个说法，或者去周计划直接删？',
         goWeek: true,
       }]);
       setLoading(false);
@@ -892,7 +916,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setTopic(pickingTopic('cancel', slots, targets)); setMissStreak(0);
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: `「${q}」对上好几件事，你要取消哪个？`,
+        text: q ? `「${q}」对上好几件事，你要取消哪个？` : '这个时间对上好几件事，你要取消哪个？',
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
         options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);
@@ -1005,19 +1029,22 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     const q = (slots.targetHint || slots.title || '').trim();
-    if (!q) {
+    const locator = cancelLocatorOf(slots);
+    if (!q && !locator) {
       setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, ['target'])); setMissStreak(0);
       setMessages((current) => [...current, { role: 'lbao', text: '要挪的是哪件事？说个名字我好找到它。' }]);
       setLoading(false);
       return;
     }
     const blocks = await blocksForMatching(today);
-    const targets = findMoveTargets(q, blocks);
+    const targets = findMoveTargets(q, blocks, locator);
     if (targets.length === 0) {
       setTopic(null);
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: `这周日程里没找到「${q}」。只有非课程块能这样挪；改课时间请用周计划的「调课」。`,
+        text: q
+          ? `这周日程里没找到「${q}」。只有非课程块能这样挪；改课时间请用周计划的「调课」。`
+          : '这个时间点上没找到能挪的安排（课程不能挪；改课时间请用周计划的「调课」）。',
         goWeek: true,
       }]);
       setLoading(false);
@@ -1049,7 +1076,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       return;
     }
     const weekNo = currentWeekNo(schedule.termStart, today);
-    const startMin = slots.window?.fromMin ?? src.startMin;
+    // 按确切时间挪（2026-10-07）：「把周三14:00的自习换成周五15:00」——
+    // 用户点名的钟点优先（一步到位），时段窗次之，都没说才沿用原时刻
+    const startMin = slots.clock?.startMin ?? slots.window?.fromMin ?? src.startMin;
     const preview = planReschedule(blocks, src.id, weekNo, newDay, startMin);
     if (!preview.ok || !preview.move) {
       setTopic(null);
@@ -1096,23 +1125,36 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     setLoading(false);
   };
 
-  /** WP9·replace 执行器：先 cancel 后 create，两步一次确认、一次快照。 */
+  /** WP9·replace 执行器：先 cancel 后 create，两步一次确认、一次快照。
+   *  2026-10-07 起支持纯时间定位（「把周三14:00的自习换成周五15:00」）。 */
   const runReplace = async (slots: IntentSlots, today: string) => {
     const q = (slots.targetHint || slots.title || '').trim();
-    if (!q) {
+    const locator = cancelLocatorOf(slots);
+    if (!q && !locator) {
       setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'target' as const])] }, ['target'])); setMissStreak(0);
-      setMessages((current) => [...current, { role: 'lbao', text: '要替换掉哪件事？说个名字我好找到它。' }]);
+      setMessages((current) => [...current, { role: 'lbao', text: '要替换掉哪件事？说个名字或说清时间（比如「周三14点那个自习」）。' }]);
       setLoading(false);
       return;
     }
     const blocks = await blocksForMatching(today);
     const targets = findCancelTargets(q, loadUserPlan().tasks, blocks, {
       termStart: schedule.termStart, weekNo: currentWeekNo(schedule.termStart, today),
-    });
+    }, locator);
     if (targets.length !== 1) {
-      // 0 个：没有可替换的既有块 → 走普通 create 通路
-      if (targets.length === 0) {
+      // 0 个：没有可替换的既有块 → 走普通 create 通路（仅在「有名有姓却没找到」时降级；
+      // 纯时间定位找不到说明指错了时间，如实说）
+      if (targets.length === 0 && q) {
         await runGoalSlots({ ...slots, intent: 'create' }, today);
+        return;
+      }
+      if (targets.length === 0) {
+        setTopic(null);
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '这个时间点上没找到能替换的安排（课程不算）。要不换个说法？',
+          goWeek: true,
+        }]);
+        setLoading(false);
         return;
       }
       // D3（B② 根治）：多候选改道 picking（带日期 hint 的候选挂进议题）——
@@ -1120,7 +1162,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       setTopic(pickingTopic('replace', slots, targets)); setMissStreak(0);
       setMessages((current) => [...current, {
         role: 'lbao',
-        text: `「${q}」对上好几件事，替换哪个？`,
+        text: q ? `「${q}」对上好几件事，替换哪个？` : '这个时间对上好几件事，替换哪个？',
         planPoints: targets.slice(0, 5).map((t) => `${t.origin === 'user' ? '待办' : '日程'}：${t.title}（${t.hint}）`),
         options: targets.slice(0, 5).map((t) => ({ label: t.title, value: t.title, hint: t.hint })),
       }]);

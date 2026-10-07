@@ -103,3 +103,34 @@ test('WP9: 五意图 DraftKind 与 detectIntent 一一对应（路由不漂移�
   assert.equal(detectIntent('把周三的社团改成备赛'), 'replace');
   assert.equal(detectIntent('这周我忙不忙'), 'query');
 });
+
+/* ---------------- 按确切时间定位（2026-10-07，缺口②） ---------------- */
+
+test('WP9·locator: 纯时间定位（没说块名）在 cancel/move 两通道都收敛', () => {
+  const tasks = [task('t-wed', '自习')];
+  const blocks = [
+    block('b-wed-14', 3, 14 * 60, '自习'),
+    block('b-fri-14', 5, 14 * 60, '自习'),
+  ];
+  const loc = { dayOfWeek: 3, startMin: 14 * 60, endMin: 15 * 60 };
+  // 纯时间：同一名字两块 → locator 收敛到周三那块
+  assert.deepEqual(findCancelTargets('', [], blocks, undefined, loc).map((t) => t.blockId), ['b-wed-14']);
+  assert.deepEqual(findMoveTargets('', blocks, loc).map((b) => b.id), ['b-wed-14']);
+  // 名字+时间交集：needle 命中两块、locator 砍掉周五
+  assert.deepEqual(findCancelTargets('自习', [], blocks, undefined, loc).map((t) => t.blockId), ['b-wed-14']);
+  // 无 locator 行为与现状逐位一致（回归锚）
+  assert.equal(findCancelTargets('自习', [], blocks).length, 2);
+  assert.equal(findMoveTargets('自习', blocks).length, 2);
+  // 时间对不上 → 空（不硬凑）
+  assert.equal(findCancelTargets('', [], blocks, undefined, { dayOfWeek: 6, startMin: 600, endMin: 660 }).length, 0);
+});
+
+test('WP9·locator: user 待办按天匹配；未指定天的任务不被时间定位选中', () => {
+  const withTime: UserTask = { id: 't1', title: '羽毛球', dayOfWeek: 3, startMin: 19 * 60, durationMin: 90 };
+  const noDay: UserTask = { id: 't2', title: '羽毛球', durationMin: 90 };
+  const loc = { dayOfWeek: 3, startMin: 19 * 60, endMin: 20 * 60 + 30 };
+  assert.equal(findCancelTargets('', [withTime], [], undefined, loc).length, 1, '周三晚上的羽毛球命中');
+  assert.equal(findCancelTargets('', [withTime], [], undefined, { dayOfWeek: 5 }).length, 0, '周五定位不命中周三任务');
+  assert.equal(findCancelTargets('', [noDay], [], undefined, loc).length, 0, '不限天的待办对不上时间定位');
+  assert.equal(findCancelTargets('羽毛球', [noDay], []).length, 1, '按名字仍能找到（老行为）');
+});

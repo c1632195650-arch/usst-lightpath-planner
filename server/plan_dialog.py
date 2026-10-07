@@ -93,7 +93,12 @@ _SLOT_SPEC = """槽位定义（只输出 JSON，抽不到的槽位直接省略�
 - startMin / endMin: 钟点起止（分钟数 0-1440）。「6点到8点」= startMin 1080 / endMin 1200；
   「晚上6点左右」= startMin 1080；「打到8点」= endMin 1200。用户给了钟点就不必再问时长
   （时长=endMin-startMin，前端自动推导）
-- targetHint: 要动的既有事项名（改期/取消/替换的对象）"""
+- targetHint: 要动的既有事项名（改期/取消/替换的对象）
+- targetWeekday / targetStartMin / targetEndMin: **要动的那块的旧时间**（2026-10-07，按确切时间定位）
+  —— 与 when/startMin（新时间）严格区分：「把周三14:00的自习换成周五15:00」=
+  targetWeekday 3 + targetStartMin 840 + weekday 5 + startMin 900；
+  「删掉周三下午两点那个自习」= targetWeekday 3 + targetStartMin 840（没有新时间）。
+  用户只给时间+类别名（「周三14点那个自习」）时，title/类别照抄、target* 记旧时间"""
 
 _SYSTEM_BASE = (
     "你是日程排程助手「梨宝」的理解层。用户的话可能是要安排日程，也可能只是闲聊或提问。"
@@ -129,6 +134,9 @@ D7 协商方案：blocked 状态的 blocking.options 列出**引擎干跑过、�
 - **相对日期指代必须换算**：候选/阻塞块的 hint 带「周X(M.D)」日期，用户的「今天/明天/后天/周几」
   先按「今天」（payload 里已附星期）换算成具体 M.D，再到 hint 里对号 —— 对上了就是 pick_candidate，
   不许因为「清单里没出现『明天』两个字」就说找不到
+- **钟点同样参与对号**（2026-10-07）：用户说的「14 点 / 下午两点」与 hint 里的「HH:MM–HH:MM」
+  是同一种东西（口语钟点 ↔ 24 小时制），星期+钟点对上唯一一条就 pick_candidate，
+  不要因为「用户说的是『14 点』、清单里写的是『14:00』」就问回去
 - prior_failed_title 存在 = 之前有一件没排成的事，用户说「还是刚才那个」→ resume_topic
 
 防编造三约束（违反任何一条都会被系统拦截、整轮作废）：
@@ -222,6 +230,16 @@ def _clean_patch(patch):
     n = _num(patch.get("endMin"))
     if n is not None and 0 <= n <= 1440:
         out["endMin"] = int(n)
+    # 按时间定位（2026-10-07）：要动的那块的旧时间（与 startMin/endMin 新时间分开）
+    n = _num(patch.get("targetWeekday"))
+    if n is not None and 1 <= n <= 7:
+        out["targetWeekday"] = int(n)
+    n = _num(patch.get("targetStartMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["targetStartMin"] = int(n)
+    n = _num(patch.get("targetEndMin"))
+    if n is not None and 0 <= n <= 1440:
+        out["targetEndMin"] = int(n)
     n = _num(patch.get("perWeekCount"))
     if n is not None and 1 <= n <= 7:
         out["perWeekCount"] = int(n)

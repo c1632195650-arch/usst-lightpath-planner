@@ -31,6 +31,12 @@ function rulePatch(slots) {
     weekNo: slots.when?.weekNo,
     relativeMonths: slots.when?.relativeMonths,
     targetHint: slots.targetHint,
+    // 钟点起止（批次 1）+ 按时间定位（2026-10-07）—— 与端点 patch 同名，缺了新金标 EM 恒 miss
+    ...(slots.clock?.startMin != null ? { startMin: slots.clock.startMin } : {}),
+    ...(slots.clock?.endMin != null ? { endMin: slots.clock.endMin } : {}),
+    ...(slots.targetDay != null ? { targetWeekday: slots.targetDay } : {}),
+    ...(slots.targetClock?.startMin != null ? { targetStartMin: slots.targetClock.startMin } : {}),
+    ...(slots.targetClock?.endMin != null ? { targetEndMin: slots.targetClock.endMin } : {}),
     perWeekCount: slots.perWeekCount,
     durationMin: slots.durationMin,
     totalHours: slots.totalHours,

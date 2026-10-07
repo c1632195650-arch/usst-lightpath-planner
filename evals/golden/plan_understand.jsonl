@@ -103,3 +103,9 @@
 {"id":"i33","scene":"intent","q":"把实验报告挪到第15周周四","expect":{"action":true,"intent":"reschedule","slots":{"targetHint":"实验报告","when_text":"第15周周四","weekNo":15,"weekday":4}}}
 {"id":"i34","scene":"intent","q":"论文答辩在下月底，帮我规划一下准备","expect":{"action":true,"intent":"create","slots":{"title":"论文","when_text":"下月底","relativeMonths":1}}}
 {"id":"i35","scene":"intent","q":"月底前完成毕设开题","expect":{"action":true,"intent":"create","slots":{"title":"毕设","when_text":"月底","relativeMonths":0}}}
+{"id":"i36","scene":"intent","q":"删掉周三下午两点那个自习","expect":{"action":true,"intent":"cancel","slots":{"targetWeekday":3,"targetStartMin":840}}}
+{"id":"i37","scene":"intent","q":"把周三14:00的自习换成周五15:00","expect":{"action":true,"intent":"replace","slots":{"targetWeekday":3,"targetStartMin":840,"weekday":5,"startMin":900}}}
+{"id":"i38","scene":"intent","q":"把周二晚上7点的跑步挪到周四同时","expect":{"action":true,"intent":"reschedule","slots":{"targetWeekday":2,"targetStartMin":1140,"weekday":4}}}
+{"id":"i39","scene":"intent","q":"取消周五下午的自习","expect":{"action":true,"intent":"cancel","slots":{"targetWeekday":5}}}
+{"id":"d41","scene":"dialog","q":"周三 14 点那个","state":{"topic":{"phase":"picking","intent":"cancel","slots":{"title":"自习","targetHint":"自习"},"asked":[],"pick_kind":"cancel","candidates":[{"idx":0,"title":"自习","hint":"周三(10.7) 14:00–15:30"},{"idx":1,"title":"自习","hint":"周五(10.9) 14:00–15:30"}]},"missStreak":0},"expect":{"act":"pick_candidate","candidate_idx":0}}
+{"id":"d42","scene":"dialog","q":"删掉周三下午两点那个自习","state":{"topic":null,"missStreak":0},"expect":{"act":"new_intent","intent":"cancel"}}

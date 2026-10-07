@@ -153,6 +153,13 @@ export interface IntentSlots {
   priorityHint: number;
   /** 「把高数复习挪到周四」→ 高数复习 */
   targetHint?: string;
+  /**
+   * 「要动的那块」的定位时间（2026-10-07，按确切时间定位）：与 `when`/`clock`（新时间）分开。
+   * 「把周三 14:00 的自习换成周五 15:00」→ targetDay=3 + targetClock{840}，when.weekday=5 + clock{900}。
+   * 「删掉周三下午两点那个自习」→ 只有 target*，没有新时间。
+   */
+  targetDay?: number;
+  targetClock?: ClockHint;
   /** 单日重排的目标天（批 3，5A-②）：「重排周四」→ [4]。与 targetHint 互斥路由：
    *  有块名 = 单块挪动；只有天 = 整日重排（执行层分流） */
   replanDays?: number[];
@@ -895,7 +902,7 @@ const CLOCK_VERB_TO_RE = /(?:打|玩|学|弄|干|忙|搞)到\s*$/;
  */
 export function extractClockRange(q: string): ClockHint | undefined {
   const s = (q || '').replace(/大概|大约|左右|前后/g, '');
-  if (!/点/.test(s)) return undefined;
+  if (!/点/.test(s) && !/\d{1,2}\s*[:：]\s*\d{2}/.test(s)) return undefined;
 
   type Atom = { start: number; end: number; min: number; ambig: boolean };
   const atoms: Atom[] = [];
@@ -914,6 +921,21 @@ export function extractClockRange(q: string): ClockHint | undefined {
     const ambig = period == null && hour >= 1 && hour <= 11;
     atoms.push({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, min, ambig });
   }
+  // 冒号形态（2026-10-07，按确切时间定位）：「14:00」「21:30」—— 课表口习惯。
+  // 视作 24 小时制直接落（14:00 不歧义）；≤12 点的冒号值无时段语境时同样标 ambig。
+  for (const m of s.matchAll(/(^|[^\d:])(\d{1,2})\s*[:：]\s*(\d{2})(?!\d)/g)) {
+    const hour = Number(m[2]);
+    const minutes = Number(m[3]);
+    if (hour > 23 || minutes > 59) continue;
+    const start = (m.index ?? 0) + m[1].length; // m[1] 是非数字前缀，数字从它之后起
+    atoms.push({
+      start,
+      end: (m.index ?? 0) + m[0].length,
+      min: hour * 60 + minutes,
+      ambig: hour >= 1 && hour <= 11,
+    });
+  }
+  atoms.sort((a, b) => a.start - b.start);
   if (atoms.length === 0) return undefined;
 
   // 成对：两原子之间只隔区间连接词，或后一原子紧跟动结式「X到」
@@ -1000,7 +1022,44 @@ export function extractTarget(q: string): string | undefined {
   if (m) return m[1];
   const m2 = /(?:取消|删掉|退掉)\s*([\u4e00-\u9fffA-Za-z0-9]{2,16})/.exec(s);
   if (m2) return m2[1];
+  // 带定位时间的把字句 / 删除句（2026-10-07，按确切时间定位）：
+  // 「把周三 14:00 的自习换成…」「删掉周三下午两点那个自习」—— 冒号/点/数字/「的」
+  // 会打断上面两条正则的连续捕获，先把时间表达归一成占位符再抽名词。
+  const stripped = (q || '')
+    .replace(/\d{1,2}\s*[:：]\s*\d{2}/g, 'T')
+    .replace(/[上下]午|早上|早晨|凌晨|晚上|夜里|中午|点半|点/g, 'T');
+  const m3 = /把\s*(?:这|本|下)?\s*周?[一二三四五六日天]?\s*T?[^，。；！？]{0,6}?\s*的?\s*([\u4e00-\u9fffA-Za-z0-9]{2,10}?)\s*(?:挪|移|改成|换成|换到|替换|删|取消|改到|改)/.exec(stripped);
+  if (m3) return m3[1];
+  const m4 = /(?:取消|删掉|退掉)\s*(?:这|本|下)?\s*周?[一二三四五六日天]?\s*T?[^，。；！？]{0,6}?\s*的?\s*(?:那个|那个叫|叫)?\s*([\u4e00-\u9fffA-Za-z0-9]{2,10})/.exec(stripped);
+  if (m4) return m4[1];
   return undefined;
+}
+
+/**
+ * 抽「要动的那块」的**定位时间**（2026-10-07，按确切时间定位）。
+ *
+ * 分段规则（调用方按意图选段）：
+ *   · move/replace（「把…换成/挪到…」）→ 取**动词之前**的片段（旧时间在「把」字结构里）
+ *   · cancel（「删掉周三下午两点的自习」）→ 取**动词之后**的片段（旧时间跟在动词后）
+ *
+ * 片段内找「周X」与钟点（复用 extractClockRange，含冒号形态）。
+ * ⚠️ 抽不到时返回 undefined —— 调用方按「只有块名」的老路径走，行为不变。
+ */
+export function extractTargetWhen(
+  q: string,
+  scope: 'before-verb' | 'after-verb',
+): { day?: number; clock?: ClockHint } | undefined {
+  const s = q || '';
+  const verb = /(?:挪到|挪去|换到|改成|换成|替换|改到|移动到|改到|取消|删掉|退掉|挪|移|换|改|删)/.exec(s);
+  const seg = scope === 'before-verb'
+    ? (verb ? s.slice(0, verb.index) : s)
+    : (verb ? s.slice(verb.index + verb[0].length) : '');
+  if (!seg) return undefined;
+  const wm = /(?:这|本|下)?周([一二三四五六日天])/.exec(seg);
+  const day = wm ? WD_NUM[wm[1]] : undefined;
+  const clock = extractClockRange(seg);
+  if (day == null && !clock) return undefined;
+  return { ...(day != null ? { day } : {}), ...(clock ? { clock } : {}) };
 }
 
 /**
@@ -1293,7 +1352,9 @@ export function missingSlots(s: IntentSlots): SlotKey[] {
     if (k === 'title' && !s.title) out.push(k);
     else if (k === 'when' && !s.when) out.push(k);
     else if (k === 'effort' && !hasEffort(s)) out.push(k);
-    else if (k === 'target' && !s.targetHint) out.push(k);
+    // target：块名**或**定位时间（targetDay/targetClock）任一在即可 ——
+    // 「删掉周三下午两点那个自习」没说名字但说清了时间，不该被追问
+    else if (k === 'target' && !s.targetHint && s.targetDay == null && !s.targetClock) out.push(k);
   }
   return out;
 }
@@ -1750,6 +1811,29 @@ export function parseIntentSlots(q: string, today?: string, whenOpts?: ResolveTe
   const target = extractTarget(raw);
   if (target) s.targetHint = target;
 
+  // 按确切时间定位（2026-10-07）：move/replace 旧时间在动词前（「把周三14:00的自习换成…」），
+  // cancel 在动词后（「删掉周三下午两点那个自习」）。抽到即记 target*，与 targetHint 正交。
+  const targetWhen = extractTargetWhen(raw, s.intent === 'cancel' ? 'after-verb' : 'before-verb');
+  if (targetWhen) {
+    if (targetWhen.day != null) s.targetDay = targetWhen.day;
+    if (targetWhen.clock) s.targetClock = targetWhen.clock;
+  }
+
+  // replace/reschedule 的方向修正：extractWhen/extractClockRange 是整句扫描，
+  // 会把「旧时间」当成新时间抓进 when/clock（「把周三14:00的自习换成周五15:00」
+  // 的 when.weekday 抓到 3）。定位时间已在场时，与 target* 相同的那份就是抓错的
+  // —— 改从动词后段重取新时间；动词后没有就清掉，不许旧时间冒充新时间。
+  if (s.intent === 'replace' || s.intent === 'reschedule') {
+    if (s.targetDay != null && s.when?.weekday === s.targetDay) {
+      const after = extractTargetWhen(raw, 'after-verb');
+      if (after?.day != null && after.day !== s.targetDay) s.when = { ...s.when, weekday: after.day };
+    }
+    if (s.targetClock?.startMin != null && s.clock?.startMin === s.targetClock.startMin) {
+      const after = extractTargetWhen(raw, 'after-verb');
+      s.clock = after?.clock;
+    }
+  }
+
   // 批 3：单日重排的目标天（与 targetHint 分属两条路由，互不覆盖）
   const replanDays = extractReplanDays(raw);
   if (replanDays) s.replanDays = replanDays;
@@ -1825,6 +1909,9 @@ export function mergeSlots(rule: IntentSlots, llm: Partial<IntentSlots> | null):
   fill('window');
   fill('clock');
   fill('targetHint');
+  // 按时间定位（2026-10-07）：LLM patch 的 target* 只在规则层没抽到时补
+  fill('targetDay');
+  fill('targetClock');
 
   if (out.intent === 'create' && llm.intent && llm.intent !== 'create') out.intent = llm.intent;
 
@@ -1897,6 +1984,10 @@ export function mergeLlmPrimary(rule: IntentSlots, patch: Partial<IntentSlots> |
   // 不被 LLM 转写覆盖；LLM 只兜规则抓不到的形态（「晚上六点左右」之外的说法）。
   if (patch.clock && !out.clock) out.clock = patch.clock;
   if (patch.targetHint) out.targetHint = patch.targetHint;
+  // 按时间定位（2026-10-07）：target* 走 fill-if-empty —— 规则层从原话抽到的
+  // 定位时间是确定性正则产物，不被 LLM 转写覆盖
+  if (patch.targetDay != null && out.targetDay == null) out.targetDay = patch.targetDay;
+  if (patch.targetClock && !out.targetClock) out.targetClock = patch.targetClock;
 
   // 批次 1 收尾三步（交集/歧义注记/时长推导）—— patch 里的钟点同样吃推导
   reconcileClock(out);

@@ -1057,6 +1057,28 @@ const dowOfISO = (iso: string): number => {
   return wd === 0 ? 7 : wd;
 };
 
+/**
+ * 按确切时间定位（2026-10-07）：targetDay/targetClock 的执行侧形状。
+ * 时间匹配用**重叠**而非全等 —— 「周三14点那个自习」的定位点落在块内即命中，
+ * 「14:00 到 15:30」的区间与块相交即命中（宽容到分钟粒度，不要求用户记得准）。
+ */
+export interface TargetLocator {
+  dayOfWeek?: number;
+  startMin?: number;
+  endMin?: number;
+}
+
+export function locatorMatches(b: { dayOfWeek: number; startMin: number; endMin: number }, loc?: TargetLocator): boolean {
+  if (!loc) return true;
+  if (loc.dayOfWeek != null && b.dayOfWeek !== loc.dayOfWeek) return false;
+  if (loc.startMin != null && loc.endMin != null) {
+    return b.startMin < loc.endMin && b.endMin > loc.startMin;
+  }
+  if (loc.startMin != null) return b.startMin <= loc.startMin && loc.startMin < b.endMin;
+  if (loc.endMin != null) return b.startMin < loc.endMin && loc.endMin <= b.endMin;
+  return true;
+}
+
 export function findCancelTargets(
   query: string,
   userTasks: readonly UserTask[],
@@ -1067,9 +1089,11 @@ export function findCancelTargets(
    * 此前 hint 只有「周X HH:MM」，「明天」结构上不可命中，只能反复追问。
    */
   weekInfo?: { termStart: string; weekNo: number },
+  /** 按时间定位（2026-10-07）：query 为空但 locator 在场 → 纯时间筛选；两者都有 → 交集 */
+  locator?: TargetLocator,
 ): CancelTarget[] {
   const needle = normTitle(query);
-  if (!needle) return [];
+  if (!needle && !locator) return [];
   const md = (dow: number): string | null => {
     if (!weekInfo) return null;
     const monday = addDays(weekInfo.termStart, (weekInfo.weekNo - 1) * 7);
@@ -1078,16 +1102,26 @@ export function findCancelTargets(
   const out: CancelTarget[] = [];
   for (const t of userTasks) {
     const title = normTitle(t.title);
-    if (title.includes(needle) || needle.includes(title)) {
-      const d = t.dayOfWeek ? md(t.dayOfWeek) : null;
-      out.push({
-        taskId: t.id,
-        title: t.title,
-        origin: 'user',
-        // D3：WEEKDAY_CN 自带「周」前缀（且不再走 dayOfWeek-1 的错位下标）
-        hint: `${t.dayOfWeek ? `${WEEKDAY_CN[t.dayOfWeek % 7]}${d ? `(${d})` : ''}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
-      });
+    const titleHit = !needle || title.includes(needle) || needle.includes(title);
+    if (!titleHit) continue;
+    // user task 的定位：只按天筛（引擎挑空档的任务没有确定的钟点，不硬凑时间匹配）；
+    // 用户给了 startMin 的任务按时间重叠匹配
+    if (locator) {
+      if (t.dayOfWeek == null) continue;
+      if (locator.dayOfWeek != null && t.dayOfWeek !== locator.dayOfWeek) continue;
+      if (t.startMin != null && !locatorMatches(
+        { dayOfWeek: t.dayOfWeek, startMin: t.startMin, endMin: t.startMin + (t.durationMin ?? 60) },
+        locator,
+      )) continue;
     }
+    const d = t.dayOfWeek ? md(t.dayOfWeek) : null;
+    out.push({
+      taskId: t.id,
+      title: t.title,
+      origin: 'user',
+      // D3：WEEKDAY_CN 自带「周」前缀（且不再走 dayOfWeek-1 的错位下标）
+      hint: `${t.dayOfWeek ? `${WEEKDAY_CN[t.dayOfWeek % 7]}${d ? `(${d})` : ''}` : '不限天'} · ${t.durationMin ?? '?'} 分钟`,
+    });
   }
   for (const b of planBlocks) {
     if (b.kind !== 'activity' && b.kind !== 'study') continue; // 课程不在此通道
@@ -1095,15 +1129,16 @@ export function findCancelTargets(
     // 不去重的话，取消/替换任何固定用户任务都会得到「两个候选」，被迫挑块。
     if (b.id.includes('-user-') && out.some((c) => c.taskId && b.id.endsWith(`-user-${c.taskId}`))) continue;
     const title = normTitle(b.title);
-    if (title.includes(needle) || needle.includes(title)) {
-      const d = md(b.dayOfWeek);
-      out.push({
-        blockId: b.id,
-        title: b.title,
-        origin: 'plan',
-        hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}${d ? `(${d})` : ''} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
-      });
-    }
+    const titleHit = !needle || title.includes(needle) || needle.includes(title);
+    if (!titleHit) continue;
+    if (!locatorMatches(b, locator)) continue;
+    const d = md(b.dayOfWeek);
+    out.push({
+      blockId: b.id,
+      title: b.title,
+      origin: 'plan',
+      hint: `${WEEKDAY_CN[b.dayOfWeek % 7]}${d ? `(${d})` : ''} ${toHHmm(b.startMin)}–${toHHmm(b.endMin)}`,
+    });
   }
   return out;
 }
@@ -1119,15 +1154,15 @@ export function applyCancel(layer: UserPlanLayer, target: CancelTarget): UserPla
   return layer;
 }
 
-/** reschedule 候选：非课程块、标题互相包含。返回块本体（调用方做 dragTo）。 */
-export function findMoveTargets(query: string, planBlocks: readonly TimeBlock[]): TimeBlock[] {
+/** reschedule 候选：非课程块、标题互相包含（或按时间定位）。返回块本体（调用方做 dragTo）。 */
+export function findMoveTargets(query: string, planBlocks: readonly TimeBlock[], locator?: TargetLocator): TimeBlock[] {
   const needle = normTitle(query);
-  if (!needle) return [];
+  if (!needle && !locator) return [];
   return planBlocks
     .filter((b) => b.kind !== 'course' && b.source !== 'course')
     .filter((b) => {
-      const title = normTitle(b.title);
-      return title.includes(needle) || needle.includes(title);
+      const titleHit = !needle || normTitle(b.title).includes(needle) || needle.includes(normTitle(b.title));
+      return titleHit && locatorMatches(b, locator);
     })
     .sort((a, b) => (a.dayOfWeek - b.dayOfWeek) || (a.startMin - b.startMin));
 }

@@ -301,6 +301,11 @@ export interface PlanSlotPatch {
   startMin?: number;
   endMin?: number;
   targetHint?: string;
+  /** 按时间定位（2026-10-07）：要动的那块的**旧时间** —— 与 startMin/endMin（新时间）严格区分。
+   *  「把周三14:00的自习换成周五15:00」= targetWeekday 3 + targetStartMin 840 + weekday 5 + startMin 900。 */
+  targetWeekday?: number;
+  targetStartMin?: number;
+  targetEndMin?: number;
 }
 
 export interface PlanUnderstandResult {
