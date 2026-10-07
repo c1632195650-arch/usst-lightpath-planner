@@ -104,30 +104,33 @@ test('B5 不变量: 预览位 = 最终位（悬停兜底与松手落点同一个
 });
 
 test('B5 源码接线: 列级 onDragOver 已接 updatePreview 兜底（防止纯函数测试名存实亡）', () => {
-  // 反向：还原 WeekPlanView 的 onDragOver/onDrop 两个 hunk → 本用例红
+  // 反向：删掉列级 dragover 的 updatePreview / onDrop 的同落点换算 → 本用例红
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：泳道事件在 WeekDayColumn.tsx。
   const src = readFileSync(
-    fileURLToPath(new URL('../src/features/week/WeekPlanView.tsx', import.meta.url)),
+    fileURLToPath(new URL('../src/features/week/WeekDayColumn.tsx', import.meta.url)),
     'utf8',
   );
-  assert.match(src, /onDragOver=\{\(e\) => \{[\s\S]*?updatePreview\(day, dropTargetMin\(null, day, baseBlocks\)/, '列级 dragover 必须接影子兜底');
-  assert.match(src, /handleDrop\(id, day, dropTargetMin\(preview, day, baseBlocks\)\)/, 'onDrop 必须走同一落点函数');
-  assert.doesNotMatch(src, /const atMin = preview && preview\.day === day \? preview\.atMin : tailMin \+ 10;/, '旧的散装落点口径应已移除');
+  assert.match(src, /onDragOver=\{\(e\) => \{[\s\S]*?if \(draggingId\) updatePreview\(day, atMinFromEvent\(e\),/, '列级 dragover 必须画影子（updatePreview）');
+  assert.match(src, /const atMin = preview && preview\.day === day \? preview\.atMin : atMinFromEvent\(e\);/, 'onDrop 与悬停预览同落点（所见即所得）');
+  assert.match(src, /handleDrop\(id, day, atMin\)/, 'onDrop 必须走同一落点口径');
 });
 
 /* ---------------- B2：撤销栈快照在 updater 外 ---------------- */
 
-test('B2 源码接线: pushUndoSnapshot 已移出 setState updater（StrictMode 不再双压栈）', () => {
-  // 反向：把 pushUndoSnapshot 挪回 setLayer((prev)=>{…}) 里 → 本用例红
+test('B2 源码接线: pushUndoSnapshot 在任何 React updater 之外（StrictMode 不再双压栈）', () => {
+  // 反向：把 pushUndoSnapshot 挪进任何 setState updater → 本用例红
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：updateLayer 收拢进 useWeekPlanStore ——
+  //    模块级 store 天然无 setState，快照在落库（commitLayer）之前同步压栈。
   const src = readFileSync(
-    fileURLToPath(new URL('../src/features/week/WeekPlanView.tsx', import.meta.url)),
+    fileURLToPath(new URL('../src/features/week/useWeekPlanStore.ts', import.meta.url)),
     'utf8',
   );
-  const m = /const updateLayer = useCallback\(([\s\S]*?)\n  \}, \[\]\);/.exec(src);
-  assert.ok(m, 'updateLayer 定义必须存在');
+  const m = /export function updateLayerStore\(([\s\S]*?)\n\}/.exec(src);
+  assert.ok(m, 'updateLayerStore 定义必须存在');
   const body = m[1];
   const pushAt = body.indexOf('pushUndoSnapshot');
-  const setAt = body.indexOf('setLayer(');
-  assert.ok(pushAt >= 0 && setAt >= 0, '快照与 setLayer 都要存在');
-  assert.ok(pushAt < setAt, '快照必须在 setLayer 之前（updater 外）压栈');
-  assert.ok(!/setLayer\(\(prev\) => \{[\s\S]*?pushUndoSnapshot/.test(body), 'updater 内不许再压快照');
+  const commitAt = body.indexOf('commitLayer(');
+  assert.ok(pushAt >= 0 && commitAt >= 0, '快照与落库都要存在');
+  assert.ok(pushAt < commitAt, '快照必须在落库之前压栈');
+  assert.equal(body.includes('setState'), false, 'store 层不得有 setState（StrictMode 双调用风险）');
 });

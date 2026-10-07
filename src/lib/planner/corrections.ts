@@ -330,3 +330,31 @@ export function countCorrections(rules: readonly CorrectionRule[]): { active: nu
   for (const r of rules) if (r.active) active += 1;
   return { active, revoked: rules.length - active };
 }
+
+/* ============================================================
+ * 二期 2.2：执行回流估时（长计划增强计划书-2026-10-07；Ray e7df736 依赖）
+ * ========================================================== */
+
+/**
+ * 用实际耗时样本修正基准估时（**隐式通道**，纯函数）。
+ *
+ * 规则（计划书 §2.2）：
+ *   · 样本 < 2 条 → 不修正（null）—— 单条太偶然，学了反而抖；
+ *   · 取样本**中位数**，与基准偏差 ≤ 15% → 不修正（基准没坏，别为噪音动它）；
+ *   · 否则 `base × median/base`，**钳制在 ±20%** —— 防一次异常把估时带飞；
+ *   · **显式修正恒胜**：本函数只改「引擎默认估时」，用户在界面上改过的时长
+ *     走 planEdits/locks 通道、在构造**之后**覆盖 —— 结构上保证，无需在此处理。
+ *
+ * @returns 修正后的分钟数；null = 维持原值
+ */
+export function refinedDurationMin(base: number, samples: readonly number[]): number | null {
+  if (samples.length < 2 || base <= 0) return null;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  if (median <= 0) return null;
+  const ratio = median / base;
+  if (Math.abs(ratio - 1) <= 0.15) return null;
+  const clamped = Math.min(1.2, Math.max(0.8, ratio));
+  return Math.round(base * clamped);
+}

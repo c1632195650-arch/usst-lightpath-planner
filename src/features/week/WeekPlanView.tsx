@@ -23,100 +23,88 @@ import type {
 } from '@/types';
 import type { Diagnostics } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
-import { lifeModeExtrasOf } from '@/lib/planner/lifeModePolicy';
-import { toPlanRequest } from '@/lib/planner/schedule';
-// ── 任务四（M4-W3）：待办 → 排程约束（云同步闭环的最后一段）────────────
-import { todosToPendingTodos } from '@/features/memo/memoLogic';
-import { fetchCloudTodos, registerPlanBlocks, syncScheduledBlockIds } from '@/features/memo/webMemo';
-import { loadIdentity } from '@/features/mobile/lib/auth';
-import type { Todo } from '@/features/mobile/lib/memoTypes';
-import { planWeek } from '@/lib/planner/planWeek';
-import { fetchRouteBatch } from '@/lib/planner/transfer';
-import { expandDeadlines, eventsNearWeek } from '@/lib/planner/events';
-import { fetchWeather, weatherHints } from '@/features/weather/weather';
-import type { WeatherAdvice, WeatherReport, WeatherDay } from '@/features/weather/weather';
-// 行为记录（2026-09-19 起只读）：「做了/没做」入口已下线，历史记录仍喂 actualLoadByDow
-import { loadRecords, actualLoadByDow } from '@/features/behavior/behaviorLog';
-import type { BehaviorRecord } from '@/features/behavior/behaviorLog';
+import { eventsNearWeek } from '@/lib/planner/events';
+import { weatherHints } from '@/features/weather/weather';
+import type { WeatherAdvice, WeatherDay } from '@/features/weather/weather';
 import {
-  isLockedThisWeek, lockCount, lockedPlacementsOf, lockLevelsOf, longLockKey,
-  rollingForWeek, withLongLock, withRolling, withoutLock, withoutLongLock,
-  weekLockCount, withoutWeekLocks,
+  isLockedThisWeek, lockCount, longLockKey,
+  weekLockCount, withLongLock, withoutLock, withoutLongLock, withoutWeekLocks,
 } from '@/features/plan/planLock';
 import { TERM_CALENDAR } from '@/constants/term';
-import { toHHmm, humanizeMinutes } from '@/constants/time';
-import { addDays, currentWeekNo, diffDays, todayISO, weekdayOf } from '@/lib/date';
+import { toHHmm } from '@/constants/time';
+import { useWeekPlan } from './useWeekPlan';
+import { addDays, currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import { DEADLINES } from '@/data/usst';
-// ── 阶段 A：二次修改能力（加块 / 删块 / 手动重排）────────────────
-import { AddTaskPanel } from './AddTaskPanel';
-// ── R2：块级编辑（改时间/时长/地点，同日改）─────────────────────
+// ── 阶段 A：二次修改能力 + R2 块级编辑（「加一件事」表单已并入 ⚙️ 调整抽屉）──
 import { EditBlockPanel } from './EditBlockPanel';
 // ── R2：用户覆盖层（一次性收口所有用户改动）────────────────────
 import {
-  addTask, applyPendingMoves, canUndo, clearRedo, diffPlanEvents, engineRestoreCount, excludeBlock, includeBlock, loadUserPlan,
-  makeLayerId, movesOfWeek, popRedo, popUndo, pushPlanEvents, pushRedoSnapshot, pushUndoSnapshot,
-  removeAssignment, removeMove, restoreEngineWeek, saveUserPlan, undoDepth, redoDepth,
+  addSlot, addTask, applyPendingMoves, blankTaskFor, clearConflictingSlots,
+  engineRestoreCount, excludeBlock, includeBlock,
+  makeLayerId, movesOfWeek, restoreEngineWeek,
+  removeAssignment, removeMove,
   upsertAssignment, upsertMove,
-  type Assignment, type UserPlanLayer,
+  type Assignment, type MealPlaces, type UnavailableSlot, type UserPlanLayer,
 } from './userPlanStore';
-import { dragTo } from '@/lib/planner/ripple';
-import { freeGapsOf, snap10, type TimeGap } from './timeScale';
-import { DayAgenda } from './DayAgenda';
-import { WeekBoard } from './WeekBoard';
-import { Segmented } from '@/components/ui/Segmented';
-import { Popover } from '@/components/ui/Popover';
-import { Modal } from '@/components/ui/Modal';
-import { Icon } from '@/components/icons/Icon';
+// ── F2c/A4：第③层持久化态上提 store（layer+撤销栈 / rules / 会话旗标）──
+import {
+  redoLayer, setFromNowOn, setReplanToken,
+  undoLayer, updateLayerStore, useLayerStore, useRulesStore, useSessionFlags, writeRules,
+} from './useWeekPlanStore';
+
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
-import { SlotEditor } from './SlotEditor';
 // ── R3：调课/停课覆盖层 + 时间追问 ────────────────────────────
-import { CourseOverrideEditor } from './CourseOverrideEditor';
 import { TimeAskDialog, type TimeAskRequest } from './TimeAskDialog';
 import { DeleteAskDialog } from './DeleteAskDialog';
 import { applyCourseOverrides } from '@/lib/planner/courseOverrides';
-import { localizedDaysFor, localizedPlan, overrideAffectedDays } from '@/lib/planner/localizedReplan';
-import { dropTargetMin } from './dragPreview';
+import { localizedPlan, unionAffectedDays } from '@/lib/planner/localizedReplan';
 import { fillGap } from '@/lib/planner/ripple';
-// ── WP7-E6：满溢度条（MOSS 预置）──
-import { SaturationBar } from './SaturationBar';
-import { dayBreakdown, daySaturation } from './saturation';
-import { blankTaskFor } from './userPlanStore';
 // ── R4 / R5：活动登记与成就统计 ────────────────────────────────
-import { goalTasksOf, loadGoals } from '@/features/activity/goalStore';
-import { AchievementPanel } from '@/features/activity/GoalEditor';
+import { loadGoals } from '@/features/activity/goalStore';
 import type { UserTask } from '@/lib/planner/templates';
-// ── WP11：重要日体系 —— 用户重要日 ∪ 静态校历，喂准备块展开与「接下来」横排 ──
-import { loadUserDeadlines, mergeDeadlines, upcomingDeadlines } from '@/features/calendar/deadlineStore';
 // ── 阶段 B/E：偏好校正层 + 自然语言意图 ──────────────────────────
-import { CorrectionCapture } from '@/features/feedback/CorrectionCapture';
-import { LearnedPreferencesPanel } from '@/features/feedback/LearnedPreferencesPanel';
-import { loadRules, saveRules, upsertRule } from '@/features/feedback/store';
+import { upsertRule } from '@/features/feedback/store';
 import { detectScope, scopeReason } from '@/features/feedback/parseCorrection';
 import type { TaskDraft } from '@/features/feedback/planIntent';
 import type { CorrectionRule } from '@/lib/planner/corrections';
-// E 批 E4（2026-09-28）：块卡片的**渲染模型**（L0 减字 / 通勤徽章 / 来源与内情分层）。
-// 纯函数单独可测（tests/week-view-model.test.ts），组件只做映射 —— 呈现改版不靠肉眼回归。
-import { blockChip, blockDetail, summarizeIssues } from '@/features/week/weekViewModel';
-import { DetailDrawer } from '@/components/ui/DetailDrawer';
-// R批 Wave3（H1）：日程评估 —— 纯读，plan 一变就重算
-// （2026-10-06 收官批次 P0-1a 自 integration-full 移植）
+import { BlockCard } from './BlockCard';
+import { DAY_LABELS } from './weekViewUtils';
+import { NearEventsPanel, PhaseHeader } from './WeekPlanHeader';
+import { useWeekPlanDrag } from './useWeekPlanDrag';
+import { WeekToolsPanel } from './WeekToolsPanel';
+import { WeekPlanSkeleton } from './PendingEditsBar';
+import { AdjustDrawer } from './AdjustDrawer';
+import { LbaoChat } from '@/features/libao/LbaoChat';
+import { DeleteAskSection, DropToDeleteZone, WeekIssuesPanel } from './WeekDiagnostics';
+import { WeekTimelineGrid } from './WeekTimelineGrid';
+import type { DragPreview } from './WeekDayColumn';
+// ── 右键空档「加一件事」（2026-10-07 RAY 拍板）────────────────────
+import type { TimeGap } from './timeScale';
+import { gapCapacityMin, resolveGapStart } from './gapAdd';
+import { GapAddPopover, type GapAddDraft } from './GapAddPopover';
+// ── 本树接缝（2026-10-08 接入 Ray 周页批次）：一键还原 / 作息入口 / 日程评估 ──
+import { Modal } from '@/components/ui/Modal';
+import { Icon } from '@/components/icons/Icon';
+import {
+  clearRoutine, loadRoutine, minutesToHHMM, routineFromHHMM, saveRoutine,
+} from './routineStore';
 import { digestPlan } from '@/lib/planner/planDigest';
 import { evaluateDigest } from '@/lib/planner/planEval';
 import { PlanEvalPanel } from './PlanEvalPanel';
-// H2：后端三库复核（/api/plan/review，失败静默）；用户身份取自 identity
-import { planReview, type PlanReviewReport } from '@/lib/api';
-import { getUserId, loadBasicInfo } from '@/lib/identity';
-import {
-  clearRoutine, dayWindowWithFallback, loadRoutine, minutesToHHMM,
-  routineFromHHMM, saveRoutine,
-} from './routineStore';
 import { makeTaskId } from './planEditsStore';
+import { AchievementPanel } from '@/features/activity/GoalEditor';
+import { planReview, type PlanReviewReport } from '@/lib/api';
+import { getUserId } from '@/lib/identity';
 
 /** 空计划兜底（引擎异步出结果前用）—— 见下方 evalDigest 的说明。 */
-const EMPTY_PLAN: WeekPlan = { weekNo: 0, blocks: [], stats: { courseMin: 0, studyMin: 0, blankMin: 0, blockCount: 0 }, issues: [] };
+const EMPTY_PLAN: WeekPlan = {
+  weekNo: 0, blocks: [],
+  stats: { courseMin: 0, studyMin: 0, blankMin: 0, blockCount: 0 },
+  issues: [],
+};
 
 interface Props {
   schedule: Schedule;
@@ -126,376 +114,30 @@ interface Props {
   planState: import('@/types').PlanPersistState | null;
   onPlanStateChange: (next: import('@/types').PlanPersistState) => void;
   /**
-   * 当前生活模式（阶段 D）。
-   *
-   * 在这之前它**只影响配色与文案**（`weekPlanAdapter.ts`），
-   * 点了「猛攻模式」排得一样松 —— 现在它会真正改变阶段策略的强度。
+   * 「📍 回到今天」：周次状态由 App（weekMonday）持有，点击回到本周
    */
-  lifeMode: string | null;
-  /** H2：打开模式问询窗口（App 持有对话框状态）；缺省不显示入口 */
-  onOpenModeSetup?: () => void;
-  /** 批 4.1（2A）：切上一周/下一周（±1）。不传 = 不渲染按钮（老调用点零改动）。
-   *  键盘 ←/→ 切周早已存在（App 全局 keydown），本字段只负责**可见性**。 */
-  onShiftWeek?: (d: number) => void;
-  /** W3/P1-5b.2（2026-10-07）：「返回总览」—— WeekView 单窗口化后从那边搬来的出口 */
-  onBack?: () => void;
-  /**
-   * W6-A（2026-10-08，CY 拍板「A 硬约束」）：FOCUS DAYS 硬约束（星期几 1-7）。
-   * 由 App 把 `selectedDays`（ISO）∩ 当前查看周换算而来；透传引擎
-   * `BuildWeekPlanInput.activeDays` —— 只在选中天排软块，未选中天只留课程与三餐。
-   * 缺省/空 = 不生效（golden 零漂移）。改动即重排（进 effect 依赖）——
-   * 「点了真的会变」是本功能的全部意义。
+  onGoToToday?: () => void;
+  /** 周页输入 → 排程模式接手（2026-10-07）：原句跳梨宝页自动以排程模式发送 */
+  /** 「去改画像」→ 由组合根经WeekPlanPage 层层透传（组件自己不碰路由） */
+  onGoProfile?: () => void;
+  /* ── 本树接缝（2026-10-08 接入 Ray 周页批次；逻辑按 Ray，落点按本树）──────────
+   *   lifeMode        —— WP5 生活模式 → 引擎附加参数（phase 与 req 两处消费）
+   *   activeDays      —— W6-A FOCUS DAYS 硬约束（App 从 selectedDays 算好传入）
+   *   onOpenModeSetup —— WP7-E5「换个节奏」= ModeSetupDialog 入口
+   *   onShiftWeek     —— 换周（weekMonday 归 App；与键盘 ←/→ 同一条 shiftWeekBy）
+   *   onBack          —— W3/P1-5b.2 返回总览
    */
+  lifeMode?: string | null;
   activeDays?: import('@/types').DayOfWeek[];
+  onOpenModeSetup?: () => void;
+  onShiftWeek?: (delta: number) => void;
+  onBack?: () => void;
 }
 
-const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-
-/**
- * UI v2 D2（设计稿 §7.6 六类色 + §7.7 色盲二重编码）：
- *   色条/文字色 + 块底浅色 + 微型几何符三重编码——颜色不再是唯一编码
- *   （红绿色盲男性约 8%，只靠 border-l-4 分辨课程性质是可达性缺陷）。
- *   键保持 BlockKind 语义；值按设计稿实测对比度落地（表内 AAA/AA 全过）。
- */
-const KIND_STYLE: Record<string, { bg: string; text: string; label: string; geo: GeoShape }> = {
-  course: { bg: 'bg-[#E5EAF6] border-l-[#1F3A78]', text: 'text-[#1F3A78]', label: '课', geo: 'tri' },
-  study: { bg: 'bg-[#FBF1E3] border-l-[#965C18]', text: 'text-[#965C18]', label: '学', geo: 'diamond' },
-  activity: { bg: 'bg-[#E6F2EC] border-l-[#14563A]', text: 'text-[#14563A]', label: '动', geo: 'circle' },
-  user: { bg: 'bg-[#E7F3F5] border-l-[#0D5560]', text: 'text-[#0D5560]', label: '我', geo: 'square' },
-  meal: { bg: 'bg-[#F3EEF9] border-l-[#4A3374]', text: 'text-[#4A3374]', label: '饭', geo: 'star' },
-  commute: { bg: 'bg-[#EDEFF5] border-l-[#5A6377]', text: 'text-[#5A6377]', label: '走', geo: 'circle' },
-  blank: { bg: 'bg-white border-l-gray-200', text: 'text-gray-400', label: '空', geo: 'star' },
-};
-
-/** 微几何符（§7.7 / §9 mg-*）：12×12，fill currentColor，随 KIND_STYLE.geo 取形 */
-type GeoShape = 'tri' | 'diamond' | 'circle' | 'square' | 'star' | 'hex';
-const GEO_PATHS: Record<GeoShape, string> = {
-  tri: 'M6 1.6l4.6 8.4H1.4z',
-  diamond: 'M6 .8l5.2 5.2L6 11.2.8 6z',
-  circle: '', // 特判 <circle>
-  square: 'M1.4 1.4h9.2v9.2H1.4z',
-  star: 'M6 1l1.5 3.2 3.5.4-2.6 2.4.7 3.4L6 8.7 2.9 10.4l.7-3.4L1 4.6l3.5-.4z',
-  hex: 'M6 .9l4.4 2.6v5L6 11.1 1.6 8.5v-5z',
-};
-function GeoMark({ shape, className = '' }: { shape: GeoShape; className?: string }) {
-  return (
-    <svg viewBox="0 0 12 12" width="12" height="12" fill="currentColor" aria-hidden="true" className={className}>
-      {shape === 'circle'
-        ? <circle cx="6" cy="6" r="4.6" />
-        : <path d={GEO_PATHS[shape]} />}
-    </svg>
-  );
-}
-
-const ISSUE_STYLE = {
-  error: 'bg-red-50 border-red-300 text-red-800',
-  warn: 'bg-amber-50 border-amber-300 text-amber-800',
-  info: 'bg-blue-50 border-blue-300 text-blue-800',
-} as const;
-
-/**
- * 「现在几点」→ 当日绝对分钟。UI 层读时钟是允许的（引擎层不许，见规格书纯函数纪律）。
- *
- * 取整到 **5 分钟**而不是精确到分：否则用户 14:03 打开页面、14:04 刷新，
- * `fromNow` 变了 → 引擎重排 → 一整列块微调，看起来像「页面自己乱动」。
- * 对齐到 5 分钟档位后，同一档内多次重排结果一致。
- */
-function nowMinutes(): number {
-  const d = new Date();
-  const raw = d.getHours() * 60 + d.getMinutes();
-  return Math.floor(raw / 5) * 5;
-}
-
-/**
- * 两份滚动状态是否等价 —— 用来避免无意义的持久化写入。
- *
- * 为什么不直接 `JSON.stringify` 比较：`rolling.upcoming` 是数组，
- * 顺序理论上稳定，但直接用字符串比较会因任何字段顺序差异误判为「变了」，
- * 从而多写一次 localStorage 并触发下一轮渲染。逐字段比更准也更省。
- */
-function sameRolling(
-  a: PlanPersistState['rolling'],
-  b: PlanPersistState['rolling'],
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  if (a.recentLoad.length !== b.recentLoad.length) return false;
-  for (let i = 0; i < a.recentLoad.length; i++) {
-    if (a.recentLoad[i] !== b.recentLoad[i]) return false;
-  }
-  if (a.loadByDow.length !== b.loadByDow.length) return false;
-  for (let i = 0; i < a.loadByDow.length; i++) {
-    if (a.loadByDow[i] !== b.loadByDow[i]) return false;
-  }
-  if (a.upcoming.length !== b.upcoming.length) return false;
-  for (let i = 0; i < a.upcoming.length; i++) {
-    const x = a.upcoming[i];
-    const y = b.upcoming[i];
-    if (x.id !== y.id || x.dueAtWeek !== y.dueAtWeek || x.urgency !== y.urgency) return false;
-  }
-  return true;
-}
-
-function BlockCard({
-  block, date, locked, onToggleLock, onExclude, editable = true,
-  assignmentMin, onSetAssignment, onClearAssignment,
-  edited, onEditBlock, onRevertEdit,
-  dragging, onDragStartCard, onDragEndCard,
-  isNew, onDismissNew, onOpenDetail,
-}: {
-  block: TimeBlock;
-  /** 这个块所属的 ISO 日期 —— 供无障碍标注（行为记录已下线，2026-09-19） */
-  date: string;
-  /** 用户已把这块「定住」 */
-  locked: boolean;
-  onToggleLock: (block: TimeBlock) => void;
-  /**
-   * 「🗑 删除这块」。
-   * 语义：把它从计划里拿掉，重排也不会回来（走 `excluded` 通道，可「全部恢复」）。
-   * 课程块不给：课是既成事实，改课走「调课」。
-   */
-  onExclude: (block: TimeBlock) => void;
-  /** T6：这门课本周已标记的作业时长（分钟）；`undefined` = 没标 */
-  assignmentMin?: number;
-  onSetAssignment: (courseId: string, courseTitle: string, minutes: number) => void;
-  onClearAssignment: (courseId: string) => void;
-  /** R2：本周用户是否改过这块的位置（改时间/时长/地点） */
-  edited?: boolean;
-  /** R2：保存块级编辑（同日改；跨天是拖拽的事） */
-  onEditBlock: (block: TimeBlock, next: { startMin: number; endMin: number; place?: string }) => void;
-  /** R2：撤销对这块的改动，回到引擎安排 */
-  onRevertEdit: (block: TimeBlock) => void;
-  /** R1：正在被拖动（自己变淡，看得出手里拿的是哪块） */
-  dragging: boolean;
-  onDragStartCard: (block: TimeBlock) => void;
-  onDragEndCard: () => void;
-  /** 🆕 新日程标注（2026-09-19）：刚添加的事在日程里高亮，点击后消失 */
-  isNew?: boolean;
-  onDismissNew?: () => void;
-  /** WP7-E5：false = 浏览态，拖拽与 hover 工具全关（纯看，防误拖） */
-  editable?: boolean;
-  /** E5：打开 L2 详情抽屉（只有真有内情的块才给入口，见 `chip.hasDetail`） */
-  onOpenDetail?: (block: TimeBlock) => void;
-}) {
-  /**
-   * T6 的展开状态：点「📝 作业」后才显示时长输入框。
-   * 用局部 state 而不是提到父组件 —— 它是**纯 UI 状态**，
-   * 放上去只会让父组件的 state 又多一个，还多一层 props 传递。
-   */
-  const [asgOpen, setAsgOpen] = useState(false);
-  const [asgMin, setAsgMin] = useState(60);
-  /** R2：块级编辑面板的展开状态（同 T6，纯 UI 状态） */
-  const [editOpen, setEditOpen] = useState(false);
-  const style = KIND_STYLE[block.kind] ?? KIND_STYLE.blank;
-  /** E4：该块在**浏览态**的 L0 呈现（时刻/地点/通勤徽章/来源；reason 走 L1 提示） */
-  const chip = blockChip(block);
-  // 校历事件展开出来的准备块（光电杯材料、四六级真题…）单独标出来 ——
-  // 否则用户只看到「又一个活动块」，意识不到它和那个截止日有关
-  const isEvent = Boolean(block.fromEventId);
-  return (
-    <div
-      draggable={editable && block.kind !== 'course' && block.source !== 'course'}
-      onDragStart={(e) => {
-        // dataTransfer 里带 id 是给**跨天**用的：目标列靠它知道拖过来的是哪一块
-        e.dataTransfer.setData('text/plain', block.id);
-        e.dataTransfer.effectAllowed = 'move';
-        onDragStartCard(block);
-      }}
-      onDragEnd={onDragEndCard}
-      title={dragging ? '松手放到目标位置；拖到右侧投放区可删除' : '可以直接拖到别的天 / 别的时段'}
-      onClick={() => { if (isNew && onDismissNew) onDismissNew(); }}
-      className={`rounded-lg border-l-4 ${style.bg} px-2.5 py-2 ${isEvent ? 'ring-1 ring-purple-300' : ''} ${dragging ? 'opacity-50 ring-2 ring-brand' : ''} ${isNew ? 'ring-2 ring-green-400' : ''} ${block.kind !== 'course' && block.source !== 'course' ? 'cursor-grab' : ''}`}
-    >
-      {/* UI v2 D2 五维分层：① 色条4px(左) ② 主标题 14.5/600 ③ 时间 等宽11.5 品牌色
-          ④ 地点 ⑤ 状态 tag；微几何符在课程名左侧 9px 处（§7.7 色盲二重编码） */}
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={`flex min-w-0 items-baseline gap-1.5 text-[14.5px] font-semibold leading-snug ${style.text}`}>
-          <GeoMark shape={style.geo} className="relative top-[6px] h-3 w-3 shrink-0 self-start" />
-          <span className="min-w-0 truncate">
-            {locked && <span title="已定住：重排时不动">🔒 </span>}
-            {block.emoji ? `${block.emoji} ` : ''}{block.title}
-            {isNew && <span className="ml-1 rounded bg-green-600 px-1 align-middle text-[9px] text-white">🆕 新</span>}
-          </span>
-        </span>
-        <span className="shrink-0 font-mono text-[11.5px] font-medium text-brand tabular-nums">
-          {toHHmm(block.startMin)}–{toHHmm(block.endMin)}
-        </span>
-      </div>
-      {locked && (
-        <div className="mt-1 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-white">
-          已定住 · 重排时不会挪动
-        </div>
-      )}
-      {isEvent && (
-        <div className="mt-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-800">
-          校历事件 · 提前准备
-        </div>
-      )}
-      {/* 地点 —— 标题里已经说了就不再重复（T5）。
-          例：「第一食堂 🍚 / @第一食堂」纯属噪音；重复信息会淹没真正要看的时刻。 */}
-      {chip.place && (
-        <div title={chip.placeFull ?? undefined} className="mt-0.5 text-[11px] text-ink-soft">
-          @{chip.place}
-        </div>
-      )}
-      {/* E4（2026-09-28）：转场从「三行散文」改成**一个徽章** —— 日常只需要「走过去大概多久」。
-          完整信息（起点→终点/余量/是否估算）进 `title`（L1），点开卡片看 L2 详情。
-          估算值带 `≈` 前缀，不把估算说成实测（诚实纪律）。 */}
-      {chip.transfer && (
-        <div
-          title={chip.transfer.detail}
-          className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] ${chip.transfer.tight ? 'bg-white/70 text-red-700' : 'text-ink-soft'}`}
-        >
-          {chip.transfer.label}
-          {chip.transfer.tight && <span className="ml-1">· 紧</span>}
-        </div>
-      )}
-      {/* reason 在浏览态不占版面（L1：悬浮可见 + ⓘ 提示「还有内情」）；编辑态保持原文，
-          因为改这块时「为什么排在这」正是判断依据。
-          E5：浏览态再给一个**显式「详情」入口** —— 渐进式披露的第二层（来源/完整转场/锁定/事件）。
-          刻意不做「整卡可点」：卡片已有拖拽与「🆕 消失」两种点击语义，再叠加会互相打架。 */}
-      {block.reason && (editable ? (
-        <div className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-ink-faint"><Icon name="sparkle" size="xs" className="relative top-[2px] shrink-0" />{block.reason}</div>
-      ) : (
-        <span
-          title={block.reason}
-          aria-label="为什么排在这"
-          className="relative top-[2px] mt-1 inline-block align-middle text-ink-faint"
-        >
-          <Icon name="info" size="xs" />
-        </span>
-      ))}
-      {!editable && chip.hasDetail && onOpenDetail && (
-        <button
-          type="button"
-          data-testid={`block-detail-${block.id}`}
-          onClick={(e) => { e.stopPropagation(); onOpenDetail(block); }}
-          className="ml-1 mt-1 inline-block rounded border border-paper-sunken px-1.5 py-0.5 text-[10px] text-ink-soft hover:bg-paper-sunken"
-        >
-          详情
-        </button>
-      )}
-
-      {/* UI v2 D2：操作收进 ⋯ 菜单（设计稿 §4.3 ⑤——最多挤 5 个按钮靠 hover 浮现，
-          手机没有 hover；改为 ⋯ 后触屏与桌面行为一致，E2E 可点元素计数下降属预期改善）。
-          原「定住/删除/作业/改」四按钮的通道、语义与确认路径全部不变。 */}
-      {editable && (
-      <div className="group mt-1.5 flex items-center gap-1.5">
-        <Popover
-          trigger={({ open, toggle }) => (
-            <button
-              type="button"
-              onClick={toggle}
-              aria-expanded={open}
-              aria-label="块操作菜单"
-              data-testid={`block-menu-${block.id}`}
-              className={`inline-flex min-h-8 items-center gap-1 rounded-lg border border-ink/10 bg-white px-2 text-[11px] font-medium text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1] ${open ? 'border-brand/40 bg-brand-light text-brand' : ''}`}
-            >
-              ⋯
-              {(edited || assignmentMin != null || locked) && (
-                <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
-              )}
-            </button>
-          )}
-        >
-          <div className="flex flex-col" role="menu">
-            <button type="button" role="menuitem" onClick={() => onToggleLock(block)} className="menu-row">
-              <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="lock" size="xs" /></span>{locked ? '解锁定住' : '定住（重排不动）'}
-            </button>
-            {block.kind !== 'course' && block.source !== 'course' && (
-              <button type="button" role="menuitem" onClick={() => setEditOpen(true)} className="menu-row">
-                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="sliders" size="xs" /></span>{edited ? '再改（这块被你改过）' : '改时间 / 时长 / 地点'}
-              </button>
-            )}
-            {block.kind === 'course' && block.courseId && (
-              <button type="button" role="menuitem" onClick={() => setAsgOpen((v) => !v)} className="menu-row">
-                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="notebook-pen" size="xs" /></span>{assignmentMin != null ? `作业已记 ${assignmentMin} 分 —— 改一下` : '记一下作业时长'}
-              </button>
-            )}
-            {block.kind !== 'course' && block.source !== 'course' && (
-              <button type="button" role="menuitem" onClick={() => onExclude(block)} className="menu-row text-[#B0402F] hover:bg-danger-light">
-                <span className="relative top-[3px] mr-1.5 inline-flex"><Icon name="trash" size="xs" /></span>删除（可撤销）
-              </button>
-            )}
-          </div>
-        </Popover>
-      </div>
-      )}
-
-      {/* R2：块级编辑面板 —— 同日改；改动攒着，「重新排一遍」才生效（T3 语义） */}
-      {editOpen && block.kind !== 'course' && block.source !== 'course' && (
-        <EditBlockPanel
-          block={block}
-          edited={edited ?? false}
-          onSave={(next) => { onEditBlock(block, next); setEditOpen(false); }}
-          onRevert={() => { onRevertEdit(block); setEditOpen(false); }}
-          onCancel={() => setEditOpen(false)}
-        />
-      )}
-
-      {/* T6：作业时长输入 —— **用户自己填**，不给「智能默认」。
-          输入框里的 60 只是个起点，确认前用户能看到并改掉。 */}
-      {asgOpen && block.kind === 'course' && block.courseId && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md bg-indigo-50 px-2 py-1.5 text-[11px] text-indigo-900">
-          <span>这门课的作业要多久？</span>
-          <input
-            type="number"
-            min={10}
-            max={600}
-            step={10}
-            value={asgMin}
-            onChange={(e) => setAsgMin(Number(e.target.value))}
-            className="w-16 rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-[11.5px]"
-          />
-          <span>分钟</span>
-          <button
-            type="button"
-            onClick={() => {
-              onSetAssignment(block.courseId as string, block.title, asgMin);
-              setAsgOpen(false);
-            }}
-            className="rounded bg-indigo-700 px-2 py-0.5 text-[11px] font-medium text-white"
-          >
-            记下
-          </button>
-          {assignmentMin != null && (
-            <button
-              type="button"
-              onClick={() => { onClearAssignment(block.courseId as string); setAsgOpen(false); }}
-              className="rounded bg-white px-2 py-0.5 text-[11px] text-indigo-900 ring-1 ring-indigo-300"
-            >
-              取消标记
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, lifeMode, onOpenModeSetup, onShiftWeek, onBack, activeDays }: Props) {
-  const [plan, setPlan] = useState<WeekPlan | null>(null);
-  const [notes, setNotes] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [backendOk, setBackendOk] = useState(true);
-  /**
-   * 求解器诊断（规格书 §4.4）—— 排得「好不好」的量化凭据。
-   * 以前只有「有没有冲突」这一个二值信号，现在能说出硬约束违反数、
-   * 加权代价（越低越好；improve 只接受严格下降，cost 单调不增）和耗时。
-   * 这是答辩时「算法依据」的答案。曾经显示成「质量分」会让人误读成
-   * 百分制评分——P1-1 改为自解释的「调度代价（越低越好）」。
-   */
-  const [diag, setDiag] = useState<Diagnostics | null>(null);
-  /** 天气是可选增强：拉不到就是 null，页面不显示天气条、排程也不受影响 */
-  const [weather, setWeather] = useState<WeatherReport | null>(null);
-  /**
-   * 上一版计划 —— 增量重排（T2.1）的基准。
-   *
-   * 为什么用 `ref` 而不是 `useState`：它**不应该触发渲染**。
-   * 放进 state 会让「算出计划 → 存计划 → 触发渲染 → effect 重跑」形成环，
-   * 而这里的语义本就是「记住上一次算出来的东西给下一次用」，是 ref 的经典用法。
-   */
-  const lastPlanRef = useRef<WeekPlan | null>(null);
+export function WeekPlanView({
+  schedule, weekNo, persona, planState, onPlanStateChange, onGoToToday, onGoProfile,
+  lifeMode = null, activeDays, onOpenModeSetup, onShiftWeek, onBack,
+}: Props) {
   /**
    * 「从此刻开始排」开关（P2-T2.3）。
    *
@@ -505,87 +147,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    *
    * 只在**本周**才有意义 —— 回看第三周时「现在」不是那周的现在。
    */
-  const [fromNowOn, setFromNowOn] = useState(false);
+  const { fromNowOn, replanToken } = useSessionFlags();
 
   /**
    * **用户覆盖层**（R2）—— 一次性收口所有「用户对本周期计划做过的事」：
    * 加的事 / 删的块 / 改过的位置 / 不可时段 / 调课停课 / 指定的食堂 / 课程作业。
    *
-   * 独立 localStorage（key `usst-user-plan-v1`），与 `behaviorLog` 同一模式。
-   * 在 R2 之前这些数据散在 `planEditsStore` 与 `assignmentStore` 两个 key 里，
-   * 再加三类就碎成一地 —— 所以合并；旧数据由 `loadUserPlan()` 自动迁移。
+   * 独立 localStorage（key `usst-user-plan-v1`）。**F2c/A4：状态上提 store**
+   * （`useWeekPlanStore`）—— 持久化、撤销/重做栈都在 store；切页不再丢状态。
    */
-  const [layer, setLayer] = useState<UserPlanLayer>(() => loadUserPlan());
-  /** WP4b-B2：撤销快照的取数镜像 —— 快照必须在 setState updater **外**压栈，
-   *  否则 StrictMode 双调用 updater 会把同一份底压两次（撤销一步变成撤两步）。 */
-  const layerRef = useRef<UserPlanLayer>(layer);
-  layerRef.current = layer;
+  const { layer, undoDepth, redoDepth } = useLayerStore();
 
   /**
    * 统一的写回入口：**任何**对覆盖层的改动都走它 ——
-   *   · 落库（`saveUserPlan`）
+   *   · 落库 + 压撤销栈 + 重做历史作废（store 内保证）
    *   · 标记「有改动待生效」（T3：不自动重排，由「重新排一遍」统一应用）
    *
    * 收成一个函数，是为了保证这两件事**永远同时发生** ——
    * 否则某个 handler 忘了标记，用户就会以为按钮没反应。
    */
   const updateLayer = useCallback((fn: (prev: UserPlanLayer) => UserPlanLayer) => {
-    pushUndoSnapshot(layerRef.current); // 撤销栈：任何改动前先留一份底（updater 外，B2）
-    // WP12-H8：前后 diff → 日程变动事件（在 updater 外算，StrictMode 双调用不会重复发）
-    const projected = fn(layerRef.current);
-    pushPlanEvents(diffPlanEvents(layerRef.current, projected));
-    setLayer((prev) => {
-      const next = fn(prev);
-      saveUserPlan(next);
-      return next;
-    });
-    clearRedo(); // 🔴 发生新改动 → 重做历史作废（标准撤销/重做语义）
+    updateLayerStore(fn);
     setPendingEdits(true);
-    setUndoDepth(undoDepth());
-    setRedoDepth(0);
-  }, []);
-
-  /* ---------- WP7-E5：编辑模式开关（单一状态源） ----------
-   * false = 浏览态：七天一行只读、面板收起、拖拽与 hover 工具全关（防误拖）；
-   * true = 编辑态：还原四档自适应网格与工具面板。localStorage 持久化。 */
-  const [editMode, setEditMode] = useState<boolean>(() => {
-    try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
-  });
-  const setEditModePersisted = (v: boolean) => {    setEditMode(v);
-    try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
-  };
-
-  /* ---------- UI v2 D1/D2：日程双层开关（SCHEDULE_VIEW_V2，默认开） ----------
-   * localStorage `usst.scheduleViewV2`：'0' 显式退出双层视图；无键/其他 = 开。
-   * 上层 WeekBoard（周概览节奏尺）+ 下层 DayAgenda（当日流水）；回退：本 commit
-   * 单独 revert 即回到默认关（WEEK_VIEW_V3 旧回退机制不受影响）。 */
-  const [scheduleV2] = useState<boolean>(() => {
-    try { return localStorage.getItem('usst.scheduleViewV2') !== '0'; } catch { return true; }
-  });
-  const [agendaView, setAgendaView] = useState<boolean>(false);
-  /** 下潜选中的天（WeekBoard 点卡 → DayAgenda；null = 跟随今天） */
-  const [agendaDay, setAgendaDay] = useState<DayOfWeek | null>(null);
-
-  // V2-2：梨宝「这段时间别排」确认后广播的重排请求 —— 收到就手动触发一次重排
-  useEffect(() => {
-    const onReplan = () => setReplanToken((v) => v + 1);
-    window.addEventListener('usst:replan', onReplan);
-    // 跨页撤销深度同步（2026-09-28 白天终验发现）：梨宝确认落盘等「本组件之外」的
-    // 改动会压 undo 栈，但本组件深度状态初始 0、不跨页感知 —— ↩ 按钮恒禁用而
-    // Ctrl+Z 可用。挂载时与重排广播时都读一次真实深度。
-    setUndoDepth(undoDepth());
-    const onReplanDepth = () => setUndoDepth(undoDepth());
-    window.addEventListener('usst:replan', onReplanDepth);
-    return () => {
-      window.removeEventListener('usst:replan', onReplan);
-      window.removeEventListener('usst:replan', onReplanDepth);
-    };
   }, []);
 
   /* ---------- Toast 操作反馈（2026-09-19） ---------- */
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  /** E5：L2 详情抽屉当前展示的块；null = 关闭（唯一真源，dialog 的 Esc 也只回报到这里） */
-  const [detailBlock, setDetailBlock] = useState<TimeBlock | null>(null);
   const toastSeq = useRef(0);
   const notify = useCallback((kind: ToastKind, message: string, action?: ToastItem['action']) => {
     toastSeq.current += 1;
@@ -603,30 +190,15 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 撤销后界面通过 `shownPlan` 立即反映（moves/excluded 都在显示口径里），
    * 不需要强制重排。
    */
-  const [undoDepthState, setUndoDepth] = useState(0);
-  const [redoDepthState, setRedoDepth] = useState(0);
   const handleUndo = useCallback(() => {
-    const snap = popUndo();
-    if (!snap) return;
-    pushRedoSnapshot(layer); // 回退前的样子进重做栈
-    setLayer(snap);
-    saveUserPlan(snap);
-    setUndoDepth(undoDepth());
-    setRedoDepth(redoDepth());
-    notify('info', '已撤销上一步改动');
-  }, [layer, notify]);
+    // 撤销/重做的栈操作与落库都在 store（useWeekPlanStore）；这里只管提示
+    if (undoLayer()) notify('info', '已撤销上一步改动');
+  }, [notify]);
 
   /** 重做（Ctrl+Shift+Z / Ctrl+Y）—— 与撤销互为逆操作 */
   const handleRedo = useCallback(() => {
-    const snap = popRedo();
-    if (!snap) return;
-    pushUndoSnapshot(layer);
-    setLayer(snap);
-    saveUserPlan(snap);
-    setUndoDepth(undoDepth());
-    setRedoDepth(redoDepth());
-    notify('info', '已重做');
-  }, [layer, notify]);
+    if (redoLayer()) notify('info', '已重做');
+  }, [notify]);
 
   /** 删除类 Toast 的「撤销」按钮 —— 一键恢复到删除前 */
   const undoAction = useCallback((): ToastItem['action'] => {
@@ -658,11 +230,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   /**
    * 偏好校正规则（阶段 B）—— 用户提过的要求。
    * ⚠️ 仍走 `feedback/store`（那是另一条线，与覆盖层数据不重叠）。
+   * F2c/A4：状态上提 `useRulesStore`（落库在 store 内保证）。
    */
-  const [rules, setRules] = useState<CorrectionRule[]>(() => loadRules());
+  const rules = useRulesStore();
 
-  /** 手动重排令牌（阶段 A3）：递增即让主 effect 重跑 */
-  const [replanToken, setReplanToken] = useState(0);
+  // replanToken 已与 fromNowOn 一并来自 useSessionFlags()（上方解构）—— 手动重排令牌：递增即让主 effect 重跑
 
   /**
    * 是否有「攒着没应用」的改动（T3）。
@@ -674,20 +246,26 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   const [pendingEdits, setPendingEdits] = useState(false);
 
   /**
-   * 转场收敛诊断（P2-T2.4）—— 问了几轮路、还有几条没问到。
-   * `uncovered` 非空时页面要如实说「个别转场是估算」，不能把估算值当实测显示。
+   * 「目标设置改过、还没生效」（2026-10-07 补，RAY 拍板：改动没体现在日程表上时，
+   * 要在周计划表上给一个**临时通知条**让用户手动重排）。
+   *
+   * 🔴 为什么要跟 `pendingEdits` 分开记：周页上其它改动全写 `layer`，都经 `updateLayer`
+   *    —— 那个函数是「写层 + 标记待生效」的收口，不会漏。**而目标走 `goalStore`**，
+   *    不经过 `layer`；摘要里也没有对应类别 ⟹ 光置 `pendingEdits` 会得到
+   *    「标记亮了、摘要却是空」，状态条因 `items.length === 0` 直接不渲染。
+   *    实测过的后果：点「延 2 周 / 减 20% / 转冲刺」后计划纹丝不动，
+   *    而界面上没有任何重排入口。
    */
-  const [transferInfo, setTransferInfo] = useState<{
-    rounds: number;
-    uncovered: string[];
-  } | null>(null);
+  const [goalsPending, setGoalsPending] = useState(false);
+
+  /** ⚙️ 调整抽屉开合（按钮在操作条、抽屉在页面根，两兄弟的状态只能放共同父级） */
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const semester = useMemo(
-    // 阶段 C/D：把用户的偏好校正 + 生活模式传下去 —— 从这一刻起，
-    // 用户提的要求与切过的模式都真正影响排程。
-    // `rules` / `lifeMode` 一变，semester → phase → 主 effect 会连锁重跑。
-    () => buildPhasesFromCalendar(schedule, persona, TERM_CALENDAR['2026-2027-1'], rules, lifeMode),
-    [schedule, persona, rules, lifeMode],
+    // 阶段 C：把用户的偏好校正传下去 —— 用户提的要求会影响排程。
+    // `rules` 一变，semester → phase → 主 effect 会连锁重跑。
+    () => buildPhasesFromCalendar(schedule, persona, TERM_CALENDAR['2026-2027-1'], rules),
+    [schedule, persona, rules],
   );
   const phase = phaseOfWeek(semester.plan, weekNo);
 
@@ -710,97 +288,55 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
   /** R5：用户的长期目标（成就统计的「往哪算」维度） */
   const [goals, setGoals] = useState(() => loadGoals());
-  const [activityVersion, setActivityVersion] = useState(0);
 
   /** R3.4：语言输入没说时间 → 挂起草稿，弹框追问 */
   const [timeAsk, setTimeAsk] = useState<{ draft: TaskDraft; ask: TimeAskRequest } | null>(null);
   /** 时间追问被放弃时的提示（T-R3-6：不建块，如实说） */
   const [timeAskNote, setTimeAskNote] = useState<string | null>(null);
 
-  /** 行为记录（2026-09-19 起只读）：不再有新的标记写入，历史数据喂 actualLoadByDow */
-  const [records] = useState<BehaviorRecord[]>(() => loadRecords());
-
-  /** T6：本周「课程 → 作业时长」的索引（避免在每个块上线性查找） */
-  const assignmentByCourse = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of assignmentsOfWeek(assignments, weekNo)) {
-      map.set(a.courseId, a.estimatedMin);
-    }
-    return map;
-  }, [assignments, weekNo]);
-
-  /**
-   * 天气数据（2026-09-19 改版：**不再有单独的天气栏**）。
-   *
-   * 天气的唯一落点是**每一天列的标题下方**：晴天显示概况（☀ 小雨 19–24℃），
-   * 达到提醒阈值（下雨/高低温/大风）的日子显示带时段的人话提醒
-   * （「记得带伞 · 下午降水概率 80%」—— `judgeDay` 产出）。
-   *
-   * ⚠️ 硬限制要如实知道：`fetchWeather(7)` 只有「今天起未来 7 天」，
-   * 回看本周的周一到周五时那天**没有数据**，对应列不显示天气 —— 不猜、不装。
-   */
-  const weatherByDate = useMemo(() => {
-    const map = new Map<string, WeatherDay>();
-    if (!weather) return map;
-    for (const d of weather.days) map.set(d.date, d);
-    return map;
-  }, [weather]);
-
-  /** 提醒（含时段）按日期索引 —— 一天最多一条（`judgeDay` 的取舍），Map 足够 */
-  const adviceByDate = useMemo(() => {
-    const map = new Map<string, WeatherAdvice>();
-    for (const a of weatherHints(weather)) map.set(a.date, a);
-    return map;
-  }, [weather]);
-
-  /** 本周的周一（ISO）—— 把「周次 + 星期几」还原成具体日期，行为记录按它定位 */
-  const weekMonday = useMemo(
-    () => addDays(schedule.termStart, (weekNo - 1) * 7),
-    [schedule.termStart, weekNo],
-  );
-  const dateOfDay = useCallback(
-    (dayOfWeek: number) => addDays(weekMonday, dayOfWeek - 1),
-    [weekMonday],
-  );
-
-  /**
-   * 「此刻」是否落在本周 —— `fromNow` 的前置条件。
-   *
-   * 为什么必须判：`fromNow` 是「现在几点」，回看/预看别的周时那个时间点不在那一周里，
-   * 传进去会让引擎把「今天」的剩余时间砍掉，而实际上那一周整天都还没开始。
-   */
-  const isCurrentWeek = useMemo(() => {
-    const today = todayISO();
-    return today >= weekMonday && today < addDays(weekMonday, 7);
-  }, [weekMonday]);
-
-  /** 今天在本周的星期几（1–7）；不在本周 = null */
-  const todayDow = useMemo(() => {
-    if (!isCurrentWeek) return null;
-    const d = weekdayOf(todayISO()); // 0 = 周日
-    return (d === 0 ? 7 : d) as number;
-  }, [isCurrentWeek]);
-
-  /** 批 6.1：列头具体日期 —— 学期第 N 周星期 d 的 ISO（再压成 M/D 展示） */
-  const dayISO = (day: number): string => addDays(schedule.termStart, (weekNo - 1) * 7 + (day - 1));
-  const dayShort = (day: number): string => dayISO(day).slice(5).replace('-', '/');
+  /** 已被用户处理（三选一/忽略）的预警 goalId —— 本地过滤，hook 里的 state 不归组件管 */
+  const [dismissedWarnings, setDismissedWarnings] = useState<string[]>([]);
 
   /* ============================================================
-   * R批 Wave3（H1.3）· 日程评估（2026-10-06 收官批次 P0-1a 自 integration-full 移植）
-   * ------------------------------------------------------------
-   * 评估是**纯读**：`digestPlan(plan)` → `evaluateDigest`，零副作用、零落库。
-   * 所以状态只需要一个「面板是否展开」—— 不缓存评估结果，因为 plan 一变
-   * 就该重算，缓存反而会给出「评估的是上一版日程」的错觉。
-   *
-   * ⚠️ `plan` 在引擎出结果前是 null（引擎是异步 effect）。此时用
-   * **空计划**兜底而不是不渲染：入口本身要在整个挂载期都在（否则它会
-   * 「忽隐忽现」，用户正要展开时它消失了）。空计划的评估结果全是
-   * unknown + 稀疏数据提示，不会给出任何指控。
-   */
-  const [evalOpen, setEvalOpen] = useState(false);
-  // 裁决 R2（批次 2）：「我的作息」写入端 —— 面板草稿状态 + 变更计数。
-  // 只写 store、不触发重排（与「改完攒着、点重新排一遍」同口径）；routineTick
-  // 让评估摘要即时重读 store（loadRoutine 非响应式）。
+   * 本树接缝（2026-10-08 接入 Ray 周页批次 e7df736）
+   * ========================================================== */
+
+  /* ---------- 缺口① 一键还原：回到引擎最初版 ----------
+   * 清：本周拖拽/改时/顺延（moves）、本周删除（excluded）、本周一次性新加（tasks）、本周块锁；
+   * 留：长期任务、不可时段、调课停课、作业时长、长期锁 —— 那些是事实声明，不是对这版的排布。
+   * 走 updateLayer → 整层快照进撤销栈，一次 Ctrl+Z 可整体回到还原前（锁的解除除外）。 */
+  const [restoreAsk, setRestoreAsk] = useState(false);
+  const restoreCount = engineRestoreCount(layer, weekNo) + weekLockCount(planState, weekNo);
+  const handleRestoreEngine = useCallback(() => {
+    const now = new Date().toISOString();
+    updateLayer((prev) => restoreEngineWeek(prev, weekNo));
+    if (weekLockCount(planState, weekNo) > 0) {
+      onPlanStateChange(withoutWeekLocks(planState, weekNo, now));
+    }
+    setRecentTaskIds([]);
+    setRestoreAsk(false);
+    setReplanToken((v) => v + 1);
+    notify('info', '已回到引擎最初版 —— 手动改动已全部清空，Ctrl+Z 可整体撤销');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateLayer, weekNo, planState, onPlanStateChange, notify, setReplanToken]);
+
+  /* ---------- WP7-E5（本树批次）：编辑模式开关（单一状态源 + localStorage 持久化） ----------
+   * false = 浏览态：块不可拖、块菜单/空档右键关、调整抽屉不可开 —— 防误拖误改；
+   * true = 编辑态：全部编辑入口可用。本树契约由 tests/wp7.test.ts / v1 / v3 锁定。 */
+  const [editMode, setEditMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
+  });
+  const setEditModePersisted = (v: boolean) => {
+    setEditMode(v);
+    try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
+  };
+  /** V1-1：投入与成就常驻（编辑模式之外也能看到）—— key 随活动记录版本刷新 */
+  const [activityVersion] = useState(0);
+
+  /* ---------- 裁决 R2（本树批次 2）：「我的作息」写入端 ----------
+   * 校验复用 routineFromHHMM（不猜纪律：无效给具体原因，不静默丢弃）；
+   * 保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见 useWeekPlan）。
+   * routineTick：作息面板保存/清除后让评估摘要即时重读 store（loadRoutine 非响应式）。 */
   const [routineTick, setRoutineTick] = useState(0);
   const [routineDraft, setRoutineDraft] = useState({ wake: '', sleep: '' });
   const [routineMsg, setRoutineMsg] = useState<string | null>(null);
@@ -832,11 +368,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     setRoutineMsg('已清除，引擎回到缺省 07:00–23:00。');
     setRoutineTick((t) => t + 1);
   };
-  // H3/H4（R批 Wave3）：评估摘要接真实数据源 ——
-  //  · routine = 作息设置真源（routineStore，与上游 Q1a/Q1b 同一份）→ 睡眠维度对「你自己的节奏」判定；
-  //  · goals = 目标库 active 目标（weeksLeft 用 today+termStart 折算，摘要层不读时钟）。
-  //  · habitSpans 不传：上游吃 R5.2 recurring 重复任务，本树 UserTask 无该字段
-  //    （digest 未传 = 该维 unknown 而非 0，不冒充数据）。
+
+  /* ---------- H1.3/H2（本树 R 批 Wave3）：日程评估入口与结果 ----------
+   * 评估是**纯读**：digestPlan(plan) → evaluateDigest，零副作用、零落库。
+   * plan 在引擎出结果前是 null → 空计划兜底（入口全挂载期都在，不忽隐忽现）。 */
+  const [evalOpen, setEvalOpen] = useState(false);
   const evalCtx = useMemo(() => {
     const r = loadRoutine();
     const routine = r.wakeMin != null && r.sleepMin != null
@@ -863,14 +399,79 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     };
     // routineTick：作息面板保存/清除后让摘要重读 store（loadRoutine 非响应式，R2）
   }, [goals, schedule.termStart, routineTick]);
+
+  /** 右键空档「加一件事」弹窗的挂起信息（2026-10-07）；null = 关 */
+  const [gapAdd, setGapAdd] = useState<{
+    day: number; startMin: number; capacityMin: number; x: number; y: number;
+  } | null>(null);
+  // 目标分解容量预警（goalWarnings）随排程管线由 `useWeekPlan` 产出 —— 本组件只展示
+
+  /** T6：本周「课程 → 作业时长」的索引（避免在每个块上线性查找） */
+  const assignmentByCourse = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of assignmentsOfWeek(assignments, weekNo)) {
+      map.set(a.courseId, a.estimatedMin);
+    }
+    return map;
+  }, [assignments, weekNo]);
+
+  /** 本周的周一（ISO）—— 把「周次 + 星期几」还原成具体日期，行为记录按它定位 */
+  const weekMonday = useMemo(
+    () => addDays(schedule.termStart, (weekNo - 1) * 7),
+    [schedule.termStart, weekNo],
+  );
+  const dateOfDay = useCallback(
+    (dayOfWeek: number) => addDays(weekMonday, dayOfWeek - 1),
+    [weekMonday],
+  );
+
+  /* ---------- 「回到今天」与今天列强调（2026-09-20） ---------- */
+  const todayIso = todayISO();
+
+  /**
+   * 「此刻」是否落在本周 —— `fromNow` 的前置条件。
+   *
+   * 为什么必须判：`fromNow` 是「现在几点」，回看/预看别的周时那个时间点不在那一周里，
+   * 传进去会让引擎把「今天」的剩余时间砍掉，而实际上那一周整天都还没开始。
+   */
+  const isCurrentWeek = useMemo(() => {
+    const today = todayISO();
+    return today >= weekMonday && today < addDays(weekMonday, 7);
+  }, [weekMonday]);
+
+  /** 今天在本周的星期几（1–7）；不在本周 = null */
+  const todayDow = useMemo(() => {
+    if (!isCurrentWeek) return null;
+    const d = weekdayOf(todayISO()); // 0 = 周日
+    return (d === 0 ? 7 : d) as number;
+  }, [isCurrentWeek]);
+
+  /**
+   * 上一版的 `actualLoad` / `prevRolling` memo 已随批次 3 上提进 `useWeekPlan`
+   * （hook 内部自算，视图从未消费）—— F2b 清掉这两段死代码与 `records` 数据态。
+   */
+
+  /* ============================================================
+   * 排程计算管线（批次 3 上提）：hook 只管「算出 plan」，
+   * 交互态（撤销/攒批/拖拽/toast）留在本组件 —— 状态所有权不动。
+   * ========================================================== */
+  const {
+    plan, notes, loading, backendOk, diag, transferInfo, goalWarnings, weather,
+  } = useWeekPlan({
+    schedule, weekNo, persona, planState, onPlanStateChange,
+    layer, goals, rules, fromNowOn, replanToken,
+    // 本树接缝：生活模式（WP5）与 FOCUS DAYS 硬约束（W6-A）都进引擎
+    lifeMode, activeDays,
+  });
+
+  /* ---------- H1.3/H2（本树 R 批 Wave3）：日程评估摘要（依赖 plan/useWeekPlan） ----------
+   * 评估是**纯读**：digestPlan(plan) → evaluateDigest，零副作用、零落库。
+   * plan 在引擎出结果前是 null → 空计划兜底（入口全挂载期都在，不忽隐忽现）。 */
   const evalDigest = useMemo(
     () => digestPlan(plan ?? EMPTY_PLAN, evalCtx),
     [plan, evalCtx],
   );
   const evalResult = useMemo(() => evaluateDigest(evalDigest), [evalDigest]);
-
-  // H2（R批 Wave3）：后端三库复核 —— 面板展开时取一次；失败静默
-  //（本地 planEval 评估照常，后端只是「对照真库再核一遍」的增强层）。
   const [evalReview, setEvalReview] = useState<
     { state: 'loading' | 'ok' | 'offline'; report?: PlanReviewReport }>({ state: 'loading' });
   useEffect(() => {
@@ -884,29 +485,44 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   }, [evalOpen, evalDigest, weekNo]);
 
   /**
-   * 实际负荷（按星期几）—— 喂给引擎的 `actualLoadByDow`（P2-T2.2）。
-   *
-   * 窗口是「本周之前 4 周」：不含本周，因为本周的执行结果还没发生（或刚开始），
-   * 把它算进「跨周疲劳」等于用未来推现在。
+   * T3：每轮排程落地 → 「待生效」标记清零。
+   * 🔴 这是一处**回归修复**（2026-10-07）：排程管线上提进 `useWeekPlan` 时，
+   * e565d6e 里的 `setPendingEdits(false)`（「这一轮排完了 —— 待生效标记清零」）
+   * 被弄丢了 ⟹ 黄条一旦亮起就永远不熄，与「已经重排过了」自相矛盾。
+   * hook 的 effect 刻意不含 layer（攒批语义），所以 `plan` 对象一变 =
+   * 真的重排过一轮（且消费的是最新 layer）——此刻清零是诚实的；
+   * 只攒批不重点「重新排一遍」时 plan 不变，标记保留。
    */
-  const actualLoad = useMemo(
-    () => actualLoadByDow(records, addDays(weekMonday, -7 * 4), 4),
-    [records, weekMonday],
-  );
+  useEffect(() => {
+    if (plan) {
+      setPendingEdits(false);
+      setGoalsPending(false); // 目标改动同一时刻失效：这一轮已经消费了最新 goals
+    }
+  }, [plan]);
 
   /**
-   * 上一周的滚动状态。走 `rollingForWeek` 而不是直接读 `planState.rolling` ——
-   * 直接读会在同一周内自我强化降档（排满 → 下周松 → 又加满 → 更松），
-   * 判据与理由写在 `planLock.ts`。
+   * 天气数据（2026-09-19 改版：**不再有单独的天气栏**）。
+   *
+   * 天气的唯一落点是**每一天列的标题下方**：晴天显示概况（☀ 小雨 19–24℃），
+   * 达到提醒阈值（下雨/高低温/大风）的日子显示带时段的人话提醒
+   * （「记得带伞 · 下午降水概率 80%」—— `judgeDay` 产出）。
+   *
+   * ⚠️ 硬限制要如实知道：`fetchWeather(7)` 只有「今天起未来 7 天」，
+   * 回看本周的周一到周五时那天**没有数据**，对应列不显示天气 —— 不猜、不装。
    */
-  const prevRolling = useMemo(
-    () => rollingForWeek(planState, weekNo),
-    [planState, weekNo],
-  );
+  const weatherByDate = useMemo(() => {
+    const map = new Map<string, WeatherDay>();
+    if (!weather) return map;
+    for (const d of weather.days) map.set(d.date, d);
+    return map;
+  }, [weather]);
 
-  /* 「做了 / 没做」执行标记已于 2026-09-19 按用户决定下线：
-     标记入口（mark）与执行情况面板移除；`records` 仍从本地加载 ——
-     历史数据继续喂 `actualLoadByDow`（跨周疲劳），通道不破坏、只是不再新增。 */
+  /** 提醒（含时段）按日期索引 —— 一天最多一条（`judgeDay` 的取舍），Map 足够 */
+  const adviceByDate = useMemo(() => {
+    const map = new Map<string, WeatherAdvice>();
+    for (const a of weatherHints(weather)) map.set(a.date, a);
+    return map;
+  }, [weather]);
 
   /**
    * 定住 / 解除（**S1：定住 = 长期锁**）。
@@ -936,11 +552,80 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * ========================================================== */
 
   const handleAddTask = useCallback((task: UserTask) => {
-    updateLayer((prev) => ({ ...prev, tasks: addTask(prev.tasks, task) }));
+    // 「最新要求优先」（RAY 2026-10-07）：显式指定时段的任务若撞上之前的禁排，
+    // 自动解除冲突的禁排并告知 —— 旧的「下午不排」不该挡住新的「下午排」
+    let cleared: string[] = [];
+    updateLayer((prev) => {
+      let slots = prev.slots;
+      if (task.dayOfWeek != null && task.startMin != null) {
+        const cc = clearConflictingSlots(prev.slots, [task], weekNo);
+        if (cc.removed.length > 0) {
+          slots = cc.slots;
+          cleared = cc.removed.map((sl) => `${sl.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(sl.fromMin)}–${toHHmm(sl.toMin)}`);
+        }
+      }
+      return { ...prev, tasks: addTask(prev.tasks, task), slots };
+    });
+    if (cleared.length > 0) {
+      notify('info', `按最新要求优先：已解除之前定的禁排（${cleared.join('、')}）`);
+    }
     // 🆕 标注：新加的事在日程表里高亮显示，直到用户点击确认（块的 id 由任务 id 派生）
     setRecentTaskIds((prev) => [...prev, task.id]);
-    notify('add', `已加入「${task.title}」—— 重排后会标注 🆕 出现在日程里`);
+    // 落位通知：引擎没给固定时刻（自己找空）时，等重排结果报位置
+    pendingPlaceRef.current = { taskId: task.id, title: task.title };
+    // 2026-10-07（RAY：所有输入要求自动重排）：加完任务立刻重排，不等手动
+    setReplanToken((v) => v + 1);
+    // 固定块报"按你指的时间排入"，浮动块报"正在为它找空位"
+    notify('add', task.dayOfWeek != null && task.startMin != null
+      ? `已加入「${task.title}」—— 按你指定的时间固定排入…`
+      : `已加入「${task.title}」—— 正在为它找空位…`);
   }, [updateLayer, notify]);
+
+  /**
+   * 右键空档 → 弹「加一件事」小窗（2026-10-07，RAY 拍板三件套）：
+   * 右键位置定开始时间（贴前块自动留 20 分钟转场缓冲，`resolveGapStart`）、
+   * 右键旁小弹窗、提交后固定 + 立即生效。
+   */
+  const handleGapContextMenu = useCallback((
+    day: number, gap: TimeGap, clickedMin: number, pos: { x: number; y: number },
+  ) => {
+    const startMin = resolveGapStart(gap, clickedMin);
+    setGapAdd({ day, startMin, capacityMin: gapCapacityMin(gap, startMin), ...pos });
+  }, []);
+
+  /** 弹窗提交：dayOfWeek+startMin 齐备 = 固定块（重排不挪），随后立即重排生效 */
+  const submitGapAdd = useCallback((d: GapAddDraft) => {
+    const g = gapAdd;
+    if (!g) return;
+    const task: UserTask = {
+      id: makeLayerId('ut'),
+      title: d.title,
+      kind: d.kind,
+      dayOfWeek: g.day as DayOfWeek,
+      startMin: g.startMin,
+      durationMin: d.durationMin,
+      weeks: [weekNo],
+      priority: 80,
+      note: '你在空闲段右键加的（已固定）',
+    };
+    handleAddTask(task);
+    setGapAdd(null);
+    // RAY 拍板「立即生效」：与「重新排一遍」按钮同一条重排链路（落库后递增令牌）
+    setReplanToken((v) => v + 1);
+  }, [gapAdd, handleAddTask, weekNo]);
+
+  /** 重排结果一到 → 定位新块并报位置（找不到 = 没排进去，也如实说） */
+  useEffect(() => {
+    const p = pendingPlaceRef.current;
+    if (!p || !plan) return;
+    pendingPlaceRef.current = null;
+    const blk = plan.blocks.find((b) => b.id.endsWith(`-${p.taskId}`));
+    if (blk) {
+      notify('add', `「${p.title}」已排进 ${DAY_LABELS[blk.dayOfWeek - 1]} ${toHHmm(blk.startMin)}–${toHHmm(blk.endMin)}`);
+    } else {
+      notify('info', `「${p.title}」这周没排进去 —— 没找到合适的空档，可换个时间或缩短时长`);
+    }
+  }, [plan, notify]);
 
   /**
    * 「这块我不做」。
@@ -973,28 +658,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    */
   const handleRestoreAll = useCallback(() => {
     updateLayer((prev) => ({ ...prev, excluded: [] }));
-  }, [updateLayer]);
-
-  /* ---------- 一键还原（2026-10-07）：回到引擎最初版 ----------
-   * 清：本周拖拽/改时/顺延（moves）、本周删除（excluded）、本周一次性新加（tasks）、本周块锁；
-   * 留：长期任务、不可时段、调课停课、作业时长、长期锁 —— 那些是事实声明，不是对这版的排布。
-   * 走 updateLayer → 整层快照进撤销栈，一次 Ctrl+Z 可整体回到还原前（锁的解除除外）。 */
-  const [restoreAsk, setRestoreAsk] = useState(false);
-  const restoreCount = engineRestoreCount(layer, weekNo) + weekLockCount(planState, weekNo);
-  const handleRestoreEngine = useCallback(() => {
-    const now = new Date().toISOString();
-    updateLayer((prev) => restoreEngineWeek(prev, weekNo));
-    if (weekLockCount(planState, weekNo) > 0) {
-      onPlanStateChange(withoutWeekLocks(planState, weekNo, now));
-    }
-    setRecentTaskIds([]);
-    setRestoreAsk(false);
     setReplanToken((v) => v + 1);
-    notify('info', '已回到引擎最初版 —— 手动改动已全部清空，Ctrl+Z 可整体撤销');
-  }, [updateLayer, weekNo, planState, onPlanStateChange, notify]);
+  }, [updateLayer, setReplanToken]);
 
   /** 🆕 新日程标注：新加任务的任务 id 列表（块的 id 以 `-{taskId}` 结尾，可可靠匹配） */
   const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
+
+  /**
+   * 落位通知（2026-10-07，RAY：「让梨宝自己找空加日程后，需要一个通知告诉我加到了哪里」）：
+   * 加任务时挂上待定位标记，重排结果（plan 更新）一到就按 `-taskId` 找到新块，
+   * 用 toast 报出「排进了哪天几点」；没找到 = 引擎没排进去，也如实说。
+   */
+  const pendingPlaceRef = useRef<{ taskId: string; title: string } | null>(null);
+  /** 排程对话执行器（LbaoChat 抽屉）保存后广播 usst:replan —— 本地版 useWeekPlan
+   *  原本没有监听者（CY 线 WeekPlanView 才有）→ 抽屉里确认草稿后课表纹丝不动。
+   *  2026-10-07 补上：事件 → replanToken+1 → 主 effect 重跑。 */
+  useEffect(() => {
+    const onReplanEvt = () => setReplanToken((v) => v + 1);
+    window.addEventListener('usst:replan', onReplanEvt);
+    return () => window.removeEventListener('usst:replan', onReplanEvt);
+  }, [setReplanToken]);
+
+  /** S4：改「我常去的食堂」 */
+  const handleMealPlacesChange = useCallback((next: MealPlaces) => {
+    updateLayer((prev) => ({ ...prev, mealPlaces: next }));
+    setReplanToken((v) => v + 1);
+  }, [updateLayer, setReplanToken]);
 
   /* ============================================================
    * R2：块级编辑（改时间/时长/地点）
@@ -1055,184 +744,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     return { ...moved, blocks: moved.blocks.filter((b) => !excluded.has(b.id)) };
   }, [plan, moveMap, layer.excluded]);
 
-  /** 本周被用户改过的块 id 集合 —— BlockCard 用它决定「✏️ 已改」的常显样式 */
+/** 本周被用户改过的块 id 集合 —— BlockCard 用它决定「✏️ 已改」的常显样式 */
   const editedBlockIds = useMemo(() => new Set(moveMap.keys()), [moveMap]);
 
   /**
    * 拖拽反馈：正在拖哪一块 + 拖不动时的原因。
    * 「拖不动」必须**明说** —— 否则用户会以为拖拽坏了（R1.6 / T-R1-5）。
    */
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragNote, setDragNote] = useState<string | null>(null);
-
-  /**
-   * **拖拽实时预览**（2026-09-19 交互改版）。
-   *
-   * 用户原话：「拖动过程中需要看到它会被放到哪个位置，以低透明度显示，
-   * 同时显示其他日程向后延的新位置」—— 松手前就能看到结局，不再盲拖。
-   *
-   * 实现：`onDragOver` 时调 `dragTo()`（纯函数，毫秒级）算出「如果现在松手」
-   * 的完整结果，画成影子 —— 落点是半透明虚线块，被顺延的块**直接画在它们
-   * 的新位置**（整列呈现的就是未来布局）；放不下/撞课时影子变红色禁止样式。
-   * 松手时 `handleDrop` 走同一条纯函数 —— **所见即所得**。
-   *
-   * 节流：只在悬停目标（天:时刻）变化时重算，不是 dragOver 的每一帧。
-   */
-  interface DragPreview {
-    day: number;
-    atMin: number;
-    ok: boolean;
-    reason?: string;
-    /** 影子块（落点）的位置与标题 */
-    startMin: number;
-    endMin: number;
-    title: string;
-    /** 被顺延块 → 新位置（渲染时直接画到新位置） */
-    displaced: Map<string, { start: number; end: number }>;
-  }
-  const [preview, setPreview] = useState<DragPreview | null>(null);
-  const previewKeyRef = useRef('');
-
-  /** WP10：拖拽合规口径（预览与落盘必须同一份）——
-   *  不可时段取本周生效的声明；转场余量在 dragTo 内按地点校区自查。 */
-  const dragCompliance = useMemo(() => ({
-    unavailableSlots: layer.slots
-      .filter((s) => s.weeks.length === 0 || s.weeks.includes(weekNo))
-      .map((s) => ({ days: s.days, fromMin: s.fromMin, toMin: s.toMin })),
-  }), [layer.slots, weekNo]);
-
-  const updatePreview = useCallback((day: number, atMin: number, coord: string) => {
-    if (!draggingId || !shownPlan) return;
-    // 🔴 去重 key 必须是**鼠标坐标**而不是落点时刻：
-    //    预览会重排布局 → 鼠标底下的块变了 → 落点变了 → key 变了 → 再重算 →
-    //    无限震荡（块在新旧位置来回跳）。坐标不动就不重算 —— 布局冻结在当前预览。
-    if (previewKeyRef.current === coord) return;
-    previewKeyRef.current = coord;
-
-    const src = shownPlan.blocks.find((b) => b.id === draggingId);
-    if (!src) { setPreview(null); return; }
-    const dur = src.endMin - src.startMin;
-    const res = dragTo(shownPlan.blocks, draggingId, day, atMin, {
-      // 与 handleDrop 完全同口径 —— 预览必须严格等于松手结果
-      dayStartMin: 7 * 60,
-      dayEndMin: 23 * 60,
-      // WP10：用户拖拽路径开合规闸（不可时段 / 转场余量）；引擎主流程不传
-      compliance: dragCompliance,
-    });
-    const snapped = Math.round(atMin / 10) * 10;
-    // ok 时影子画在真实落点；被拒时画在悬停处并标红（用户得知道「这里不行」）
-    const dragRec = res.records.find((r) => r.source === 'drag');
-    const ghost = dragRec
-      ? { startMin: dragRec.startMin, endMin: dragRec.endMin }
-      : { startMin: snapped, endMin: snapped + dur };
-    const displaced = new Map<string, { start: number; end: number }>();
-    if (res.ok) {
-      for (const r of res.records) {
-        if (r.source === 'ripple') displaced.set(r.blockId, { start: r.startMin, end: r.endMin });
-      }
-    }
-    setPreview({
-      day, atMin, ok: res.ok, reason: res.reason, title: src.title,
-      startMin: ghost.startMin, endMin: ghost.endMin, displaced,
-    });
-  }, [draggingId, shownPlan]);
-
-  const clearPreview = useCallback(() => {
-    previewKeyRef.current = '';
-    setPreview(null);
-  }, []);
-
-  /**
-   * 🔴 拖拽结束的**兜底清理**（挂在 window 上，不依赖源元素还活着）。
-   *
-   * 为什么必须：预览期间被拖的块会从列表里**卸载**（它变成了影子），
-   * 而浏览器的 `dragend` 派发给源元素 —— 元素都没了，事件没人收，
-   * `draggingId` 就会残留 → 那块永远卡在半透明「拖动中」样式。
-   * window 级监听永远收得到，drop / dragend / 取消 / Escape 全覆盖。
-   */
-  useEffect(() => {
-    if (!draggingId) return;
-    const onEnd = () => {
-      setDraggingId(null);
-      clearPreview();
-    };
-    window.addEventListener('dragend', onEnd);
-    window.addEventListener('drop', onEnd);
-    return () => {
-      window.removeEventListener('dragend', onEnd);
-      window.removeEventListener('drop', onEnd);
-    };
-  }, [draggingId, clearPreview]);
-
-  /**
-   * 落位计算（R1）—— 把某一块送到「星期几 + 起点」。
-   *
-   * 关键三点：
-   *   · **blockId 不重写**：跨天后 id 仍带旧的 `d` 段，`dayOfWeek` 字段单独记录。
-   *     写回 id 会让引擎认成「删一个 + 新增一个」→ churn 虚高、锁失效（R1.3）。
-   *   · **顺延**：占到的软块自动往后排（`makeRoom`），被挪的记成 `ripple`（soft），
-   *     拖的那块是 `drag`（hard）—— 用户明确表达的位置，重排不许动。
-   *   · **放不下就告知**，绝不制造重叠（硬约束 H1 是验收基准）。
-   *
-   * ⚠️ 基准是 `shownPlan`（屏幕上正显示的那一版，含未生效的手动改动）——
-   *    与预览同一基准，用户看到的影子才严格等于松手结果。
-   */
-  const handleDrop = useCallback((blockId: string, day: number, atMin: number) => {
-    if (!shownPlan) return;
-    const res = dragTo(shownPlan.blocks, blockId, day, atMin, {
-      // 天的可用区间与引擎同口径（`construct` 里 `'07:00'` / `'23:00'` 是默认值）
-      dayStartMin: 7 * 60,
-      dayEndMin: 23 * 60,
-      // WP10：与预览同一份合规口径 —— 所见即所得
-      compliance: dragCompliance,
-    });
-    clearPreview();
-    if (!res.ok) {
-      setDragNote(res.reason ?? '放不下');
-      return;
-    }
-    setDragNote(null);
-    const moved = shownPlan.blocks.find((b) => b.id === blockId);
-    updateLayer((prev) => {
-      let moves = prev.moves;
-      for (const r of res.records) {
-        moves = upsertMove(moves, {
-          weekNo, blockId: r.blockId, dayOfWeek: r.dayOfWeek,
-          startMin: r.startMin, endMin: r.endMin, source: r.source,
-        });
-      }
-      return { ...prev, moves };
-    });
-    if (moved) {
-      notify('move', `已移动「${moved.title}」→ ${DAY_LABELS[day - 1]} ${toHHmm(res.records[0].startMin)} · Ctrl+Z 撤销`);
-    }
-  }, [shownPlan, clearPreview, updateLayer, weekNo, notify]);
-
-  /**
-   * **拖拽删除投放区**（2026-09-19）：拖动时屏幕右侧浮现「🗑 拖到这里删除」，
-   * 松手到它上面 → 该块进删除通道（与块上的「🗑 删除」按钮走**同一个** `excluded`
-   * 通道，可用顶部的「全部恢复」一键撤销 —— 撤销比确认轻，所以不做二次弹窗）。
-   */
-  const [deleteHover, setDeleteHover] = useState(false);
-  const handleDropToDelete = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDeleteHover(false);
-    const id = e.dataTransfer.getData('text/plain') || draggingId;
-    setDraggingId(null);
-    clearPreview();
-    if (!id || !shownPlan) return;
-    const block = shownPlan.blocks.find((b) => b.id === id);
-    if (!block) return;
-    if (block.kind === 'course' || block.source === 'course') {
-      setDragNote('课程不能删除 —— 要改课程时间请用「调课」');
-      return;
-    }
-    // 与「🗑 删除」按钮同一条通道 —— 删除后同样弹「空档怎么处理」
-    handleExcludeBlock(block);
-  }, [draggingId, shownPlan, handleExcludeBlock, clearPreview]);
-
-  /* 双层时间视图（悬停时间轴 / 坐标拖拽 / 边缘调时）已于 2026-09-19 晚
-     按用户决定整体回退 —— 恢复单一卡片流 + 空闲块 + 悬停块式拖拽。 */
+  /* ============================================================
+   * R1 拖拽（F2d/A5：状态与逻辑整体收进 useWeekPlanDrag —— 第②层交互态
+   * 仍与排程管线隔离、不触发重排；视图只消费快照与回调）
+   * ========================================================== */
+  const {
+    draggingId, setDraggingId, dragNote, preview,
+    updatePreview, clearPreview, deleteHover, setDeleteHover,
+    handleDrop, handleDropToDelete,
+  } = useWeekPlanDrag({ shownPlan, weekNo, updateLayer, notify, handleExcludeBlock });
 
   /* ============================================================
    * T6：作业（用户填时长）
@@ -1265,17 +792,41 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * ========================================================== */
 
   const handleAddRule = useCallback((rule: CorrectionRule) => {
-    setRules((prev) => {
-      const next = upsertRule(prev, rule);
-      saveRules(next);
-      return next;
-    });
-  }, []);
+    // 2026-10-07（RAY 实测「周四下午不排」没生效）：unavailable_slot 类约束
+    // **改走硬排除通道**（layer.slots，solver 经 applyUnavailableSlots 真消费）——
+    // 原路径存成偏好校正规则，但引擎对 corrections.unavailableByDay **没有消费点**
+    // （buildPhases 只合成不使用，等于死信），块自然赖着不走。
+    // 长期/一次性由 detectScope 对原话判定（与语言路径共用一处纪律）。
+    if (rule.kind === 'unavailable_slot' && rule.payload.kind === 'unavailable_slot') {
+      const p = rule.payload;
+      const scope = detectScope(rule.utterance ?? '');
+      const slot: UnavailableSlot = {
+        id: makeLayerId('slot'),
+        days: [...p.days],
+        fromMin: p.window.startMin,
+        toMin: p.window.endMin,
+        weeks: scope === 'long' ? [] : [weekNo],
+        scope: scope === 'long' ? 'long' : 'once',
+        createdAtWeek: weekNo,
+        ...(rule.utterance ? { title: rule.utterance } : {}),
+      };
+      updateLayer((prev) => ({ ...prev, slots: addSlot(prev.slots, slot) }));
+      setReplanToken((v) => v + 1);
+      notify('add', `已记入不可时段：${slot.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(slot.fromMin)}–${toHHmm(slot.toMin)}（⚙️ 调整 → 偏好校正 可查看/删除）`);
+      return;
+    }
+    writeRules((prev) => upsertRule(prev, rule));
+    // 2026-10-07（RAY 实测反馈）：记下要求后课程表没变 —— 规则只对下一次重排
+    // 生效，但用户在「跟梨宝说一句」里表达的是**现在就要**的意图。
+    // 落库后立刻递增 replanToken，与「重新排一遍」按钮走同一条重排链路；
+    // 手动重排以 previousPlan 为增量基准，不会丢掉用户已确认的安排。
+    setReplanToken((v) => v + 1);
+  }, [weekNo, updateLayer]);
 
   const handleRulesChange = useCallback((next: CorrectionRule[]) => {
-    setRules(next);
-    saveRules(next);
-  }, []);
+    writeRules(next);
+    setReplanToken((v) => v + 1);
+  }, [setReplanToken]);
 
   /* ============================================================
    * 阶段 E：自然语言 → 可执行意图
@@ -1339,7 +890,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 做法：把**当前计划里**匹配的块加进排除清单 —— 于是重排时它们不会回来。
    * 依赖 `plan` 是有意的：用户看到的是屏幕上这一版，删的也该是这一版里的块。
    */
-  const handleRemoveBlocks = useCallback((days: DayOfWeek[], blockKind?: BlockKind) => {
+  const handleRemoveBlocks = useCallback((days: DayOfWeek[], blockKind?: BlockKind, titleKw?: string) => {
+    /* ── 按标题删（2026-10-07，RAY：「删除所有德语自习」）──
+     * 删**任务本体**（下周不再回来）+ 排除当前计划里的匹配块（不依赖重排），
+     * 然后自动重排 + toast 报删了几处。课程是既成事实，永不删。 */
+    if (titleKw) {
+      const kw = titleKw.toLowerCase();
+      let taskN = 0;
+      let blockN = 0;
+      const ids = plan
+        ? plan.blocks
+            .filter((b) => b.title.toLowerCase().includes(kw))
+            .filter((b) => b.kind !== 'course' && b.source !== 'course')
+            .map((b) => b.id)
+        : [];
+      updateLayer((prev) => {
+        const kept = prev.tasks.filter((t) => !t.title.toLowerCase().includes(kw));
+        taskN = prev.tasks.length - kept.length;
+        let excluded = prev.excluded;
+        for (const id of ids) excluded = excludeBlock(excluded, id);
+        blockN = ids.length;
+        return { ...prev, tasks: kept, excluded };
+      });
+      setReplanToken((v) => v + 1);
+      notify('delete', `已删除「${titleKw}」：任务 ${taskN} 条、日程块 ${blockN} 处 —— 已重排`);
+      return;
+    }
     if (!plan) return;
     const ids = plan.blocks
       .filter((b) => days.includes(b.dayOfWeek))
@@ -1353,691 +929,221 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       for (const id of ids) excluded = excludeBlock(excluded, id);
       return { ...prev, excluded };
     });
-  }, [plan, updateLayer]);
+    setReplanToken((v) => v + 1);
+    notify('delete', `已拿掉 ${ids.length} 处安排 —— 已重排`, undoAction());
+  }, [plan, updateLayer, notify, setReplanToken, undoAction]);
 
-  // 天气与周次无关（都是「未来 7 天」），所以只拉一次；
-  // 换周时靠下面的 filter（weatherToTasks 按 weekNo 过滤）而不是重拉。
-  useEffect(() => {
-    let cancelled = false;
-    // past_days=6：窗口恒为「过去 6 天 + 未来 7 天」—— 无论今天周几，
-    // 本周七天都有天气（否则周末打开，周一到周五全是空白 —— 实测教训）
-    fetchWeather(7, 6).then((r) => { if (!cancelled) setWeather(r); });
-    return () => { cancelled = true; };
+  /**
+   * 排程对话抽屉（2026-10-07，RAY：「接手之后不需要跳转，直接处理」）：
+   * 周页输入解析不动的句子 → 原句在**本页右侧抽屉**里进排程模式对话
+   * （LLM 理解 → 追问 → 草稿卡确认 → 执行器操作本地引擎），边看课表边聊。
+   * nonce 变化 = 重挂 LbaoChat 并自动发送；对话历史走 sessionStorage 快照不丢。
+   */
+  const [schedDrawer, setSchedDrawer] = useState<{ q: string; nonce: number } | null>(null);
+  const handleAskSched = useCallback((q: string) => {
+    setSchedDrawer({ q, nonce: Date.now() });
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        if (!phase) { setPlan(null); return; }
-        // 校历事件 → 本周准备块（光电杯材料 / 四六级真题 / 期中复习…）。
-        // 这一步就是「把截止日变成日程」：事件不再只是旁边一个倒计时数字。
-        // WP11：静态校历 ∪ 用户重要日（title+date 去重）。只在重排发生时自然参与 —— 不因新增节点触发自动重排。
-        const eventTasks = expandDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), schedule.termStart, schedule.totalWeeks);
-        // 天气 → 当天提醒块（带伞 / 防暑 / 保暖 / 防风）。
-        // 与事件走**同一条 tasks 通道**，引擎完全不知道有「天气」这回事。
-        // 差别在权重：天气块优先级只有 45–55（事件准备块是 88），
-        // 挤不进日程也没关系 —— 提醒还有天气条那条独立路径。
-        // 阶段 A：把**用户自己加的事**也并进来。
-        // 它们与校历事件走同一条 `UserTask` 通道 —— 引擎不知道「这是用户加的」，
-        // 也就不需要为它改任何代码。指定了「星期 + 时间」的会变成固定块
-        // （判定见 `construct`：`dayOfWeek != null && startMin != null`）。
-        const userTasks = edits.userTasks.filter(
-          (t) => !t.weeks?.length || t.weeks.includes(weekNo),
-        );
-        /**
-         * ⚠️ T1（2026-09-19）：**天气不再进 `tasks`**。
-         *
-         * 此前 `weatherToTasks(...)` 会产出一条 30 分钟的 activity 块，
-         * 于是时间轴上出现「🌧️ 带伞 · 小雨」这样一个占半小时的日程 —— 荒谬：
-         * 「带伞」是一条提醒，不是一件要做半小时的事。
-         * 现在改成当天列顶部的**备注条**（见下方 `weatherByDay` 的渲染）。
-         */
-        const tasks = [
-          ...eventTasks,
-          ...userTasks,
-          // R5：目标 → 排程任务（2026-09-19）。设立了截止日期并选了节奏的目标，
-          // 按节奏生成每周投入块 / 截止前冲刺块（与作业同一 UserTask 通道）。
-          // ⚠️ goals 刻意不在 effect 依赖里：目标改动「攒着」，点「重新排一遍」生效（T3 语义一致）。
-          ...goalTasksOf(goals, weekNo, schedule.termStart),
-          /**
-           * T6：作业 → `UserTask`。
-           *
-           * 引擎不知道「这节课留了作业」，所以由界面翻译成「一件要花 N 分钟的 study」。
-           * `priority: 78` —— 高于普通活动（26–66）、低于校历事件准备块（88）；
-           * **不设 `essential`**：作业重要，但还没到「有硬截止日」那一档，
-           * 不该像备考那样抢独立预算。
-           */
-          ...assignmentsOfWeek(assignments, weekNo).map((a): UserTask => ({
-            id: a.id,
-            title: `${a.courseTitle} 作业`,
-            emoji: '📝',
-            kind: 'study',
-            durationMin: a.estimatedMin,
-            weeks: [weekNo],
-            priority: 78,
-            note: `课程作业 —— 预计 ${a.estimatedMin} 分钟（你自己填的）`,
-          })),
-        ];
-        // ── 任务四（M4-W3）：待办 → 排程约束 ─────────────────────────
-        // 手机/网页待办工作区里**未完成**的待办参与排程（云同步闭环：
-        // 手机记 → 云端 SyncState → 网页排计划时带上）。
-        // recent → UserTask 通道、longterm → 可拆 Commit 通道（映射规则见
-        // `memoLogic.todosToPendingTodos`，确定且有测试）。
-        // 🔴 拉不到云端 / 未登录 → pendingTodos 为空 = 旧行为（不阻塞排程）。
-        const identity = loadIdentity();
-        let memoTodos: Todo[] = [];
-        if (identity?.token) {
-          try {
-            memoTodos = await fetchCloudTodos(identity.token);
-          } catch { /* 云端拉不到 → 本轮不带待办，诚实降级 */ }
-        }
-        const pendingTodos = todosToPendingTodos(memoTodos, schedule.termStart, weekNo);
+  // 天气拉取已上提 `useWeekPlan`（F2b/A3：数据态归 hook，两页共用一次拉取）；
+  // 本组件只消费 hook 返回的 `weather`（weatherByDate / weatherAdvice 派生不变）。
 
-        // ── P2：把「动态能力」的三组输入接进来 ────────────────────────
-        //   · rolling / actualLoadByDow → 跨周疲劳（T2.2）
-        //   · previousPlan              → 增量重排的脏区域基准（T2.1）
-        //   · fromNow / fromNowDay      → 「从此刻开始排」（T2.3）
-        // 三组都是**可选**：不传就退回 P1 的全量排程行为，不会因为这里出错而排不出来。
-        const nowMin = fromNowOn && isCurrentWeek ? nowMinutes() : null;
+  /* ============================================================
+   * 主 effect 已上提 `useWeekPlan()`（批次 3，见上方 hook 调用处）。
+   * 原实现里的任务拼装/锁合并/两遍法/定点融合/planState 回写全部原样保留在
+   * hook 内 —— 本组件只消费结果（plan/notes/loading/backendOk/diag/transferInfo），
+   * 交互态（撤销/攒批/拖拽/toast）仍归本组件所有。
+   * ========================================================== */
 
-        /**
-         * R2：把「用户改过的位置」（`layer.moves`）并进锁。
-         *
-         * 为什么必须并进来：用户改过/拖过的块，如果只写进 localStorage 而**不告诉引擎**，
-         * 下一次 construct 从头排一遍就把它挪回去了 —— 用户会说「我改的怎么又跑了」。
-         *
-         * 锁级别按来源分：
-         *   · `drag` / `edit`  → **hard**（用户明确表达的位置，重排不许动）
-         *   · `ripple`         → **soft**（被顺延带出来的连带结果，引擎后续还可以再调）
-         */
-        const moveMap = movesOfWeek(layer.moves, weekNo);
-        const effectiveLockLevels = { ...lockLevelsOf(planState) };
-        const effectivePlacements = { ...lockedPlacementsOf(planState) };
-        for (const [id, m] of moveMap) {
-          effectiveLockLevels[id] = m.source === 'ripple' ? 'soft' : 'hard';
-          effectivePlacements[id] = {
-            dayOfWeek: m.dayOfWeek,
-            startMin: m.startMin,
-            endMin: m.endMin,
-            ...(m.place !== undefined ? { place: m.place } : {}),
-            ...(m.room !== undefined ? { room: m.room } : {}),
-          };
+  /* 浮层（调整抽屉 / 排程对话抽屉 / Toast）—— 2026-10-07 提取：loading 骨架屏
+   * 早退时也要渲染，否则自动重排期间抽屉被卸载重挂，tab/对话状态全丢
+   * （RAY 实测「偏好校正点删除后弹回加一件事」的根因）。 */
+  const overlays = (
+    <>
+      {/* ⚙️ 调整抽屉（F3/N3：加一件事/调课停课/不可时段/指定食堂/偏好校正 五 tab 收敛） */}
+      <AdjustDrawer
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        weekNo={weekNo}
+        schedule={schedule}
+        layer={layer}
+        updateLayer={updateLayer}
+        rules={rules}
+        goals={goals}
+        handleRulesChange={handleRulesChange}
+        onAddTask={handleAddTask}
+        pendingEdits={pendingEdits}
+        dateOfDay={dateOfDay}
+        derivedApplied={derived.applied}
+      />
+      {/* 一键还原确认弹窗（本树缺口①）：清什么/留什么逐条列清，重排 + Ctrl+Z 整体撤销 */}
+      <Modal
+        open={restoreAsk}
+        onClose={() => setRestoreAsk(false)}
+        title="回到引擎最初版？"
+        testId="week-restore-engine-dialog"
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => setRestoreAsk(false)}
+              className="rounded-md px-3 py-1.5 text-[12.5px] font-medium text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+            >
+              先不了
+            </button>
+            <button
+              type="button"
+              onClick={handleRestoreEngine}
+              data-testid="week-restore-engine-confirm"
+              className="rounded-md bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-red-700"
+            >
+              还原并重排
+            </button>
+          </>
         }
-        const req = {
-          ...toPlanRequest({
-            // R3：喂的是**派生后的课表**（已应用调课/停课），原始 `schedule` 不受影响
-            schedule: effectiveSchedule, weekNo, policy: phase.policy,
-            scenarios: persona?.scenarios ?? null,
-            // 批 4.3（1A-③）：完整画像进引擎 —— socialCap 与画像块级偏好的入口
-            persona,
-            tasks,
-            // 任务四（M4-W3）：待办约束（空数组 = 与旧行为逐字段一致）
-            pendingTodos,
-            // W6-A：FOCUS DAYS 硬约束（toPlanRequest 对空数组/undefined 原样吞掉 = 不生效）
-            activeDays,
-          }),
-          // 裁决 R2（2026-10-06 收官批次·批次 2）：作息设置真源 → 引擎日窗。
-          // 走 PlanRequest **已有**字段 dayStart/dayEnd（model.ts），零契约改动；
-          // 未采集时 dayWindowWithFallback 返回 null → 一个字段都不加，
-          // 引擎走缺省 '07:00'/'23:00'，行为与改造前**逐位一致**（golden 零漂移）。
-          ...(dayWindowWithFallback(loadRoutine(), loadBasicInfo().sleepMin ?? null) ?? {}),
-          // P1-5（裁决 R3）：每周活动量下限，WHO ≥150 分钟/周（健康库 aerobic-150，A 级）。
-          // 引擎侧 opt-in：字段不传不生效；这里给产品缺省 150（已排够就不再补）。
-          weeklyActivityMin: 150,
-          // 锁的两半都要传：
-          //   · lockLevels     → improve 不主动移动 hard 块、churn 按锁加权
-          //   · lockedPlacements → solver 在构造之后把 hard 块**写回原位**
-          // 少了后者，construct 从头排一遍就会把块挪走，锁变成装饰。
-          // 注意用 **effective*** 版本：已并入用户改/拖过的位置（见上方 R2 注释）。
-          lockLevels: effectiveLockLevels,
-          lockedPlacements: effectivePlacements,
-          // WP6：三餐自动就近食堂（离下一节课最近的；显式 mealPlaces 仍优先——已停用 UI）
-          mealAutoPlace: true,
-          // WP5：生活模式的引擎附加参数（运动配额/加餐窗口/自由格）。
-          // 缺省（没选模式）= undefined → 引擎默认路径，与不传逐位一致。
-          lifeModeExtras: lifeModeExtrasOf(lifeMode),
-          // R6.2：用户声明的不可时段 → 硬约束
-          unavailable: layer.slots.map((s) => ({
-            id: s.id,
-            days: s.days,
-            fromMin: s.fromMin,
-            toMin: s.toMin,
-            weeks: s.weeks,
-            createdAtWeek: s.createdAtWeek,
-            title: s.title,
-          })),
-          // 跨周疲劳：计划值兜底、实际值优先（引擎里 mergeLoad 决定）
-          rolling: prevRolling,
-          actualLoadByDow: actualLoad,
-          // 增量重排的「上一版」= 本次之前算出来的那一版
-          previousPlan: lastPlanRef.current,
-          fromNow: nowMin,
-          fromNowDay: nowMin != null ? (todayDow as never) : null,
-          // 阶段 A：用户删掉的块。不告诉引擎的话，下一轮构造又会把它排回来 ——
-          // 用户会觉得「删了没用」。引擎侧在 `construct` 末尾过滤（课程受保护）。
-          excludedBlockIds: edits.excludedBlockIds,
-          // 阶段 C：校正层透传给引擎。
-          // 当前 `construct` 主要消费的是「阶段策略」那条路径（经 buildPhases），
-          // 这个字段留给「时段/地点黑名单」这类更细的约束（本轮已备好口子）。
-          corrections: rules,
-        };
-        // 两遍法编排交给公共入口 `planWeek()` —— 原先这一段在本组件和
-        // `features/libao/weekPlanForChat.ts` 各写了一份，是同一套逻辑的两个副本。
-        // 我们只注入「转场怎么取」：浏览器里 = 调后端批量问路（拿不到就退回估算）。
-        //
-        // P2 起改成注入 `fetchRoutes`（**每次给一批对，返回实测分钟**）而不是
-        // `transferFactory`（一次给整批）。差别在收敛循环要**增量**地问：
-        // 第 1 轮问候选对、第 2 轮再补上一轮新出现的相邻对。用工厂做不到这点
-        // —— 它的入参是「整批布局」，只能在开头问一次。
-        const result = await planWeek(req, {
-          fetchRoutes: async (pairs) => {
-            const routes = await fetchRouteBatch(pairs);
-            // 一条实测都没拿到 → 转场全是估算值，页面要如实提示
-            if (!cancelled && pairs.length > 0) {
-              const anyHit = Object.values(routes).some((v) => v && typeof v.minutes === 'number');
-              if (anyHit) setBackendOk(true);
-            }
-            return routes;
-          },
-        });
-        /**
-         * R6.1 **定点修改**：改动只影响相关天 —— 其余六天保留上一版。
-         *
-         * 为什么要有这一步：用户说的是「周四下午别排」，整周重排会让
-         * 「我明明只改了一处」变成「七天全抖一遍」，他无法判断自己的要求是否生效。
-         * 引擎仍排一整周（它必须看全局才知道紧松），排完再按天融合。
-         *
-         * ⚠️ 只在**同一周的上一版**时才融合：跨周本来就该整体重排；
-         * ⚠️ 没有上一版（首次排程）时也只能整体接受。
-         */
-        const prev = lastPlanRef.current;
-        // WP4b-B3：融合天集必须并入本周调课/停课实际影响的天 ——
-        // 否则应用调课后的重排会把调课那天当「未受影响」保留旧版，覆写切周才出现。
-        const days = localizedDaysFor(
-          layer,
-          overrideAffectedDays(schedule, derived.schedule, weekNo),
-          weekNo,
-        );
-        const fused = days !== null && prev && prev.weekNo === weekNo
-          ? localizedPlan(prev, result.plan, days).plan
-          : result.plan;
-        if (!cancelled) {
-          setPlan(fused);
-          setNotes(
-            days && days.length > 0
-              ? [...result.notes, `本次只重排了${days.map((d) => DAY_LABELS[d - 1]).join('、')}（其它天保持上一版）`]
-              : result.notes,
-          );
-          setDiag(result.diagnostics);
-          setTransferInfo({
-            rounds: result.transferRounds ?? 1,
-            uncovered: result.transferUncovered ?? [],
-          });
-          lastPlanRef.current = result.plan;
-          // 任务四（M4-W2-P2-3）：待办 → 已排块回填。注册块位置（「已排进周三 15:00」
-          // 的精确回显用）+ 把命中块 id 写回 Todo.scheduledBlockId（云端，单项 LWW）。
-          // 失败不影响排程主流程（fire-and-forget，台账留痕）。
-          registerPlanBlocks(fused);
-          if (identity?.token && memoTodos.length > 0) {
-            void syncScheduledBlockIds(identity.token, memoTodos, fused).catch(() => { /* 回填失败不阻塞 */ });
-          }
-          // ── 补上 P1 留下的断链：把本次产物写回持久化状态 ──────────
-          // 原先 `result.nextRolling` 产出来了却**没有任何地方接收** →
-          // `planState.rolling` 永远是 null，跨周疲劳既传不下去也用不上。
-          // 现在写回；下一周排程时经 `rollingForWeek` 读出来喂回引擎。
-          //
-          // ⚠️ 依赖里刻意**不含 planState**：本 effect 会因 planState 变化而重跑
-          //    （点「定住」要立刻重排），若这里再无条件写回，就会
-          //    「重排 → 写 planState → 触发重排」无限循环。
-          //    所以只在 rolling / churn 真的变了才写。
-          {
-            const now = new Date().toISOString();
-            const churn = result.diagnostics.churnMin;
-            const next = withRolling(planState, weekNo, result.nextRolling, churn, now);
-            const changed = planState?.lastPlanWeek !== weekNo
-              || planState?.churnMin !== next.churnMin
-              || !sameRolling(planState?.rolling ?? null, next.rolling);
-            if (changed) onPlanStateChange(next);
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          // T3：这一轮排完了 —— 「待生效」标记清零
-          setPendingEdits(false);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-    // planState 在依赖里：点了「定住」要立刻按新锁重排，而不是等下次刷新
-    //
-    // ⚠️ `fromNowOn` 也必须在依赖里 —— 它决定 `nowMin`（见上方 L375），
-    //    漏掉会导致「⏱ 从此刻开始排」开关**点了不生效**：开关变了、effect 不重跑，
-    //    用户得先做别的操作（比如点一次「定住」）才会看到变化。这是 P2 留下的漏项。
-    //
-    // ⚠️ `edits` 同理（阶段 A）：用户加了块 / 删了块要**立刻**反映到计划上，
-    //    否则他会以为按钮没反应。`replanToken` 则是「手动重排」的触发器。
-    // ⚠️ T3（2026-09-19）：`edits` **不在**依赖数组里 ——
-    //    加块 / 删块**不再立刻重排**。删一个块就让整周跟着抖，用户根本看不清
-    //    自己改了什么；改动先攒着，由「重新排一遍」统一应用（见 `pendingEdits`）。
-    //
-    //    `assignments` 同理（T6）：标记作业也只是**攒着**，
-    //    点「重新排一遍」时本 effect 会在新一轮渲染里读到最新的 `assignments`。
-  }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken, activeDays]);
+      >
+        <ul className="list-disc space-y-0.5 pl-4">
+          {layer.moves.filter((m) => m.weekNo === weekNo).length > 0 && (
+            <li>挪动 / 改时 {layer.moves.filter((m) => m.weekNo === weekNo).length} 处</li>
+          )}
+          {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length > 0 && (
+            <li>已跳过的 {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length} 块会回来</li>
+          )}
+          {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length > 0 && (
+            <li>本周新加的 {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length} 件事会拿掉</li>
+          )}
+          {weekLockCount(planState, weekNo) > 0 && (
+            <li>本周定住的 {weekLockCount(planState, weekNo)} 块会解锁</li>
+          )}
+        </ul>
+        <p className="mt-2">
+          保留不动：长期任务、不可时段、调课停课、作业时长与长期锁。
+          还原后马上重排；按 Ctrl+Z 可整体撤销（定住的解除除外）。
+        </p>
+      </Modal>
+      {/* 排程对话抽屉：周页输入「排程模式接手」的落点（不跳页，就地对话） */}
+      {schedDrawer && (
+        <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label="排程模式对话">
+          <div className="absolute inset-0 bg-ink/30" onClick={() => setSchedDrawer(null)} />
+          <div className="relative z-10 flex h-full w-[min(680px,100vw)] flex-col border-l border-ink/10 bg-paper shadow-[-24px_0_48px_rgba(22,35,63,0.15)]">
+            <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 bg-white px-4 py-2.5">
+              <span className="text-[13px] font-semibold text-ink">梨宝 · 排程模式</span>
+              <span className="text-[11px] text-ink-faint">说一件事，它追问、出草稿、你确认才落盘</span>
+              <button
+                type="button"
+                onClick={() => setSchedDrawer(null)}
+                className="ml-auto rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+              >
+                收起（对话保留）
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col px-2 pb-2">
+              <LbaoChat
+                key={schedDrawer.nonce}
+                profile={persona}
+                schedule={schedule}
+                seedQuestion={schedDrawer.q}
+                seedMode="sched"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
+    </>
+  );
 
   if (loading) {
-    return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;
+    /* 🔴 2026-10-07：原先是一句 12px 灰字，界面在此期间**完全空白**（像是点了没反应），
+       内容出来时整页从空跳到满。改成同尺寸骨架屏，替换时不位移。 */
+    return (
+      <>
+      <WeekPlanSkeleton />
+      {overlays}
+    </>
+    );
   }
   if (!phase || !plan) {
-    return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">这个周次不在学期范围内。</div>;
+    return (
+    <>
+      <div className="panel px-6 py-10 text-center text-sm text-ink-soft">这个周次不在学期范围内。</div>
+      {overlays}
+    </>
+    );
   }
 
-  const issues: PlanIssue[] = plan.issues;
+  /**
+   * 问题清单取**屏幕上那一版**（`shownPlan`）的 issues，而不是引擎原生的 `plan.issues`。
+   *
+   * 🔴 2026-10-07 修：`applyPendingMoves` 现在会**拒掉会撞车的旧改动**并补一条
+   * `lock-conflict` 说明（"你之前改动的「X」现在和「Y」撞了…"）。那条 issue 长在
+   * `shownPlan` 上；若这里仍读 `plan.issues`，用户看到的就是「块悄悄弹回原位、
+   * 一句解释都没有」—— 比不拦还糟。
+   */
+  const issues: PlanIssue[] = shownPlan?.issues ?? plan.issues;
   /** 本周与下周的校历节点 —— 让「为什么这周多出准备块」有出处 */
   const nearEvents = eventsNearWeek(DEADLINES, schedule.termStart, weekNo);
-  // WP11：「接下来」横排 —— 静态校历 ∪ 用户重要日，未来 3 个节点，紧急度配色
-  const upcoming = upcomingDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), todayISO(), 3);
 
   return (
     <div className="space-y-4">
-      {/* WP11：「接下来」—— 未来 3 个重要节点。≤3 天红 / ≤7 天黄，其余中性。
-          只提醒，不替用户改日程（L4）。 */}
-      {upcoming.length > 0 && (
-        <div className="panel px-4 py-3 sm:px-5" data-testid="upcoming-deadlines">
-          <p className="section-label-zh">接下来</p>
-          <div className="mt-1.5 flex flex-wrap gap-2">
-            {upcoming.map(({ deadline: d, daysLeft }) => {
-              const urgency = daysLeft <= 3
-                ? 'border-red-300 bg-red-50 text-red-700'
-                : daysLeft <= 7
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-ink/10 bg-paper text-ink-soft';
-              return (
-                <span key={d.id} className={`rounded-full border px-3 py-1 text-[12px] font-medium ${urgency}`}>
-                  {d.emoji} {d.title} · {daysLeft <= 0 ? '就是今天' : `还剩 ${daysLeft} 天`}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {/* 阶段头：现在处于什么阶段、策略是什么、为什么 */}
-      <div className="panel px-4 py-3.5 sm:px-5">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="flex items-center gap-1.5">
-            {/* W3/P1-5b.2：返回总览（WeekView 单窗口化后搬到这里） */}
-            {onBack && (
-              <button
-                type="button"
-                data-testid="weekplan-back-overview"
-                onClick={onBack}
-                className="rounded-lg bg-white px-2.5 py-1 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-              >
-                返回总览
-              </button>
-            )}
-            {onShiftWeek && (
-              <button
-                type="button"
-                data-testid="weekplan-prev-week"
-                aria-label="上一周"
-                onClick={() => onShiftWeek(-1)}
-                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-              >
-                ‹
-              </button>
-            )}
-            <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
-            {onShiftWeek && (
-              <button
-                type="button"
-                data-testid="weekplan-next-week"
-                aria-label="下一周"
-                onClick={() => onShiftWeek(1)}
-                className="rounded-lg bg-white px-2 py-1 text-[13px] leading-none text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-              >
-                ›
-              </button>
-            )}
-          </span>
-          {onShiftWeek && <span className="text-[11px] text-ink-faint">键盘 ←/→ 也可切周</span>}
-          <span className="text-[12px] text-ink-soft">
-            每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
-            留白 {Math.round(phase.policy.blankRatio * 100)}% ·
-            晚间{phase.policy.eveningAllowed ? '可用' : '不排'} ·
-            周末{phase.policy.weekendWork ? '排' : '不排'}
-          </span>
-        </div>
-        {/* WP7-E5：编辑模式开关（浏览态附提示，L4：只看不动手） */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {onOpenModeSetup && (
-            <button
-              type="button"
-              data-testid="open-mode-setup"
-              onClick={onOpenModeSetup}
-              className="rounded-lg bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
-            >
-              换个节奏
-            </button>
-          )}
-          <button
-            type="button"
-            data-testid="edit-mode-toggle"
-            aria-pressed={editMode}
-            onClick={() => setEditModePersisted(!editMode)}
-            className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
-              editMode ? 'bg-brand text-white' : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
-            }`}
-          >
-            <span className="relative top-[2px] mr-1 inline-flex"><Icon name="notebook-pen" size="xs" /></span>{editMode ? '编辑中' : '编辑'}
-          </button>
-          {!editMode && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
-        </div>
-        <ul className="mt-2 space-y-0.5">
-          {phase.reasons.slice(0, 3).map((r, i) => (
-            <li key={i} className="text-[11.5px] leading-relaxed text-ink-faint">· {r}</li>
-          ))}
-        </ul>
-        {/* 求解器诊断：排得「好不好」的量化凭据。
-            刻意不用绿色高亮 —— 它是给人核对的事实，不是「成功了」的庆祝。 */}
-        {diag && (
-          <div className="mt-2 border-t border-ink/10 pt-1.5 font-mono text-[11px] text-ink-faint">
-            {diag.hardViolations === 0 ? '硬约束违反 0' : `⚠ 硬约束违反 ${diag.hardViolations}`}
-            {' · '}调度代价 {Math.round(diag.cost.total)}（越低越好）
-            {' · '}{diag.iterations} 次迭代
-            {' · '}{Math.round(diag.elapsedMs)} ms
-            {lockCount(planState) > 0 && <>{' · '}已定住 {lockCount(planState)} 块</>}
-            {diag.churnMin > 0 && <>{' · '}本次挪动 {diag.churnMin} 分钟</>}
-          </div>
-        )}
-        {/* 锁太多会挤掉引擎的自由度 —— 与其让用户自己发现排不出来，不如先说一句 */}
-        {lockCount(planState) >= 6 && (
-          <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
-            已经定住 {lockCount(planState)} 块了 —— 定住的越多，引擎能腾挪的空间越小，排出来可能比较勉强
-          </div>
-        )}
-
-        {/* ── P2 控制条：从此刻开始排（T2.3） ────────────────────────
-            为什么只在「当前周」出现：`fromNow` 的语义是「今天剩下的时间」，
-            回看第 3 周时不存在这个时间点。放出来只会让人误以为能对历史周生效。
-            为什么默认关：开了之后今天这一列会明显变短（过去的时间被砍掉），
-            不解释的话用户会当成 bug —— 所以标签本身就把后果写出来了。 */}
-        {isCurrentWeek && (
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink/10 pt-2">
-            <button
-              type="button"
-              onClick={() => setFromNowOn((v) => !v)}
-              className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
-                fromNowOn
-                  ? 'bg-slate-800 text-white'
-                  : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
-              }`}
-            >
-              {fromNowOn ? '⏱ 只排剩下的时间' : '⏱ 从此刻开始排'}
-            </button>
-            <span className="text-[11px] text-ink-faint">
-              {fromNowOn
-                ? '今天已经过去的时间不再安排，其余日子不受影响'
-                : '完整排满这一周（默认）'}
-            </span>
-          </div>
-        )}
-
-        {/* ── P2 转场收敛如实提示（T2.4 / AC-10） ────────────────────
-            收敛成功时不显示任何东西（正常情况不需要夸奖）。
-            只有「还有路没问到」才提示 —— 这时块上的分钟数是估算值，
-            用户有权知道，而不是把一个猜的数字当实测值看。 */}
-        {transferInfo && transferInfo.uncovered.length > 0 && (
-          <div className="mt-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11.5px] text-ink-soft">
-            有 {transferInfo.uncovered.length} 处转场时间仍是**估算值**
-            （后端暂无这些路线的实测数据）：{transferInfo.uncovered.slice(0, 3).join('、')}
-            {transferInfo.uncovered.length > 3 ? ' 等' : ''}
-          </div>
-        )}
-
-        {!backendOk && (
-          <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
-            后端未连通，转场时间是估算值 —— 跑 <code className="font-mono">python server/app.py</code> 后刷新
-          </div>
-        )}
-      </div>
-
-      {/* 本周节点 —— 事件不再只是「旁边一个倒计时」，这里说明它怎么进了日程 */}
-      {nearEvents.length > 0 && (
-        <div className="panel px-4 py-3 sm:px-5">
-          <h3 className="text-[14px] font-semibold text-ink">这周的节点</h3>
-          <ul className="mt-2 space-y-1.5">
-            {nearEvents.map((d) => {
-              const left = diffDays(todayISO(), d.date);
-              return (
-                <li key={d.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
-                  <span>{d.emoji}</span>
-                  <span className="font-medium text-ink">{d.title}</span>
-                  <span className="font-mono text-[11px] text-ink-faint">{d.date}</span>
-                  <span className={left >= 0 && left <= 7 ? 'text-red-600' : 'text-ink-soft'}>
-                    {left === 0 ? '就是今天' : left > 0 ? `还有 ${left} 天` : `已过 ${-left} 天`}
-                  </span>
-                  {d.prep && (
-                    <span className="text-purple-700">→ 已排准备块</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      {/* ── 阶段 A：二次修改能力 ──────────────────────────────────
-          用户的干预入口。加进去 / 删掉的事会**立刻**重排
-          （`edits` 在主 effect 的依赖数组里）。 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={handleUndo}
-          disabled={undoDepthState === 0}
-          title="撤销上一步改动（Ctrl+Z）"
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            undoDepthState > 0
-              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-              : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
-          }`}
-        >
-          ↩ 撤销{undoDepthState > 0 ? `（${undoDepthState}）` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={handleRedo}
-          disabled={redoDepthState === 0}
-          title="重做（Ctrl+Shift+Z）"
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            redoDepthState > 0
-              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-              : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
-          }`}
-        >
-          ↪ 重做{redoDepthState > 0 ? `（${redoDepthState}）` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={() => setReplanToken((v) => v + 1)}
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            pendingEdits
-              ? 'bg-slate-800 text-white ring-slate-800'
-              : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-          }`}
-        >
-          重新排一遍
-        </button>
-        <button
-          type="button"
-          onClick={() => setRestoreAsk(true)}
-          disabled={restoreCount === 0}
-          data-testid="week-restore-engine"
-          title="清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎排的最初版"
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            restoreCount > 0
-              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-              : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
-          }`}
-        >
-          ↺ 回到最初版{restoreCount > 0 ? `（${restoreCount}）` : ''}
-        </button>
-        <Modal
-          open={restoreAsk}
-          onClose={() => setRestoreAsk(false)}
-          title="回到引擎最初版？"
-          testId="week-restore-engine-dialog"
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => setRestoreAsk(false)}
-                className="rounded-md px-3 py-1.5 text-[12.5px] font-medium text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
-              >
-                先不了
-              </button>
-              <button
-                type="button"
-                onClick={handleRestoreEngine}
-                data-testid="week-restore-engine-confirm"
-                className="rounded-md bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-red-700"
-              >
-                还原并重排
-              </button>
-            </>
-          }
-        >
-          <ul className="list-disc space-y-0.5 pl-4">
-            {layer.moves.filter((m) => m.weekNo === weekNo).length > 0 && (
-              <li>挪动 / 改时 {layer.moves.filter((m) => m.weekNo === weekNo).length} 处</li>
-            )}
-            {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length > 0 && (
-              <li>已跳过的 {layer.excluded.filter((id) => id.startsWith(`w${weekNo}-`)).length} 块会回来</li>
-            )}
-            {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length > 0 && (
-              <li>本周新加的 {layer.tasks.filter((t) => t.weeks && t.weeks.length > 0 && t.weeks.includes(weekNo)).length} 件事会拿掉</li>
-            )}
-            {weekLockCount(planState, weekNo) > 0 && (
-              <li>本周定住的 {weekLockCount(planState, weekNo)} 块会解锁</li>
-            )}
-          </ul>
-          <p className="mt-2">
-            保留不动：长期任务、不可时段、调课停课、作业时长与长期锁。
-            还原后马上重排；按 Ctrl+Z 可整体撤销（定住的解除除外）。
-          </p>
-        </Modal>
-        {/* T3：改动不再自动应用 —— 必须**明说**还没生效，否则用户会以为按钮坏了 */}
-        {pendingEdits && (
-          <span className="rounded-md bg-amber-50 px-2 py-1 text-[11.5px] text-amber-900 ring-1 ring-amber-700/20">
-            改动已记下，点左边「重新排一遍」才会生效
-          </span>
-        )}
-        {edits.userTasks.length > 0 && (
-          <span className="text-[11.5px] text-ink-faint">你加了 {edits.userTasks.length} 件事</span>
-        )}
-        {edits.excludedBlockIds.length > 0 && (
-          <span className="text-[11.5px] text-ink-faint">
-            已跳过 {edits.excludedBlockIds.length} 块
-            <button
-              type="button"
-              onClick={handleRestoreAll}
-              className="ml-1.5 rounded bg-white px-2 py-0.5 text-[11px] text-brand ring-1 ring-brand/25 hover:bg-brand/5"
-            >
-              全部恢复
-            </button>
-          </span>
-        )}
-      </div>
-
-      {/* WP7-E5：面板区只在编辑态渲染（浏览态零渲染，防误操作） */}
-      {editMode && (
-      <>
-      <AddTaskPanel onAdd={handleAddTask} weekNo={weekNo} />
-
-      {/* S4：我常去的食堂 —— 引擎不猜（T2），但给用户一个显式设定的地方 */}
-
-      {/* R4：不可时段声明（多条并存）+ 用途追问 */}
-      <SlotEditor
+      {/* 阶段头 + 本周节点（F2d/A5：拆为 WeekPlanHeader 纯展示子组件） */}
+      <PhaseHeader
         weekNo={weekNo}
-        slots={layer.slots}
+        phase={phase}
+        diag={diag}
+        planState={planState}
+        isCurrentWeek={isCurrentWeek}
+        fromNowOn={fromNowOn}
+        setFromNowOn={setFromNowOn}
+        transferInfo={transferInfo}
+        backendOk={backendOk} onGoProfile={onGoProfile}
+      />
+      <NearEventsPanel events={nearEvents} />
+
+      {/* 工具面板栈（F2d/A5：操作条 + 用户干预面板拆为 WeekToolsPanel） */}
+      <WeekToolsPanel
+        weekNo={weekNo}
         goals={goals}
-        mondayISO={dateOfDay(1)}
-        onChange={(next) => updateLayer((prev) => ({ ...prev, slots: next }))}
+        rules={rules}
+        /*
+         * 目标改动**不自动重排**（引擎 effect 的依赖里刻意没有 goals —— T3 攒批语义），
+         * 所以要像 `updateLayer` 那样「写 store 的同时标记待生效」，
+         * 否则用户点完「延 2 周 / 减 20% / 转冲刺」只会看到计划纹丝不动。
+         * ⟹ 状态条「有 N 项改动还没生效 · 调了 目标设置」+「重新排一遍」就此可达。
+         */
+        onGoalsChange={(next) => { setGoals(next); setGoalsPending(true); setPendingEdits(true); }}
+        notify={notify}
+        onGoToToday={onGoToToday}
+        handleUndo={handleUndo}
+        handleRedo={handleRedo}
+        undoDepth={undoDepth}
+        redoDepth={redoDepth}
+        setReplanToken={setReplanToken}
+        onOpenAdjust={() => setAdjustOpen(true)}
+        pendingEdits={pendingEdits} editedBlockIds={editedBlockIds} edits={edits}
+        goalsChanged={goalsPending}
+        handleRestoreAll={handleRestoreAll}
+        timeAskNote={timeAskNote}
+        handleAddRule={handleAddRule}
+        handleAddTaskFromDraft={handleAddTaskFromDraft}
+        onAskSched={handleAskSched}
+        handleRemoveBlocks={handleRemoveBlocks}
+        dragNote={dragNote}
+        goalWarnings={goalWarnings}
+        dismissedWarnings={dismissedWarnings}
+        setDismissedWarnings={setDismissedWarnings}
+        /* 本树接缝：换周/返回/模式/一键还原 都经操作条上抛（Ray 版原只有「回到今天」） */
+        onShiftWeek={onShiftWeek}
+        onBack={onBack}
+        onOpenModeSetup={onOpenModeSetup}
+        onRestoreEngine={() => setRestoreAsk(true)}
+        restoreCount={restoreCount}
+        editMode={editMode}
+        onToggleEditMode={() => setEditModePersisted(!editMode)}
       />
 
-      {/* R3：调课 / 停课 —— 走覆盖层，原始课表永不改动 */}
-      <CourseOverrideEditor
-        schedule={schedule}
-        weekNo={weekNo}
-        overrides={layer.courseOverrides}
-        onChange={(next) => updateLayer((prev) => ({ ...prev, courseOverrides: next }))}
-      />
-      {derived.applied.length > 0 && (
-        <div className="rounded-md bg-slate-50 px-3 py-2 text-[11.5px] text-ink-soft">
-          这周已应用 {derived.applied.length} 处调课/停课：
-          {derived.applied
-            .map((a) => `${a.courseName} ${a.periodLabel} ${a.action === 'cancel' ? '停课' : '调课'}`)
-            .join('、')}
-        </div>
-      )}
-      {timeAskNote && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
-          {timeAskNote}
-        </div>
-      )}
-
-      {/* ── 阶段 B：偏好校正层 ────────────────────────────────────
-          采集用户的改进建议。本期**只记录、不参与排程**（面板内已如实说明）。 */}
-      <CorrectionCapture
-        onAdd={handleAddRule}
-        onAddTask={handleAddTaskFromDraft}
-        onRemoveBlocks={handleRemoveBlocks}
-      />
-
-      {/* R5：投入与成就 —— V1-1 移到编辑门之外常驻（见下方）；数字由 aggregate.ts 现算 */}
-      <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
-      </>
-      )}
-
-      {/* V1-1：投入与成就 —— CY 要求常驻（编辑模式之外也能看到），不再包在 editMode 门里 */}
-      <AchievementPanel key={activityVersion} weekNo={weekNo} />
-
-      {/* 天气（2026-09-19 改版）：单独的天气栏已移除 ——
-          天气的唯一落点在下面每一天列的标题下方（有数据的日子才显示）。 */}
-
-      {/* 执行情况面板已下线（2026-09-19，用户确认不需要）：
-          「做了 / 没做」入口随之移除，历史记录仍留在本地供 actualLoad 消费。 */}
-
-      {/* R1：拖拽 —— 原生 drag-and-drop，零新增依赖。
-          放进前后的次序是 HTML5 drag 的约定：`dragover` 不 preventDefault 的话 drop 不会触发。 */}
-      {dragNote && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
-          {dragNote}
-        </div>
-      )}
-
-      {/* 批 6.1（规范 §3.2 欠账）：引擎 issue 明细收进顶部聚合条，点开展开 ——
-          周网格默认屏上不再出现 issue 长句（明细仍可在本条内看全） */}
-      {(() => {
-        const s = summarizeIssues(plan.issues);
-        if (!s.headline) return null;
-        return (
-          <details data-testid="issue-summary-bar" className="panel px-4 py-2.5 text-[12px]">
-            <summary className={`cursor-pointer font-medium ${s.errorCount > 0 ? 'text-red-700' : 'text-ink-soft'}`}>
-              {s.headline}
-            </summary>
-            <ul className="mt-2 space-y-1 text-ink-soft">
-              {s.details.map((d, i) => <li key={i}>· {d}</li>)}
-            </ul>
-          </details>
-        );
-      })()}
-
-      {/* 裁决 R2（2026-10-06 收官批次·批次 2）：「我的作息」采集入口 —— 写入端补齐。
+      {/* 裁决 R2（本树批次 2）：「我的作息」采集入口 —— 写入端补齐。
           校验复用 routineFromHHMM（不猜纪律：无效给具体原因，不静默丢弃）；
-          保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见上方 req 构造）。 */}
+          保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见 useWeekPlan）。 */}
       <details
         data-testid="routine-entry"
         className="panel px-4 py-3"
@@ -2085,9 +1191,10 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         </div>
       </details>
 
-      {/* R批 Wave3（H1.3）· 日程评估入口与结果 ——（2026-10-06 收官批次 P0-1a 自 integration-full 移植）
-          放在 issue 聚合条之后、时间轴之前：它属于「这一版日程的整体体检」，
-          紧贴用户刚排完的网格，不用往下翻。
+      {/* V1-1（本树 V 批）：投入与成就 —— CY 要求**常驻**（编辑模式之外也能看到） */}
+      <AchievementPanel key={activityVersion} weekNo={weekNo} termStart={schedule.termStart} />
+
+      {/* R批 Wave3（H1.3）· 日程评估入口与结果（本树接缝）。
           **手动触发**而非自动弹：评估会占一屏，自动弹等于打断。 */}
       <details
         data-testid="plan-eval-entry"
@@ -2131,305 +1238,53 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         )}
       </details>
 
-      {/* UI v2 D1/D2：日程双层切换（SCHEDULE_VIEW_V2 开才显示，默认层=周概览） */}
-      {scheduleV2 && (
-        <div className="flex justify-end">
-          <Segmented
-            label="日程视图"
-            options={[
-              { value: 'week', label: '周概览' },
-              { value: 'day', label: '当日流水' },
-            ]}
-            value={agendaView ? 'day' : 'week'}
-            onChange={(v) => setAgendaView(v === 'day')}
-          />
-        </div>
-      )}
 
-      {/* UI v2 D2：上层 · 周概览七密度卡（节奏尺，不画课名；点卡下潜当日流水） */}
-      {scheduleV2 && (
-        <WeekBoard
-          blocks={(shownPlan ?? plan).blocks}
-          issues={plan.issues}
-          weekMonday={weekMonday}
-          todayDow={(todayDow ?? null) as DayOfWeek | null}
-          selectedDay={agendaView ? ((agendaDay ?? todayDow ?? 1) as DayOfWeek) : null}
-          onSelectDay={(d) => { setAgendaDay(d); setAgendaView(true); }}
-        />
-      )}
+      {/* 七天时间轴（T3：七列共享时间基准 · WeekTimelineGrid + WeekDayColumn 泳道） */}
+      <WeekTimelineGrid
+        allBlocks={(shownPlan ?? plan).blocks}
+        todayDow={todayDow}
+        dateOfDay={dateOfDay}
+        weatherByDate={weatherByDate}
+        adviceByDate={adviceByDate}
+        recentTaskIds={recentTaskIds}
+        onDismissNew={(tid) => setRecentTaskIds((prev) => prev.filter((x) => x !== tid))}
+        planState={planState}
+        weekNo={weekNo}
+        assignmentByCourse={assignmentByCourse}
+        editedBlockIds={editedBlockIds}
+        draggingId={draggingId}
+        preview={preview}
+        setDraggingId={setDraggingId}
+        updatePreview={updatePreview}
+        clearPreview={clearPreview}
+        handleDrop={handleDrop}
+        onGapContextMenu={handleGapContextMenu}
+        onToggleLock={toggleLock}
+        onExclude={handleExcludeBlock}
+        onSetAssignment={handleSetAssignment}
+        onClearAssignment={handleClearAssignment}
+        onEditBlock={handleEditBlock}
+        onRevertEdit={handleRevertEdit}
+        allowEdit={editMode}
+      />
 
-      {/* UI v2 D1：下层 · 当日流水（SCHEDULE_VIEW_V2 开 + 下潜/切到「当日流水」才渲染） */}
-      {scheduleV2 && agendaView && (
-        <DayAgenda
-          blocks={(shownPlan ?? plan).blocks}
-          issues={plan.issues}
-          todayDow={(todayDow ?? 1) as DayOfWeek}
-          day={(agendaDay ?? undefined) as DayOfWeek | undefined}
-          onDayChange={setAgendaDay}
-          onOpenDetail={setDetailBlock}
-        />
-      )}
-
-      {!agendaView && (
-      <>
-      {/* 七天时间轴（WP7-E6：浏览态七天同屏一行，窄屏横向滚动不换行；编辑态还原四档自适应）
-          E4（2026-09-28）：浏览态给时间轴一个**视觉重心** —— 至少撑满视口主体高度，
-          让「时间轴是主角、其他都是注脚」（docs/week-view-design.md §2.1）。
-          `data-testid` 供 E6 剧本 O 量测高度占比。 */}
-      <div className={editMode
-        ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-        : 'overflow-x-auto'}>
-        {/* E4：视觉重心用**内联 style** 而不是 className —— `tests/wp7.test.ts` 锁定的是
-            浏览/编辑态**类名字符串**（`'contents' : 'grid grid-cols-7 …'`），
-            动它就得改既有断言；内联 style 达到同样效果且零断言漂移。
-            `display: contents` 下 minHeight 无效，故编辑态无副作用。 */}
-        <div
-          data-testid="week-timeline"
-          style={{ minHeight: 'calc(100vh - 280px)' }}
-          className={editMode ? 'contents' : 'grid grid-cols-7 min-w-[1120px] gap-3'}
-        >
-        {DAY_LABELS.map((name, idx) => {
-          const day = idx + 1;
-          const baseBlocks = (shownPlan ?? plan).blocks
-            .filter((b) => b.dayOfWeek === day)
-            .sort((a, b) => a.startMin - b.startMin);
-          const study = baseBlocks.filter((b) => b.kind === 'study')
-            .reduce((n, b) => n + (b.endMin - b.startMin), 0);
-
-          /**
-           * 拖拽实时预览（悬停块式）：影子画在卡片流里；源块保留原位（不卸载）。
-           * 🔴 源块不许卸载：dragend 派发给源元素，卸载则事件丢失（透明度卡死）。
-           */
-          const dayPreview = preview && preview.day === day ? preview : null;
-          const gaps = freeGapsOf(baseBlocks, day);
-          /** 这一天最后一件事的结束时间 —— 拖到空白处的默认落点 */
-          const tailMin = baseBlocks.length ? baseBlocks[baseBlocks.length - 1].endMin : 8 * 60;
-          const movedBlocks = dayPreview?.ok
-            ? baseBlocks.map((b) => {
-                const d = dayPreview.displaced.get(b.id);
-                return d ? { ...b, startMin: d.start, endMin: d.end } : b;
-              })
-            : baseBlocks;
-          const ghost = dayPreview
-            ? {
-                startMin: dayPreview.startMin, endMin: dayPreview.endMin,
-                ok: dayPreview.ok, title: dayPreview.title, reason: dayPreview.reason,
-              }
-            : null;
-          /** 渲染序列：块 + 空闲块 + 影子（按时间合并） */
-          const renderItems: Array<
-            | { kind: 'block'; startMin: number; block: TimeBlock }
-            | { kind: 'gap'; startMin: number; gap: TimeGap }
-            | { kind: 'ghost'; startMin: number; ghost: NonNullable<typeof ghost> }
-          > = [
-            ...movedBlocks.map((b) => ({ kind: 'block' as const, startMin: b.startMin, block: b })),
-            ...gaps.map((g) => ({ kind: 'gap' as const, startMin: g.startMin, gap: g })),
-            ...(ghost ? [{ kind: 'ghost' as const, startMin: ghost.startMin, ghost }] : []),
-          ].sort((a, b) => a.startMin - b.startMin);
-          return (
-            <div
-              key={day}
-              className={`panel p-3 ${day === todayDow ? 'ring-2 ring-brand/40' : ''}`}
-              data-today={day === todayDow ? '1' : undefined}
-              onDragLeave={(e) => {
-                // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
-                if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
-              }}
-              onDragOver={(e) => {
-                // WP4b-B5：列空白处的悬停兜底 —— 影子直接画在「列末尾」，
-                // 与 onDrop 用同一个 dropTargetMin，预览位恒等于松手落位。
-                e.preventDefault();
-                updatePreview(day, dropTargetMin(null, day, baseBlocks), `${day}:tail:${e.clientX}:${e.clientY}`);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const id = e.dataTransfer.getData('text/plain') || draggingId;
-                if (id) handleDrop(id, day, dropTargetMin(preview, day, baseBlocks));
-                setDraggingId(null);
-                clearPreview();
-              }}
-            >
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[13px] font-semibold text-ink">
-                  {name}
-                  {/* 批 6.1：列头补具体日期 —— 「周X」对不上「第几号」，跨周核对全靠它 */}
-                  <span className="ml-1 text-[11px] font-normal text-ink-faint">{dayShort(day)}</span>
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  {study > 0 && <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>}
-                  <SaturationBar
-                    sat={daySaturation(baseBlocks, 7 * 60, 23 * 60)}
-                    detail={(() => {
-                      const d = dayBreakdown(baseBlocks);
-                      const h = (m: number) => (m / 60).toFixed(1).replace(/.0$/, '') + 'h';
-                      return ['课程 ' + h(d.courseMin), '自习 ' + h(d.studyMin), '活动 ' + h(d.activityMin), '留白 ' + h(d.blankMin)];
-                    })()}
-                  />
-                </span>
-              </div>
-
-              {/* 天气 —— 就在星期名称下面（2026-09-19 改版）。
-                  有提醒（下雨/高低温/大风）显示带时段的人话提醒，
-                  平常日子显示一行概况；那天没有数据（过去的日子）就不显示 —— 不猜。 */}
-              {(() => {
-                const wd = weatherByDate.get(dateOfDay(day));
-                if (!wd) return null;
-                const adv = adviceByDate.get(dateOfDay(day));
-                const range = wd.tMin != null && wd.tMax != null ? `${wd.tMin}–${wd.tMax}℃` : '';
-                if (adv) {
-                  return (
-                    <div
-                      title={adv.detail}
-                      className={`mb-1.5 rounded border-l-2 px-2 py-1 text-[11px] leading-relaxed ${
-                        adv.severity === 'warn'
-                          ? 'border-amber-400 bg-amber-50 text-amber-900'
-                          : 'border-slate-300 bg-slate-50 text-ink-soft'
-                      }`}
-                    >
-                      {adv.emoji} <strong>{adv.label}</strong> · {wd.text} {range}：{adv.detail}
-                    </div>
-                  );
-                }
-                const emoji = wd.rainProb >= 50 ? '🌧️' : wd.rainProb >= 20 ? '⛅' : '☀️';
-                return (
-                  <div className="mb-1.5 rounded bg-slate-50 px-2 py-1 text-[11px] text-ink-soft">
-                    {emoji} {wd.text} {range}
-                  </div>
-                );
-              })()}
-
-              {/* 卡片流 + 空闲块（≥30 分钟）+ 拖拽影子 */}
-              <div className="space-y-1.5">
-                  {renderItems.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-ink/15 px-3 py-4 text-center text-[12px] text-ink-faint">
-                      这一天没有安排
-                    </div>
-                  )}
-                  {renderItems.map((item) => {
-                    // 影子块：拖动预览的落点（半透明虚线）或不可落位警告（红色）
-                    if (item.kind === 'ghost') {
-                      const g = item.ghost;
-                      // 影子上必须拦住 dragover：不拦的话事件冒到列容器，落点会被重算
-                      const ghostProps = {
-                        onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
-                      };
-                      return g.ok ? (
-                        <div
-                          key="drag-ghost"
-                          {...ghostProps}
-                          className="rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-2.5 py-2 text-[12.5px] font-medium text-brand opacity-60"
-                        >
-                          📍 {g.title}
-                          <span className="ml-1 font-mono text-[11px]">{toHHmm(g.startMin)}–{toHHmm(g.endMin)}</span>
-                          <div className="mt-0.5 text-[10.5px] font-normal text-brand/70">松手放到这里</div>
-                        </div>
-                      ) : (
-                        <div
-                          key="drag-ghost"
-                          {...ghostProps}
-                          className="rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-2.5 py-2 text-[12.5px] font-medium text-red-700"
-                        >
-                          <span className="relative top-[3px] mr-1 inline-flex"><Icon name="x-circle" size="xs" /></span>放不到这里 —— {g.reason ?? '放不下'}
-                        </div>
-                      );
-                    }
-                    if (item.kind === 'gap') {
-                      return (
-                        <div
-                          key={`gap-${item.gap.startMin}`}
-                          className="rounded-lg border border-dashed border-ink/20 bg-paper/60 px-2.5 py-1.5 text-[11px] text-ink-faint"
-                        >
-                          <span className="relative top-[3px] mr-1 inline-flex"><Icon name="inbox" size="xs" /></span>空闲 {toHHmm(item.gap.startMin)}–{toHHmm(item.gap.endMin)}
-                          （{humanizeMinutes(item.gap.endMin - item.gap.startMin)}）
-                        </div>
-                      );
-                    }
-                    const b = item.block;
-                    const newTaskId = recentTaskIds.find((tid) => b.id.endsWith(`-${tid}`));
-                    return (
-                      <BlockCard
-                        key={b.id}
-                        editable={editMode}
-                        block={b}
-                        date={dateOfDay(day)}
-                        locked={isLockedThisWeek(planState, weekNo, b)}
-                        onToggleLock={toggleLock}
-                        onExclude={handleExcludeBlock}
-                        assignmentMin={b.courseId ? assignmentByCourse.get(b.courseId) : undefined}
-                        onSetAssignment={handleSetAssignment}
-                        onClearAssignment={handleClearAssignment}
-                        edited={editedBlockIds.has(b.id)}
-                        onEditBlock={handleEditBlock}
-                        onRevertEdit={handleRevertEdit}
-                        dragging={draggingId === b.id}
-                        onDragStartCard={(blk) => { setDraggingId(blk.id); clearPreview(); }}
-                        onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
-                        isNew={!!newTaskId}
-                        onDismissNew={newTaskId ? () => setRecentTaskIds((prev) => prev.filter((tid) => tid !== newTaskId)) : undefined}
-                        onOpenDetail={setDetailBlock}
-                      />
-                    );
-                  })}
-                </div>
-            </div>
-          );
-        })}
-        </div>
-      </div>
-      </>
-      )}
-
-      {/* 拖拽删除投放区 —— 只在拖动时浮现（侧边固定，不随页面滚动）。
-          松手 = 删除（与块上「🗑 删除」同通道，可「全部恢复」撤销）。 */}
+      {/* 拖拽删除投放区（F2d/A5：拆为 WeekDiagnostics 纯展示组件） */}
       {draggingId && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDeleteHover(true); }}
-          onDragLeave={() => setDeleteHover(false)}
+        <DropToDeleteZone
+          deleteHover={deleteHover}
+          setDeleteHover={setDeleteHover}
           onDrop={handleDropToDelete}
-          className={`fixed right-4 top-1/2 z-50 -translate-y-1/2 select-none rounded-xl border-2 border-dashed px-3.5 py-6 text-center text-[12.5px] font-semibold leading-relaxed shadow-lg transition-colors ${
-            deleteHover
-              ? 'scale-105 border-red-500 bg-red-100 text-red-700'
-              : 'border-red-300 bg-white/95 text-red-600'
-          }`}
-        >
-          <span className="relative top-[3px] mx-auto inline-flex"><Icon name="trash" size="md" /></span><br />拖到这里<br />删除
-        </div>
+        />
       )}
 
-      {/* 问题清单 + 汇总 */}
-      <div className="panel px-4 py-3.5 sm:px-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-[14px] font-semibold text-ink">这一周的情况</h3>
-          <span className="text-[12px] text-ink-soft">
-            上课 {(plan.stats.courseMin / 60).toFixed(1)}h · 自习 {(plan.stats.studyMin / 60).toFixed(1)}h ·
-            留白 {(plan.stats.blankMin / 60).toFixed(1)}h · {plan.stats.blockCount} 个块
-          </span>
-        </div>
-        {issues.length === 0 ? (
-          <p className="mt-2 text-[12px] text-green-700">没有发现问题 —— 转场余量都在安全范围内。</p>
-        ) : (
-          <ul className="mt-2 space-y-1.5">
-            {issues.map((iss, i) => (
-              <li key={i} className={`rounded-md border px-2.5 py-1.5 text-[12px] leading-snug ${ISSUE_STYLE[iss.level]}`}>
-                [{iss.level === 'error' ? '会迟到' : iss.level === 'warn' ? '偏紧' : '提示'}] {iss.message}
-              </li>
-            ))}
-          </ul>
-        )}
-        {notes.length > 0 && (
-          <ul className="mt-2 space-y-0.5 border-t border-ink/10 pt-2">
-            {notes.map((n, i) => (
-              <li key={i} className="text-[11.5px] text-ink-faint">· {n}</li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* 问题清单 + 汇总（F2d/A5 拆出） */}
+      <WeekIssuesPanel plan={plan} issues={issues} notes={notes} />
 
-      {/* 删除后的空档处理（2026-09-19）：补上来 / 留空白 / 整周重排 / 取消删除 */}
+      {/* 删除后的空档处理（2026-09-19）：补上来 / 留空白 / 整周重排 / 取消删除（F2d/A5 拆出） */}
       {deleteAsk && (
-        <DeleteAskDialog
-          title={deleteAsk.title}
-          timeText={`${DAY_LABELS[deleteAsk.day - 1] ?? `周${deleteAsk.day}`} ${toHHmm(deleteAsk.startMin)}–${toHHmm(deleteAsk.endMin)}`}
+        <DeleteAskSection
+          deleteAsk={deleteAsk}
+          dayLabel={DAY_LABELS[deleteAsk.day - 1] ?? `周${deleteAsk.day}`}
           onFill={() => {
             let fillCount = 0;
             if (shownPlan) {
@@ -2507,17 +1362,21 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         />
       )}
 
-      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      {/* 右键空档「加一件事」小弹窗（2026-10-07；fixed 定位在光标处，打开时已夹回视口） */}
+      {gapAdd && (
+        <GapAddPopover
+          day={gapAdd.day}
+          startMin={gapAdd.startMin}
+          capacityMin={gapAdd.capacityMin}
+          x={gapAdd.x}
+          y={gapAdd.y}
+          onSubmit={submitGapAdd}
+          onClose={() => setGapAdd(null)}
+        />
+      )}
 
-      {/* E5（2026-09-28）：L2 详情抽屉 —— 点块上的「详情」才展开
-          （来源 / 为什么排在这 / 完整转场 / 锁定与事件）。零依赖：原生 dialog。 */}
-      <DetailDrawer
-        open={detailBlock !== null}
-        title={detailBlock ? blockDetail(detailBlock).title : ''}
-        rows={detailBlock ? blockDetail(detailBlock).rows : []}
-        onClose={() => setDetailBlock(null)}
-      />
+
+      {overlays}
     </div>
   );
 }

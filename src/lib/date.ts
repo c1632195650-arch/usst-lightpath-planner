@@ -49,6 +49,27 @@ export function weekdayCN(iso: string): string {
 }
 
 /**
+ * 「周一 → 周日」七天的中文名 —— **唯一真源**（2026-09-21 P2-5 去重）。
+ *
+ * ⚠️ 与上面的 `WEEKDAY_CN` **口径不同，别混用**：
+ *   · `WEEKDAY_CN`  = `[0]=周日 … [6]=周六` —— 配合 `Date.getDay()` / `weekdayOf(iso)`；
+ *   · `DAY_LABELS`  = `[0]=周一 … [6]=周日` —— 配合 `dayOfWeek`（1–7，取值 `[d-1]`）。
+ * 两种口径都合法，各服务一类调用方；同名不同序才是陷阱，所以这里刻意用两个名字。
+ *
+ * ── 为什么真源放在 `lib/` 而不是某个 feature ──────────────────────
+ * 这份字面量**两侧都要用**：前端各域（`features/**`）与排程引擎（`lib/planner/**`）。
+ * 而 `lib/**` 不得 import `features/**`（前端架构规格书 §4.1 规则 1），
+ * 所以共同上游只能落在 `lib/`。放这里也顺便和 `WEEKDAY_CN` 并排，口径差异一眼可见。
+ *
+ * ── 去重前的事实（2026-09-21 实测）────────────────────────────────
+ * 同一份字面量在仓里共 **8 处**副本：周视图 ×5（`weekViewUtils` / `CourseOverrideEditor` /
+ * `SlotEditor` / `TimeAskDialog` / `WeekView`）、目标页 ×1、引擎 ×2（`incremental` / `roll`）。
+ * 任一处改了文案、另几处没跟，界面就会同时出现「周三」和「礼拜三」这种不一致，
+ * 且**不会有任何测试报错**。`tests/arch-guards.test.ts` 已加静态守卫把定义点钉死。
+ */
+export const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/**
  * 当前是第几周（1-based）。
  * @param termStart 学期第一周的**周一**日期
  */

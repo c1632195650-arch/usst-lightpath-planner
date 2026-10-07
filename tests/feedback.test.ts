@@ -37,6 +37,7 @@ import {
 } from '@/lib/planner/corrections';
 import { parseCorrection, asNoteDraft } from '@/features/feedback/parseCorrection';
 import { parsePlanIntent } from '@/features/feedback/planIntent';
+import { clearConflictingSlots, type UnavailableSlot } from '@/features/week/userPlanStore';
 import { DEFAULT_WEIGHTS } from '@/lib/planner/model';
 
 /** 造一条规则（默认是「周日不排」） */
@@ -503,4 +504,41 @@ test('parsePlanIntent：「周五下午不安排」→ 约束（NEGATION 补 不
     assert.equal(it.draft.kind, 'unavailable_slot');
     assert.deepEqual((it.draft.payload as { days: number[] }).days, [5]);
   }
+});
+
+/* ============================================================
+ * 七、2026-10-08 接入 RAY 批次（e7df736）：
+ *     「最新要求优先」clearConflictingSlots —— 显式时段任务解除冲突禁排
+ * ========================================================== */
+
+test('clearConflictingSlots：显式时段任务解除冲突禁排（最新要求优先）', () => {
+  const slot: UnavailableSlot = {
+    id: 's1', days: [4], fromMin: 13 * 60, toMin: 18 * 60,
+    weeks: [6], scope: 'once', createdAtWeek: 6,
+  };
+  const tasks = [{ dayOfWeek: 4, startMin: 15 * 60, durationMin: 120 }];
+  const r = clearConflictingSlots([slot], tasks, 6);
+  assert.equal(r.removed.length, 1);
+  assert.equal(r.slots.length, 0);
+});
+
+test('clearConflictingSlots：浮动任务（无 startMin）不解除任何禁排', () => {
+  const slot: UnavailableSlot = {
+    id: 's1', days: [4], fromMin: 13 * 60, toMin: 18 * 60,
+    weeks: [6], scope: 'once', createdAtWeek: 6,
+  };
+  const r = clearConflictingSlots([slot], [{ dayOfWeek: 4, durationMin: 120 }], 6);
+  assert.equal(r.removed.length, 0);
+  assert.equal(r.slots.length, 1);
+});
+
+test('clearConflictingSlots：不相交不解除；长期槽按 createdAtWeek 判活', () => {
+  const long: UnavailableSlot = {
+    id: 'L', days: [1], fromMin: 9 * 60, toMin: 12 * 60,
+    weeks: [], scope: 'long', createdAtWeek: 5,
+  };
+  const r1 = clearConflictingSlots([long], [{ dayOfWeek: 1, startMin: 14 * 60, durationMin: 60 }], 6);
+  assert.equal(r1.removed.length, 0);
+  const r2 = clearConflictingSlots([long], [{ dayOfWeek: 1, startMin: 10 * 60, durationMin: 60 }], 6);
+  assert.equal(r2.removed.length, 1);
 });

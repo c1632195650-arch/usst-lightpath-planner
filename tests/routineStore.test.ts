@@ -282,17 +282,18 @@ test('AC-9: 作息窗口经 routineToDayWindow 翻译后同样生效（组装层
  */
 
 test('Q1b 守卫：组装层确实把作息窗口展开进了 PlanRequest（否则整条链是死代码）', () => {
-  // 移植适配（2026-10-06 收官批次·批次 2，CY 裁决 R2）：本树组装层不在
-  // useWeekPlan.ts（引擎 effect 在 WeekPlanView 内联，req 构造处展开），
-  // 且按 R2 口径走 dayWindowWithFallback（作息真源 + 问卷就寝兜底）。
-  const code = srcOf('src/features/week/WeekPlanView.tsx');
+  // 移植适配（2026-10-06 收官批次·批次 2，CY 裁决 R2）：本树组装层按 R2 口径走
+  // dayWindowWithFallback（作息真源 + 问卷就寝兜底）。
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：排程 effect 收拢进 useWeekPlan.ts ——
+  //   日窗在 useMemo 里算好（dayWindow），req 处展开；两环缺一即死代码。
+  const code = srcOf('src/features/week/useWeekPlan.ts');
   assert.match(
     code,
-    /\.\.\.\(dayWindowWithFallback\(loadRoutine\(\), loadBasicInfo\(\)\.sleepMin \?\? null\) \?\? \{\}\)/,
+    /dayWindowWithFallback\(loadRoutine\(\), loadBasicInfo\(\)\.sleepMin \?\? null\)/,
     '组装层不再把作息窗口展开进 PlanRequest —— 采到的作息不会生效',
   );
   assert.match(code, /loadRoutine\(\)/, '组装层不再读 routineStore —— 界面设了也没用');
-  assert.match(code, /dayWindowWithFallback\(/, '缺「分钟数 → HH:MM」的翻译 —— 引擎读不懂裸的分钟数');
+  assert.match(code, /\.\.\.\(dayWindow \?\? \{\}\)/, '作息日窗必须展开进 req（不展开 = 死代码）');
 });
 
 test('Q1b 守卫：采集入口在位（周计划页 routine-entry 面板，写入端补齐）', () => {
@@ -313,8 +314,10 @@ test('Q1b 守卫：全仓只有 routineStore 一处碰作息存储（不许各�
       const p = join(dir, e.name);
       return e.isDirectory() ? walk(p) : /\.tsx?$/.test(e.name) ? [p] : [];
     });
+  // ⚠️ 2026-10-08 精化：只查**代码里的键字面量**（引号包住）——注释里提到键名不算
+  //   触碰真源（新接入的 useWeekPlan / energyCurve 在注释中引用了键名，被旧口径误伤）。
   const hits = walk(join(REPO, 'src'))
-    .filter((f) => readFileSync(f, 'utf8').includes('usst-routine-v1'))
+    .filter((f) => /['"]usst-routine-v1['"]/.test(readFileSync(f, 'utf8')))
     .map((f) => f.replaceAll('\\', '/').slice(REPO.length + 1));
   assert.deepEqual(
     hits,

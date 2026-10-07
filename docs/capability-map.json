@@ -7,10 +7,10 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 138,
-    "engineFiles": 101,
+    "testFiles": 143,
+    "engineFiles": 106,
     "uiFiles": 37,
-    "guardedSources": 124,
+    "guardedSources": 138,
     "reverseVerified": 88,
     "orphans": 0
   },
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 60,
+      "testCount": 61,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -36,6 +36,7 @@
         "tests/construct.test.ts",
         "tests/correctionsPolicy.test.ts",
         "tests/courseOverride.test.ts",
+        "tests/estimateRefine.test.ts",
         "tests/explain.test.ts",
         "tests/fatigue.test.ts",
         "tests/feedback.test.ts",
@@ -124,12 +125,14 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 39,
+      "testCount": 42,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/agenda-model.test.ts",
         "tests/assignment.test.ts",
         "tests/d-batch.test.ts",
+        "tests/feedback.test.ts",
+        "tests/gapAdd.test.ts",
         "tests/h1-eval-panel.test.ts",
         "tests/h3h4-eval.test.ts",
         "tests/issue-bar-ui.test.ts",
@@ -160,6 +163,7 @@
         "tests/v3.test.ts",
         "tests/week-diag-copy.test.ts",
         "tests/week-view-model.test.ts",
+        "tests/weekViewUtils.test.ts",
         "tests/weekplan-shift-ui.test.ts",
         "tests/wp12.test.ts",
         "tests/wp4b.test.ts",
@@ -184,17 +188,27 @@
         "src/components/ui/Tag",
         "src/components/ui/Toast",
         "src/components/ui/toastModel",
+        "src/features/week/BlockCard",
         "src/features/week/PlanEvalPanel",
+        "src/features/week/WeekDayColumn",
+        "src/features/week/WeekDiagnostics",
+        "src/features/week/WeekPlanHeader",
         "src/features/week/WeekPlanView",
+        "src/features/week/WeekTimelineGrid",
+        "src/features/week/WeekToolsPanel",
         "src/features/week/agendaModel",
         "src/features/week/assignmentStore",
         "src/features/week/dragPreview",
+        "src/features/week/gapAdd",
         "src/features/week/miniWeekPreviewModel",
         "src/features/week/routineStore",
         "src/features/week/saturation",
         "src/features/week/timeScale",
+        "src/features/week/useWeekPlan",
+        "src/features/week/useWeekPlanStore",
         "src/features/week/userPlanStore",
-        "src/features/week/weekViewModel"
+        "src/features/week/weekViewModel",
+        "src/features/week/weekViewUtils"
       ]
     },
     "libao-chat": {
@@ -294,17 +308,22 @@
         "src/features/activity/",
         "src/features/feedback/"
       ],
-      "testCount": 4,
+      "testCount": 6,
       "tests": [
         "tests/activityAndLocalized.test.ts",
         "tests/courseOverride.test.ts",
         "tests/feedback.test.ts",
-        "tests/planIntent.test.ts"
+        "tests/goalDecompose.test.ts",
+        "tests/planIntent.test.ts",
+        "tests/restartRoll.test.ts"
       ],
       "sources": [
         "src/features/activity/activityStore",
         "src/features/activity/aggregate",
+        "src/features/activity/goalDecompose",
+        "src/features/activity/goalPrefs",
         "src/features/activity/goalStore",
+        "src/features/activity/restartTasks",
         "src/features/feedback/parseCorrection",
         "src/features/feedback/planIntent",
         "src/features/feedback/store"
@@ -359,7 +378,7 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 17,
+      "testCount": 18,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
@@ -377,6 +396,7 @@
         "tests/improve-live.test.ts",
         "tests/libao-copy-freeze.test.ts",
         "tests/p2-incremental-rolling.test.ts",
+        "tests/weekViewUtils.test.ts",
         "tests/wp12.test.ts"
       ],
       "sources": [
@@ -809,7 +829,7 @@
         "libao-chat",
         "week-view"
       ],
-      "guardCount": 5,
+      "guardCount": 6,
       "reverseVerified": true
     },
     "tests/demo-banner-ui.test.ts": {
@@ -817,6 +837,14 @@
       "guards": [],
       "guardCount": 1,
       "reverseVerified": true
+    },
+    "tests/estimateRefine.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 4,
+      "reverseVerified": false
     },
     "tests/eval-compute.test.ts": {
       "suite": "engine",
@@ -862,9 +890,10 @@
       "suite": "engine",
       "guards": [
         "activity-feedback",
-        "planner-engine"
+        "planner-engine",
+        "week-view"
       ],
-      "guardCount": 4,
+      "guardCount": 6,
       "reverseVerified": false
     },
     "tests/fillGap.test.ts": {
@@ -882,6 +911,22 @@
       ],
       "guardCount": 1,
       "reverseVerified": true
+    },
+    "tests/gapAdd.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
+    },
+    "tests/goalDecompose.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
     },
     "tests/golden-lib.test.ts": {
       "suite": "engine",
@@ -964,7 +1009,7 @@
       "guards": [
         "week-view"
       ],
-      "guardCount": 1,
+      "guardCount": 2,
       "reverseVerified": true
     },
     "tests/knowledge-wiring.test.ts": {
@@ -1227,6 +1272,14 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/restartRoll.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "activity-feedback"
+      ],
+      "guardCount": 3,
+      "reverseVerified": false
+    },
     "tests/ripple.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1242,7 +1295,7 @@
         "week-view",
         "planner-engine"
       ],
-      "guardCount": 5,
+      "guardCount": 6,
       "reverseVerified": false
     },
     "tests/scoring-transfer.test.ts": {
@@ -1435,7 +1488,7 @@
         "week-view",
         "calendar"
       ],
-      "guardCount": 5,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/v2.test.ts": {
@@ -1453,7 +1506,7 @@
         "week-view",
         "libao-chat"
       ],
-      "guardCount": 3,
+      "guardCount": 5,
       "reverseVerified": false
     },
     "tests/week-diag-copy.test.ts": {
@@ -1469,8 +1522,17 @@
       "guards": [
         "week-view"
       ],
-      "guardCount": 4,
+      "guardCount": 5,
       "reverseVerified": true
+    },
+    "tests/weekViewUtils.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts",
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": false
     },
     "tests/weekly-activity-floor.test.ts": {
       "suite": "engine",
@@ -1520,7 +1582,7 @@
         "planner-engine",
         "week-view"
       ],
-      "guardCount": 4,
+      "guardCount": 5,
       "reverseVerified": true
     },
     "tests/wp5.test.ts": {
@@ -1544,7 +1606,7 @@
       "guards": [
         "week-view"
       ],
-      "guardCount": 3,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/wp9.test.ts": {
@@ -1564,7 +1626,9 @@
     ],
     "src/features/behavior/behaviorLog": [
       "scripts/behavior.test.ts",
-      "scripts/rollingState.test.ts"
+      "scripts/rollingState.test.ts",
+      "tests/estimateRefine.test.ts",
+      "tests/restartRoll.test.ts"
     ],
     "src/lib/planner/buildPhases": [
       "scripts/buildPhases.test.ts",
@@ -1750,6 +1814,7 @@
     "src/lib/planner/templates": [
       "scripts/libao-taxonomy.test.ts",
       "scripts/scheduler.test.ts",
+      "tests/estimateRefine.test.ts",
       "tests/lifeModeAndSocial.test.ts",
       "tests/meal-canteen-rank.test.ts",
       "tests/ongoing-task.test.ts",
@@ -1824,7 +1889,8 @@
     ],
     "src/lib/date": [
       "scripts/rollingState.test.ts",
-      "tests/p2-incremental-rolling.test.ts"
+      "tests/p2-incremental-rolling.test.ts",
+      "tests/weekViewUtils.test.ts"
     ],
     "src/features/libao/schedSession": [
       "scripts/schedSession.test.ts"
@@ -1862,7 +1928,9 @@
       "tests/activityAndLocalized.test.ts"
     ],
     "src/features/activity/goalStore": [
-      "tests/activityAndLocalized.test.ts"
+      "tests/activityAndLocalized.test.ts",
+      "tests/goalDecompose.test.ts",
+      "tests/restartRoll.test.ts"
     ],
     "src/features/week/agendaModel": [
       "tests/agenda-model.test.ts"
@@ -1930,19 +1998,18 @@
       "tests/d-batch.test.ts",
       "tests/libao-copy-freeze.test.ts"
     ],
+    "src/features/week/useWeekPlanStore": [
+      "tests/d-batch.test.ts",
+      "tests/wp12.test.ts",
+      "tests/wp4b.test.ts"
+    ],
     "src/features/week/WeekPlanView": [
       "tests/d-batch.test.ts",
       "tests/h3h4-eval.test.ts",
-      "tests/issue-bar-ui.test.ts",
       "tests/routineStore.test.ts",
       "tests/v1.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",
-      "tests/week-diag-copy.test.ts",
-      "tests/week-view-model.test.ts",
-      "tests/weekplan-shift-ui.test.ts",
-      "tests/wp12.test.ts",
-      "tests/wp4b.test.ts",
       "tests/wp7.test.ts"
     ],
     "src/App": [
@@ -1951,6 +2018,13 @@
       "tests/v3.test.ts",
       "tests/weekplan-shift-ui.test.ts",
       "tests/wp12.test.ts"
+    ],
+    "src/lib/planner/corrections": [
+      "tests/estimateRefine.test.ts",
+      "tests/feedback.test.ts"
+    ],
+    "src/features/behavior/refine": [
+      "tests/estimateRefine.test.ts"
     ],
     "src/features/mobile/eval/compute": [
       "tests/eval-compute.test.ts",
@@ -1995,8 +2069,22 @@
     "src/features/feedback/store": [
       "tests/feedback.test.ts"
     ],
-    "src/lib/planner/corrections": [
-      "tests/feedback.test.ts"
+    "src/features/feedback/planIntent": [
+      "tests/feedback.test.ts",
+      "tests/planIntent.test.ts"
+    ],
+    "src/features/week/userPlanStore": [
+      "tests/feedback.test.ts",
+      "tests/mobile/evalWiring.test.ts",
+      "tests/mobile/weekBoard.test.ts",
+      "tests/ripple.test.ts",
+      "tests/syncContract.test.ts",
+      "tests/userPlanRestore.test.ts",
+      "tests/userPlanStore.test.ts",
+      "tests/userPlanUndo.test.ts",
+      "tests/v1.test.ts",
+      "tests/wp12.test.ts",
+      "tests/wp9.test.ts"
     ],
     "src/lib/planner/ripple": [
       "tests/fillGap.test.ts",
@@ -2004,6 +2092,15 @@
       "tests/ripple.test.ts",
       "tests/wp10.test.ts",
       "tests/wp4a.test.ts"
+    ],
+    "src/features/week/gapAdd": [
+      "tests/gapAdd.test.ts"
+    ],
+    "src/features/activity/goalPrefs": [
+      "tests/goalDecompose.test.ts"
+    ],
+    "src/features/activity/goalDecompose": [
+      "tests/goalDecompose.test.ts"
     ],
     "src/lib/planner/planDigest": [
       "tests/h1-eval-panel.test.ts",
@@ -2033,6 +2130,16 @@
       "tests/improve-transfer.test.ts",
       "tests/improve.test.ts"
     ],
+    "src/features/week/WeekDiagnostics": [
+      "tests/issue-bar-ui.test.ts"
+    ],
+    "src/features/week/WeekTimelineGrid": [
+      "tests/issue-bar-ui.test.ts",
+      "tests/v1.test.ts",
+      "tests/v3.test.ts",
+      "tests/week-view-model.test.ts",
+      "tests/wp7.test.ts"
+    ],
     "src/lib/planner/knowledge": [
       "tests/knowledge-wiring.test.ts"
     ],
@@ -2051,18 +2158,6 @@
     ],
     "src/features/mobile/lib/burnBar": [
       "tests/mobile/burnBar.test.ts"
-    ],
-    "src/features/week/userPlanStore": [
-      "tests/mobile/evalWiring.test.ts",
-      "tests/mobile/weekBoard.test.ts",
-      "tests/ripple.test.ts",
-      "tests/syncContract.test.ts",
-      "tests/userPlanRestore.test.ts",
-      "tests/userPlanStore.test.ts",
-      "tests/userPlanUndo.test.ts",
-      "tests/v1.test.ts",
-      "tests/wp12.test.ts",
-      "tests/wp9.test.ts"
     ],
     "src/features/mobile/eval/units": [
       "tests/mobile/evalWiring.test.ts"
@@ -2098,9 +2193,6 @@
     "src/lib/planner/placesPolicy": [
       "tests/places-policy.test.ts"
     ],
-    "src/features/feedback/planIntent": [
-      "tests/planIntent.test.ts"
-    ],
     "src/lib/planner/planWeek": [
       "tests/planweek.test.ts"
     ],
@@ -2111,7 +2203,13 @@
     "src/features/persona/PersonaResult": [
       "tests/profile-explain.test.ts"
     ],
+    "src/features/activity/restartTasks": [
+      "tests/restartRoll.test.ts"
+    ],
     "src/features/week/routineStore": [
+      "tests/routineStore.test.ts"
+    ],
+    "src/features/week/useWeekPlan": [
       "tests/routineStore.test.ts"
     ],
     "src/features/week/timeScale": [
@@ -2175,14 +2273,34 @@
       "tests/v1.test.ts",
       "tests/wp7.test.ts"
     ],
+    "src/features/week/WeekToolsPanel": [
+      "tests/v1.test.ts",
+      "tests/v3.test.ts",
+      "tests/weekplan-shift-ui.test.ts",
+      "tests/wp7.test.ts"
+    ],
+    "src/features/week/WeekPlanHeader": [
+      "tests/week-diag-copy.test.ts"
+    ],
     "src/features/week/weekViewModel": [
       "tests/week-view-model.test.ts"
     ],
     "src/components/ui/DetailDrawer": [
       "tests/week-view-model.test.ts"
     ],
+    "src/features/week/BlockCard": [
+      "tests/week-view-model.test.ts",
+      "tests/wp7.test.ts"
+    ],
+    "src/features/week/weekViewUtils": [
+      "tests/weekViewUtils.test.ts"
+    ],
     "src/features/week/dragPreview": [
       "tests/wp4b.test.ts"
+    ],
+    "src/features/week/WeekDayColumn": [
+      "tests/wp4b.test.ts",
+      "tests/wp7.test.ts"
     ],
     "src/lib/planner/campusLookup": [
       "tests/wp6.test.ts"

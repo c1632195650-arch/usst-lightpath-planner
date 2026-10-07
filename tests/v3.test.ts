@@ -31,14 +31,20 @@ test('V3: ⑥→⑦ 模式窗双入口 + 确认落 lifeMode', () => {
   assert.match(app, /addTimetableFacts\(s, getUserId\(\)\)/, '⑤ 导入后回写事实'); // 8
   assert.match(app, /setModeSetupOpen\(true\)/, '⑤ 导入完成自动弹窗'); // 8b
   assert.match(app, /onConfirm=\{\(id\) => \{ patchState\(\{ lifeMode: id \}\)/, '⑦ 确认落 lifeMode'); // 9
-  const wv = src('/src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /data-testid="open-mode-setup"/, 'V1-4 换个节奏入口');    // 10
+  // ⚠️ 2026-10-08 改锚：操作条收进 WeekToolsPanel —— 换个节奏入口随迁。
+  const panel = src('/src/features/week/WeekToolsPanel.tsx');
+  assert.match(panel, /data-testid="open-mode-setup"/, 'V1-4 换个节奏入口'); // 10
 });
 
 test('V3: ⑧⑨⑩ 日程区三件套（满溢度/编辑开关/留白块）', () => {
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：三件套的落点随组件拆分更新 ——
+  //    满溢度条进 WeekTimelineGrid 列头；编辑开关进 WeekToolsPanel 操作条；
+  //    留白块与 usst:replan 监听仍在 WeekPlanView。语义不变。
   const wv = src('/src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /<SaturationBar/, '⑧ 满溢度条');                          // 11
-  assert.match(wv, /data-testid="edit-mode-toggle"/, '⑨ 编辑开关');          // 12
+  const grid = src('/src/features/week/WeekTimelineGrid.tsx');
+  const panel = src('/src/features/week/WeekToolsPanel.tsx');
+  assert.match(grid, /<SaturationBar/, '⑧ 满溢度条');                        // 11
+  assert.match(panel, /data-testid="edit-mode-toggle"/, '⑨ 编辑开关');        // 12
   assert.match(wv, /blankTaskFor\(deleteAsk, weekNo\)/, '⑩ 留白块实体');     // 13
   assert.match(wv, /addEventListener\('usst:replan'/, '⑯ hold 确认触发重排'); // 14
 });

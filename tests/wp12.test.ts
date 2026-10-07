@@ -68,9 +68,10 @@ test('WP12·H7 源码: SHOW_IMPORT 恒 true（正式构建可见导入入口）'
 });
 
 test('WP12·H8 源码: updateLayer 落层时发事件；LbaoChat 注入 getRecentPlanEvents', () => {
-  // 反向：摘掉 updateLayer 里的 pushPlanEvents(diffPlanEvents(…)) → 本用例红
-  const wv = SRC('/src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /pushPlanEvents\(diffPlanEvents\(layerRef\.current, projected\)\)/);
+  // 反向：摘掉 updateLayerStore 里的 pushPlanEvents(diffPlanEvents(…)) → 本用例红
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：updateLayer 收拢进 useWeekPlanStore（模块级 store）。
+  const store = SRC('/src/features/week/useWeekPlanStore.ts');
+  assert.match(store, /pushPlanEvents\(diffPlanEvents\(layerSnap\.layer, next\)\)/);
   const chat = SRC('/src/features/libao/LbaoChat.tsx');
   assert.match(chat, /lbaoChat\(q, identity, profileCtx, getRecentPlanEvents\(\)\)/);
 });

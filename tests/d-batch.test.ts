@@ -38,7 +38,9 @@ test('D0 快照: mode 随快照存取（恢复时接续，不退回问答）', (
   const chat = src('/src/features/libao/LbaoChat.tsx');
   assert.match(chat, /mode: 'chat' \| 'sched';/, '快照类型带 mode');
   assert.match(chat, /modeFromV2\(s\.mode, s\.schedMode\)/, 'v2 迁移按推导补 mode');
-  assert.match(chat, /boot\?\.mode \?\? 'chat'/, 'v3 快照 mode 原样恢复');
+  // ⚠️ 2026-10-08 微调（Ray 周页批次接入）：seedMode 只影响「无快照」时的初始模式，
+  //    快照里存的 mode 仍最优先 —— 意图（v3 快照 mode 原样恢复）不变。
+  assert.match(chat, /boot\?\.mode \?\? \(seedMode === 'sched' \? 'sched' : 'chat'\)/, 'v3 快照 mode 原样恢复');
 });
 
 /* ---------------- D1 · dialogManager ---------------- */
@@ -305,10 +307,13 @@ test('D7+: 纯总量诉求在 blocked 态必须拿得到「降一档目标量」
 
 /* ---------------- 白天终验修复（2026-09-28） ---------------- */
 
-test('终验修复: WeekPlanView 挂载/重排时同步跨页 undo 深度（↩ 按钮不再恒禁用）', () => {
+test('终验修复: 跨页 undo 深度响应式同步（↩ 按钮不再恒禁用）', () => {
+  // ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：撤销/重做栈与深度上提 useWeekPlanStore ——
+  //   commitLayer 每次落库都带最新深度发布、useLayerStore 经 useSyncExternalStore 订阅，
+  //   「挂载/重排后按钮恒禁用」在结构上不可能复现（取代旧的手动同步行）。
+  const store = src('/src/features/week/useWeekPlanStore.ts');
+  assert.match(store, /layerSnap = \{ layer: next, undoDepth: undoDepth\(\), redoDepth: redoDepth\(\) \};/, '每次落库都发布最新深度');
+  assert.match(store, /export function useLayerStore\(\): LayerSnapshot \{\n  return useSyncExternalStore\(subscribeLayer, getLayerSnapshot\);/, '深度经订阅式读取（跨页响应）');
   const wv = src('/src/features/week/WeekPlanView.tsx');
-  // 反向：删掉挂载同步行 → 本用例红。背景：梨宝确认落盘压栈后，周计划页
-  // undoDepthState 初始 0 不跨页感知，按钮恒禁用而 Ctrl+Z 可用。
-  assert.match(wv, /setUndoDepth\(undoDepth\(\)\);\n\s+const onReplanDepth = \(\) => setUndoDepth\(undoDepth\(\)\);/,
-    '挂载 + 重排广播双路同步在位');
+  assert.match(wv, /const \{ layer, undoDepth, redoDepth \} = useLayerStore\(\);/, '周页读的是 store 的深度（不再自持 0 初始）');
 });

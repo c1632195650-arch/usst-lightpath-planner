@@ -56,38 +56,54 @@ test('WP7·E6: capacity=0 → ratio 0（不制造假满）；确定性', () => {
 
 /* ---------------- E5：源码接线断言 ---------------- */
 
+/**
+ * ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：七列时间轴替换了「浏览 7 列一行 /
+ * 编辑四档自适应」两套网格 —— 编辑模式不再重排网格，而是**开关一切编辑入口**
+ * （拖拽/右键菜单/空档加事/调整抽屉）。ED5 的四条断言全部改锚到新落点，
+ * 断言的契约意图（浏览态不可误改、编辑态全开）原样保留：
+ *   ① 开关按钮（testid/aria-pressed/浏览提示）→ WeekToolsPanel 操作条；
+ *   ② 「编辑开关真的控制编辑能力」→ allowEdit 从 WeekPlanView 一路透传到 BlockCard；
+ *   ③ 低频面板入口（原面板区）→ 调整抽屉按钮在浏览态禁用（等价于旧「浏览态零渲染」）；
+ *   ④ BlockCard 的 editable 门 → 由 allowEdit 参与计算（拖拽/菜单/编辑面板三合一）。
+ */
 const SRC = (): string =>
   readFileSync(fileURLToPath(new URL('../src/features/week/WeekPlanView.tsx', import.meta.url)), 'utf8');
+const PANEL = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/WeekToolsPanel.tsx', import.meta.url)), 'utf8');
+const GRID = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/WeekTimelineGrid.tsx', import.meta.url)), 'utf8');
+const COL = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/WeekDayColumn.tsx', import.meta.url)), 'utf8');
+const CARD = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/week/BlockCard.tsx', import.meta.url)), 'utf8');
 
 test('WP7·E5 源码: 开关按钮带 aria-pressed + data-testid，浏览态提示在位', () => {
-  const src = SRC();
+  const src = PANEL();
   assert.match(src, /data-testid="edit-mode-toggle"/);
-  assert.match(src, /aria-pressed=\{editMode\}/);
+  assert.match(src, /aria-pressed=\{editMode === true\}/);
   assert.match(src, /浏览模式 · 点「编辑」才能拖拽与改排/);
 });
 
-test('WP7·E5 源码: 网格类名绑定 editMode（浏览 7 列一行 / 编辑四档自适应）', () => {
-  // 反向：把网格类名写死回旧版 → 本用例红
-  const src = SRC();
-  assert.match(src, /editMode\s*\?\s*'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'\s*:\s*'overflow-x-auto'/);
-  assert.match(src, /editMode \? 'contents' : 'grid grid-cols-7 min-w-\[1120px\] gap-3'/);
+test('WP7·E5 源码: 编辑开关控制编辑能力（allowEdit 全链路透传）', () => {
+  // 反向：删掉任一层 allowEdit 透传 → 本用例红
+  assert.match(SRC(), /allowEdit=\{editMode\}/, '视图必须把 editMode 传进网格');
+  assert.match(GRID(), /allowEdit=\{allowEdit\}/, '网格必须把 allowEdit 传给日列');
+  assert.match(COL(), /allowEdit=\{allowEdit\}/, '日列必须把 allowEdit 传给块卡片');
+  assert.match(COL(), /if \(!allowEdit\) return; \/\/ 浏览态/, '空档右键（加一件事）必须挂门');
 });
 
-test('WP7·E5 源码: 面板区被 editMode 包裹（浏览态零渲染）', () => {
-  // 反向：删掉面板区的 editMode 包裹 → 本用例红
-  const src = SRC();
-  const addAt = src.indexOf('<AddTaskPanel');
-  const learnedAt = src.indexOf('<LearnedPreferencesPanel');
-  const openGate = src.lastIndexOf('{editMode && (', addAt);
-  assert.ok(openGate >= 0 && openGate < addAt, 'AddTaskPanel 之前必须有 editMode 门');
-  const closeGate = src.indexOf(')}', learnedAt);
-  assert.ok(closeGate > learnedAt, 'LearnedPreferencesPanel 之后必须闭合门控');
+test('WP7·E5 源码: 低频面板入口在浏览态禁用（等价旧「浏览态零渲染」）', () => {
+  // 反向：删掉调整按钮的 editMode 门 → 本用例红
+  const src = PANEL();
+  const adjustAt = src.indexOf('onClick={onOpenAdjust}');
+  // 同一 <button> 内：onClick 在前、disabled 紧随其后（两者夹在同一个开标签里）
+  const gate = src.indexOf('disabled={editMode === false}', adjustAt);
+  assert.ok(gate > adjustAt, '「调整」抽屉按钮必须在浏览态禁用');
 });
 
-test('WP7·E5 源码: BlockCard 拖拽与 hover 工具挂 editable 门；调用点传 editMode', () => {
-  // 反向：draggable 的 editable 门删掉 → 本用例红
-  const src = SRC();
-  assert.match(src, /draggable=\{editable && block\.kind !== 'course'/);
-  assert.match(src, /editable=\{editMode\}/);
-  assert.match(src, /\{editable && \(\n\s*<div className="group /);
+test('WP7·E5 源码: BlockCard 拖拽与菜单挂 editable 门（allowEdit 参与计算）', () => {
+  const src = CARD();
+  assert.match(src, /const editable = allowEdit !== false && block\.kind !== 'course' && block\.source !== 'course';/);
+  assert.match(src, /draggable=\{editable\}/);
+  assert.match(src, /if \(!editable\) return; \/\/ 浏览态/, '右键菜单入口必须挂 editable 门');
 });
