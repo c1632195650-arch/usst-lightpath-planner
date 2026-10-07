@@ -18,25 +18,38 @@ export interface ParsedQuickGoal {
   dueAt?: string;
 }
 
-const PHRASES: RegExp[] = [
-  /在?(\d{1,2})月(\d{1,2})[日号]?\s*(之?前|以前)/,
-  /在?(\d{1,2})[/](\d{1,2})\s*(之?前|以前)/,
+const PHRASES: Array<{ re: RegExp; date: (m: RegExpMatchArray, year: number) => string | null }> = [
+  // 10/31前 · 10.31前 · 10-31前 · 10月31日(号)前 —— 分隔符一网打尽（RAY 实测「10.31前」没识别）
+  { re: /在?(\d{1,2})[月/.·\-](\d{1,2})[日号]?\s*(之?前|以前)/, date: (m, y) => isoDay(y, Number(m[1]), Number(m[2])) },
+  // 10月底前（月底 = 当月最后一天）
+  { re: /在?(\d{1,2})月底\s*(之?前|以前)/, date: (m, y) => isoDay(y, Number(m[1]), new Date(Date.UTC(y, Number(m[1]), 0)).getUTCDate()) },
+  // 年底前 → 12/31
+  { re: /年底\s*(之?前|以前)/, date: (_m, y) => isoDay(y, 12, 31) },
 ];
+
+/** 年 + 月 + 日 → ISO；无效日期（2 月 30 日等）返回 null —— 不静默滚动到下个月 */
+function isoDay(year: number, month: number, day: number): string | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) return null;
+  return dt.toISOString().slice(0, 10);
+}
 
 export function parseQuickGoal(text: string, todayIso: string): ParsedQuickGoal {
   const trimmed = text.trim();
-  for (const re of PHRASES) {
+  const year = Number(todayIso.slice(0, 4));
+  const today = Date.parse(`${todayIso}T00:00:00Z`);
+  for (const { re, date } of PHRASES) {
     const m = trimmed.match(re);
     if (!m) continue;
-    const month = Number(m[1]);
-    const day = Number(m[2]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) break;
-    const today = Date.parse(`${todayIso}T00:00:00Z`);
-    const d = new Date(Date.UTC(Number(todayIso.slice(0, 4)), month - 1, day));
-    if (Number.isNaN(d.getTime())) break;
-    // 已过期的月日 → 顺延一年（「10/31前」在 11 月说，指的是明年）
-    if (d.getTime() < today) d.setUTCFullYear(d.getUTCFullYear() + 1);
-    const dueAt = d.toISOString().slice(0, 10);
+    const due = date(m, year);
+    if (!due) break; // 日期非法（13 月 40 日）→ 不猜，原样返回
+    const dueAt = (() => {
+      const d = new Date(`${due}T00:00:00Z`);
+      // 已过期的月日 → 顺延一年（「10/31前」在 11 月说，指的是明年）
+      if (d.getTime() < today) d.setUTCFullYear(d.getUTCFullYear() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
     const title = trimmed
       .replace(m[0], ' ')
       .replace(/\s{2,}/g, ' ')

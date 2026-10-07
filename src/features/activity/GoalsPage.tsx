@@ -20,6 +20,7 @@ import { AchievementPanel } from './GoalEditor';
 import { GoalQuickInput } from './GoalQuickInput';
 import { EXPERIENCE_HOURS, deadlineProximity } from './goalDecompose';
 import { repairQuickGoal, suggestTotalHours } from './quickGoalParse';
+import { DateSegmentInput } from './DateSegmentInput';
 import { MilestoneTimeline } from './MilestoneTimeline';
 import { GoalMonitor } from './GoalMonitor';
 import { PriorityStrip } from './PriorityStrip';
@@ -50,7 +51,14 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
   const weekNo = currentWeekNo(schedule.termStart);
   const todayDow = (() => { const d = weekdayOf(todayISO()); return d === 0 ? 7 : d; })();
 
-  const handleGoalsChange = (next: Goal[]) => { saveGoals(next); setGoals(next); };
+  // 🔴 唯一落库通道（2026-10-07）：任何路径（快速输入/加一个/卡片操作）写入目标前
+  //   都过一遍存量修补 —— 有截止解析器没接到的创建路径，落库时兜住（幂等：已补的
+  //   目标原样通过）。否则新路径建的目标会重演「输入了截止日期却不生效」。
+  const handleGoalsChange = (next: Goal[]) => {
+    const repaired = next.map((g) => repairQuickGoal(g, todayISO(), EXPERIENCE_HOURS));
+    saveGoals(repaired);
+    setGoals(repaired);
+  };
   const patchGoal = (id: string, patch: Partial<Goal>) => {
     handleGoalsChange(goals.map((g) => (g.id === id ? { ...g, ...patch } : g)));
   };
@@ -215,6 +223,33 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                             </div>
                           );
                         })()}
+                        {/* 后补截止日期（2026-10-07 RAY：创建时没写截止的，之后要能补）。
+                            分段输入：输完年份自动跳月、月份自动跳日（RAY 体验要求）。
+                            补上 → 总量自动按「每周 3h 封顶」建议（suggestTotalHours）→ 走节奏分解。
+                            已有截止的也能改/清（清 = 退回每周固定投入兜底）。 */}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                          <span className="text-ink-faint">截止日期：</span>
+                          <DateSegmentInput
+                            value={g.dueAt ?? ''}
+                            ariaLabel="设定或修改截止日期"
+                            onChange={(v) => {
+                              if (!v) { patchGoal(g.id, { dueAt: undefined, totalHours: undefined }); return; }
+                              const patch: Partial<Goal> = { dueAt: v };
+                              if (g.totalHours == null) {
+                                patch.totalHours = suggestTotalHours(g.kind ?? 'study', v, todayISO(), EXPERIENCE_HOURS);
+                              }
+                              patchGoal(g.id, patch);
+                            }}
+                          />
+                          {!g.dueAt && (
+                            <span className="text-[10px] text-ink-faint">
+                              补上后自动按节奏分解进周计划（总时长按类型经验值封顶，可用下方滑块调）
+                            </span>
+                          )}
+                          {g.dueAt && g.totalHours != null && (
+                            <span className="text-[10px] text-ink-faint">改日期后总投入不变，用滑块调</span>
+                          )}
+                        </div>
                         {/* 定向提示 */}
                         {!hasDirection && (
                           <div className="rounded bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">

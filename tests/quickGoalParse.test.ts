@@ -42,6 +42,21 @@ test('非法日期（13月40日）→ 不猜，原样返回', () => {
   assert.equal(r.title, '在13月40日前完成');
 });
 
+test('细化识别（2026-10-07 RAY「10.31前」没识别）：点/横线分隔、月底、年底', () => {
+  // 点号分隔（RAY 实测漏识别的写法）
+  assert.equal(parseQuickGoal('10.31前完成材料撰写', TODAY).dueAt, '2026-10-31');
+  assert.equal(parseQuickGoal('10.31前完成材料撰写', TODAY).title, '完成材料撰写');
+  // 横线分隔
+  assert.equal(parseQuickGoal('10-31前交表', TODAY).dueAt, '2026-10-31');
+  // 「N月底前」= 当月最后一天
+  assert.equal(parseQuickGoal('10月底前完成申报', TODAY).dueAt, '2026-10-31');
+  // 「年底前」= 12/31
+  assert.equal(parseQuickGoal('年底前完成论文开题', TODAY).dueAt, '2026-12-31');
+  assert.equal(parseQuickGoal('年底前完成论文开题', TODAY).title, '完成论文开题');
+  // 无效日期（2月30日）→ 不静默滚动，原样返回
+  assert.equal(parseQuickGoal('2月30日前交', TODAY).dueAt, undefined);
+});
+
 test('repairQuickGoal：存量老目标（标题带日期、缺字段）→ 自动补全 dueAt + 封顶总时长', () => {
   const legacy = { id: 'x', title: '在10/31前彻底完成DAAD奖学金申请', kind: 'study' };
   const r = repairQuickGoal(legacy, TODAY, { study: 40 });
