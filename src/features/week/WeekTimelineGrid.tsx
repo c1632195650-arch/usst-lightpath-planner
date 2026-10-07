@@ -233,11 +233,11 @@ export function WeekTimelineGrid({
               >
                 <div className="truncate text-[12.5px] font-semibold leading-tight text-ink">
                   {name}
-                  <span className={`ml-1 font-mono text-[10.5px] font-normal ${isToday ? 'text-brand' : 'text-ink-faint'}`}>
+                  <span className={`ml-1 font-mono text-[10.5px] font-normal ${isToday ? 'text-school-red' : 'text-ink-faint'}`}>
                     {mm}/{dd}
                   </span>
                   {isToday && (
-                    <span className="ml-1 rounded bg-brand px-[3px] py-px align-middle text-[9px] font-semibold text-white">
+                    <span className="ml-1 rounded bg-school-red px-[3px] py-px align-middle text-[9px] font-semibold text-white">
                       今天
                     </span>
                   )}
