@@ -379,6 +379,16 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
   const rollingRes = dayCapacityFactors(req.rolling, ctx.actualLoadByDow ?? undefined);
   const loadDecisions = rollingRes.days;
 
+  /**
+   * 一次性任务登记表（🔴 2026-10-08，RAY：「晚上玩两小时游戏」被铺满一周 7 块；
+   * 与本地引擎同日同修，保持双引擎行为一致）：
+   * 没说星期、只给了单次时长（`durationMin`）的浮动任务此前**天天都是候选** ——
+   * 一句话在 7 天里各塞一块。语义收紧为 **一周一块**（落位即登记，后续天不再候选）；
+   * 要重复就明说星期（周页）或次数（对话 `perWeekCount` 通路会按天钉死）。
+   * `durations` 多档位的「填空档」用法（CY 夹具「练英语听力」）不受影响。
+   */
+  const placedOnce = new Set<string>();
+
   for (const day of DAY_ORDER) {
     const dayName = DAY_NAME[day];
     const daySlots = slotsOn(schedule, weekNo, day);
@@ -424,24 +434,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       issues.push(issueCourseNoPlace(dayName, s.course.name));
     }
 
-    /* --- 6.2 用户固定块 --- */
-    const userBlocks: TimeBlock[] = fixedTasks
-      .filter((t) => t.dayOfWeek === day && taskActive(t))
-      .map((t) => ({
-        id: mkId(day, 'user', t.id),
-        kind: t.kind ?? 'activity',
-        dayOfWeek: day,
-        startMin: t.startMin as number,
-        endMin: (t.startMin as number) + (t.durationMin ?? 60),
-        title: t.title,
-        place: t.place,
-        emoji: t.emoji ?? '📌',
-        reason: reasonForUserTask(),
-        locked: true,
-        source: 'user' as const,
-      }));
-
-    /* --- 6.2b 提交项（用户钉死的落点）--- */
+    /* --- 6.2b 提交项（用户钉死的落点；先于固定任务建，供其判撞）--- */
     const commitFixedBlocks: TimeBlock[] = fixedCommits
       .filter((c) => c.pinned?.dayOfWeek === day)
       .map((c) => {
@@ -463,6 +456,41 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
           source: 'user' as const,
         } satisfies TimeBlock;
       });
+
+    /* --- 6.2 用户固定块 --- */
+    // 🔴 2026-10-08（RAY：「他会在已经有了的日程的地方强行插入…应该放在课程之后」）：
+    //    固定块此前**原样落位、零碰撞校验** —— 用户钉的 18:00 正好叠在 18:00 晚课上
+    //    （本地/CY 双引擎同病，复现见 `_repro-evening.mjs` 场景 B）。修法与本地引擎一致：
+    //    与当天已有硬块（课程/钉死的提交项/更早的固定任务）相撞时**顺延到其后**。
+    const userBlocks: TimeBlock[] = [];
+    for (const t of fixedTasks.filter((t) => t.dayOfWeek === day && taskActive(t))) {
+      const dur = t.durationMin ?? 60;
+      let start = t.startMin as number;
+      let shifted = false;
+      for (let guard = 0; guard < 32; guard += 1) {
+        const hitEnd = [...courseBlocks, ...commitFixedBlocks, ...userBlocks]
+          .filter((b) => start < b.endMin && b.startMin < start + dur)
+          .reduce((m, b) => Math.max(m, b.endMin), -1);
+        if (hitEnd < 0) break;
+        start = hitEnd;
+        shifted = true;
+      }
+      userBlocks.push({
+        id: mkId(day, 'user', t.id),
+        kind: t.kind ?? 'activity',
+        dayOfWeek: day,
+        startMin: start,
+        endMin: start + dur,
+        title: t.title,
+        place: t.place,
+        emoji: t.emoji ?? '📌',
+        reason: shifted
+          ? `${reasonForUserTask()}；与已有日程相撞，已顺延到其后`
+          : reasonForUserTask(),
+        locked: true,
+        source: 'user' as const,
+      });
+    }
 
     // 逐块累积：引擎每放一个块，都要考虑「从上个块走过来要多久」
     let placed: TimeBlock[] = [...courseBlocks, ...userBlocks, ...commitFixedBlocks];
@@ -560,7 +588,7 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
       // WP5 运动模式：sportQuota 生效时绕过画像触发（模式本身就是对运动的显式表达）
       // P1-5：周下限未达标同样强制出运动候选（缺口按天均摊的真实需求）
       forceSport: sportQuota != null || sportRemaining > 0,
-    });
+    }, placedOnce);
     const perCat: Record<string, number> = {};
     let activityMin = 0;
     /**
@@ -596,6 +624,11 @@ export function construct(req: PlanRequest, ctx: ConstructCtx = {}): ConstructRe
         if (cat === 'sport') {
           if (sportQuota != null) sportPlaced += 1;
           weeklySportMin += block.endMin - block.startMin; // P1-5 周计数
+        }
+        // 🔴 2026-10-08：一次性任务落位即登记 —— 本周后续天不再为它找空位
+        if (tpl.id.startsWith('custom-')) {
+          const src = floatingTasks.find((t) => t.id === tpl.id.slice('custom-'.length));
+          if (src && src.dayOfWeek == null && src.durationMin != null) placedOnce.add(src.id);
         }
       }
     }
@@ -948,6 +981,8 @@ function buildCandidates(
   taskActive: (t: UserTask) => boolean,
   day: DayOfWeek,
   opts: { forceSport?: boolean } = {},
+  /** 本周已落位的一次性任务 id（与本地引擎同语义，2026-10-08） */
+  placedOnce: ReadonlySet<string> = new Set(),
 ): ActivityTemplate[] {
   const tpls = templates.filter((t) => {
     // 食堂由 placeMeal 专门处理（要按校区与营业时段选），自习由 fillStudy 处理（要按策略分块），
@@ -968,6 +1003,8 @@ function buildCandidates(
   const custom = floatingTasks
     .filter(taskActive)
     .filter((t) => t.dayOfWeek == null || t.dayOfWeek === day)
+    // 🔴 2026-10-08：一次性任务（无星期 + 单次时长）本周已落位 → 后续天不再是候选
+    .filter((t) => !placedOnce.has(t.id))
     .map(customTemplate);
   return [...custom, ...tpls].sort((a, b) => b.priority - a.priority);
 }

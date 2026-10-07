@@ -190,6 +190,10 @@ export function applyLockedPlacements(
   const restored: string[] = [];
   const conflicts: LockApplyResult['conflicts'] = [];
 
+  /** 块的可读指代 —— 绝不把内部 block id 露给用户（与 lib/planner/solver.ts 同款修复） */
+  const refOf = (p: { title?: string; dayOfWeek?: number }): string =>
+    p.title ?? (p.dayOfWeek ? `${DAY_NAME[p.dayOfWeek]}的某一块` : '某一块安排');
+
   for (const id of targets) {
     const idx = working.findIndex((b) => b.id === id);
     if (idx < 0) {
@@ -199,9 +203,10 @@ export function applyLockedPlacements(
       plan.issues.push({
         level: 'info',
         code: 'lock-conflict',
-        message: `你锁定的「${placements[id].title ?? id}」这次没能排进计划（可能被新课占掉了时间），解开锁定或调整那天的安排都可以`,
+        blockId: id,
+        message: `你锁定的「${refOf(placements[id])}」这次没能排进计划（可能被新课占掉了时间），解开锁定或调整那天的安排都可以`,
       });
-      conflicts.push({ id, title: placements[id].title ?? id, dayOfWeek: placements[id].dayOfWeek, reason: '这次没能排出来' });
+      conflicts.push({ id, title: refOf(placements[id]), dayOfWeek: placements[id].dayOfWeek, reason: '这次没能排出来' });
       continue;
     }
     const block = working[idx];
