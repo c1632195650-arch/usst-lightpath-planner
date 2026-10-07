@@ -16,6 +16,45 @@
 import type { AxisKey, BlockKind, DayOfWeek, ScenarioFields } from '@/types';
 import type { CorrectionKind, CorrectionPayload, CorrectionRule } from '@/lib/planner/corrections';
 import { toMinutes } from '@/constants/time';
+import { weekdayOf } from '@/lib/date';
+
+/* ============================================================
+ * 相对日解析（2026-10-07，RAY 实测「帮我明天安排两个小时的德语自习」
+ * 把任务摊满了全周）：matchDays 只认「周X/星期X」，「明天/今天/后天/
+ * 大后天」这些相对说法全部漏掉 → 任务没挂星期 → 引擎把它当成
+ * 「不限日期」摊到每一天。今天日期由**调用方注入**（纯函数纪律）。
+ * ========================================================== */
+
+/** 相对日偏移（0 = 今天）。注意 大后天 必须排在 后天 之前匹配 */
+const REL_DAY: Array<[RegExp, number]> = [
+  [/大后天/g, 3],
+  [/后天/g, 2],
+  [/明天|明晚/g, 1],
+  [/今天|今日|今晚/g, 0],
+];
+
+/** 句子里出现的相对日偏移列表（去重升序；没有 = 空数组） */
+export function relDayOffsets(t: string): number[] {
+  const out: number[] = [];
+  let rest = t;
+  for (const [re, off] of REL_DAY) {
+    if (re.test(rest)) {
+      out.push(off);
+      rest = rest.replace(re, '，'); // 占位，防 大后天 再命中 后天
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/** 偏移 → 星期几（1–7）。跨周（周日说明天=下周一）按星期几回绕 */
+function relToDow(off: number, today: string): DayOfWeek {
+  return ((((weekdayOf(today) - 1) + off) % 7) + 1) as DayOfWeek;
+}
+
+/** 句中相对日 → 星期几列表；没有相对日返回空数组 */
+export function resolveRelDays(t: string, today: string): DayOfWeek[] {
+  return [...new Set(relDayOffsets(t).map((o) => relToDow(o, today)))].sort((a, b) => a - b);
+}
 
 /**
  * 「长期」的**唯一判定入口**（R3.5 / 计划书 §1.5-1）
@@ -127,7 +166,7 @@ const PLACE_WORDS: Array<[string, string]> = [
 ];
 
 /** 否定词 —— 命中才认为用户是在「提要求」而不是普通陈述 */
-const NEGATION = /(别|不要|不用|不想|不去|不排|别再|起不来|受不了)/;
+const NEGATION = /(别|不要|不用|不想|不去|不排|不安排|没排|没安排|空着|留空|别再|起不来|受不了)/;
 
 /* ---------- 匹配工具 ---------- */
 
@@ -180,11 +219,13 @@ function matchKind(t: string): BlockKind | undefined {
  *
  * @returns 解析成功返回草稿；解析不出返回 `null`（调用方退回结构化表单）
  */
-export function parseCorrection(text: string): CorrectionDraft | null {
+export function parseCorrection(text: string, today?: string): CorrectionDraft | null {
   const t = (text ?? '').trim();
   if (!t) return null;
 
-  const days = matchDays(t);
+  let days = matchDays(t);
+  // 相对日（今天/明天/后天/大后天）→ 注入 today 才能换算成星期几
+  if (days.length === 0 && today) days = resolveRelDays(t, today);
   const win = matchWindow(t);
   const kind = matchKind(t);
   const negated = NEGATION.test(t);

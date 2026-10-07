@@ -31,6 +31,8 @@ import { SlotEditor } from './SlotEditor';
 import { MealPlaceSetting } from './MealPlaceSetting';
 import { LearnedPreferencesPanel } from '@/features/feedback/LearnedPreferencesPanel';
 import type { UserPlanLayer } from './userPlanStore';
+import { humanizeMinutes } from '@/constants/time';
+import { removeSlot } from './userPlanStore';
 
 type DrawerTab = 'addtask' | 'overrides' | 'slots' | 'meals' | 'prefs';
 
@@ -153,7 +155,16 @@ export function AdjustDrawer({
             <MealPlaceSetting value={layer.mealPlaces} onChange={handleMealPlacesChangeInternal} />
           )}
           {tab === 'prefs' && (
-            <LearnedPreferencesPanel rules={rules} onChange={handleRulesChange} />
+            <LearnedPreferencesPanel
+              rules={rules}
+              onChange={handleRulesChange}
+              unavailable={layer.slots.map((s) => ({
+                id: s.id,
+                label: `${s.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${humanizeMinutes(s.fromMin)}–${humanizeMinutes(s.toMin)}`,
+                sub: s.scope === 'long' ? '每周' : '只一周',
+              }))}
+              onRemoveSlot={(id) => updateLayer((prev) => ({ ...prev, slots: removeSlot(prev.slots, id) }))}
+            />
           )}
         </div>
       </aside>
