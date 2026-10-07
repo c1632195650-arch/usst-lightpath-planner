@@ -37,7 +37,8 @@ export interface DecomposeOutput {
   warnings: DecomposeWarning[];
 }
 
-const KIND_TO_BLOCK: Record<GoalKind, 'study' | 'activity'> = {
+/** 目标 kind → 块 kind（重启补课等模块复用；单一真源在此） */
+export const KIND_TO_BLOCK: Record<GoalKind, 'study' | 'activity'> = {
   contest: 'study', study: 'study', interest: 'activity', habit: 'activity',
 };
 
@@ -72,6 +73,8 @@ export function decomposeGoal(
   prefs: GoalPrefs,
   courseMinByDay?: Record<number, number>,
   budgetOverrideMin?: number,
+  /** 其它长目标已占用的天（分钟）—— 分布时避开，防止多目标挤同几天（2026-10-07） */
+  goalLoadByDay?: Record<number, number>,
 ): { tasks: UserTask[]; warning: DecomposeWarning | null } {
   const blockKind = KIND_TO_BLOCK[goal.kind];
   if (!goal.dueAt || !goal.totalHours) {
@@ -103,29 +106,35 @@ export function decomposeGoal(
   const budgetMin = budgetOverrideMin
     ?? (goal.totalHours * 60) * (weights[0] / weights.reduce((a, b) => a + b, 0)) * discount;
 
-  // 分布：有空天按「课程量升序」排 —— 避开课程密日
+  // 分布：有空天按「课程量升序」排 —— 避开课程密日。
+  // 🔴 天数 = 按单块硬顶（120 分钟）算出的**最少**天数（2026-10-07 RAY 实测
+  //   「长目标把空闲排满」）：旧实现 days.map 给每个有空天都排一块（600 ÷ 7 =
+  //   天天 85 分钟）—— 视觉上就是「空闲全被吃掉」。现在**大块少天**：
+  //   600 分钟 → 5 天 × 120（周末留白）；300 分钟 → 3 天 × 100；
+  //   225 分钟 → 2 天 × ~115。宁可块大一点，也不为平摊而天天见。
   const freeDays = [...prefs.freeDays].sort(
-    (a, b) => (courseMinByDay?.[a] ?? 0) - (courseMinByDay?.[b] ?? 0),
+    (a, b) => ((courseMinByDay?.[a] ?? 0) + (goalLoadByDay?.[a] ?? 0))
+      - ((courseMinByDay?.[b] ?? 0) + (goalLoadByDay?.[b] ?? 0)),
   );
   const days = freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5];
-  const perDay = budgetMin / days.length;
-  const durationMin = Math.max(MIN_BLOCK, Math.min(MAX_BLOCK, snap5(perDay)));
+  const usedDays = Math.max(1, Math.min(days.length, Math.ceil(budgetMin / MAX_BLOCK)));
+  const perBlock = Math.max(MIN_BLOCK, Math.min(MAX_BLOCK, snap5(budgetMin / usedDays)));
 
-  const tasks: UserTask[] = days.map((dow) => ({
+  const tasks: UserTask[] = days.slice(0, usedDays).map((dow) => ({
     id: `goal-${goal.id}-w${weekNo}-d${dow}`,
     title: goal.title,
     emoji: goal.emoji,
     kind: blockKind,
     category: 'custom',
     weeks: [weekNo],
-    durationMin,
+    durationMin: perBlock,
     priority: 70,
-    note: `你的目标 · 本周预算 ${Math.round(budgetMin)} 分钟`,
+    note: `你的目标 · 本周预算 ${Math.round(budgetMin)} 分钟（${usedDays} 天 × ${perBlock} 分钟）`,
   }));
 
   // 容量守卫：超 60% 不静默砍 —— 产出预警交上层展示（三选项由用户选）
   let warning: DecomposeWarning | null = null;
-  if (courseMinByDay && perDay > 0) {
+  if (courseMinByDay && budgetMin > 0) {
     const freeMinutes = DAY_SPAN_MIN * 7 - Object.values(courseMinByDay).reduce((a, b) => a + b, 0);
     if (budgetMin > freeMinutes * CAP_RATIO) {
       warning = {
@@ -172,10 +181,34 @@ export function goalTasksOf(
   const used: Record<'study' | 'activity', number> = { study: 0, activity: 0 };
 
   // ── 第一遍：算需求与权重 ──
-  const infos = goals.map((goal) => ({
+  const rawInfos = goals.map((goal) => ({
     goal,
     demand: weeklyDemandMin(goal, weekNo, termStart, prefs, adherence, persona),
     capKind: blockKindOf(goal.kind),
+  }));
+
+  // ── 软上限（长计划增强计划书 §1.3，RAY 拍板「软上限+降权」）──
+  // 活跃目标超过 5 个 → 排序键（截止临近度 desc, 优先级 desc, id 稳定序）
+  // 第 6 名起需求按 50% 计入注水。**不拦截建目标**，只降权 + 明说（诚实纪律）。
+  const SOFT_GOAL_LIMIT = 5;
+  const overLimit = new Set<string>();
+  if (goals.length > SOFT_GOAL_LIMIT) {
+    const ranked = [...rawInfos]
+      .filter((x) => x.demand != null)
+      .sort((a, b) =>
+        deadlineProximity(b.goal, weekNo, termStart) - deadlineProximity(a.goal, weekNo, termStart)
+        || (b.goal.priority ?? 3) - (a.goal.priority ?? 3)
+        || a.goal.id.localeCompare(b.goal.id));
+    for (const x of ranked.slice(SOFT_GOAL_LIMIT)) overLimit.add(x.goal.id);
+    warnings.push({
+      goalId: 'soft-limit',
+      title: '目标过多',
+      message: `活跃目标 ${goals.length} 个，超过 ${SOFT_GOAL_LIMIT} 个：本周优先临近截止 / 高优先级的前 ${SOFT_GOAL_LIMIT} 个，其余目标的需求按 50% 计入分配 —— 建议结转或归档部分目标`,
+    });
+  }
+  const infos = rawInfos.map((x) => ({
+    ...x,
+    demand: x.demand != null && overLimit.has(x.goal.id) ? Math.round(x.demand * 0.5) : x.demand,
   }));
 
   // ── 第二遍：按类别注水（加权最大最小公平）──
@@ -192,13 +225,24 @@ export function goalTasksOf(
   }
 
   // ── 第三遍：按分配额分解 + cap 兜底 + 预警 ──
-  for (const { goal, demand } of infos) {
-    const r = decomposeGoalV2(goal, weekNo, termStart, prefs, courseMinByDay, adherence, persona, alloc.get(goal.id));
+  // 🔴 分解顺序 = 优先级 desc（2026-10-07）：高优先目标先挑天（goalLoadByDay 累计），
+  //   低优先目标自动避开已被占的天 —— 否则两目标挑到同几天 → 同日超容量 →
+  //   低优先的块在放置层被静默挤掉（RAY 实测「只排最优先的目标」）。
+  const goalLoadByDay: Record<number, number> = {};
+  const orderedInfos = [...infos].sort((a, b) =>
+    (b.goal.priority ?? 3) - (a.goal.priority ?? 3)
+    || deadlineProximity(b.goal, weekNo, termStart) - deadlineProximity(a.goal, weekNo, termStart)
+    || a.goal.id.localeCompare(b.goal.id));
+  for (const { goal, demand } of orderedInfos) {
+    const r = decomposeGoalV2(goal, weekNo, termStart, prefs, courseMinByDay, adherence, persona, alloc.get(goal.id), goalLoadByDay);
     const capKind = blockKindOf(goal.kind);
     let kept = 0;
     let droppedMin = 0;
     for (const t of r.tasks) {
       const dur = t.durationMin ?? 0;
+      // 分布天占用登记（v1 任务 id 带 -d{dow}）—— 供后续目标避开
+      const m = /-d(\d+)$/.exec(t.id);
+      if (m) goalLoadByDay[Number(m[1])] = (goalLoadByDay[Number(m[1])] ?? 0) + dur;
       if (used[capKind] + dur <= caps[capKind]) {
         used[capKind] += dur;
         tasks.push(t);
@@ -327,19 +371,39 @@ export function weeklyDemandMin(
   const weeksLeft = dueWeek - weekNo;
   if (weeksLeft < 0) return null;
 
+  // 截止临近度调制（计划书 §1.1）：越临近截止，本周需求预算越高（上限 +40%）。
+  // v1 / v2 两条路径统一乘 —— 注水法把它当需求，天然传导到分配额。
+  const proximityGain = 1 + PROXIMITY_GAIN * deadlineProximity(goal, weekNo, termStart);
+
   const seg = currentSegment(goal, weekNo, termStart);
   if (seg) {
     const k = adherenceK(adherence) * personaMultiplier(persona?.axes);
-    return Math.round(seg.budgetMin * k);
+    return Math.round(seg.budgetMin * k * proximityGain);
   }
 
   const W = weeksLeft + 1;
   const weights = paceWeights(goal.pace, W);
   const discount = PARALLEL_DISCOUNT[prefs.parallelCount] ?? 1;
-  return (goal.totalHours * 60) * (weights[0] / weights.reduce((a, b) => a + b, 0)) * discount;
+  return (goal.totalHours * 60) * (weights[0] / weights.reduce((a, b) => a + b, 0)) * discount * proximityGain;
 }
 
 const clampK = (v: number) => Math.max(0.5, Math.min(1.2, v));
+
+/**
+ * 截止临近度（长计划增强计划书-2026-10-07 §1.1）：0（远）→ 1（本周截止）。
+ * 线性窗口 8 周：8 周以外恒 0，最后一周为 1；无截止 → 0。
+ * 纯函数：不读时钟 —— 周上下文由参数注入（与 objective.ts 同一口径）。
+ */
+export function deadlineProximity(goal: Goal, weekNo: number, termStart: string): number {
+  if (!goal.dueAt) return 0;
+  const dueWeek = currentWeekNo(termStart, goal.dueAt);
+  const weeksLeft = dueWeek - weekNo;
+  if (weeksLeft <= 0) return 1;
+  return Math.max(0, Math.min(1, 1 - weeksLeft / 8));
+}
+
+/** 临近度 → 预算增益上限（计划书 §1.1：+40% 硬编码，测试钉住挤压上限） */
+export const PROXIMITY_GAIN = 0.4;
 
 /** 执行率校准系数；`null` = 没有数据 → 1（不惩罚） */
 function adherenceK(adherence: number | null | undefined): number {
@@ -422,6 +486,8 @@ function decomposeGoalV2(
   adherence?: number | null,
   persona?: import('@/types').PersonaProfile | null,
   budgetOverrideMin?: number,
+  /** 其它长目标已占用的天（分钟）—— 分布避开（2026-10-07） */
+  goalLoadByDay?: Record<number, number>,
 ): { tasks: UserTask[]; warning: DecomposeWarning | null } {
   // 硬不变量：无里程碑 → v1 路径
   // Q4 定向周只在「完全没有任何可用信息」时触发（无产出、无截止、无总量）
@@ -435,12 +501,12 @@ function decomposeGoalV2(
 
   // 有预算 + 无里程碑 → v1 平摊
   if (!hasMilestones) {
-    return decomposeGoal(goal, weekNo, termStart, prefs, courseMinByDay, budgetOverrideMin);
+    return decomposeGoal(goal, weekNo, termStart, prefs, courseMinByDay, budgetOverrideMin, goalLoadByDay);
   }
 
   // 有预算 + 有里程碑 → v2 里程碑切段
   const seg = currentSegment(goal, weekNo, termStart);
-  if (!seg) return decomposeGoal(goal, weekNo, termStart, prefs, courseMinByDay, budgetOverrideMin);
+  if (!seg) return decomposeGoal(goal, weekNo, termStart, prefs, courseMinByDay, budgetOverrideMin, goalLoadByDay);
 
   const k = adherenceK(adherence) * personaMultiplier(persona?.axes);
   const budget = budgetOverrideMin ?? Math.round(seg.budgetMin * k);
@@ -449,7 +515,8 @@ function decomposeGoalV2(
   // 槽位
   const slots = resolveSkeleton(goal);
   const freeDays = [...prefs.freeDays].sort(
-    (a, b) => (courseMinByDay?.[a] ?? 0) - (courseMinByDay?.[b] ?? 0),
+    (a, b) => ((courseMinByDay?.[a] ?? 0) + (goalLoadByDay?.[a] ?? 0))
+      - ((courseMinByDay?.[b] ?? 0) + (goalLoadByDay?.[b] ?? 0)),
   );
   const days = freeDays.length > 0 ? freeDays : [1, 2, 3, 4, 5];
   const pr = goal.priority ?? 3;

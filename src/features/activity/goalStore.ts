@@ -70,8 +70,8 @@ const KIND_TO_CATEGORY: Record<GoalKind, GoalCategory> = {
   contest: 'contest', study: 'academic', interest: 'growth', habit: 'health',
 };
 
-/** category → kind 映射（排程层消费用） */
-const CATEGORY_TO_KIND: Record<GoalCategory, GoalKind> = {
+/** category → kind 映射（排程层消费用；GoalsPage 快速输入也用它取经验时长） */
+export const CATEGORY_TO_KIND: Record<GoalCategory, GoalKind> = {
   contest: 'contest', academic: 'study', skill: 'study',
   growth: 'interest', health: 'habit', social: 'interest',
 };

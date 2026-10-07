@@ -8,11 +8,14 @@
 import { useState, useRef, useCallback } from 'react';
 import type { GoalCategory } from './goalStore';
 import { GOAL_CATEGORY_LABEL } from './goalStore';
+import { parseQuickGoal } from './quickGoalParse';
+import { todayISO } from '@/lib/date';
 
 /** 解析结果（简化版 —— 完整解析器 parseGoalLine 待实施，此处用关键词匹配） */
 interface ParsedDraft {
   title: string;
   category: GoalCategory;
+  /** 截止日期（「在10/31前…」这类短语自动识别；未识别 = undefined） */
   dueAt?: string;
   totalHours?: number;
 }
@@ -32,20 +35,19 @@ function guessCategory(text: string): GoalCategory {
   return 'growth';
 }
 
-function guessTitle(text: string): string {
-  return text.trim().length > 0 ? text.trim() : '未命名目标';
-}
-
-export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: string; category: GoalCategory }) => void }) {
+export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: string; category: GoalCategory; dueAt?: string }) => void }) {
   const [line, setLine] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [draft, setDraft] = useState<ParsedDraft | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const parse = useCallback((text: string): ParsedDraft => {
+    // 截止短语解析（2026-10-07：RAY 输入「在10/31前…」后排程没变化 —— 此前日期被当标题扔掉）
+    const { title, dueAt } = parseQuickGoal(text, todayISO());
     return {
-      title: guessTitle(text),
+      title,
       category: guessCategory(text),
+      ...(dueAt ? { dueAt } : {}),
     };
   }, []);
 
@@ -58,7 +60,7 @@ export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: stri
 
   const confirm = () => {
     if (!draft) return;
-    onConfirm({ title: draft.title, category: draft.category });
+    onConfirm({ title: draft.title, category: draft.category, ...(draft.dueAt ? { dueAt: draft.dueAt } : {}) });
     setLine(''); setDraft(null); setShowConfirm(false);
     inputRef.current?.focus();
   };
@@ -82,6 +84,11 @@ export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: stri
           <div className="text-[12px] text-ink-soft">
             类别：<b className="text-ink">{GOAL_CATEGORY_LABEL[draft.category]}</b>
             <span className="ml-1 text-ink-faint">（自动识别，可改）</span>
+            {draft.dueAt && (
+              <span className="ml-2">截止：<b className="text-ink">{draft.dueAt}</b>
+                <span className="ml-1 text-ink-faint">（自动识别；总时长暂按类型经验值，可在目标卡里改）</span>
+              </span>
+            )}
           </div>
           <div className="mt-1.5 flex gap-1.5">
             <button type="button" onClick={confirm}

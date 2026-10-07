@@ -1,31 +1,32 @@
 /**
  * 目标页 v2（设计书 §5 / §14 / §16 / §21）
  * ============================================================
- * 一句话输入 → 按类别分组的目标卡片 → 成就统计 → 补记 → 偏好。
- * 旧 GoalEditor 收进「详细编辑」折叠区（不删，兼容老字段编辑）。
+ * 一句话输入 → 按类别分组的目标卡片 → 成就统计 → 补记。
+ * 🔴 2026-10-07 RAY 拍板精简：「详细编辑」折叠区（GoalEditor）与「目标偏好」面板删除——
+ * 截止/总时长由一句话输入自动识别 + 经验值兜底（quickGoalParse），精力偏好走
+ * 「我的画像 → ⚡ 精力高峰」，其余走 goalPrefs 缺省值（存储与引擎消费链保留）。
  */
 import { useState } from 'react';
 import type { Schedule } from '@/types';
-import { currentWeekNo, DAY_LABELS, todayISO, weekdayOf } from '@/lib/date';
+import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
 import {
   loadGoals, saveGoals, makeGoalId,
+  CATEGORY_TO_KIND,
   categoryOf, isSchedulable,
   type Goal, type GoalCategory, type GoalStatus,
   GOAL_CATEGORY_LABEL, GOAL_STATUS_LABEL,
 } from './goalStore';
-import { GoalEditor, AchievementPanel } from './GoalEditor';
-import { ActivityCapture } from './ActivityCapture';
-import { loadGoalPrefs, saveGoalPrefs, type GoalPrefs } from './goalPrefs';
+import { AchievementPanel } from './GoalEditor';
 import { GoalQuickInput } from './GoalQuickInput';
+import { EXPERIENCE_HOURS, deadlineProximity } from './goalDecompose';
+import { repairQuickGoal, suggestTotalHours } from './quickGoalParse';
 import { MilestoneTimeline } from './MilestoneTimeline';
-import { WeeklyReviewCard } from './WeeklyReviewCard';
-import { resolveSkeleton } from './resolveSkeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { GoalMonitor } from './GoalMonitor';
+import { PriorityStrip } from './PriorityStrip';
+import { orderGoalsByPriority } from './priorityOrder';
+import { loadRecords, goalDebtByGoal } from '@/lib/behaviorLog';
+import { resolveSkeleton } from './resolveSkeleton';import { EmptyState } from '@/components/ui/EmptyState';
 
-const FOCUS_OPTIONS = [20, 30, 40, 60, 90];
-const TIME_OPTIONS: Array<{ id: GoalPrefs['timeOfDay']; label: string }> = [
-  { id: 'morning', label: '早上' }, { id: 'day', label: '白天' }, { id: 'evening', label: '晚上' },
-];
 const CATEGORIES: GoalCategory[] = ['contest', 'academic', 'skill', 'growth', 'health', 'social'];
 
 const STATUS_STYLE: Record<GoalStatus, string> = {
@@ -33,31 +34,25 @@ const STATUS_STYLE: Record<GoalStatus, string> = {
   done: 'bg-slate-100 text-slate-600', archived: 'bg-slate-50 text-slate-400',
 };
 
-const WILLINGNESS: Array<{ label: string; value: 4 | 3 | 2 }> = [
-  { label: '尽量多排', value: 4 }, { label: '正常', value: 3 }, { label: '有空再说', value: 2 },
-];
-
 export function GoalsPage({ schedule }: { schedule: Schedule }) {
-  const [goals, setGoals] = useState<Goal[]>(() => loadGoals());
-  const [prefs, setPrefs] = useState<GoalPrefs>(() => loadGoalPrefs());
-  const [prefsSaved, setPrefsSaved] = useState(false);
-  const [captureVersion, setCaptureVersion] = useState(0);
-  const [showDetail, setShowDetail] = useState(false);
+  // 存量修补（2026-10-07）：解析上线前建的目标，标题带截止短语却缺 dueAt → 自动补全。
+  // 有补全就落库（周计划的 goalsRef 读存储，不落库监测面板与排程会不同步）。
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const loaded = loadGoals();
+    const repaired = loaded.map((g) => repairQuickGoal(g, todayISO(), EXPERIENCE_HOURS));
+    if (repaired.some((g, i) => g !== loaded[i])) saveGoals(repaired);
+    return repaired;
+  });
+  const [records] = useState(() => loadRecords());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [overviewOpen, setOverviewOpen] = useState(false);
 
   const weekNo = currentWeekNo(schedule.termStart);
   const todayDow = (() => { const d = weekdayOf(todayISO()); return d === 0 ? 7 : d; })();
 
-  const handleGoalsChange = (next: Goal[]) => { saveGoals(next); setGoals(next); setCaptureVersion((v) => v + 1); };
+  const handleGoalsChange = (next: Goal[]) => { saveGoals(next); setGoals(next); };
   const patchGoal = (id: string, patch: Partial<Goal>) => {
     handleGoalsChange(goals.map((g) => (g.id === id ? { ...g, ...patch } : g)));
-  };
-  const patchPrefs = (patch: Partial<GoalPrefs>) => {
-    const next = { ...prefs, ...patch }; saveGoalPrefs(next); setPrefs(next); setPrefsSaved(true);
-  };
-  const toggleFreeDay = (day: number) => {
-    const has = prefs.freeDays.includes(day);
-    patchPrefs({ freeDays: has ? prefs.freeDays.filter((d) => d !== day) : [...prefs.freeDays, day].sort() });
   };
 
   const active = goals.filter((g) => isSchedulable(g, todayISO()));
@@ -67,21 +62,21 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
     <div className="space-y-4">
 
       {/* ── 一句话输入 ─────────────────────────────── */}
-      <GoalQuickInput onConfirm={({ title, category }) => {
-        const g: Goal = { id: makeGoalId(), title, emoji: '🎯', kind: 'study', category, source: 'manual' };
+      <GoalQuickInput onConfirm={({ title, category, dueAt }) => {
+        // 2026-10-07：截止短语自动识别（quickGoalParse）—— 有截止才走「节奏分解」路径，
+        // 总时长 = min(类型经验值, 剩余周数×3h)（suggestTotalHours，防「天天 2 小时」）
+        const kind = CATEGORY_TO_KIND[category] ?? 'study';
+        const g: Goal = {
+          id: makeGoalId(), title, emoji: '🎯', kind, category, source: 'manual',
+          ...(dueAt ? { dueAt, totalHours: suggestTotalHours(kind, dueAt, todayISO(), EXPERIENCE_HOURS) } : {}),
+        };
         handleGoalsChange([...goals, g]);
       }} />
 
-      {/* ── 每周复盘 ───────────────────────────────── */}
-      {active.map((g) => (
-        <WeeklyReviewCard key={`rv-${g.id}`} goal={g} weekNo={weekNo}
-          lastDone={null} lastTotal={90}
-          onSave={(theme) => {
-            patchGoal(g.id, { weekThemes: { ...g.weekThemes, [weekNo]: theme } });
-          }}
-          onSkip={() => patchGoal(g.id, { reviewMissed: [...(g.reviewMissed ?? []), weekNo] })}
-        />
-      ))}
+      {/* 🔴 「每周复盘」卡已删除（2026-10-07 RAY 拍板）：卡内「上周实际 90 分钟」是写死的
+          假数据，收集的 weekThemes 引擎不消费——其客观职能已被周计划页的执行标记
+          （✓做了/✗没做 + 实际用时 → adherence/顺延/估时自学）全面替代。
+          宽泛目标的「方向输入」保留在下方目标卡展开区（本周主题/达成/子领域）。 */}
 
       {/* ── 空状态：一个目标都没有时的引导 ────────── */}
       {goals.length === 0 && (
@@ -91,6 +86,59 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
             title="还没有目标"
             description="在上面输入一句话就能开始 —— 比如「考研初试」「学编程」「跑步 1km 跑进 3 分钟」。建完之后，分解出的任务会进周程。"
           />
+        </div>
+      )}
+
+      {/* ── 长目标总览（可展开：点标题条展开全部活跃目标的监测面板，按优先级排序）── */}
+      {goals.length > 0 && (
+        <div className="panel px-4 py-2.5 sm:px-5">
+          <button
+            type="button"
+            onClick={() => setOverviewOpen(!overviewOpen)}
+            aria-expanded={overviewOpen}
+            className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 text-left"
+          >
+            <span className="text-[12px] font-medium text-ink">
+              长目标总览：活跃 {active.length} 个
+            </span>
+            <span className="text-[11.5px] text-amber-700">
+              临近截止（≤2 周）{active.filter((g) => g.dueAt && deadlineProximity(g, weekNo, schedule.termStart) >= 0.75).length} 个
+            </span>
+            <span className={`text-[11.5px] ${(goalDebtByGoal(records, weekNo - 1).size ?? 0) > 0 ? 'text-red-700' : 'text-ink-faint'}`}>
+              上周欠账目标 {goalDebtByGoal(records, weekNo - 1).size} 个
+            </span>
+            <span className="ml-auto text-[11px] text-ink-faint">{overviewOpen ? '▲ 收起' : '▼ 展开全部监测'}</span>
+          </button>
+          {overviewOpen && (
+            <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
+              {orderGoalsByPriority(active, weekNo, schedule.termStart).map((g, i) => (
+                <div key={g.id} className="rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-ink/5">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+                    <span className="text-ink-faint">{i === 0 ? '👑' : `${i + 1}.`}</span>
+                    <span>{g.emoji}</span>
+                    <span>{g.title}</span>
+                  </div>
+                  <div className="mt-1.5">
+                    <GoalMonitor goal={g} records={records} weekNo={weekNo} termStart={schedule.termStart} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 长目标优先级（≥2 个活跃目标才出现）────────── */}
+      {active.length >= 2 && (
+        <div className="panel px-4 py-3.5 sm:px-5">
+          <h3 className="text-[14px] font-semibold text-ink">目标优先级</h3>
+          <p className="mt-1 text-[12px] leading-5 text-ink-soft">
+            拖拽排序：<b className="text-ink">从左到右优先级依次减弱</b>。
+            多目标争预算、超限降权排名都吃这个顺序 —— 下次「重新排一遍」生效。
+          </p>
+          <div className="mt-2">
+            <PriorityStrip goals={active} weekNo={weekNo} termStart={schedule.termStart} onChange={handleGoalsChange} />
+          </div>
         </div>
       )}
 
@@ -124,9 +172,49 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                       {g.pace && <span>{g.pace === 'sprint' ? '冲刺' : g.pace === 'steady' ? '匀速' : '兼顾'}</span>}
                       {g.place && <span>@{g.place}</span>}
                     </div>
-                    {/* 展开：方向提示 / 里程碑 / 意愿 / 状态 */}
+                    {/* 展开：长目标监测 / 定向提示 / 里程碑 / 意愿 / 状态 */}
                     {isExp && (
                       <div className="mt-2 space-y-2 border-t border-ink/10 pt-2">
+                        {/* 长目标监测面板（临近度/总进度/本周需求vs完成/欠账/里程碑） */}
+                        <GoalMonitor goal={g} records={records} weekNo={weekNo} termStart={schedule.termStart}
+                          onToggleMilestone={(mid) => {
+                            const updated = g.milestones!.map((m) =>
+                              m.id === mid ? { ...m, done: !m.done, doneAt: !m.done ? todayISO() : undefined } : m);
+                            patchGoal(g.id, { milestones: updated });
+                          }} />
+                        {/* 投入量滑块（2026-10-07 RAY：滑动调节总投入 —— 40h「排满」事故后的手动旋钮）。
+                            只给有截止+总量的目标（宽泛目标走 Q4 定向，滑了也没意义）。
+                            拖动即存；总进度分母、周需求都随之变化；排程下次「重新排一遍」生效。 */}
+                        {g.dueAt && g.totalHours != null && (() => {
+                          const dueWeek = currentWeekNo(schedule.termStart, g.dueAt);
+                          const weeksLeft = Math.max(1, dueWeek - weekNo + 1);
+                          const weeklyMin = Math.round((g.totalHours * 60) / weeksLeft);
+                          return (
+                            <div className="rounded bg-slate-50 px-2.5 py-2 ring-1 ring-ink/5">
+                              <div className="flex items-baseline justify-between text-[11px]">
+                                <span className="text-ink-faint">总投入</span>
+                                <span className="font-medium text-ink">{g.totalHours} 小时
+                                  <span className="ml-1.5 text-[10px] font-normal text-ink-faint">≈ 每周 {weeklyMin} 分钟</span>
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={2}
+                                max={40}
+                                step={1}
+                                value={g.totalHours}
+                                onChange={(e) => patchGoal(g.id, { totalHours: Number(e.target.value) })}
+                                className="mt-1.5 w-full accent-slate-800"
+                                aria-label={`调节总投入：当前 ${g.totalHours} 小时`}
+                              />
+                              <div className="flex justify-between text-[10px] text-ink-faint">
+                                <span>2h</span>
+                                <span>拖动调节 · 下次「重新排一遍」生效</span>
+                                <span>40h</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {/* 定向提示 */}
                         {!hasDirection && (
                           <div className="rounded bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
@@ -147,29 +235,9 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                             本周主题：<b>{g.weekThemes[weekNo].text}</b>
                           </div>
                         )}
-                        {/* 里程碑 */}
-                        {g.milestones && g.milestones.length > 0 && (
-                          <div>
-                            <div className="text-[11px] font-medium text-ink-soft">里程碑</div>
-                            <MilestoneTimeline milestones={g.milestones}
-                              onToggle={(mid) => {
-                                const updated = g.milestones!.map((m) =>
-                                  m.id === mid ? { ...m, done: !m.done, doneAt: !m.done ? todayISO() : undefined } : m);
-                                patchGoal(g.id, { milestones: updated });
-                              }} />
-                          </div>
-                        )}
-                        {/* 意愿档位 */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-ink-faint">投入：</span>
-                          {WILLINGNESS.map((w) => (
-                            <button key={w.value} type="button"
-                              onClick={() => patchGoal(g.id, { priority: w.value as 2 | 3 | 4 })}
-                              className={`rounded px-2 py-0.5 text-[10.5px] ring-1 transition ${
-                                (g.priority ?? 3) === w.value ? 'bg-slate-800 text-white ring-slate-800' : 'bg-white text-ink-soft ring-ink/10'
-                              }`}>{w.label}</button>
-                          ))}
-                        </div>
+                        {/* 🔴 意愿档位三按钮已删（2026-10-07 RAY 拍板）：优先级升级为
+                            顶部「目标优先级」模块（拖拽排序，左高右低）—— 同一数据
+                            （goal.priority），一处编辑，不再分散在每张卡里。 */}
                         {/* 状态操作 */}
                         <div className="flex flex-wrap gap-1">
                           {st === 'active' && (
@@ -213,87 +281,19 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
         </div>
       )}
 
-      {/* ── 详细编辑（折叠，兼容老字段） ───────────── */}
-      <div className="panel px-4 py-3 sm:px-5">
-        <button type="button" onClick={() => setShowDetail(!showDetail)}
-          className="text-[12px] text-ink-faint hover:text-ink">
-          {showDetail ? '▲ 收起详细编辑' : '▼ 详细编辑（节奏 / 截止 / 总时长）'}
-        </button>
-        {showDetail && (
-          <div className="mt-3">
-            <GoalEditor goals={goals} onChange={handleGoalsChange} />
-          </div>
-        )}
-      </div>
+      {/* ── 成就统计（数据源 = behaviorLog 执行标记，2026-10-07 切换）── */}
+      <AchievementPanel weekNo={weekNo} termStart={schedule.termStart} />
 
-      {/* ── 成就统计 ───────────────────────────────── */}
-      <div key={captureVersion}>
-        <AchievementPanel weekNo={weekNo} termStart={schedule.termStart} />
-      </div>
+      {/* 🔴 「活动补记」（ActivityCapture）已删（2026-10-07 RAY「投入和成就没用上」）：
+          手动补记零使用，真实投入已在周计划用 ✓做了 标记并自动累计到这里。
+          周计划 SlotEditor 里的 ActivityCapture 入口保留（场景不同：加一件事）。 */}
 
-      {/* ── 活动补记 ───────────────────────────────── */}
-      <div className="panel px-4 py-3.5 sm:px-5">
-        <h3 className="text-[14px] font-semibold text-ink">活动补记</h3>
-        <p className="mt-1 text-[12px] leading-5 text-ink-soft">
-          事后补记已发生的投入。行为日志（behaviorLog）是只读历史，两者口径并列。
-        </p>
-        <div className="mt-3" key={captureVersion}>
-          <ActivityCapture weekNo={weekNo} date={todayISO()} goals={goals}
-            onDone={() => setCaptureVersion((v) => v + 1)}
-            onDismiss={() => setCaptureVersion((v) => v + 1)} />
-        </div>
-      </div>
-
-      {/* ── 目标偏好 ───────────────────────────────── */}
-      <div className="panel px-4 py-3.5 sm:px-5">
-        <h3 className="text-[14px] font-semibold text-ink">目标偏好</h3>
-        <p className="mt-1 text-[12px] leading-5 text-ink-soft">
-          改动下次「重新排一遍」生效。{prefsSaved && <span className="ml-1 text-green-700">已保存 ✓</span>}
-        </p>
-        <dl className="mt-3 space-y-3 text-[12px]">
-          <div>
-            <dt className="font-medium text-ink">每周有空的大块时间</dt>
-            <dd className="mt-1 flex flex-wrap gap-1">
-              {DAY_LABELS.map((name, i) => {
-                const day = i + 1; const act = prefs.freeDays.includes(day);
-                return (<button key={day} type="button" onClick={() => toggleFreeDay(day)}
-                  className={`rounded px-2 py-0.5 text-[11px] ring-1 transition ${act ? 'bg-slate-800 text-white ring-slate-800' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
-                  aria-pressed={act}>{name}</button>);
-              })}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-ink">单次专注时长</dt>
-            <dd className="mt-1 flex flex-wrap items-center gap-1">
-              {FOCUS_OPTIONS.map((m) => (
-                <button key={m} type="button" onClick={() => patchPrefs({ focusMinutes: m })}
-                  className={`rounded px-2 py-0.5 text-[11px] ring-1 transition ${prefs.focusMinutes === m ? 'bg-slate-800 text-white ring-slate-800' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
-                  aria-pressed={prefs.focusMinutes === m}>{m} 分钟</button>
-              ))}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-ink">自主安排偏好时段</dt>
-            <dd className="mt-1 flex flex-wrap items-center gap-1">
-              {TIME_OPTIONS.map((t) => (
-                <button key={t.id} type="button" onClick={() => patchPrefs({ timeOfDay: t.id })}
-                  className={`rounded px-2 py-0.5 text-[11px] ring-1 transition ${prefs.timeOfDay === t.id ? 'bg-slate-800 text-white ring-slate-800' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
-                  aria-pressed={prefs.timeOfDay === t.id}>{t.label}</button>
-              ))}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-ink">习惯同时推进的目标数</dt>
-            <dd className="mt-1 flex flex-wrap items-center gap-1">
-              {([1, 2, 3] as const).map((n) => (
-                <button key={n} type="button" onClick={() => patchPrefs({ parallelCount: n })}
-                  className={`rounded px-2 py-0.5 text-[11px] ring-1 transition ${prefs.parallelCount === n ? 'bg-slate-800 text-white ring-slate-800' : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'}`}
-                  aria-pressed={prefs.parallelCount === n}>{n} 个</button>
-              ))}
-            </dd>
-          </div>
-        </dl>
-      </div>
+      {/* 🔴 两块已删（2026-10-07 RAY 拍板「目标页的详细编辑 / 目标偏好没用了」）：
+          · 「详细编辑（节奏/截止/总时长）」折叠区（GoalEditor）—— 截止/总时长现在由
+            一句话输入自动识别 + 类型经验值兜底（quickGoalParse）；
+          · 「目标偏好」面板（freeDays/专注时长/时段/并行数）—— G1 初步机制，精力偏好
+            由「我的画像 → ⚡ 精力高峰」承接，其余走 goalPrefs 缺省值（存储与引擎消费链保留）。
+          数据通道未动：dueAt/totalHours/pace 仍可经引擎侧消费（老数据照常读）。 */}
     </div>
   );
 }

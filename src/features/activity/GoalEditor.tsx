@@ -13,7 +13,8 @@ import {
   withPace, type Goal, type GoalKind, type GoalPace,
 } from './goalStore';
 import { EXPERIENCE_HOURS } from './goalDecompose';
-import { loadActivityLog, type ActivityEntry } from './activityStore';
+import type { ActivityEntry } from './activityStore';
+import { loadRecords } from '@/lib/behaviorLog';
 import { goalTasksOf } from './goalDecompose';
 import { loadGoalPrefs } from './goalPrefs';
 import { humanHours, summarizeRange, totalForGoal } from './aggregate';
@@ -266,8 +267,30 @@ export function GoalEditor({
 }
 
 export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termStart: string }) {
-  const [goals, setGoals] = useState<Goal[]>(() => loadGoals());
-  const [entries] = useState(() => loadActivityLog());
+  const [goals] = useState<Goal[]>(() => loadGoals());
+  /**
+   * 🔴 数据源切换（2026-10-07 RAY「投入和成就没用上」）：原读 `activityStore`
+   * （只有手动「记一笔」才写入 → 永远 0 笔）。现改读 **behaviorLog 执行标记**
+   * （周计划里 ✓做了 的块）—— 零额外输入，数据自动累计。
+   * 适配：done 记录 → ActivityEntry 视图（goalId 从 `goal-{id}-` 前缀提取）。
+   */
+  const [entries] = useState<ActivityEntry[]>(() =>
+    loadRecords()
+      .filter((r) => r.status === 'done')
+      .map((r) => {
+        const isGoal = r.blockId.startsWith('goal-');
+        return {
+          id: r.id,
+          date: r.date,
+          weekNo: r.weekNo,
+          minutes: r.plannedMin,
+          title: r.title,
+          tag: isGoal ? ('goal' as const) : ('other' as const),
+          ...(isGoal ? { goalId: r.blockId.slice(5).split('-')[0] } : {}),
+          source: 'manual' as const,
+          at: r.at,
+        };
+      }));
   /** 「学期至今」= 第 1 周到本周 —— 它就是用户问「这学期花了多少」的那个区间 */
   const range = useMemo(() => summarizeRange(entries, 1, weekNo, goals), [entries, weekNo, goals]);
 
@@ -295,7 +318,7 @@ export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termSt
 
       {range.count === 0 ? (
         <p className="mt-1.5 text-[11.5px] text-ink-faint">
-          还没登记过 —— 空闲时段旁边点「记一笔」就行，不想说也可以跳过。
+          还没有记录 —— 在周计划里把块标成「✓ 做了」就会自动累计。
         </p>
       ) : (
         <ul className="mt-2 space-y-1.5">
@@ -333,8 +356,8 @@ export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termSt
           ))}
         </ul>
       )}
-
-      <GoalEditor goals={goals} onChange={setGoals} />
+      {/* 🔴 内嵌 GoalEditor 已删（2026-10-07 RAY 拍板删「详细编辑」）：目标写路径
+          统一走 GoalsPage（一句话输入 + 卡片操作），本面板改为纯只读统计。 */}
     </div>
   );
 }
