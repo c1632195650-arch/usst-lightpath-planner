@@ -54,6 +54,12 @@ export interface WeekToolsPanelProps {
   onOpenAdjust: () => void;
   /* T3「攒批」标记：视图层已记下改动但尚未应用 */
   pendingEdits: boolean;
+  /**
+   * 目标设置改过（尚未生效）。
+   * 🔴 目标走 `goalStore`、**不经过 layer**，所以 `editedBlockIds` 里看不见它 ——
+   *    不单独传这一个，状态条的摘要就会是空的（详见 `countPendingEdits` 注释）。
+   */
+  goalsChanged?: boolean;
   /** 本周被改过时间/地点的块 id —— 待生效状态条数「改了 N 处」的来源 */
   editedBlockIds: ReadonlySet<string>;
   /** 「已跳过 N 块」的判定仍要看它（状态条的"查看改动"接的是「全部恢复」） */
@@ -62,8 +68,9 @@ export interface WeekToolsPanelProps {
   /* 面板回调 */
   timeAskNote: string | null;
   handleAddRule: (rule: CorrectionRuleT) => void;
+  onAskSched?: (q: string) => void;
   handleAddTaskFromDraft: (draft: import('@/features/feedback/planIntent').TaskDraft) => void;
-  handleRemoveBlocks: (days: import('@/types').DayOfWeek[], blockKind?: import('@/types').BlockKind) => void;
+  handleRemoveBlocks: (days: import('@/types').DayOfWeek[], blockKind?: import('@/types').BlockKind, titleKw?: string) => void;
   /* 拖拽反馈 + 容量预警 */
   dragNote: string | null;
   goalWarnings: GoalWarningLike[];
@@ -75,9 +82,9 @@ export function WeekToolsPanel({
   weekNo, goals, onGoalsChange, notify,
   onGoToToday, handleUndo, handleRedo, undoDepth, redoDepth, setReplanToken,
   onOpenAdjust,
-  pendingEdits, editedBlockIds, edits, handleRestoreAll,
+  pendingEdits, editedBlockIds, edits, handleRestoreAll, goalsChanged,
   timeAskNote,
-  handleAddRule, handleAddTaskFromDraft, handleRemoveBlocks,
+  handleAddRule, handleAddTaskFromDraft, handleRemoveBlocks, onAskSched,
   dragNote, goalWarnings, dismissedWarnings, setDismissedWarnings,
 }: WeekToolsPanelProps) {
   /* 引擎切换（2026-10-06）：全局单例，读同一份真源 —— 见 `@/lib/engineMode` */
@@ -90,6 +97,7 @@ export function WeekToolsPanel({
     excludedCount: edits.excludedBlockIds.length,
     userTaskCount: edits.userTasks.length,
     editedIds: editedBlockIds,
+    goalsChanged,
   });
   return (
     <>
@@ -137,17 +145,9 @@ export function WeekToolsPanel({
         >
           ↪ 重做{redoDepth > 0 ? `（${redoDepth}）` : ''}
         </button>
-        <button
-          type="button"
-          onClick={() => setReplanToken((v) => v + 1)}
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            pendingEdits
-              ? 'bg-slate-800 text-white ring-slate-800'
-              : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-          }`}
-        >
-          重新排一遍
-        </button>
+        {/* 重新排一遍按钮已退役（2026-10-07，RAY）：所有输入要求（加事/删事/
+            规则/食堂/不可时段）现在都自动重排 —— PendingEditsBar 与删除询问
+            弹窗里的显式「重排」选项保留。 */}
         {/* ⚙️ 调整：与上面四个操作同级 —— 低频干预入口（加事/调课/不可时段/食堂/偏好）
             收敛成一个抽屉。按钮放这一排，抽屉本体由 WeekPlanView 渲染。 */}
         <button
@@ -216,6 +216,7 @@ export function WeekToolsPanel({
         onAdd={handleAddRule}
         onAddTask={handleAddTaskFromDraft}
         onRemoveBlocks={handleRemoveBlocks}
+        onAskSched={onAskSched}
       />
 
       {/* R1：拖拽如实提示（放不下/课程不能删） */}

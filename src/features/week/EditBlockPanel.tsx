@@ -72,7 +72,7 @@ export function EditBlockPanel({
   const clash = (occupied ?? []).find((o) => start < o.endMin && o.startMin < end) ?? null;
 
   return (
-    <div className="mt-1.5 space-y-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
+    <div className="space-y-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="shrink-0">开始</span>
         <TimeWheelPicker value={startText} onChange={setStartText} step={10} />

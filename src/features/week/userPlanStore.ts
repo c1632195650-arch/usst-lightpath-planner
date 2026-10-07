@@ -222,6 +222,33 @@ export function removeSlot(slots: readonly UnavailableSlot[], id: string): Unava
   return slots.filter((s) => s.id !== id);
 }
 
+/**
+ * 「最新要求优先」（2026-10-07，RAY）：新加的任务**显式指定了**星期+时段，
+ * 而该时段被不可时段硬排除 —— 冲突时以更晚的要求为准，自动解除冲突的禁排
+ * （整条解除，undo 可回退）。
+ * 只认「显式指定了开始时间」的任务：引擎自选位置的浮动任务不解除任何限制。
+ * 纯函数。
+ */
+export function clearConflictingSlots(
+  slots: readonly UnavailableSlot[],
+  tasks: readonly { dayOfWeek?: number; startMin?: number; durationMin?: number }[],
+  weekNo: number,
+): { slots: UnavailableSlot[]; removed: UnavailableSlot[] } {
+  const active = (s: UnavailableSlot) =>
+    s.scope === 'long' ? s.createdAtWeek <= weekNo : s.weeks.includes(weekNo);
+  const conflicts = (s: UnavailableSlot) =>
+    active(s) &&
+    tasks.some((t) =>
+      t.dayOfWeek != null && t.startMin != null &&
+      s.days.includes(t.dayOfWeek) &&
+      s.fromMin < t.startMin + (t.durationMin ?? 60) &&
+      s.toMin > t.startMin,
+    );
+  const removed = slots.filter(conflicts);
+  if (removed.length === 0) return { slots: [...slots], removed };
+  return { slots: slots.filter((s) => !conflicts(s)), removed };
+}
+
 export function addOverride(list: readonly CourseOverride[], ov: CourseOverride): CourseOverride[] {
   const i = list.findIndex((o) => o.id === ov.id);
   const next = [...list];

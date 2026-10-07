@@ -71,8 +71,9 @@ const CROSS_DOMAIN_FROZEN = new Set([
   'week -> weather',
 ]);
 
-/** R5 冻结总条数（同一域对可被多个文件命中）—— 同样只许缩短 */
-const CROSS_DOMAIN_BASELINE = 43;
+/** R5 冻结总条数（同一域对可被多个文件命中）—— 同样只许缩短
+ *  43 → 44：WeekPlanView 内嵌排程对话抽屉（2026-10-07，RAY「接手不跳页」）+1 条 week→libao */
+const CROSS_DOMAIN_BASELINE = 44;
 
 /**
  * AC-8 允许：唯一引擎准入通道（前端架构规格书 §6.1 / §7.3）。

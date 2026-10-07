@@ -21,7 +21,7 @@
 import { useRef } from 'react';
 import type { PlanPersistState, TimeBlock } from '@/types';
 import { humanizeMinutes, toHHmm } from '@/constants/time';
-import { freeGapsOf, snap10 } from './timeScale';
+import { freeGapsOf, snap10, type TimeGap } from './timeScale';
 import { AXIS_HEIGHT, hourRules, minToY, spanToH, yToMin } from './timeAxis';
 import { isLockedThisWeek } from '@/features/plan/planLock';
 import { nowMinutes, TODAY_COL_BG } from './weekViewUtils';
@@ -64,6 +64,12 @@ export interface WeekDayColumnProps {
   updatePreview: (day: number, atMin: number, coord: string) => void;
   clearPreview: () => void;
   handleDrop: (blockId: string, day: number, atMin: number) => void;
+  /**
+   * 右键空档 → 「加一件事」（2026-10-07）：gap = 被点的空档；clickedMin =
+   * 右键点的分钟（泳道 Y 反算，未吸附 —— 缓冲/吸附由 WeekPlanView 的纯函数定）。
+   * pos = 右键光标的视口坐标（弹窗定位用）。
+   */
+  onGapContextMenu: (gap: TimeGap, clickedMin: number, pos: { x: number; y: number }) => void;
   /* BlockCard 的操作回调（视图层 handler 原样透传） */
   onToggleLock: (block: TimeBlock) => void;
   onExclude: (block: TimeBlock) => void;
@@ -81,6 +87,7 @@ export function WeekDayColumn({
   recentTaskIds, onDismissNew,
   planState, weekNo, assignmentByCourse, editedBlockIds,
   draggingId, preview, setDraggingId, updatePreview, clearPreview, handleDrop,
+  onGapContextMenu,
   onToggleLock, onExclude, onSetAssignment, onClearAssignment, onEditBlock, onRevertEdit,
 }: WeekDayColumnProps) {
   const baseBlocks = allBlocks
@@ -139,6 +146,10 @@ export function WeekDayColumn({
         e.preventDefault();
         if (draggingId) updatePreview(day, atMinFromEvent(e), `${e.clientX}:${e.clientY}`);
       }}
+      /* `dragenter` 也 preventDefault（2026-10-07 补）：目标链一旦切换，浏览器会先发
+         `dragenter` 再等 `dragover`；把这里也标成"接受"，`drop` 才不会被判为落在
+         未接受的目标上而静默丢弃。与上面那条 `pointer-events-none` 是同一次修复的两半。 */
+      onDragEnter={(e) => e.preventDefault()}
       onDragLeave={(e) => {
         // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
         if (!e.currentTarget.contains(e.relatedTarget as Node) && preview?.day === day) clearPreview();
@@ -164,14 +175,22 @@ export function WeekDayColumn({
 
       {/* 空档（≥30 分钟）：不再是「卡片」，而是泳道上的虚线区域 ——
           拖到空档 = 按鼠标位置排进去（沿用 R1 的 dragTo 判定，不另立逻辑）。
-          整块 pointer-events-none：事件穿透到泳道，落点统一按 Y 换算。 */}
+          拖拽时事件仍穿透到泳道（dragover 冒泡），右键则归自己：右键空档 =
+          「加一件事」入口（2026-10-07），块上的右键菜单不受影响（块后画先收）。 */}
       {gaps.map((g) => (
         <div
           key={`gap-${g.startMin}`}
-          className={`pointer-events-none absolute inset-x-1 overflow-hidden rounded-md border border-dashed ${
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (draggingId) return; // 拖拽中不弹（右键本来也轮不到它）
+            const lane = laneRef.current?.getBoundingClientRect();
+            if (!lane) return;
+            onGapContextMenu(g, yToMin(e.clientY - lane.top), { x: e.clientX, y: e.clientY });
+          }}
+          className={`group absolute inset-x-1 overflow-hidden rounded-md border border-dashed ${
             draggingId ? 'border-brand/40 bg-brand-light/30' : 'border-ink/20 bg-paper/60'
           }`}
-          style={{ top: minToY(g.startMin), height: spanToH(g.startMin, g.endMin) }}
+          style={{ top: minToY(g.startMin), height: spanToH(g.startMin, g.endMin), cursor: 'context-menu' }}
         >
           <div className="truncate px-1.5 pt-0.5 text-[10px] leading-tight text-ink-faint">
             空闲 {toHHmm(g.startMin)}–{toHHmm(g.endMin)}
@@ -179,6 +198,7 @@ export function WeekDayColumn({
           <div className="truncate px-1.5 text-[10px] leading-tight text-ink-faint/80">
             {humanizeMinutes(g.endMin - g.startMin)}
             {draggingId && <span className="ml-1 text-brand/70">· 可拖到这里</span>}
+            {!draggingId && <span className="ml-1 opacity-0 transition-opacity group-hover:opacity-100">· 右键可加事</span>}
           </div>
         </div>
       ))}
@@ -236,7 +256,16 @@ export function WeekDayColumn({
       {ghost && (ghost.ok ? (
         <div
           key="drag-ghost"
-          className="absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-1.5 py-1"
+          /* 🔴 必须 `pointer-events-none`（2026-10-07 修 RAY「拖不动」）：
+             影子是**浮在光标底下**的（它就画在落点上）。若不透明，
+             拖拽过程中光标底下的元素会从「泳道」变成「影子」；而影子会随预览移动、
+             顺带挪动别的块 ⟹ 浏览器在**原地**补发 `dragenter` 而不是 `dragover`。
+             此时松手，Chrome 认为"当前目标没被接受" ⟹ **`drop` 根本不派发** ——
+             用户看到预览是对的、松手却毫无反应，也没有任何提示。
+             实测事件序列：`dragstart → dragenter/dragover(目标=z-20 影子) → dragend`，
+             全程没有 `drop`。加这行后目标链稳定在泳道上，`drop` 必达。
+             （顺带修掉影子抢鼠标 hover 的问题。） */
+          className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-1.5 py-1"
           style={{ top: minToY(ghost.startMin), height: spanToH(ghost.startMin, ghost.endMin) }}
         >
           <div className="truncate text-[11px] font-medium text-brand">📍 {ghost.title}</div>
@@ -247,7 +276,8 @@ export function WeekDayColumn({
       ) : (
         <div
           key="drag-ghost"
-          className="absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-1.5 py-1"
+          /* 同上：不可落位的红色影子也必须对指针透明，否则同样会吃掉 `drop` */
+          className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-1.5 py-1"
           style={{
             top: minToY(ghost.startMin),
             /* 拒绝提示不守时：至少 36px 高，否则 20 分钟的块放不下这行字 */

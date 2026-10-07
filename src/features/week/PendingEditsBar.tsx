@@ -103,6 +103,18 @@ export function countPendingEdits(input: {
   excludedCount: number;
   userTaskCount: number;
   editedIds: ReadonlySet<string>;
+  /**
+   * 目标设置改过（2026-10-07 补）。
+   *
+   * 🔴 为什么必须单独开一类：周页上**其它**改动（删除 / 加事 / 拖拽改时间 / 不可时段 /
+   *    食堂 / 作业）都写 `layer`，一律经 `updateLayer` —— 那个函数是「写层 + 标记待生效」
+   *    的收口，天然不会漏。**而目标走 `goalStore`，不经过 `layer`** ⟹
+   *    `editedIds` 里看不见它。
+   *    后果（RAY 2026-10-07 实测到的）：点了「延 2 周 / 减 20% / 转冲刺」，
+   *    `goalStore` 确实写了、toast 也弹了，但计划不重算；而摘要里没有这一类 ⟹
+   *    `items` 为空 ⟹ 连这条「有改动还没生效」的提示都不会出现，用户**没有任何重排入口**。
+   */
+  goalsChanged?: boolean;
 }): PendingEdit[] {
   if (!input.pendingEdits) return [];
   const items: PendingEdit[] = [];
@@ -114,6 +126,9 @@ export function countPendingEdits(input: {
   }
   if (input.editedIds.size > 0) {
     items.push({ kind: '改了', detail: `${input.editedIds.size} 处时间` });
+  }
+  if (input.goalsChanged) {
+    items.push({ kind: '调了', detail: '目标设置' });
   }
   return items;
 }

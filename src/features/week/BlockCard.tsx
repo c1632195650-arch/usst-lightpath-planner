@@ -14,13 +14,11 @@
  *    块底色作为 CSS 变量传进去，而块底色是 Tailwind 类名（无 hex），加一份
  *    hex 就是多一处真相源。独立渐隐层 + 半透明黑（与原型渐隐同色系）+ JS
  *    切 opacity —— 颜色无关、零真相源。
- * ② 编辑/作业面板**浮出块外**（fragment 兄弟节点，`top-full` 纵向展开）：
- *    块高守时后 75px 的块塞不下表单；挂在滚动区里又会被裁剪。面板的定位
- *    祖先 = 时间轴的块容器（`position:absolute`），不受滚动区/泳道裁剪。
- *    ⚠️ 面板宽度 = 块宽（`inset-x-0`）：与改造前「嵌在卡片里」的表单宽度
- *    一致，不引入横向溢出（横向溢出会催生滚动条）。
- *    ⚠️ 时间轴侧为「面板能盖过相邻块」做了配套：块容器平时不加 z-index
- *    （加了会创建层叠上下文、把面板的 z-50 困住），见 WeekDayColumn 注释。
+ * ② 编辑/作业面板**浮出块外**：块高守时后 75px 的块塞不下表单。
+ *    「改时间、地点」面板（EditBlockPanel）自 2026-10-07 起**不再挂块下方** ——
+ *    改为 fixed 浮在**右键菜单原位置**、可拖动（RAY 拍板；见组件内 editPos 注释）；
+ *    只有作业输入条仍留在块下方（`top-full` 纵向展开，块容器 position:absolute
+ *    是它的定位祖先，不受滚动区/泳道裁剪）。
  * ③ `live`：今天 + 此刻进行中的块整块高亮（原型定案：替代横贯七列的红线）。
  * ④ 2026-10-07 RAY 反馈三件事（同日落地）：
  *    · 滚动条**隐藏**（`[scrollbar-width:none]` + `::-webkit-scrollbar: hidden`）——
@@ -168,8 +166,16 @@ export function BlockCard({
    */
   const [asgOpen, setAsgOpen] = useState(false);
   const [asgMin, setAsgMin] = useState(60);
-  /** R2：块级编辑面板的展开状态（同 T6，纯 UI 状态） */
-  const [editOpen, setEditOpen] = useState(false);
+  /** R2：块级编辑面板（见下方 editPos 注释；「改」从右键菜单点开） */
+  /**
+   * 「改时间、地点」面板的**浮动位置**（2026-10-07 RAY 拍板）：从右键菜单点
+   * 「改」后面板不再展开在块下方，而是 fixed 弹在**原右键菜单处**，可拖动。
+   * null = 关。编辑中滚动页面会带着走（fixed）——这是刻意选择：面板跟着
+   * 光标上下文，不被块下方空间/邻块挤占。
+   */
+  const [editPos, setEditPos] = useState<{ x: number; y: number } | null>(null);
+  /** 拖动手柄的按下偏移（拖动中有效）；配合 document 级 mousemove/mouseup */
+  const editDrag = useRef<{ dx: number; dy: number } | null>(null);
   /**
    * T2.0（长计划增强计划书）：执行标记 —— 操作行「✓ 做了 / ✗ 没做」的本地回显。
    * 初始值读一次存储；写走 `markBlock`（覆盖同块同天）。只有 study/activity 可标
@@ -242,6 +248,36 @@ export function BlockCard({
       window.removeEventListener('resize', close);
     };
   }, [menu]);
+  /** 编辑面板的拖动（手柄 mousedown 起跳，document 级跟随，松手即卸） */
+  const startEditDrag = (e: React.MouseEvent) => {
+    if (!editPos) return;
+    e.preventDefault(); // 不抢输入框焦点也能拖；同时防文本选中
+    editDrag.current = { dx: e.clientX - editPos.x, dy: e.clientY - editPos.y };
+    const PANEL_W = 288; // w-72，拖动中夹回视口
+    const onMove = (ev: MouseEvent) => {
+      const d = editDrag.current;
+      if (!d) return;
+      setEditPos({
+        x: Math.max(0, Math.min(ev.clientX - d.dx, window.innerWidth - PANEL_W)),
+        y: Math.max(0, Math.min(ev.clientY - d.dy, window.innerHeight - 80)),
+      });
+    };
+    const onUp = () => {
+      editDrag.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+  /* 编辑面板 Esc 关闭（与右键菜单同一纪律；不挂「点外部关闭」——
+     误点丢表单比多点一次「取消」更烦人） */
+  useEffect(() => {
+    if (!editPos) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEditPos(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [editPos]);
   const style = KIND_STYLE[block.kind] ?? KIND_STYLE.blank;
   const t = block.transfer;
   // 校历事件展开出来的准备块（光电杯材料、四六级真题…）单独标出来 ——
@@ -449,7 +485,7 @@ export function BlockCard({
              在「时间是纵轴」的时间轴里，看起来就是「两块重叠/串行」，让人怀疑引擎排错了。
              弹到侧面只横向遮到邻列，**同一列的时间轴完全不被遮挡**，误读消失。
              宽度 `w-56`（比块宽 ⟹ 一眼是浮层）；朝向由 `floatLeft` 按列位置给。 */
-          className={`pointer-events-none absolute top-0 z-50 w-56 max-w-[70vw] ${floatLeft ? 'right-full mr-1.5' : 'left-full ml-1.5'} rounded-lg border border-brand/25 bg-white p-2 shadow-xl ring-1 ring-brand/20 transition-opacity duration-150 ${peek && !dragging && !editOpen && !asgOpen && !menu ? 'opacity-100' : 'opacity-0'}`}
+          className={`pointer-events-none absolute top-0 z-50 w-56 max-w-[70vw] ${floatLeft ? 'right-full mr-1.5' : 'left-full ml-1.5'} rounded-lg border border-brand/25 bg-white p-2 shadow-xl ring-1 ring-brand/20 transition-opacity duration-150 ${peek && !dragging && !editPos && !asgOpen && !menu ? 'opacity-100' : 'opacity-0'}`}
         >
           {/* 浮层标识：把「悬停详情」和「日程块」明确区分开 */}
           <div className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-brand/60">
@@ -485,10 +521,27 @@ export function BlockCard({
         </div>
       )}
 
-      {/* R2：块级编辑面板 —— 浮出块体（见文件头「T3 改造」②）。
-          定位祖先 = 时间轴的块容器；宽度 = 块宽（inset-x-0），不横向溢出。 */}
-      {editOpen && editable && (
-        <div className="absolute inset-x-0 top-full z-50">
+      {/* R2：块级编辑面板 —— **浮动在右键菜单原位置**（2026-10-07 RAY 拍板）：
+          fixed 定位、带拖动手柄（按住标题条拖动，夹回视口）、Esc/取消关闭。
+          不再展开在块下方 —— 块高守时后下方空间不可靠，且会被相邻块遮挡。
+          （作业输入仍走块下方内联条，与编辑面板天然互斥。） */}
+      {editPos && editable && (
+        <div
+          role="dialog"
+          aria-label={`改 ${block.title} 的时间、地点`}
+          style={{ left: editPos.x, top: editPos.y }}
+          className="fixed z-50 w-72 rounded-lg bg-white p-2 shadow-xl ring-1 ring-ink/10"
+        >
+          <div
+            onMouseDown={startEditDrag}
+            title="按住拖动面板"
+            className="mb-1.5 flex cursor-move select-none items-center justify-between rounded-md bg-slate-100 px-2 py-1"
+          >
+            <span className="truncate text-[11px] font-semibold text-ink-soft">
+              ✏️ 改「{block.title}」
+            </span>
+            <span className="text-[10px] text-ink-faint">⠿ 拖动</span>
+          </div>
           <EditBlockPanel
             block={block}
             edited={edited ?? false}
@@ -496,9 +549,9 @@ export function BlockCard({
             occupied={(dayBlocks ?? [])
               .filter((x) => x.id !== block.id && x.dayOfWeek === block.dayOfWeek)
               .map((x) => ({ id: x.id, title: x.title, startMin: x.startMin, endMin: x.endMin }))}
-            onSave={(next) => { onEditBlock(block, next); setEditOpen(false); }}
-            onRevert={() => { onRevertEdit(block); setEditOpen(false); }}
-            onCancel={() => setEditOpen(false)}
+            onSave={(next) => { onEditBlock(block, next); setEditPos(null); }}
+            onRevert={() => { onRevertEdit(block); setEditPos(null); }}
+            onCancel={() => setEditPos(null)}
           />
         </div>
       )}
@@ -543,9 +596,9 @@ export function BlockCard({
 
       {/*
        * 右键菜单本体（见文件头 T3 改造 ⑤）：fixed 在光标处（坐标打开时已夹回
-       * 视口）。「改 / 作业」点完后菜单关掉、内联面板在块下方展开，和按钮行同一套
-       * 面板。fixed 定位不受祖先 overflow 裁剪，但会被祖先 transform 劫持 ——
-       * 周计划页容器没有 transform（已核查），安全。
+       * 视口）。「改」点完后菜单关掉、编辑面板浮在**原菜单位置**（可拖动）；
+       * 「作业」点完后内联输入条在块下方展开。fixed 定位不受祖先 overflow 裁剪，
+       * 但会被祖先 transform 劫持 —— 周计划页容器没有 transform（已核查），安全。
        */}
       {menu && (
         <div
@@ -607,7 +660,8 @@ export function BlockCard({
                   key: 'edit',
                   label: edited ? '✏️ 再改 / 恢复引擎安排' : '✏️ 改时间、地点',
                   danger: false,
-                  run: () => setEditOpen(true),
+                  // 面板弹在原菜单位置（menu 坐标打开时已夹回视口）——RAY 2026-10-07
+                  run: () => setEditPos(menu ? { x: menu.x, y: menu.y } : { x: 8, y: 8 }),
                 }]
               : []),
             ...(block.kind === 'course' && block.courseId

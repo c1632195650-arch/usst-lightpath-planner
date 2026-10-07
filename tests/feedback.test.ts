@@ -36,6 +36,8 @@ import {
   summarizeCorrections, countCorrections,
 } from '@/lib/planner/corrections';
 import { parseCorrection, asNoteDraft } from '@/features/feedback/parseCorrection';
+import { parsePlanIntent } from '@/features/feedback/planIntent';
+import { clearConflictingSlots, type UnavailableSlot } from '@/features/week/userPlanStore';
 import { DEFAULT_WEIGHTS } from '@/lib/planner/model';
 
 /** 造一条规则（默认是「周日不排」） */
@@ -374,4 +376,162 @@ test('parse: asNoteDraft 兜底保留原话（信号不丢）', () => {
 
 test('未使用任何新增依赖：DEFAULT_WEIGHTS 仍可读（冒烟）', () => {
   assert.equal(typeof DEFAULT_WEIGHTS.churn, 'number');
+});
+
+/* ============================================================
+ * 2026-10-07 补：否定词表扩「没排/没安排/空着/留空」+ ADD 填族
+ * （RAY 实测「周四下午没安排」掉进 unknown；UI 示例 chip 自己
+ *   就在用「帮我填个晚上自习」，必须能解析）
+ * ========================================================== */
+
+test('parseCorrection：「周四下午没安排」→ unavailable_slot（周四下午禁排）', () => {
+  const d = parseCorrection('周四下午没安排');
+  assert.ok(d, '应解析成约束草稿');
+  assert.equal(d.kind, 'unavailable_slot');
+  assert.deepEqual(d.payload.days, [4]);
+  assert.deepEqual(d.payload.window.startMin, 13 * 60);
+});
+
+test('parsePlanIntent：「周四下午没安排」→ constraint（不再掉进 unknown）', () => {
+  const it = parsePlanIntent('周四下午没安排');
+  assert.equal(it.type, 'constraint');
+});
+
+test('parsePlanIntent：「周四下午没安排，帮我填个晚上自习」→ add-task 且标题干净', () => {
+  const it = parsePlanIntent('周四下午没安排，帮我填个晚上自习');
+  assert.equal(it.type, 'add-task');
+  if (it.type === 'add-task') {
+    assert.equal(it.task.title, '晚上自习');
+    assert.equal(it.task.dayOfWeek, 4);
+    assert.equal(it.task.startMin, 13 * 60);
+  }
+});
+
+test('parsePlanIntent：「周四下午空着」同样命中约束', () => {
+  const it = parsePlanIntent('周四下午空着');
+  assert.equal(it.type, 'constraint');
+});
+
+test('parsePlanIntent：「我周四下午要玩两个小时游戏放松」→ add-task（愿望句族+中文时长）', () => {
+  const it = parsePlanIntent('我周四下午要玩两个小时游戏放松');
+  assert.equal(it.type, 'add-task');
+  if (it.type === 'add-task') {
+    assert.equal(it.task.title, '游戏放松');
+    assert.equal(it.task.dayOfWeek, 4);
+    assert.equal(it.task.startMin, 13 * 60);
+    assert.equal(it.task.durationMin, 120, '中文数字「两个小时」= 120 分钟');
+    assert.equal(it.task.kind, 'activity');
+  }
+});
+
+test('parsePlanIntent：「帮我明天安排…」相对日 → 挂到明天（周四）只排一天', () => {
+  const it = parsePlanIntent('帮我明天安排两个小时的德语自习', '2026-10-07');
+  assert.equal(it.type, 'add-task');
+  if (it.type === 'add-task') {
+    assert.equal(it.task.dayOfWeek, 4, '2026-10-07 是周三，明天 = 周四');
+    assert.equal(it.task.title, '德语自习');
+    assert.equal(it.task.durationMin, 120);
+  }
+});
+
+test('parsePlanIntent：「明天下午别排东西」→ 约束挂到明天', () => {
+  const it = parsePlanIntent('明天下午别排东西', '2026-10-07');
+  assert.equal(it.type, 'constraint');
+  if (it.type === 'constraint') {
+    assert.equal(it.draft.kind, 'unavailable_slot');
+    assert.deepEqual((it.draft.payload as { days: number[] }).days, [4]);
+  }
+});
+
+test('parsePlanIntent：「今天晚上加个跑步」→ 挂今天（周三）+ 晚上起点', () => {
+  const it = parsePlanIntent('今天晚上加个跑步', '2026-10-07');
+  assert.equal(it.type, 'add-task');
+  if (it.type === 'add-task') {
+    assert.equal(it.task.dayOfWeek, 3);
+    assert.equal(it.task.startMin, 18 * 60, '晚上窗口起点 18:00（matchWindow 口径）');
+  }
+});
+
+test('parsePlanIntent：不传 today 时相对日不解析（向后兼容，纯函数纪律）', () => {
+  const it = parsePlanIntent('帮我明天安排两个小时的德语自习');
+  assert.equal(it.type, 'add-task');
+  if (it.type === 'add-task') assert.equal(it.task.dayOfWeek, undefined);
+});
+
+test('parsePlanIntent：「删除所有德语自习」→ remove-block 带标题关键词', () => {
+  const it = parsePlanIntent('删除所有德语自习');
+  assert.equal(it.type, 'remove-block');
+  if (it.type === 'remove-block') {
+    assert.equal(it.titleKw, '德语自习');
+    assert.equal(it.blockKind, 'study', '「自习」命中学习类词表');
+  }
+});
+
+test('parsePlanIntent：「删掉周日下午的自习」→ 天数 + 标题词（标题不含日期）', () => {
+  const it = parsePlanIntent('删掉周日下午的自习');
+  assert.equal(it.type, 'remove-block');
+  if (it.type === 'remove-block') {
+    assert.deepEqual(it.days, [7]);
+    assert.equal(it.titleKw, '自习');
+  }
+});
+
+test('parsePlanIntent：「为什么周三排这么多」仍是 explain（删除词表不含为为什么）', () => {
+  assert.equal(parsePlanIntent('为什么周三排这么多').type, 'explain');
+});
+
+test('parsePlanIntent：「删去所有德语自习」→ remove-block（RAY 实测「删去」漏词）', () => {
+  const it = parsePlanIntent('删去所有德语自习');
+  assert.equal(it.type, 'remove-block');
+  if (it.type === 'remove-block') assert.equal(it.titleKw, '德语自习');
+});
+
+test('clearConflictingSlots：显式时段任务解除冲突禁排（最新要求优先）', () => {
+  const slot: UnavailableSlot = {
+    id: 's1', days: [4], fromMin: 13 * 60, toMin: 18 * 60,
+    weeks: [6], scope: 'once', createdAtWeek: 6,
+  };
+  const tasks = [{ dayOfWeek: 4, startMin: 15 * 60, durationMin: 120 }];
+  const r = clearConflictingSlots([slot], tasks, 6);
+  assert.equal(r.removed.length, 1);
+  assert.equal(r.slots.length, 0);
+});
+
+test('clearConflictingSlots：浮动任务（无 startMin）不解除任何禁排', () => {
+  const slot: UnavailableSlot = {
+    id: 's1', days: [4], fromMin: 13 * 60, toMin: 18 * 60,
+    weeks: [6], scope: 'once', createdAtWeek: 6,
+  };
+  const r = clearConflictingSlots([slot], [{ dayOfWeek: 4, durationMin: 120 }], 6);
+  assert.equal(r.removed.length, 0);
+  assert.equal(r.slots.length, 1);
+});
+
+test('clearConflictingSlots：不相交不解除；长期槽按 createdAtWeek 判活', () => {
+  const long: UnavailableSlot = {
+    id: 'L', days: [1], fromMin: 9 * 60, toMin: 12 * 60,
+    weeks: [], scope: 'long', createdAtWeek: 5,
+  };
+  const r1 = clearConflictingSlots([long], [{ dayOfWeek: 1, startMin: 14 * 60, durationMin: 60 }], 6);
+  assert.equal(r1.removed.length, 0);
+  const r2 = clearConflictingSlots([long], [{ dayOfWeek: 1, startMin: 10 * 60, durationMin: 60 }], 6);
+  assert.equal(r2.removed.length, 1);
+});
+
+test('parsePlanIntent：「周五下午不排东西」→ 约束（RAY 实测回归）', () => {
+  const it = parsePlanIntent('周五下午不排东西', '2026-10-08');
+  assert.equal(it.type, 'constraint');
+  if (it.type === 'constraint') {
+    assert.equal(it.draft.kind, 'unavailable_slot');
+    assert.deepEqual((it.draft.payload as { days: number[] }).days, [5]);
+  }
+});
+
+test('parsePlanIntent：「周五下午不安排」→ 约束（NEGATION 补 不安排；ADD 误钩后正确回落）', () => {
+  const it = parsePlanIntent('周五下午不安排', '2026-10-08');
+  assert.equal(it.type, 'constraint');
+  if (it.type === 'constraint') {
+    assert.equal(it.draft.kind, 'unavailable_slot');
+    assert.deepEqual((it.draft.payload as { days: number[] }).days, [5]);
+  }
 });

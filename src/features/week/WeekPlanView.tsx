@@ -39,11 +39,11 @@ import { DEADLINES } from '@/data/usst';
 import { EditBlockPanel } from './EditBlockPanel';
 // ── R2：用户覆盖层（一次性收口所有用户改动）────────────────────
 import {
-  addTask, applyPendingMoves, excludeBlock, includeBlock,
+  addSlot, addTask, applyPendingMoves, clearConflictingSlots, excludeBlock, includeBlock,
   makeLayerId, movesOfWeek,
   removeAssignment, removeMove,
   upsertAssignment, upsertMove,
-  type Assignment, type MealPlaces, type UserPlanLayer,
+  type Assignment, type MealPlaces, type UnavailableSlot, type UserPlanLayer,
 } from './userPlanStore';
 // ── F2c/A4：第③层持久化态上提 store（layer+撤销栈 / rules / 会话旗标）──
 import {
@@ -76,9 +76,14 @@ import { useWeekPlanDrag } from './useWeekPlanDrag';
 import { WeekToolsPanel } from './WeekToolsPanel';
 import { WeekPlanSkeleton } from './PendingEditsBar';
 import { AdjustDrawer } from './AdjustDrawer';
+import { LbaoChat } from '@/features/libao/LbaoChat';
 import { DeleteAskSection, DropToDeleteZone, WeekIssuesPanel } from './WeekDiagnostics';
 import { WeekTimelineGrid } from './WeekTimelineGrid';
 import type { DragPreview } from './WeekDayColumn';
+// ── 右键空档「加一件事」（2026-10-07 RAY 拍板）────────────────────
+import type { TimeGap } from './timeScale';
+import { gapCapacityMin, resolveGapStart } from './gapAdd';
+import { GapAddPopover, type GapAddDraft } from './GapAddPopover';
 
 interface Props {
   schedule: Schedule;
@@ -91,6 +96,7 @@ interface Props {
    * 「📍 回到今天」：周次状态由 App（weekMonday）持有，点击回到本周
    */
   onGoToToday?: () => void;
+  /** 周页输入 → 排程模式接手（2026-10-07）：原句跳梨宝页自动以排程模式发送 */
   /** 「去改画像」→ 由组合根经WeekPlanPage 层层透传（组件自己不碰路由） */
   onGoProfile?: () => void;
 }
@@ -203,6 +209,19 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    */
   const [pendingEdits, setPendingEdits] = useState(false);
 
+  /**
+   * 「目标设置改过、还没生效」（2026-10-07 补，RAY 拍板：改动没体现在日程表上时，
+   * 要在周计划表上给一个**临时通知条**让用户手动重排）。
+   *
+   * 🔴 为什么要跟 `pendingEdits` 分开记：周页上其它改动全写 `layer`，都经 `updateLayer`
+   *    —— 那个函数是「写层 + 标记待生效」的收口，不会漏。**而目标走 `goalStore`**，
+   *    不经过 `layer`；摘要里也没有对应类别 ⟹ 光置 `pendingEdits` 会得到
+   *    「标记亮了、摘要却是空」，状态条因 `items.length === 0` 直接不渲染。
+   *    实测过的后果：点「延 2 周 / 减 20% / 转冲刺」后计划纹丝不动，
+   *    而界面上没有任何重排入口。
+   */
+  const [goalsPending, setGoalsPending] = useState(false);
+
   /** ⚙️ 调整抽屉开合（按钮在操作条、抽屉在页面根，两兄弟的状态只能放共同父级） */
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -241,6 +260,11 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
 
   /** 已被用户处理（三选一/忽略）的预警 goalId —— 本地过滤，hook 里的 state 不归组件管 */
   const [dismissedWarnings, setDismissedWarnings] = useState<string[]>([]);
+
+  /** 右键空档「加一件事」弹窗的挂起信息（2026-10-07）；null = 关 */
+  const [gapAdd, setGapAdd] = useState<{
+    day: number; startMin: number; capacityMin: number; x: number; y: number;
+  } | null>(null);
   // 目标分解容量预警（goalWarnings）随排程管线由 `useWeekPlan` 产出 —— 本组件只展示
 
   /** T6：本周「课程 → 作业时长」的索引（避免在每个块上线性查找） */
@@ -300,6 +324,22 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   });
 
   /**
+   * T3：每轮排程落地 → 「待生效」标记清零。
+   * 🔴 这是一处**回归修复**（2026-10-07）：排程管线上提进 `useWeekPlan` 时，
+   * e565d6e 里的 `setPendingEdits(false)`（「这一轮排完了 —— 待生效标记清零」）
+   * 被弄丢了 ⟹ 黄条一旦亮起就永远不熄，与「已经重排过了」自相矛盾。
+   * hook 的 effect 刻意不含 layer（攒批语义），所以 `plan` 对象一变 =
+   * 真的重排过一轮（且消费的是最新 layer）——此刻清零是诚实的；
+   * 只攒批不重点「重新排一遍」时 plan 不变，标记保留。
+   */
+  useEffect(() => {
+    if (plan) {
+      setPendingEdits(false);
+      setGoalsPending(false); // 目标改动同一时刻失效：这一轮已经消费了最新 goals
+    }
+  }, [plan]);
+
+  /**
    * 天气数据（2026-09-19 改版：**不再有单独的天气栏**）。
    *
    * 天气的唯一落点是**每一天列的标题下方**：晴天显示概况（☀ 小雨 19–24℃），
@@ -351,11 +391,80 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * ========================================================== */
 
   const handleAddTask = useCallback((task: UserTask) => {
-    updateLayer((prev) => ({ ...prev, tasks: addTask(prev.tasks, task) }));
+    // 「最新要求优先」（RAY 2026-10-07）：显式指定时段的任务若撞上之前的禁排，
+    // 自动解除冲突的禁排并告知 —— 旧的「下午不排」不该挡住新的「下午排」
+    let cleared: string[] = [];
+    updateLayer((prev) => {
+      let slots = prev.slots;
+      if (task.dayOfWeek != null && task.startMin != null) {
+        const cc = clearConflictingSlots(prev.slots, [task], weekNo);
+        if (cc.removed.length > 0) {
+          slots = cc.slots;
+          cleared = cc.removed.map((sl) => `${sl.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(sl.fromMin)}–${toHHmm(sl.toMin)}`);
+        }
+      }
+      return { ...prev, tasks: addTask(prev.tasks, task), slots };
+    });
+    if (cleared.length > 0) {
+      notify('info', `按最新要求优先：已解除之前定的禁排（${cleared.join('、')}）`);
+    }
     // 🆕 标注：新加的事在日程表里高亮显示，直到用户点击确认（块的 id 由任务 id 派生）
     setRecentTaskIds((prev) => [...prev, task.id]);
-    notify('add', `已加入「${task.title}」—— 重排后会标注 🆕 出现在日程里`);
+    // 落位通知：引擎没给固定时刻（自己找空）时，等重排结果报位置
+    pendingPlaceRef.current = { taskId: task.id, title: task.title };
+    // 2026-10-07（RAY：所有输入要求自动重排）：加完任务立刻重排，不等手动
+    setReplanToken((v) => v + 1);
+    // 固定块报"按你指的时间排入"，浮动块报"正在为它找空位"
+    notify('add', task.dayOfWeek != null && task.startMin != null
+      ? `已加入「${task.title}」—— 按你指定的时间固定排入…`
+      : `已加入「${task.title}」—— 正在为它找空位…`);
   }, [updateLayer, notify]);
+
+  /**
+   * 右键空档 → 弹「加一件事」小窗（2026-10-07，RAY 拍板三件套）：
+   * 右键位置定开始时间（贴前块自动留 20 分钟转场缓冲，`resolveGapStart`）、
+   * 右键旁小弹窗、提交后固定 + 立即生效。
+   */
+  const handleGapContextMenu = useCallback((
+    day: number, gap: TimeGap, clickedMin: number, pos: { x: number; y: number },
+  ) => {
+    const startMin = resolveGapStart(gap, clickedMin);
+    setGapAdd({ day, startMin, capacityMin: gapCapacityMin(gap, startMin), ...pos });
+  }, []);
+
+  /** 弹窗提交：dayOfWeek+startMin 齐备 = 固定块（重排不挪），随后立即重排生效 */
+  const submitGapAdd = useCallback((d: GapAddDraft) => {
+    const g = gapAdd;
+    if (!g) return;
+    const task: UserTask = {
+      id: makeLayerId('ut'),
+      title: d.title,
+      kind: d.kind,
+      dayOfWeek: g.day as DayOfWeek,
+      startMin: g.startMin,
+      durationMin: d.durationMin,
+      weeks: [weekNo],
+      priority: 80,
+      note: '你在空闲段右键加的（已固定）',
+    };
+    handleAddTask(task);
+    setGapAdd(null);
+    // RAY 拍板「立即生效」：与「重新排一遍」按钮同一条重排链路（落库后递增令牌）
+    setReplanToken((v) => v + 1);
+  }, [gapAdd, handleAddTask, weekNo]);
+
+  /** 重排结果一到 → 定位新块并报位置（找不到 = 没排进去，也如实说） */
+  useEffect(() => {
+    const p = pendingPlaceRef.current;
+    if (!p || !plan) return;
+    pendingPlaceRef.current = null;
+    const blk = plan.blocks.find((b) => b.id.endsWith(`-${p.taskId}`));
+    if (blk) {
+      notify('add', `「${p.title}」已排进 ${DAY_LABELS[blk.dayOfWeek - 1]} ${toHHmm(blk.startMin)}–${toHHmm(blk.endMin)}`);
+    } else {
+      notify('info', `「${p.title}」这周没排进去 —— 没找到合适的空档，可换个时间或缩短时长`);
+    }
+  }, [plan, notify]);
 
   /**
    * 「这块我不做」。
@@ -388,15 +497,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    */
   const handleRestoreAll = useCallback(() => {
     updateLayer((prev) => ({ ...prev, excluded: [] }));
-  }, [updateLayer]);
+    setReplanToken((v) => v + 1);
+  }, [updateLayer, setReplanToken]);
 
   /** 🆕 新日程标注：新加任务的任务 id 列表（块的 id 以 `-{taskId}` 结尾，可可靠匹配） */
   const [recentTaskIds, setRecentTaskIds] = useState<string[]>([]);
 
+  /**
+   * 落位通知（2026-10-07，RAY：「让梨宝自己找空加日程后，需要一个通知告诉我加到了哪里」）：
+   * 加任务时挂上待定位标记，重排结果（plan 更新）一到就按 `-taskId` 找到新块，
+   * 用 toast 报出「排进了哪天几点」；没找到 = 引擎没排进去，也如实说。
+   */
+  const pendingPlaceRef = useRef<{ taskId: string; title: string } | null>(null);
+  /** 排程对话执行器（LbaoChat 抽屉）保存后广播 usst:replan —— 本地版 useWeekPlan
+   *  原本没有监听者（CY 线 WeekPlanView 才有）→ 抽屉里确认草稿后课表纹丝不动。
+   *  2026-10-07 补上：事件 → replanToken+1 → 主 effect 重跑。 */
+  useEffect(() => {
+    const onReplanEvt = () => setReplanToken((v) => v + 1);
+    window.addEventListener('usst:replan', onReplanEvt);
+    return () => window.removeEventListener('usst:replan', onReplanEvt);
+  }, [setReplanToken]);
+
   /** S4：改「我常去的食堂」 */
   const handleMealPlacesChange = useCallback((next: MealPlaces) => {
     updateLayer((prev) => ({ ...prev, mealPlaces: next }));
-  }, [updateLayer]);
+    setReplanToken((v) => v + 1);
+  }, [updateLayer, setReplanToken]);
 
   /* ============================================================
    * R2：块级编辑（改时间/时长/地点）
@@ -505,12 +631,41 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * ========================================================== */
 
   const handleAddRule = useCallback((rule: CorrectionRule) => {
+    // 2026-10-07（RAY 实测「周四下午不排」没生效）：unavailable_slot 类约束
+    // **改走硬排除通道**（layer.slots，solver 经 applyUnavailableSlots 真消费）——
+    // 原路径存成偏好校正规则，但引擎对 corrections.unavailableByDay **没有消费点**
+    // （buildPhases 只合成不使用，等于死信），块自然赖着不走。
+    // 长期/一次性由 detectScope 对原话判定（与语言路径共用一处纪律）。
+    if (rule.kind === 'unavailable_slot' && rule.payload.kind === 'unavailable_slot') {
+      const p = rule.payload;
+      const scope = detectScope(rule.utterance ?? '');
+      const slot: UnavailableSlot = {
+        id: makeLayerId('slot'),
+        days: [...p.days],
+        fromMin: p.window.startMin,
+        toMin: p.window.endMin,
+        weeks: scope === 'long' ? [] : [weekNo],
+        scope: scope === 'long' ? 'long' : 'once',
+        createdAtWeek: weekNo,
+        ...(rule.utterance ? { title: rule.utterance } : {}),
+      };
+      updateLayer((prev) => ({ ...prev, slots: addSlot(prev.slots, slot) }));
+      setReplanToken((v) => v + 1);
+      notify('add', `已记入不可时段：${slot.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(slot.fromMin)}–${toHHmm(slot.toMin)}（⚙️ 调整 → 偏好校正 可查看/删除）`);
+      return;
+    }
     writeRules((prev) => upsertRule(prev, rule));
-  }, []);
+    // 2026-10-07（RAY 实测反馈）：记下要求后课程表没变 —— 规则只对下一次重排
+    // 生效，但用户在「跟梨宝说一句」里表达的是**现在就要**的意图。
+    // 落库后立刻递增 replanToken，与「重新排一遍」按钮走同一条重排链路；
+    // 手动重排以 previousPlan 为增量基准，不会丢掉用户已确认的安排。
+    setReplanToken((v) => v + 1);
+  }, [weekNo, updateLayer]);
 
   const handleRulesChange = useCallback((next: CorrectionRule[]) => {
     writeRules(next);
-  }, []);
+    setReplanToken((v) => v + 1);
+  }, [setReplanToken]);
 
   /* ============================================================
    * 阶段 E：自然语言 → 可执行意图
@@ -574,7 +729,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 做法：把**当前计划里**匹配的块加进排除清单 —— 于是重排时它们不会回来。
    * 依赖 `plan` 是有意的：用户看到的是屏幕上这一版，删的也该是这一版里的块。
    */
-  const handleRemoveBlocks = useCallback((days: DayOfWeek[], blockKind?: BlockKind) => {
+  const handleRemoveBlocks = useCallback((days: DayOfWeek[], blockKind?: BlockKind, titleKw?: string) => {
+    /* ── 按标题删（2026-10-07，RAY：「删除所有德语自习」）──
+     * 删**任务本体**（下周不再回来）+ 排除当前计划里的匹配块（不依赖重排），
+     * 然后自动重排 + toast 报删了几处。课程是既成事实，永不删。 */
+    if (titleKw) {
+      const kw = titleKw.toLowerCase();
+      let taskN = 0;
+      let blockN = 0;
+      const ids = plan
+        ? plan.blocks
+            .filter((b) => b.title.toLowerCase().includes(kw))
+            .filter((b) => b.kind !== 'course' && b.source !== 'course')
+            .map((b) => b.id)
+        : [];
+      updateLayer((prev) => {
+        const kept = prev.tasks.filter((t) => !t.title.toLowerCase().includes(kw));
+        taskN = prev.tasks.length - kept.length;
+        let excluded = prev.excluded;
+        for (const id of ids) excluded = excludeBlock(excluded, id);
+        blockN = ids.length;
+        return { ...prev, tasks: kept, excluded };
+      });
+      setReplanToken((v) => v + 1);
+      notify('delete', `已删除「${titleKw}」：任务 ${taskN} 条、日程块 ${blockN} 处 —— 已重排`);
+      return;
+    }
     if (!plan) return;
     const ids = plan.blocks
       .filter((b) => days.includes(b.dayOfWeek))
@@ -588,7 +768,20 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
       for (const id of ids) excluded = excludeBlock(excluded, id);
       return { ...prev, excluded };
     });
-  }, [plan, updateLayer]);
+    setReplanToken((v) => v + 1);
+    notify('delete', `已拿掉 ${ids.length} 处安排 —— 已重排`, undoAction());
+  }, [plan, updateLayer, notify, setReplanToken, undoAction]);
+
+  /**
+   * 排程对话抽屉（2026-10-07，RAY：「接手之后不需要跳转，直接处理」）：
+   * 周页输入解析不动的句子 → 原句在**本页右侧抽屉**里进排程模式对话
+   * （LLM 理解 → 追问 → 草稿卡确认 → 执行器操作本地引擎），边看课表边聊。
+   * nonce 变化 = 重挂 LbaoChat 并自动发送；对话历史走 sessionStorage 快照不丢。
+   */
+  const [schedDrawer, setSchedDrawer] = useState<{ q: string; nonce: number } | null>(null);
+  const handleAskSched = useCallback((q: string) => {
+    setSchedDrawer({ q, nonce: Date.now() });
+  }, []);
 
   // 天气拉取已上提 `useWeekPlan`（F2b/A3：数据态归 hook，两页共用一次拉取）；
   // 本组件只消费 hook 返回的 `weather`（weatherByDate / weatherAdvice 派生不变）。
@@ -600,13 +793,76 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * 交互态（撤销/攒批/拖拽/toast）仍归本组件所有。
    * ========================================================== */
 
+  /* 浮层（调整抽屉 / 排程对话抽屉 / Toast）—— 2026-10-07 提取：loading 骨架屏
+   * 早退时也要渲染，否则自动重排期间抽屉被卸载重挂，tab/对话状态全丢
+   * （RAY 实测「偏好校正点删除后弹回加一件事」的根因）。 */
+  const overlays = (
+    <>
+      {/* ⚙️ 调整抽屉（F3/N3：加一件事/调课停课/不可时段/指定食堂/偏好校正 五 tab 收敛） */}
+      <AdjustDrawer
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        weekNo={weekNo}
+        schedule={schedule}
+        layer={layer}
+        updateLayer={updateLayer}
+        rules={rules}
+        goals={goals}
+        handleRulesChange={handleRulesChange}
+        onAddTask={handleAddTask}
+        pendingEdits={pendingEdits}
+        dateOfDay={dateOfDay}
+        derivedApplied={derived.applied}
+      />
+      {/* 排程对话抽屉：周页输入「排程模式接手」的落点（不跳页，就地对话） */}
+      {schedDrawer && (
+        <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label="排程模式对话">
+          <div className="absolute inset-0 bg-ink/30" onClick={() => setSchedDrawer(null)} />
+          <div className="relative z-10 flex h-full w-[min(680px,100vw)] flex-col border-l border-ink/10 bg-paper shadow-[-24px_0_48px_rgba(22,35,63,0.15)]">
+            <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 bg-white px-4 py-2.5">
+              <span className="text-[13px] font-semibold text-ink">梨宝 · 排程模式</span>
+              <span className="text-[11px] text-ink-faint">说一件事，它追问、出草稿、你确认才落盘</span>
+              <button
+                type="button"
+                onClick={() => setSchedDrawer(null)}
+                className="ml-auto rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+              >
+                收起（对话保留）
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col px-2 pb-2">
+              <LbaoChat
+                key={schedDrawer.nonce}
+                profile={persona}
+                schedule={schedule}
+                seedQuestion={schedDrawer.q}
+                seedMode="sched"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
+    </>
+  );
+
   if (loading) {
     /* 🔴 2026-10-07：原先是一句 12px 灰字，界面在此期间**完全空白**（像是点了没反应），
        内容出来时整页从空跳到满。改成同尺寸骨架屏，替换时不位移。 */
-    return <WeekPlanSkeleton />;
+    return (
+      <>
+      <WeekPlanSkeleton />
+      {overlays}
+    </>
+    );
   }
   if (!phase || !plan) {
-    return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">这个周次不在学期范围内。</div>;
+    return (
+    <>
+      <div className="panel px-6 py-10 text-center text-sm text-ink-soft">这个周次不在学期范围内。</div>
+      {overlays}
+    </>
+    );
   }
 
   /**
@@ -642,7 +898,13 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         weekNo={weekNo}
         goals={goals}
         rules={rules}
-        onGoalsChange={setGoals}
+        /*
+         * 目标改动**不自动重排**（引擎 effect 的依赖里刻意没有 goals —— T3 攒批语义），
+         * 所以要像 `updateLayer` 那样「写 store 的同时标记待生效」，
+         * 否则用户点完「延 2 周 / 减 20% / 转冲刺」只会看到计划纹丝不动。
+         * ⟹ 状态条「有 N 项改动还没生效 · 调了 目标设置」+「重新排一遍」就此可达。
+         */
+        onGoalsChange={(next) => { setGoals(next); setGoalsPending(true); setPendingEdits(true); }}
         notify={notify}
         onGoToToday={onGoToToday}
         handleUndo={handleUndo}
@@ -652,10 +914,12 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         setReplanToken={setReplanToken}
         onOpenAdjust={() => setAdjustOpen(true)}
         pendingEdits={pendingEdits} editedBlockIds={editedBlockIds} edits={edits}
+        goalsChanged={goalsPending}
         handleRestoreAll={handleRestoreAll}
         timeAskNote={timeAskNote}
         handleAddRule={handleAddRule}
         handleAddTaskFromDraft={handleAddTaskFromDraft}
+        onAskSched={handleAskSched}
         handleRemoveBlocks={handleRemoveBlocks}
         dragNote={dragNote}
         goalWarnings={goalWarnings}
@@ -663,22 +927,6 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         setDismissedWarnings={setDismissedWarnings}
       />
 
-      {/* ⚙️ 调整抽屉（F3/N3：加一件事/调课停课/不可时段/指定食堂/偏好校正 五 tab 收敛） */}
-      <AdjustDrawer
-        open={adjustOpen}
-        onClose={() => setAdjustOpen(false)}
-        weekNo={weekNo}
-        schedule={schedule}
-        layer={layer}
-        updateLayer={updateLayer}
-        rules={rules}
-        goals={goals}
-        handleRulesChange={handleRulesChange}
-        onAddTask={handleAddTask}
-        pendingEdits={pendingEdits}
-        dateOfDay={dateOfDay}
-        derivedApplied={derived.applied}
-      />
 
       {/* 七天时间轴（T3：七列共享时间基准 · WeekTimelineGrid + WeekDayColumn 泳道） */}
       <WeekTimelineGrid
@@ -699,6 +947,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         updatePreview={updatePreview}
         clearPreview={clearPreview}
         handleDrop={handleDrop}
+        onGapContextMenu={handleGapContextMenu}
         onToggleLock={toggleLock}
         onExclude={handleExcludeBlock}
         onSetAssignment={handleSetAssignment}
@@ -793,8 +1042,21 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         />
       )}
 
-      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      {/* 右键空档「加一件事」小弹窗（2026-10-07；fixed 定位在光标处，打开时已夹回视口） */}
+      {gapAdd && (
+        <GapAddPopover
+          day={gapAdd.day}
+          startMin={gapAdd.startMin}
+          capacityMin={gapAdd.capacityMin}
+          x={gapAdd.x}
+          y={gapAdd.y}
+          onSubmit={submitGapAdd}
+          onClose={() => setGapAdd(null)}
+        />
+      )}
+
+
+      {overlays}
     </div>
   );
 }

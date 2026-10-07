@@ -24,6 +24,7 @@ import type { PlanPersistState, TimeBlock } from '@/types';
 import type { WeatherAdvice, WeatherDay } from '@/features/weather/weather';
 import { DAY_LABELS, TODAY_COL_BG } from './weekViewUtils';
 import { AXIS_HEIGHT, gutterMarks } from './timeAxis';
+import type { TimeGap } from './timeScale';
 import { WeekDayColumn, type DragPreview } from './WeekDayColumn';
 
 export interface WeekTimelineGridProps {
@@ -48,6 +49,8 @@ export interface WeekTimelineGridProps {
   updatePreview: (day: number, atMin: number, coord: string) => void;
   clearPreview: () => void;
   handleDrop: (blockId: string, day: number, atMin: number) => void;
+  /** 右键空档 → 「加一件事」（透传给泳道；弹窗状态在 WeekPlanView 持有） */
+  onGapContextMenu: (day: number, gap: TimeGap, clickedMin: number, pos: { x: number; y: number }) => void;
   onToggleLock: (block: TimeBlock) => void;
   onExclude: (block: TimeBlock) => void;
   onSetAssignment: (courseId: string, courseTitle: string, minutes: number) => void;
@@ -89,6 +92,7 @@ export function WeekTimelineGrid({
   weatherByDate, adviceByDate, recentTaskIds, onDismissNew,
   planState, weekNo, assignmentByCourse, editedBlockIds,
   draggingId, preview, setDraggingId, updatePreview, clearPreview, handleDrop,
+  onGapContextMenu,
   onToggleLock, onExclude, onSetAssignment, onClearAssignment, onEditBlock, onRevertEdit,
 }: WeekTimelineGridProps) {
   const marks = gutterMarks();
@@ -289,6 +293,7 @@ export function WeekTimelineGrid({
               updatePreview={updatePreview}
               clearPreview={clearPreview}
               handleDrop={handleDrop}
+              onGapContextMenu={(gap, clickedMin, pos) => onGapContextMenu(idx + 1, gap, clickedMin, pos)}
               onToggleLock={onToggleLock}
               onExclude={onExclude}
               onSetAssignment={onSetAssignment}

@@ -77,7 +77,7 @@ import {
 import { PlanEvalPanel } from '@/features/week/PlanEvalPanel';
 import { makeTaskId } from '@/features/week/planEditsStore';
 import type { MoveRecord, UnavailableSlot } from '@/features/week/userPlanStore';
-import { addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
+import { clearConflictingSlots, addSlot, addTask, diffPlanEvents, getRecentPlanEvents, loadUserPlan, pushPlanEvents, pushUndoSnapshot, saveUserPlan, upsertMove } from '@/features/week/userPlanStore';
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
@@ -342,12 +342,14 @@ function loadChatSnapshot(): ChatSnapshot | null {
 }
 
 /** 将本地排程建议和校园资料问答放进同一段对话，而不混用两种数据来源。 */
-export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
+export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMode }: {
   profile: PersonaProfile | null;
   schedule: Schedule;
   onGoProfile?: () => void;
   /** V0-3：checklist 跳转时的预填提示（App 用 nonce 作 key 保证只在进入时注入一次） */
   seedQuestion?: string;
+  /** 2026-10-07（RAY）：周页「跟梨宝说一句」跳转入口 —— 带原句直进排程模式并自动发送 */
+  seedMode?: 'sched';
 }) {
   /** 挂载时读一次快照；下面的 state 初始化都从它取 —— 切 tab 回来即恢复。 */
   const [boot] = useState(loadChatSnapshot);
@@ -355,6 +357,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     () => boot?.messages ?? [{ role: 'lbao', text: GREETING }],
   );
   const [input, setInput] = useState(seedQuestion ?? '');
+  /** seedMode 种子的自动发送只跑一次（dev StrictMode 双挂载防护） */
+  const seedSentRef = useRef(false);
   const [loading, setLoading] = useState(false);
   /** W5b：长回复折叠态（消息下标 → 是否已展开）。仅渲染态，不入快照。 */
   const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(() => new Set());
@@ -468,7 +472,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
 
   /** D0 双模式（问答/排程硬区分）：问答模式只答问题，排程意图出切换提示不静默改道；
    *  排程模式内所有输入走排程流（D3 起 dialog 裁决 → 执行器，离线走规则链）。 */
-  const [mode, setMode] = useState<'chat' | 'sched'>(() => boot?.mode ?? 'chat');
+  const [mode, setMode] = useState<'chat' | 'sched'>(() => boot?.mode ?? (seedMode === 'sched' ? 'sched' : 'chat'));
 
   /** D3 topic 生命周期：出草稿卡 → topic{draft,draftKey}（保留 priorFailed——
    *  confirm_draft 的 voice 通道、B① 议题续用都靠它）。 */
@@ -744,7 +748,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
         pushUndoSnapshot(layer);
         const afterCancel = applyCancel(layer, target);
         const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), afterCancel.tasks);
-        const nextLayer = { ...afterCancel, tasks };
+        const weekNoNow = schedule ? currentWeekNo(schedule.termStart, todayISO()) : 1;
+        const ccR = clearConflictingSlots(afterCancel.slots, tasks, weekNoNow);
+        const nextLayer = { ...afterCancel, tasks, ...(ccR.removed.length ? { slots: ccR.slots } : {}) };
         saveUserPlan(nextLayer);
         pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
         bumpPlanVersion();
@@ -776,7 +782,13 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
       const layer = loadUserPlan();
       pushUndoSnapshot(layer);
       const tasks = g.tasks.reduce((acc, t) => addTask(acc, t), layer.tasks);
-      const nextLayer = { ...layer, tasks };
+      // 「最新要求优先」（RAY 2026-10-07）：显式指定时段的任务撞上旧禁排 → 解除之
+      const weekNoNow = schedule ? currentWeekNo(schedule.termStart, todayISO()) : 1;
+      const cc = clearConflictingSlots(layer.slots, tasks, weekNoNow);
+      const nextLayer = { ...layer, tasks, ...(cc.removed.length ? { slots: cc.slots } : {}) };
+      if (cc.removed.length > 0) {
+        setMessages((c) => [...c, { role: 'lbao', text: `按最新要求优先：已解除 ${cc.removed.length} 条和它冲突的「不可时段」，重排后生效。` }]);
+      }
       saveUserPlan(nextLayer);
       pushPlanEvents(diffPlanEvents(layer, nextLayer)); // H8
       bumpPlanVersion();
@@ -1975,6 +1987,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
      *  D3：抽出为 ragReply —— chit_chat act 与这里共用同一段（议题保留由调用方控制）。 */
     await ragReply(q);
   };
+
+  /** seed 自动发送：周页「跟梨宝说一句」跳转进来时，原句以排程模式发一遍（只跑一次） */
+  useEffect(() => {
+    if (seedSentRef.current || seedMode !== 'sched' || !seedQuestion) return;
+    seedSentRef.current = true;
+    void send(seedQuestion, { forceMode: 'sched' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_12px_32px_rgba(22,35,63,0.06)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[264px_minmax(0,1fr)_300px]">
