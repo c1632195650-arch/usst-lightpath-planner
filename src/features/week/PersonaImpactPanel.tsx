@@ -27,6 +27,7 @@
  */
 
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import type { Phase } from '@/types';
 
 /** 理由文案里括号包着的分值，如「成就驱动偏高（58）」→ 抽出 58 供左栏展示。 */
@@ -79,11 +80,11 @@ export function PersonaImpactPanel({
         }`}
       >
         <span
-          className="inline-block text-[9px] transition-transform"
+          className="inline-flex transition-transform"
           style={{ transform: open ? 'rotate(90deg)' : 'none' }}
           aria-hidden
         >
-          ▶
+          <Icon name="chevron-right" size="xs" />
         </span>
         画像影响排程
         {/* 徽标给「有几条」——用户点之前就知道点开能得到什么 */}

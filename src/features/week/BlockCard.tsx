@@ -542,8 +542,9 @@ export function BlockCard({
             title="按住拖动面板"
             className="mb-1.5 flex cursor-move select-none items-center justify-between rounded-md bg-slate-100 px-2 py-1"
           >
-            <span className="truncate text-[11px] font-semibold text-ink-soft">
-              ✏️ 改「{block.title}」
+            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold text-ink-soft">
+              <Icon name="sliders" size="xs" className="shrink-0" />
+              <span className="truncate">改「{block.title}」</span>
             </span>
             <span className="inline-flex items-center gap-0.5 text-[10px] text-ink-faint"><Icon name="grip" size="xs" />拖动</span>
           </div>
