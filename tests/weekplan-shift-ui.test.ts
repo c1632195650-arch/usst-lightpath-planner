@@ -34,5 +34,7 @@ test('Props 可选 + App 传入 shiftWeekBy（老调用点零改动）', () => {
 });
 
 test('键盘快捷键提示可见（可发现性是本批的真正目标）', () => {
-  assert.match(panel, /键盘 ←\/→ 也可切周/);
+  // 2026-10-08（CY 截图裁决）：操作条按 Ray 设计收敛，提示文案并入按钮 title（不再占版面）。
+  assert.match(panel, /title="上一周（键盘 ←）"/);
+  assert.match(panel, /title="下一周（键盘 →）"/);
 });

@@ -77,33 +77,13 @@ const COL = (): string =>
 const CARD = (): string =>
   readFileSync(fileURLToPath(new URL('../src/features/week/BlockCard.tsx', import.meta.url)), 'utf8');
 
-test('WP7·E5 源码: 开关按钮带 aria-pressed + data-testid，浏览态提示在位', () => {
-  const src = PANEL();
-  assert.match(src, /data-testid="edit-mode-toggle"/);
-  assert.match(src, /aria-pressed=\{editMode === true\}/);
-  assert.match(src, /浏览模式 · 点「编辑」才能拖拽与改排/);
-});
-
-test('WP7·E5 源码: 编辑开关控制编辑能力（allowEdit 全链路透传）', () => {
-  // 反向：删掉任一层 allowEdit 透传 → 本用例红
-  assert.match(SRC(), /allowEdit=\{editMode\}/, '视图必须把 editMode 传进网格');
-  assert.match(GRID(), /allowEdit=\{allowEdit\}/, '网格必须把 allowEdit 传给日列');
-  assert.match(COL(), /allowEdit=\{allowEdit\}/, '日列必须把 allowEdit 传给块卡片');
-  assert.match(COL(), /if \(!allowEdit\) return; \/\/ 浏览态/, '空档右键（加一件事）必须挂门');
-});
-
-test('WP7·E5 源码: 低频面板入口在浏览态禁用（等价旧「浏览态零渲染」）', () => {
-  // 反向：删掉调整按钮的 editMode 门 → 本用例红
-  const src = PANEL();
-  const adjustAt = src.indexOf('onClick={onOpenAdjust}');
-  // 同一 <button> 内：onClick 在前、disabled 紧随其后（两者夹在同一个开标签里）
-  const gate = src.indexOf('disabled={editMode === false}', adjustAt);
-  assert.ok(gate > adjustAt, '「调整」抽屉按钮必须在浏览态禁用');
-});
-
-test('WP7·E5 源码: BlockCard 拖拽与菜单挂 editable 门（allowEdit 参与计算）', () => {
-  const src = CARD();
-  assert.match(src, /const editable = allowEdit !== false && block\.kind !== 'course' && block\.source !== 'course';/);
-  assert.match(src, /draggable=\{editable\}/);
-  assert.match(src, /if \(!editable\) return; \/\/ 浏览态/, '右键菜单入口必须挂 editable 门');
+test('WP7·E5 源码（2026-10-08 改锚）: 编辑模式下线 —— 回到 Ray 的「始终可编辑」', () => {
+  // CY 截图裁决：周页操作条按 Ray 设计收敛，编辑模式开关 / 浏览态门 / 相关提示整体下线。
+  // 本用例把 E5 契约改锚为下线后的形态：防回流（开关不得复活）+ 防残留门控（视图不再传门）。
+  const panel = PANEL();
+  assert.equal(panel.includes('edit-mode-toggle'), false, '操作条不再有编辑开关（Ray 设计：始终可编辑）');
+  assert.equal(SRC().includes('allowEdit={editMode}'), false, '视图不再把编辑门传给网格');
+  // BlockCard 的 allowEdit 注入口保留（默认恒真）——将来要做「只读分享」等场景可直接复用
+  assert.match(CARD(), /const editable = allowEdit !== false && block\.kind !== 'course' && block\.source !== 'course';/);
+  assert.match(CARD(), /draggable=\{editable\}/);
 });

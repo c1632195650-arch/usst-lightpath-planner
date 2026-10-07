@@ -10,7 +10,7 @@
     "testFiles": 144,
     "engineFiles": 107,
     "uiFiles": 37,
-    "guardedSources": 139,
+    "guardedSources": 141,
     "reverseVerified": 88,
     "orphans": 0
   },
@@ -189,6 +189,7 @@
         "src/components/ui/Toast",
         "src/components/ui/toastModel",
         "src/features/week/BlockCard",
+        "src/features/week/HardBoundaryCard",
         "src/features/week/PlanEvalPanel",
         "src/features/week/WeekDayColumn",
         "src/features/week/WeekDiagnostics",
@@ -308,7 +309,7 @@
         "src/features/activity/",
         "src/features/feedback/"
       ],
-      "testCount": 7,
+      "testCount": 8,
       "tests": [
         "tests/activityAndLocalized.test.ts",
         "tests/courseOverride.test.ts",
@@ -316,9 +317,11 @@
         "tests/goalDecompose.test.ts",
         "tests/planIntent.test.ts",
         "tests/quickGoalParse.test.ts",
-        "tests/restartRoll.test.ts"
+        "tests/restartRoll.test.ts",
+        "tests/v1.test.ts"
       ],
       "sources": [
+        "src/features/activity/GoalsPage",
         "src/features/activity/activityStore",
         "src/features/activity/aggregate",
         "src/features/activity/goalDecompose",
@@ -1305,7 +1308,7 @@
         "week-view",
         "planner-engine"
       ],
-      "guardCount": 6,
+      "guardCount": 7,
       "reverseVerified": false
     },
     "tests/scoring-transfer.test.ts": {
@@ -1496,9 +1499,10 @@
       "suite": "engine",
       "guards": [
         "week-view",
-        "calendar"
+        "calendar",
+        "activity-feedback"
       ],
-      "guardCount": 7,
+      "guardCount": 8,
       "reverseVerified": true
     },
     "tests/v2.test.ts": {
@@ -2016,7 +2020,6 @@
     "src/features/week/WeekPlanView": [
       "tests/d-batch.test.ts",
       "tests/h3h4-eval.test.ts",
-      "tests/routineStore.test.ts",
       "tests/v1.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",
@@ -2024,6 +2027,7 @@
     ],
     "src/App": [
       "tests/demo-banner-ui.test.ts",
+      "tests/routineStore.test.ts",
       "tests/v0.test.ts",
       "tests/v3.test.ts",
       "tests/weekplan-shift-ui.test.ts",
@@ -2225,6 +2229,9 @@
     "src/features/week/useWeekPlan": [
       "tests/routineStore.test.ts"
     ],
+    "src/features/week/HardBoundaryCard": [
+      "tests/routineStore.test.ts"
+    ],
     "src/features/week/timeScale": [
       "tests/timeScale.test.ts"
     ],
@@ -2291,6 +2298,9 @@
       "tests/v3.test.ts",
       "tests/weekplan-shift-ui.test.ts",
       "tests/wp7.test.ts"
+    ],
+    "src/features/activity/GoalsPage": [
+      "tests/v1.test.ts"
     ],
     "src/features/week/WeekPlanHeader": [
       "tests/week-diag-copy.test.ts"

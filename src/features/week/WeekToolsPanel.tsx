@@ -40,21 +40,11 @@ export interface WeekToolsPanelProps {
   /** 目标变更（视图持有 goals state；store 落库在回调里完成） */
   onGoalsChange: (next: Goal[]) => void;
   notify: (kind: 'add' | 'delete' | 'move' | 'info', message: string, action?: { label: string; run: () => void }) => void;
-  /* 操作条 */
+  /* 操作条（2026-10-08 CY 裁决：按 Ray 设计收敛为「‹ › 回到今天 / 撤销 / 重做 / 调整」——
+     编辑模式与一键还原入口分别下线/移入调整抽屉，「返回总览」由顶栏「总览」tab 承担）。 */
   onGoToToday?: () => void;
-  /**
-   * 本树接缝（2026-10-08 接入）：周次/出口/模式/还原 —— 本树 App 持有 weekMonday，
-   * 换周与返回经回调上抛；「换个节奏」= ModeSetupDialog 入口（WP7-E5）；「一键还原」= 缺口①。
-   */
+  /** 换周（本树：weekMonday 归 App；与键盘 ←/→ 同一条 shiftWeekBy；提示并入 title） */
   onShiftWeek?: (delta: number) => void;
-  onBack?: () => void;
-  onOpenModeSetup?: () => void;
-  /** 一键还原（回到引擎最初版）：清本周手动改动；restoreCount = 可还原干预数（0 时禁用） */
-  onRestoreEngine?: () => void;
-  restoreCount?: number;
-  /** WP7-E5（本树）：编辑模式开关（undefined = 未接入，视作编辑态） */
-  editMode?: boolean;
-  onToggleEditMode?: () => void;
   handleUndo: () => void;
   handleRedo: () => void;
   undoDepth: number;
@@ -96,8 +86,7 @@ export function WeekToolsPanel({
   timeAskNote,
   handleAddRule, handleAddTaskFromDraft, handleRemoveBlocks, onAskSched,
   dragNote, goalWarnings, dismissedWarnings, setDismissedWarnings,
-  onShiftWeek, onBack, onOpenModeSetup, onRestoreEngine, restoreCount,
-  editMode, onToggleEditMode,
+  onShiftWeek,
 }: WeekToolsPanelProps) {
   /* 待生效计数（提案第 7 条）。纯函数 `countPendingEdits`，口径与 BlockCard 的
      「✏️ 已改」同源（都取 `editedBlockIds`），不另立一套判断。 */
@@ -110,18 +99,9 @@ export function WeekToolsPanel({
   });
   return (
     <>
-      {/* 操作条：返回/换周 / 回到今天 / 撤销 / 重做 / ⚙️ 调整 / 换个节奏 / 一键还原 */}
+      {/* 操作条（Ray 设计：回到今天 / 撤销 / 重做 / 调整；本树在其左侧加「‹ ›」周导航，
+          键盘 ←/→ 提示并入按钮 title —— 提示文案不占版面）。 */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* W3/P1-5b.2（本树）：返回总览 —— 周计划是总览的下潜层，出口固定在操作条左端 */}
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
-          >
-            <span className="inline-flex items-center gap-1"><Icon name="arrow-right" size="xs" className="rotate-180" />返回总览</span>
-          </button>
-        )}
         {/* 换周（本树：weekMonday 归 App，‹ › 与键盘 ←/→ 同一条 shiftWeekBy） */}
         {onShiftWeek && (
           <span className="flex items-center gap-1">
@@ -130,6 +110,7 @@ export function WeekToolsPanel({
               onClick={() => onShiftWeek(-1)}
               data-testid="weekplan-prev-week"
               aria-label="上一周"
+              title="上一周（键盘 ←）"
               className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
             >
               ‹
@@ -139,6 +120,7 @@ export function WeekToolsPanel({
               onClick={() => onShiftWeek(1)}
               data-testid="weekplan-next-week"
               aria-label="下一周"
+              title="下一周（键盘 →）"
               className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
             >
               ›
@@ -155,6 +137,7 @@ export function WeekToolsPanel({
                 document.querySelector('[data-today-col]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }, 80);
             }}
+            data-testid="week-goto-today"
             title="回到今天所在的那一周，并定位到今天"
             className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
           >
@@ -195,65 +178,11 @@ export function WeekToolsPanel({
         <button
           type="button"
           onClick={onOpenAdjust}
-          disabled={editMode === false}
-          title={editMode === false
-            ? '浏览模式不可改 —— 点「编辑」解锁'
-            : '加一件事 / 调课停课 / 不可时段 / 指定食堂 / 偏好校正'}
-          className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-            editMode === false
-              ? 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
-              : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-          }`}
+          title="加一件事 / 调课停课 / 不可时段 / 指定食堂 / 偏好校正 / 回到最初版"
+          className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
         >
           <span className="inline-flex items-center gap-1.5"><Icon name="settings" size="xs" />调整</span>
         </button>
-        {/* WP7-E5（本树）：换个节奏 = 生活模式问询窗（ModeSetupDialog）入口 */}
-        {onOpenModeSetup && (
-          <button
-            type="button"
-            data-testid="open-mode-setup"
-            onClick={onOpenModeSetup}
-            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
-          >
-            换个节奏
-          </button>
-        )}
-        {/* WP7-E5（本树）：编辑模式开关 —— 浏览态零编辑入口（防误拖），编辑态全开 */}
-        {onToggleEditMode && (
-          <button
-            type="button"
-            data-testid="edit-mode-toggle"
-            aria-pressed={editMode === true}
-            onClick={onToggleEditMode}
-            className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-              editMode ? 'bg-brand text-white' : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5"><Icon name="notebook-pen" size="xs" />{editMode ? '编辑中' : '编辑'}</span>
-          </button>
-        )}
-        {editMode === false && <span className="text-[11px] text-ink-faint">浏览模式 · 点「编辑」才能拖拽与改排</span>}
-        {/* 一键还原（本树缺口①）：清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎最初版 */}
-        {onRestoreEngine && (
-          <button
-            type="button"
-            onClick={onRestoreEngine}
-            disabled={(restoreCount ?? 0) === 0}
-            data-testid="week-restore-engine"
-            title="清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎排的最初版"
-            className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
-              (restoreCount ?? 0) > 0
-                ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
-                : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="rotate" size="xs" />
-              回到最初版{(restoreCount ?? 0) > 0 ? `（${restoreCount}）` : ''}
-            </span>
-          </button>
-        )}
-        {onShiftWeek && <span className="text-[11px] text-ink-faint">键盘 ←/→ 也可切周</span>}
       </div>
       {/* 引擎切换（2026-10-06，RAY）不随批接入：本树 `@/lib/planner` 是唯一权威引擎，
           `our/cy` A/B 开关与 planner-cy 移植件留在 Ray 分支供两端比对。 */}

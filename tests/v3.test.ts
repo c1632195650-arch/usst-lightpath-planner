@@ -31,9 +31,9 @@ test('V3: ⑥→⑦ 模式窗双入口 + 确认落 lifeMode', () => {
   assert.match(app, /addTimetableFacts\(s, getUserId\(\)\)/, '⑤ 导入后回写事实'); // 8
   assert.match(app, /setModeSetupOpen\(true\)/, '⑤ 导入完成自动弹窗'); // 8b
   assert.match(app, /onConfirm=\{\(id\) => \{ patchState\(\{ lifeMode: id \}\)/, '⑦ 确认落 lifeMode'); // 9
-  // ⚠️ 2026-10-08 改锚：操作条收进 WeekToolsPanel —— 换个节奏入口随迁。
-  const panel = src('/src/features/week/WeekToolsPanel.tsx');
-  assert.match(panel, /data-testid="open-mode-setup"/, 'V1-4 换个节奏入口'); // 10
+  // ⚠️ 2026-10-08 改锚（CY 截图裁决）：操作条按 Ray 设计收敛，「换个节奏」不再占周页操作条；
+  // 模式窗其余两个入口（导入完成自动弹 8b + 总览 checklist）即本步的「双入口」。
+  assert.match(app, /onOpenModeSetup=\{\(\) => setModeSetupOpen\(true\)\}/, '总览 checklist 节奏入口'); // 10
 });
 
 test('V3: ⑧⑨⑩ 日程区三件套（满溢度/编辑开关/留白块）', () => {
@@ -44,7 +44,9 @@ test('V3: ⑧⑨⑩ 日程区三件套（满溢度/编辑开关/留白块）', (
   const grid = src('/src/features/week/WeekTimelineGrid.tsx');
   const panel = src('/src/features/week/WeekToolsPanel.tsx');
   assert.match(grid, /<SaturationBar/, '⑧ 满溢度条');                        // 11
-  assert.match(panel, /data-testid="edit-mode-toggle"/, '⑨ 编辑开关');        // 12
+  // ⑨ 2026-10-08（CY 截图裁决）：编辑模式整体下线（Ray 设计 = 始终可编辑）；
+  //    改锚为操作条「回到今天」在位（收敛后的操作条核心件）。
+  assert.match(panel, /data-testid="week-goto-today"/, '⑨→操作条（Ray 设计）'); // 12
   assert.match(wv, /blankTaskFor\(deleteAsk, weekNo\)/, '⑩ 留白块实体');     // 13
   assert.match(wv, /addEventListener\('usst:replan'/, '⑯ hold 确认触发重排'); // 14
 });

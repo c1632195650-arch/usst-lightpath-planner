@@ -62,11 +62,15 @@ export interface AdjustDrawerProps {
   onAddTask: (task: UserTask) => void;
   /** 有攒着没应用的改动（T3）—— 抽屉里也要明说，否则收起后用户看不到那条提示 */
   pendingEdits?: boolean;
+  /** 一键还原（2026-10-08 从操作条移入）：清本周手动改动，回到引擎最初版 */
+  onRestoreEngine?: () => void;
+  restoreCount?: number;
 }
 
 export function AdjustDrawer({
   open, onClose, weekNo, schedule, layer, updateLayer, rules, goals, handleRulesChange,
   dateOfDay, derivedApplied, onAddTask, pendingEdits = false,
+  onRestoreEngine, restoreCount,
 }: AdjustDrawerProps) {
   const [tab, setTab] = useState<DrawerTab>('addtask');
 
@@ -94,13 +98,33 @@ export function AdjustDrawer({
             <Icon name="settings" size="sm" />
             调整
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-2 py-1 text-[12px] text-ink-soft hover:bg-white"
-          >
-            收起
-          </button>
+          <span className="ml-auto flex items-center gap-1.5">
+            {/* 一键还原（本树缺口①；2026-10-08 从操作条移入）：清本周手动改动，回到引擎最初版 */}
+            {onRestoreEngine && (
+              <button
+                type="button"
+                onClick={onRestoreEngine}
+                disabled={(restoreCount ?? 0) === 0}
+                data-testid="week-restore-engine"
+                title="清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎排的最初版"
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium ring-1 transition ${
+                  (restoreCount ?? 0) > 0
+                    ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+                    : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
+                }`}
+              >
+                <Icon name="rotate" size="xs" />
+                回到最初版{(restoreCount ?? 0) > 0 ? `（${restoreCount}）` : ''}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded px-2 py-1 text-[12px] text-ink-soft hover:bg-white"
+            >
+              收起
+            </button>
+          </span>
         </div>
 
         {/* T3：改动攒着没生效 —— 抽屉里也要说。收起后提示仍在操作条上（两处一致） */}

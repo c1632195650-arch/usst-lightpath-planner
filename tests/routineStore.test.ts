@@ -296,14 +296,16 @@ test('Q1b 守卫：组装层确实把作息窗口展开进了 PlanRequest（否�
   assert.match(code, /\.\.\.\(dayWindow \?\? \{\}\)/, '作息日窗必须展开进 req（不展开 = 死代码）');
 });
 
-test('Q1b 守卫：采集入口在位（周计划页 routine-entry 面板，写入端补齐）', () => {
-  // 移植适配（同上）：上游双入口（WeekToolsPanel + OnboardingSetup）不在本树；
-  // R2 口径为单入口 —— 周计划页 routine-entry 面板，保存/清除走同一 store。
-  const wv = srcOf('src/features/week/WeekPlanView.tsx');
-  assert.match(wv, /data-testid="routine-entry"/, '周计划页没有「我的作息」入口 —— 用户无法设置作息');
-  assert.match(wv, /saveRoutine\(/, '保存没走 routineStore');
-  assert.match(wv, /clearRoutine\(/, '清除没走 routineStore');
-  assert.match(wv, /routineFromHHMM\(/, '校验没用 routineFromHHMM（不猜纪律：无效要给具体原因）');
+test('Q1b 守卫：采集入口在位（2026-10-08 起 = 画像页 HardBoundaryCard）', () => {
+  // 2026-10-08（CY 截图裁决）：周页「我的作息」删去，入口按 Ray 40a57ea 的设计
+  // 迁到「我的画像」页（features/week/HardBoundaryCard）——单入口口径不变。
+  const card = srcOf('src/features/week/HardBoundaryCard.tsx');
+  assert.match(card, /data-testid="routine-entry"/, '画像页没有「我的作息」入口 —— 用户无法设置作息');
+  assert.match(card, /saveRoutine\(/, '保存没走 routineStore');
+  assert.match(card, /clearRoutine\(/, '清除没走 routineStore');
+  assert.match(card, /routineFromHHMM\(/, '校验没用 routineFromHHMM（不猜纪律：无效要给具体原因）');
+  const app = srcOf('src/App.tsx');
+  assert.match(app, /<HardBoundaryCard \/>/, '硬边界卡必须在组合根挂到画像页');
 });
 
 test('Q1b 守卫：全仓只有 routineStore 一处碰作息存储（不许各存一份）', () => {

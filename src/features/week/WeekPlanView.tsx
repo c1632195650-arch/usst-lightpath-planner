@@ -88,14 +88,12 @@ import { GapAddPopover, type GapAddDraft } from './GapAddPopover';
 // ── 本树接缝（2026-10-08 接入 Ray 周页批次）：一键还原 / 作息入口 / 日程评估 ──
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/icons/Icon';
-import {
-  clearRoutine, loadRoutine, minutesToHHMM, routineFromHHMM, saveRoutine,
-} from './routineStore';
+import { loadRoutine } from './routineStore';
 import { digestPlan } from '@/lib/planner/planDigest';
 import { evaluateDigest } from '@/lib/planner/planEval';
 import { PlanEvalPanel } from './PlanEvalPanel';
 import { makeTaskId } from './planEditsStore';
-import { AchievementPanel } from '@/features/activity/GoalEditor';
+
 import { planReview, type PlanReviewReport } from '@/lib/api';
 import { getUserId } from '@/lib/identity';
 
@@ -320,54 +318,14 @@ export function WeekPlanView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateLayer, weekNo, planState, onPlanStateChange, notify, setReplanToken]);
 
-  /* ---------- WP7-E5（本树批次）：编辑模式开关（单一状态源 + localStorage 持久化） ----------
-   * false = 浏览态：块不可拖、块菜单/空档右键关、调整抽屉不可开 —— 防误拖误改；
-   * true = 编辑态：全部编辑入口可用。本树契约由 tests/wp7.test.ts / v1 / v3 锁定。 */
-  const [editMode, setEditMode] = useState<boolean>(() => {
-    try { return localStorage.getItem('usst.week.editMode') === '1'; } catch { return false; }
-  });
-  const setEditModePersisted = (v: boolean) => {
-    setEditMode(v);
-    try { localStorage.setItem('usst.week.editMode', v ? '1' : '0'); } catch { /* 隐私模式等不可写场景静默降级 */ }
-  };
-  /** V1-1：投入与成就常驻（编辑模式之外也能看到）—— key 随活动记录版本刷新 */
-  const [activityVersion] = useState(0);
+  /* ---------- 2026-10-08（CY 截图裁决）：编辑模式开关下线 ----------
+   * 按 Ray 设计 = **始终可编辑**（拖拽/块菜单/空档加事/调整抽屉都不再设浏览态门）；
+   * 操作条同步收敛为「‹ › 回到今天 / 撤销 / 重做 / 调整」。旧 localStorage 键
+   * `usst.week.editMode` 保留不读（无害）。
+   */
 
-  /* ---------- 裁决 R2（本树批次 2）：「我的作息」写入端 ----------
-   * 校验复用 routineFromHHMM（不猜纪律：无效给具体原因，不静默丢弃）；
-   * 保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见 useWeekPlan）。
-   * routineTick：作息面板保存/清除后让评估摘要即时重读 store（loadRoutine 非响应式）。 */
-  const [routineTick, setRoutineTick] = useState(0);
-  const [routineDraft, setRoutineDraft] = useState({ wake: '', sleep: '' });
-  const [routineMsg, setRoutineMsg] = useState<string | null>(null);
-  const openRoutinePanel = (open: boolean) => {
-    if (open) {
-      const r = loadRoutine();
-      setRoutineDraft({
-        wake: r.wakeMin != null ? minutesToHHMM(r.wakeMin) : '',
-        sleep: r.sleepMin != null ? minutesToHHMM(r.sleepMin) : '',
-      });
-      setRoutineMsg(null);
-    }
-  };
-  const saveRoutineDraft = () => {
-    const r = routineFromHHMM(routineDraft.wake, routineDraft.sleep);
-    if (!r.ok) {
-      setRoutineMsg(r.reason === 'order'
-        ? '起床要早于入睡（跨零点入睡先按当天时刻记，比如 23:30）'
-        : '时间格式要用 HH:MM，比如 07:30');
-      return;
-    }
-    saveRoutine(r.routine);
-    setRoutineMsg('已保存。点「重新排一遍」按新作息重排；评估摘要已同步。');
-    setRoutineTick((t) => t + 1);
-  };
-  const clearRoutineDraft = () => {
-    clearRoutine();
-    setRoutineDraft({ wake: '', sleep: '' });
-    setRoutineMsg('已清除，引擎回到缺省 07:00–23:00。');
-    setRoutineTick((t) => t + 1);
-  };
+  /* 「我的作息」输入端 2026-10-08 迁「我的画像」页（features/week/HardBoundaryCard）——
+   * 按 Ray 40a57ea 的设计：作息是长期硬边界，不属于「这周临时调一下」的干预项。 */
 
   /* ---------- H1.3/H2（本树 R 批 Wave3）：日程评估入口与结果 ----------
    * 评估是**纯读**：digestPlan(plan) → evaluateDigest，零副作用、零落库。
@@ -397,8 +355,7 @@ export function WeekPlanView({
           };
         }),
     };
-    // routineTick：作息面板保存/清除后让摘要重读 store（loadRoutine 非响应式，R2）
-  }, [goals, schedule.termStart, routineTick]);
+  }, [goals, schedule.termStart]);
 
   /** 右键空档「加一件事」弹窗的挂起信息（2026-10-07）；null = 关 */
   const [gapAdd, setGapAdd] = useState<{
@@ -974,6 +931,9 @@ export function WeekPlanView({
         pendingEdits={pendingEdits}
         dateOfDay={dateOfDay}
         derivedApplied={derived.applied}
+        /* 2026-10-08：一键还原入口从操作条移入抽屉（按 Ray 设计的操作条收敛） */
+        onRestoreEngine={() => setRestoreAsk(true)}
+        restoreCount={restoreCount}
       />
       {/* 一键还原确认弹窗（本树缺口①）：清什么/留什么逐条列清，重排 + Ctrl+Z 整体撤销 */}
       <Modal
@@ -1131,68 +1091,10 @@ export function WeekPlanView({
         goalWarnings={goalWarnings}
         dismissedWarnings={dismissedWarnings}
         setDismissedWarnings={setDismissedWarnings}
-        /* 本树接缝：换周/返回/模式/一键还原 都经操作条上抛（Ray 版原只有「回到今天」） */
+        /* 本树接缝：只有换周经操作条上抛（「回到今天」= Ray 原字段，上方已传；
+           返回/模式/还原入口 2026-10-08 按 Ray 设计移出操作条） */
         onShiftWeek={onShiftWeek}
-        onBack={onBack}
-        onOpenModeSetup={onOpenModeSetup}
-        onRestoreEngine={() => setRestoreAsk(true)}
-        restoreCount={restoreCount}
-        editMode={editMode}
-        onToggleEditMode={() => setEditModePersisted(!editMode)}
       />
-
-      {/* 裁决 R2（本树批次 2）：「我的作息」采集入口 —— 写入端补齐。
-          校验复用 routineFromHHMM（不猜纪律：无效给具体原因，不静默丢弃）；
-          保存走 saveRoutine（routineStore 唯一键），引擎日窗在重排时重读（见 useWeekPlan）。 */}
-      <details
-        data-testid="routine-entry"
-        className="panel px-4 py-3"
-        onToggle={(e) => openRoutinePanel((e.currentTarget as HTMLDetailsElement).open)}
-      >
-        <summary className="cursor-pointer text-[13px] font-medium text-ink">
-          我的作息
-          <span className="ml-2 text-[11px] font-normal text-ink-faint">
-            起床/就寝决定引擎给你排事的时段（不排「你还没起床」的块）
-          </span>
-        </summary>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
-          <label className="flex items-center gap-1">
-            起床
-            <input
-              data-testid="routine-wake"
-              type="time"
-              value={routineDraft.wake}
-              onChange={(e) => setRoutineDraft((d) => ({ ...d, wake: e.target.value }))}
-              className="rounded-lg border border-ink/15 px-2 py-1 text-[12px]"
-            />
-          </label>
-          <label className="flex items-center gap-1">
-            就寝
-            <input
-              data-testid="routine-sleep"
-              type="time"
-              value={routineDraft.sleep}
-              onChange={(e) => setRoutineDraft((d) => ({ ...d, sleep: e.target.value }))}
-              className="rounded-lg border border-ink/15 px-2 py-1 text-[12px]"
-            />
-          </label>
-          <button type="button" data-testid="routine-save" onClick={saveRoutineDraft} className="button-primary px-3 py-1.5 text-xs">
-            保存
-          </button>
-          <button
-            type="button"
-            data-testid="routine-clear"
-            onClick={clearRoutineDraft}
-            className="rounded-xl border border-ink/15 px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-ink/30"
-          >
-            清除
-          </button>
-          {routineMsg && <span className="w-full text-[11.5px] text-ink-soft" data-testid="routine-msg">{routineMsg}</span>}
-        </div>
-      </details>
-
-      {/* V1-1（本树 V 批）：投入与成就 —— CY 要求**常驻**（编辑模式之外也能看到） */}
-      <AchievementPanel key={activityVersion} weekNo={weekNo} termStart={schedule.termStart} />
 
       {/* R批 Wave3（H1.3）· 日程评估入口与结果（本树接缝）。
           **手动触发**而非自动弹：评估会占一屏，自动弹等于打断。 */}
@@ -1265,7 +1167,6 @@ export function WeekPlanView({
         onClearAssignment={handleClearAssignment}
         onEditBlock={handleEditBlock}
         onRevertEdit={handleRevertEdit}
-        allowEdit={editMode}
       />
 
       {/* 拖拽删除投放区（F2d/A5：拆为 WeekDiagnostics 纯展示组件） */}

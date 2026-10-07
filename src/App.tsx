@@ -26,6 +26,7 @@ import { OverviewPage } from '@/features/overview/OverviewPage';
 import { WeekPlanView } from '@/features/week/WeekPlanView';
 import { FocusDaysPanel } from '@/features/week/FocusDaysPanel';
 import { WeekTimetable } from '@/features/week/WeekTimetable';
+import { HardBoundaryCard } from '@/features/week/HardBoundaryCard';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { LbaoLauncher } from '@/features/libao/LbaoLauncher';
 import { ImportTester } from '@/features/import/ImportTester';
@@ -384,6 +385,8 @@ export default function App() {
                   重看引导
                 </button>
               </div>
+              {/* 2026-10-08：硬边界卡（我的作息）——从周页迁来（Ray 40a57ea 设计） */}
+              <HardBoundaryCard />
               {/* UI v2 D5：设置面板（分组列表行上直显当前值；真实状态源，无占位行） */}
               <div className="px-4 pb-4 sm:px-6">
                 <SettingsPanel />
@@ -402,6 +405,8 @@ export default function App() {
                   </span>
                 </button>
               </div>
+              {/* 2026-10-08：硬边界卡（我的作息）——不依赖画像，未完成画像时同样可设 */}
+              <HardBoundaryCard />
               {/* UI v2 D5：画像未完成时设置同样可达（真实状态源不依赖画像） */}
               <SettingsPanel />
             </div>
@@ -427,9 +432,10 @@ export default function App() {
               // 阶段 D：生活模式此前只影响配色，现在会真正改变排程强度
               // WP5：旧模式 id 在读取口归一（localStorage 里可能还存着 slack/food…）
               lifeMode={normalizeLifeMode(state.lifeMode)}
-              onOpenModeSetup={() => setModeSetupOpen(true)}
               onShiftWeek={shiftWeekBy}
-              onBack={() => setWeekMonday(null)}
+              /* 2026-10-08（CY 截图裁决）：操作条按 Ray 设计收敛 —— 返回总览由顶栏
+                 「总览」tab 承担；「换个节奏」入口保留在总览 checklist 与导入完成弹窗。 */
+              onGoToToday={() => setWeekMonday(null)}
               activeDays={focusDays}
             />
             {/* P1-5b.3：本块是单点可删的 —— CY 若说连折叠块也不要，删这一个 <details> 即可 */}

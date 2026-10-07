@@ -4,7 +4,7 @@
  * ⚠️ 反向验证（docs/wp-ledger-v2.md §V1）：
  *   RV1 ← blankTaskFor 的 kind 改回 'activity' → 留白块用例红
  *   RV2 ← urgencyLevel 阈值位移 → 档位用例红
- *   RV3 ← AchievementPanel 挪回 editMode 包裹内 → 源码断言红
+ *   RV3 ← AchievementPanel 从目标页撤下（或回流到周页）→ 源码断言红（2026-10-08 改锚，见下）
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -66,7 +66,7 @@ test('V1-5: blank 不进满溢度 occupied（留白不算「用户排的」）',
 
 /**
  * ⚠️ 2026-10-08 改锚（Ray 周页批次接入）：周页拆组件后三处断言的落点：
- *   · AchievementPanel → WeekPlanView（常驻，视图层零 editMode 门控）；
+ *   · AchievementPanel → GoalsPage（2026-10-08 CY 裁决：从周页迁目标页常驻）；
  *   · 「换个节奏」/「编辑」按钮 → WeekToolsPanel（操作条整体搬入）；
  *   · 留白块 blankTaskFor → WeekPlanView；满溢度 detail → WeekTimelineGrid 列头。
  * 语义（V1-1 常驻 / V1-4 顺序 / V1-5 留白实体+满溢度详情）不变。
@@ -77,19 +77,27 @@ const PANELSRC = (): string =>
   readFileSync(fileURLToPath(new URL('../src/features/week/WeekToolsPanel.tsx', import.meta.url)), 'utf8');
 const GRIDSRC = (): string =>
   readFileSync(fileURLToPath(new URL('../src/features/week/WeekTimelineGrid.tsx', import.meta.url)), 'utf8');
+const GOALSSRC = (): string =>
+  readFileSync(fileURLToPath(new URL('../src/features/activity/GoalsPage.tsx', import.meta.url)), 'utf8');
 
-test('V1-1 源码: AchievementPanel 常驻（视图层零 editMode 门控）', () => {
-  // 反向：把面板包进任何 editMode 门 → 本用例红
-  const src = WVSRC();
-  assert.ok(src.includes('<AchievementPanel key={activityVersion}'), '投入与成就面板必须常驻周页');
-  assert.equal(src.includes('{editMode && ('), false, '视图层不得再有 editMode 门（门控下沉到子组件）');
+test('V1-1 源码（2026-10-08 改锚）: 投入与成就迁「目标页」常驻', () => {
+  // CY 裁决（2026-10-08 截图）：成就面板从周页删去 —— 它已在「目标」页常驻（GoalsPage）。
+  // 本用例把「常驻」的锚点从周页改到目标页，并断言周页不再挂（防回流）。
+  assert.match(GOALSSRC(), /<AchievementPanel weekNo=\{weekNo\} termStart=\{schedule\.termStart\} \/>/, '目标页常驻投入与成就');
+  assert.equal(WVSRC().includes('<AchievementPanel'), false, '周页不再挂成就面板（已迁目标页）');
 });
 
-test('V1-4 源码: 「换个节奏」在编辑按钮之前（第一顺位）', () => {
+test('V1-4 源码（2026-10-08 改锚）: 周页操作条按 Ray 设计收敛', () => {
+  // CY 裁决：操作条 =「‹ › 回到今天 / 撤销 / 重做 / 调整」；编辑模式与一键还原下线/迁移，
+  // 「换个节奏」不再占操作条（入口留总览 checklist 与导入完成弹窗）。
   const src = PANELSRC();
-  const modeBtn = src.indexOf('data-testid="open-mode-setup"');
-  const editBtn = src.indexOf('data-testid="edit-mode-toggle"');
-  assert.ok(modeBtn >= 0 && editBtn > modeBtn, '换节奏必须在编辑按钮前面');
+  assert.match(src, /data-testid="week-goto-today"/, '回到今天在位');
+  assert.match(src, /data-testid="weekplan-prev-week"/, '换周 ‹ 在位');
+  assert.match(src, /↩ 撤销/, '撤销在位');
+  assert.match(src, /↪ 重做/, '重做在位');
+  assert.match(src, /<Icon name="settings" size="xs" \/>调整/, '调整在位（Icon 图鉴）');
+  assert.equal(src.includes('edit-mode-toggle'), false, '编辑模式开关已下线');
+  assert.equal(src.includes('open-mode-setup'), false, '换个节奏不再占操作条');
 });
 
 test('V1-5 源码: onKeepGap 走 blankTaskFor 落层；满溢度传 detail', () => {
