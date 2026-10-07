@@ -22,8 +22,13 @@ import { STORAGE_KEY_LIST, metaOf } from '@/lib/storageRegistry';
  * 2026-09-27：14 → 16（+`usst.libao.basic_info`，+`usst.libao.chat.*` 与 `deadlines` 属 LbaoChat 线，
  * 见其各自登记项）。
  * 2026-10-01：16 → 17（+`usst.local_owner.v1`，localOnly 本机专属、不入库）。
+ * 2026-10-06：17 → 18（+`usst.engine_mode.v1`，引擎对比开关，同为 localOnly）。
+ * 2026-10-07：18 → 19（+`usst-energy-curve-v1`，另一会话补登记，localOnly）。
+ * 2026-10-07：19 → 20（+`usst-goal-pool-v1`，目标池/孵化池，localOnly —— memo 云通道合流时摘标记）。
+ * 2026-10-07：20 → 21（+`usst.libao.deadlines.v1`，随 CY 梨宝壳搬运，localOnly 过渡）。
+ * 2026-10-07：21 → 25（+梨宝对话快照 v3/v2/v1/chat.cleared，纯本机 UI 状态，全 localOnly）。
  */
-const REGISTERED_TOTAL = 17;
+const REGISTERED_TOTAL = 25;
 
 test('① cloudKeys：legacy 只迁不写、localOnly 只写本机，其余登记 key 全部可入库', () => {
   const keys = cloudKeys();
@@ -31,7 +36,7 @@ test('① cloudKeys：legacy 只迁不写、localOnly 只写本机，其余登�
   const localOnly = STORAGE_KEY_LIST.filter((k) => metaOf(k)?.localOnly);
   assert.equal(STORAGE_KEY_LIST.length, REGISTERED_TOTAL, '登记表总数变了 → 改 REGISTERED_TOTAL');
   assert.equal(legacy.length, 2, 'legacy 恒为 2（assignments / plan-edits），新增 legacy 要显式改这里');
-  assert.equal(localOnly.length, 1, 'localOnly 恒为 1（local_owner），新增 localOnly 要显式改这里');
+  assert.equal(localOnly.length, 9, 'localOnly 恒为 9（local_owner / engine_mode / energy_curve / goal_pool / libao.deadlines / libao.chat.v3 / v2 / v1 / chat.cleared），新增 localOnly 要显式改这里');
   assert.equal(
     keys.length,
     REGISTERED_TOTAL - legacy.length - localOnly.length,

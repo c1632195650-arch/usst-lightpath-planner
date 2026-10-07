@@ -171,6 +171,88 @@ export const STORAGE_KEYS = {
     spec: '持久化与账号系统实施规格书 §5.5',
     localOnly: true,
   },
+
+  /**
+   * 引擎选择（2026-10-06 补）：`'ours'` = 本地引擎，`'cy'` = 移植进来的 CY 引擎。
+   * 用于在同一个页面上**对比两套算法在同一份输入下的产出**。
+   * 标 `localOnly`：这是**这台机器上做对比用的调试开关**，不是用户偏好 ——
+   * 上云会变成可同步状态，换设备/换账号时把"你在对比"也带过去，纯属噪音。
+   */
+  'usst.engine_mode.v1': {
+    owner: 'B',
+    module: 'lib/engineMode',
+    localOnly: true,
+  },
+
+  /**
+   * 精力高峰微调（长计划增强计划书 §2.3）：用户只存一档「高峰时段」，
+   * 曲线由 `energyCurve.inferEnergyCurve` 现算。标 `localOnly`：
+   * 设备级微调，上云会把"你在哪台机器上调过峰"同步出去，噪音大于价值。
+   */
+  'usst-energy-curve-v1': {
+    owner: 'B',
+    module: 'features/week/energyStore',
+    localOnly: true,
+  },
+
+  /**
+   * 目标池 / 孵化池（2026-10-07）：长目标的苗圃 —— 转正前的轻条目
+   * （title/note/粗交期），字段对齐 CY memo 协议（memoTypes.ts），
+   * memo 云通道合流时零迁移接管（source:'memo' 喂入 + goalId 投影）。
+   * 标 `localOnly`：合流前先本地跑通，不动 serve.py 白名单；
+   * 接 memo 云通道时摘掉本标记，并同步 persistence.test 两处锚点。
+   */
+  'usst-goal-pool-v1': {
+    owner: 'B',
+    module: 'features/activity/goalPoolStore',
+    localOnly: true,
+  },
+
+  /**
+   * 用户重要日（2026-10-07 补登记，随 CY 梨宝排程壳搬运进本地线）：
+   * deadlineStore（features/calendar/）—— 梨宝排程会话里「添加重要日」的存储。
+   * 标 `localOnly`：CY 侧语义为云同步（他服务器 sync 白名单），本地线暂不
+   * 入库，等两线数据面合流时摘标记对齐 —— 与 goal-pool 同款过渡策略。
+   */
+  'usst.libao.deadlines.v1': {
+    owner: 'CY',
+    module: 'features/calendar/deadlineStore',
+    localOnly: true,
+  },
+
+  /* ── 梨宝对话快照三连（2026-10-07 随 CY 排程壳搬运登记）──
+   * dialogManager 写 v3 / 读失败回读 v2 合成 / v1 链在 LbaoChat —— 均为
+   * 纯本机 UI 恢复状态，标 localOnly（上云毫无价值还添乱）。 */
+
+  /** 对话快照 v3（现行）：DialogState v3 单容器 */
+  'usst.libao.chat.v3': {
+    owner: 'CY',
+    module: 'features/libao/dialogManager',
+    alsoReadBy: ['features/libao/LbaoChat'],
+    localOnly: true,
+  },
+
+  /** 对话快照 v2（迁移读取：clarify→collect、clarifyPicking→picking 合成） */
+  'usst.libao.chat.v2': {
+    owner: 'CY',
+    module: 'features/libao/dialogManager',
+    localOnly: true,
+  },
+
+  /** 对话快照 v1（最老迁移链，读取点在 LbaoChat） */
+  'usst.libao.chat.v1': {
+    owner: 'CY',
+    module: 'features/libao/dialogManager',
+    alsoReadBy: ['features/libao/LbaoChat'],
+    localOnly: true,
+  },
+
+  /** 对话快照清除标记（LbaoChat「清空对话」落盘位） */
+  'usst.libao.chat.cleared': {
+    owner: 'CY',
+    module: 'features/libao/LbaoChat',
+    localOnly: true,
+  },
 } as const satisfies Record<string, StorageKeyMeta>;
 
 /** 所有已登记的 key 字符串 */
