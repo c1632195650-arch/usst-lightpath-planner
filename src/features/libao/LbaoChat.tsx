@@ -364,7 +364,7 @@ function loadChatSnapshot(): ChatSnapshot | null {
 }
 
 /** 将本地排程建议和校园资料问答放进同一段对话，而不混用两种数据来源。 */
-export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMode }: {
+export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMode, fastTry }: {
   profile: PersonaProfile | null;
   schedule: Schedule;
   onGoProfile?: () => void;
@@ -372,6 +372,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
   seedQuestion?: string;
   /** 2026-10-07（RAY）：周页「跟梨宝说一句」跳转入口 —— 带原句直进排程模式并自动发送 */
   seedMode?: 'sched';
+  /**
+   * 混合体 · 规则快层（2026-10-07 RAY：「输入要求解析，默认都是调用混合体」）：
+   * 宿主注入的本地规则执行器 —— 认出明确意图就**当场执行**并返回气泡文案（零 LLM 成本）；
+   * 返回 null = 规则认不出，原句落回对话管理器（LLM 理解层）。规则是快层，LLM 是理解层，
+   * 一条通路两层。仅在排程模式且状态机空闲（无追问/草稿/阻塞）时被询问，追问中的
+   * 碎片回答不会被规则劫持。不传 = 纯 LLM 行为（梨宝页挂载点不受影响）。
+   */
+  fastTry?: (text: string) => string | null;
 }) {
   /** 挂载时读一次快照；下面的 state 初始化都从它取 —— 切 tab 回来即恢复。 */
   const [boot] = useState(loadChatSnapshot);
@@ -1812,6 +1820,21 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
       }
     }
 
+    // ── 混合体 · 规则快层（2026-10-07，RAY：「输入要求解析，默认都是调用混合体」）──
+    // 周页注入的本地规则先行：明确意图（提要求/加事/拿掉/问原因）**当场执行**，
+    // 零 LLM 成本、不进状态机；认不出（返回 null）才落进下面的对话管理器。
+    // 规则是快层，LLM 是理解层 —— 一条通路两层，而不是两个入口。
+    // 守卫 `!topic`：状态机在 collect/draft/blocked 时本轮归追问流程，规则不得
+    // 劫持（「周五下午」这种回答追问的碎片不能被误当新约束）。
+    if (fastTry && activeMode === 'sched' && !topic) {
+      const fast = fastTry(q);
+      if (fast) {
+        setMessages((current) => [...current, { role: 'lbao', text: fast }]);
+        setLoading(false);
+        return;
+      }
+    }
+
     // ── D3 · 对话管理器主干：排程模式 + 后端在线 → 每轮恰一次 dialog 裁决 ──
     // act 接管本轮（含 chit_chat，议题保留）；端点挂/超时/校验拒 → 原样落回
     // 下面的规则链路（S/T 批产出全保留为 fallback，离线可用性不变）。
@@ -2377,7 +2400,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
                         rel="noreferrer"
                         className="block py-3 transition-colors hover:text-brand"
                       >
-                        <div className="text-sm font-semibold leading-5 text-ink">{source.title}</div>
+                        <div className="font-display text-sm font-semibold leading-5 text-ink">{source.title}</div>
                         <div className="mt-1 text-xs text-ink-faint">{source.account} · {source.pub_time}</div>
                       </a>
                     ))}
