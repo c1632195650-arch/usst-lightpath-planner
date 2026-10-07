@@ -100,9 +100,14 @@ async function stubCoreApi(page: Page, opts: { state?: unknown; todos?: unknown[
 
 /** M-W1 欢迎页（2026-10-07）：首次打开且未登录时先见品牌页 —— e2e 统一从这里过 */
 async function openMobile(page: Page) {
-  await openMobile(page);
+  await page.goto('/m.html');
+  // 等首个可判定根元素渲染（欢迎页 / 登录表单 / 今日页），避免与 React 挂载竞态
+  await page
+    .locator('[data-testid="m-welcome-start"], [data-testid="m-login-user"], [data-testid="m-today-list"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 15_000 });
   const start = page.getByTestId('m-welcome-start');
-  if (await start.isVisible({ timeout: 2_000 }).catch(() => false)) await start.click();
+  if (await start.isVisible()) await start.click();
 }
 
 async function registerAndReady(page: Page) {
@@ -546,6 +551,11 @@ test('W3：总览点某天 → 进「日程」并高亮该天；「周计划」�
 });
 
 test('评估动线①：周计划 → 点评估 → 五维分数渲染 → 展开某维「看依据」可读', async ({ page }) => {
+  // 2026-10-08：离线分支改为**确定性打桩**（此前靠「8001 无后端」的环境假设 ——
+  // CY 的 dev 后端常驻时 preview 代理会连通它，离线说明永不出现，用例在本机假红）。
+  // route.abort() 产生的网络失败与连接被拒走同一条 fetch reject 路径，断言不变。
+  await page.route('**/api/plan/review', (route) => route.abort());
+
   await desktopOnboard(page);
   await desktopGoWeek(page);
 
