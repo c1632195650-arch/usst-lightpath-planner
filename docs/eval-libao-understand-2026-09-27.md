@@ -440,3 +440,22 @@ a01–a20（answer 定位）、b01–b10（边界反例）逐条复核全部通�
 - 端点拒收（dialog_act_rejected/超时等）: 无
 - 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
 
+
+## 评测运行 · 2026-10-08 00:13（生产忠实口径 v3）
+
+### 在线（生产忠实口径：规则先行 → LLM 补空/救援 → 双侧归一合并计分）
+- 端点调用 76 次，ok 51（ok:false 含偶发 8s 超时——③口径：设计行为，生产回规则结果，评测同口径计分，不重试）
+- action P/R/F1 = 1.0 / 1.0 / 1.0（TP 39 · FP 0 · FN 0 · TN 10）
+- FN: []｜FP: []
+- 槽位 EM（TP 条目）= 0.988（未命中: [('i17', 'month')]）
+- answer 槽位命中（双侧归一）= 0.885（23/26）｜未命中: [('a05', 'target'), ('a14', 'target'), ('a17', 'effort')]
+- 端点直判参考线（规则拦下的 10 条若直询端点的命中率）：1.0
+- 门槛（action F1≥0.95 且 槽位 EM≥0.90）：✅ 过
+### dialog 组（D 批：act 分类 25 + idx 消歧 8 + 防编造负例 7）
+- act 宏 F1 = 0.972（逐 act: {'ask_slot': 0.947, 'chit_chat': 1.0, 'confirm_draft': 0.857, 'discard_topic': 1.0, 'new_intent': 1.0, 'pick_candidate': 1.0, 'resume_topic': 1.0}）｜准确率 = 0.976（41/42）
+- 混淆 Top: [(('confirm_draft', 'ask_slot'), 1)]
+- idx 消歧 EM = 1.0（9/9）｜未命中: 无
+- 非法输出拦截率 = 1.0（负例 7 条；ok:false 或合法域内都算拦住——镜像后端 _clean_dialog + 前端 validateDialogAct）
+- 端点拒收（dialog_act_rejected/超时等）: 无
+- 门槛（act 宏 F1≥0.90 且 拦截率 100%）：✅ 过
+
