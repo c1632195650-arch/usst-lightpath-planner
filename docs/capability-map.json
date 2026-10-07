@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 119,
-    "engineFiles": 83,
+    "testFiles": 120,
+    "engineFiles": 84,
     "uiFiles": 36,
     "guardedSources": 106,
-    "reverseVerified": 70,
+    "reverseVerified": 71,
     "orphans": 1
   },
   "domains": {
@@ -171,7 +171,7 @@
         "src/lib/lbao.ts",
         "src/lib/api.ts"
       ],
-      "testCount": 28,
+      "testCount": 29,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/day-replan-intent.test.ts",
@@ -194,6 +194,7 @@
         "scripts/modeSetup.test.ts",
         "scripts/schedSession.test.ts",
         "tests/d-batch.test.ts",
+        "tests/libao-copy-freeze.test.ts",
         "tests/libao-eval-entry.test.ts",
         "tests/libao-regression-anchor.test.ts",
         "tests/v0.test.ts",
@@ -223,10 +224,11 @@
         "src/lib/persona.ts",
         "src/features/onboarding/"
       ],
-      "testCount": 4,
+      "testCount": 5,
       "tests": [
         "scripts/basicInfo.test.ts",
         "scripts/personaCopy.test.ts",
+        "tests/libao-copy-freeze.test.ts",
         "tests/profile-explain.test.ts",
         "tests/v0.test.ts"
       ],
@@ -322,7 +324,7 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 16,
+      "testCount": 17,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
@@ -338,6 +340,7 @@
         "tests/h3h4-eval.test.ts",
         "tests/identity.test.ts",
         "tests/improve-live.test.ts",
+        "tests/libao-copy-freeze.test.ts",
         "tests/p2-incremental-rolling.test.ts",
         "tests/wp12.test.ts"
       ],
@@ -917,6 +920,16 @@
         "planner-engine"
       ],
       "guardCount": 7,
+      "reverseVerified": true
+    },
+    "tests/libao-copy-freeze.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts",
+        "libao-chat",
+        "persona"
+      ],
+      "guardCount": 3,
       "reverseVerified": true
     },
     "tests/libao-eval-entry.test.ts": {
@@ -1532,7 +1545,8 @@
       "tests/wp6.test.ts"
     ],
     "src/lib/lbao": [
-      "scripts/lbaoPlan.test.ts"
+      "scripts/lbaoPlan.test.ts",
+      "tests/libao-copy-freeze.test.ts"
     ],
     "src/features/libao/lbaoPlanFromEngine": [
       "scripts/lbaoPlan.test.ts"
@@ -1591,7 +1605,8 @@
       "tests/v2.test.ts"
     ],
     "src/features/persona/personaCopy": [
-      "scripts/personaCopy.test.ts"
+      "scripts/personaCopy.test.ts",
+      "tests/libao-copy-freeze.test.ts"
     ],
     "src/lib/persona": [
       "scripts/personaCopy.test.ts",
@@ -1713,7 +1728,8 @@
       "tests/feedback.test.ts"
     ],
     "src/features/libao/dialogManager": [
-      "tests/d-batch.test.ts"
+      "tests/d-batch.test.ts",
+      "tests/libao-copy-freeze.test.ts"
     ],
     "src/features/libao/LbaoChat": [
       "tests/d-batch.test.ts",
