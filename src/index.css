@@ -331,6 +331,12 @@
   .hint-undo {
     @apply flex items-center gap-2 rounded-xl border border-gold/40 bg-ok/10 px-3 py-2 text-xs font-medium leading-5 text-ink-soft;
   }
+
+  /* 组件库 spinner 关键帧（§10.1 态 7：1.1s linear；reduced-motion 由全局查询冻结）。 */
+  @keyframes ui-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 }
 
 @layer utilities {
