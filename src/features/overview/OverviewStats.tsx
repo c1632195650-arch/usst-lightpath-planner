@@ -116,13 +116,16 @@ export function OverviewStats({ schedule, weekNo, todayIso, onGotoTodos, onGotoG
 export function PersonaStatusCard({ persona, onGotoProfile }: { persona: PersonaProfile | null; onGotoProfile?: () => void }) {
   const axes = persona?.axes;
   const dims = axes ? Object.values(axes).map((v) => Math.min(1, (Number(v) || 0) / 100)) : [];
+  /** 焦点卡原先那句「当前建议参考「X」的节奏」搬到这里 —— 一句提醒放在它真正相关的那张卡上，
+      顺手把焦点卡省下一整行（一屏仪表盘的高度预算很紧）。 */
+  const archetype = persona?.archetype.primary?.name;
   return (
     <StatCard
       icon="radar"
       label="状态"
       value={dims.length ? `${dims.length}` : '—'}
       unit={dims.length ? '维' : undefined}
-      hint={dims.length ? '点击进画像' : '还没做画像'}
+      hint={dims.length ? (archetype ? `参考「${archetype}」的节奏 · 点击进画像` : '点击进画像') : '还没做画像'}
       dz={<DzBars values={dims.length ? dims : [0.25, 0.25, 0.25, 0.25]} />}
       onClick={onGotoProfile}
     />
@@ -159,7 +162,7 @@ function StatCard({
     </>
   );
 
-  const base = 'panel flex flex-col p-3 text-left lg:col-span-4';
+  const base = 'panel flex flex-col p-3 text-left lg:col-span-2';
   if (!onClick) return <div className={base}>{body}</div>;
   return (
     <button

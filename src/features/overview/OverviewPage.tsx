@@ -46,7 +46,9 @@ export function OverviewPage({
   schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona,
   onGotoTodos, onGotoGoals, onGotoProfile,
 }: Props) {
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  /* 校历默认展开（2026-10-08 两侧栏批）：左栏是 300×整带高度，收起态在里面几乎全空；
+     展开的月历正好填满这根栏。要回到「默认收起」改回 useState(false) 即可。 */
+  const [calendarOpen, setCalendarOpen] = useState(true);
 
   /** 收起态展示本月节点数，让用户知道展开能看到什么。 */
   const thisMonth = fromISO(todayIso).getMonth();
@@ -57,10 +59,14 @@ export function OverviewPage({
   }).length;
 
   return (
-    /* 三档容器由 page-shell（1200px = default 档）承担。
-       lg+ 是一屏仪表盘：四行栅格 + 最后一行吃掉剩余高度（`minmax(0,1fr)`），
-       所以页面本身不滚动，只有「校历 / 接下来节点」两张卡在各自内部滚动。
-       窄屏（<lg）退回单列普通流 —— 那时行高不够，硬撑会裁内容。 */
+    /* 总览仪表盘栅格（lg+ 一屏不滚动）。
+       ⚠️ **JSX 顺序 = 栅格排布顺序**：CSS 栅格是稀疏自动排布，item 按 DOM 顺序找第一个空位。
+       所以两侧栏必须在 DOM 里**先于**要夹住的卡片出现，否则会被挤到第三行去
+       （踩过：校历/节点写在末尾 → 它们落到了模块带下面的新行，两侧还是空的）。
+       正确顺序：焦点卡 → 校历(跨两行) → 三张数字卡 → 节点(跨两行) → 一周节奏 → 状态。
+       12 列分配（CY 圈定「两侧栏夹住中间」）：校历 3 ┃ 课时 2 · 待办 2 · 连续 2 ┃ 节点 3；
+       下一行 节奏 4 ┃ 状态 2（中间 6 列）。竖线落在 25% / 41.7% / 58.3% / 75%，
+       且 58.3% 那条上下贯通（待办|连续 与 节奏|状态 对齐）。 */
     <div className="overview-grid">
       <div className="lg:col-span-12">
         <TodayCard
@@ -73,30 +79,8 @@ export function OverviewPage({
         />
       </div>
 
-      {/* 三张数字卡自带 lg:col-span-4（它们是本栅格的直接子元素） */}
-      <OverviewStats
-        schedule={schedule}
-        weekNo={weekNo}
-        todayIso={todayIso}
-        persona={persona}
-        onGotoTodos={onGotoTodos}
-        onGotoGoals={onGotoGoals}
-      />
-
-      <div className="lg:col-span-8">
-        <WeekStrip
-          schedule={schedule}
-          weekNo={weekNo}
-          weekMonday={mondayOf(todayIso)}
-          todayIso={todayIso}
-          onSelectDay={onOpenWeek}
-        />
-      </div>
-
-      <PersonaStatusCard persona={persona} onGotoProfile={onGotoProfile} />
-
-      {/* 最后一行：校历在左、接下来的节点在右，两张卡分掉剩余高度、各自内部滚动 */}
-      <section className="panel flex min-h-0 flex-col p-4 sm:p-5 lg:col-span-6">
+      {/* 两侧栏之一：校历常驻最左一列，`row-span-2` 贯穿整个「模块带」（下面两行）。 */}
+      <section className="overview-rail panel flex min-h-0 flex-col p-4 lg:col-span-3 lg:row-span-2">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h2 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ink">
@@ -129,9 +113,33 @@ export function OverviewPage({
         )}
       </section>
 
-      <div className="min-h-0 lg:col-span-6">
+      {/* 模块带第一行：三张数字卡（各自 lg:col-span-2，共 6 列）—— 夹在两侧栏之间 */}
+      <OverviewStats
+        schedule={schedule}
+        weekNo={weekNo}
+        todayIso={todayIso}
+        persona={persona}
+        onGotoTodos={onGotoTodos}
+        onGotoGoals={onGotoGoals}
+      />
+
+      {/* 两侧栏之二：接下来的节点常驻最右一列，同样贯穿整个模块带（内部滚动）。 */}
+      <div className="overview-rail min-h-0 lg:col-span-3 lg:row-span-2">
         <DeadlineBoard />
       </div>
+
+      {/* 模块带第二行：一周节奏 span 4 + 状态 span 2（中间 6 列）。 */}
+      <div className="lg:col-span-4">
+        <WeekStrip
+          schedule={schedule}
+          weekNo={weekNo}
+          weekMonday={mondayOf(todayIso)}
+          todayIso={todayIso}
+          onSelectDay={onOpenWeek}
+        />
+      </div>
+
+      <PersonaStatusCard persona={persona} onGotoProfile={onGotoProfile} />
     </div>
   );
 }

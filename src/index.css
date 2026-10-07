@@ -451,13 +451,20 @@
  * 总览「一屏仪表盘」（2026-10-08，CY 指令「第一个界面就搞成不可滑动的一页」）。
  *
  * 为什么带**高度**条件：四行栅格（焦点卡 / 三个数字卡 / 节奏+状态 / 校历+节点）在
- * 1024×900 以上才装得下；只说  的话，1280×720 这类矮窗口会让最后一行
- * 被压成 0 高度（实测 1280×720：三行 auto 吃掉全部空间，1fr 行塌成 0；实测 1280×960 / 1440×900：末行分别拿到 201 / 141px，四行都在）。
+ * 1024×800 以上才装得下；只说  的话，1280×720 这类矮窗口会让最后一行
+ * 被压成 0 高度（门槛先定 900，实测 CY 的窗口视口 ~877 落在门槛之下 —— 校历/节点被推到折叠线以下，
+ * 看到的正是「要滚动才看得到」；压紧上半部分后门槛降到 800：877 高时末行仍有 ~180px）。
  * 矮窗口**诚实地退回普通滚动页**，而不是把内容裁掉。
  *
  * 生效时：外壳锁视口高 + 裁溢出（页面不滚），栅格吃掉剩余高度，
  * 页脚不渲染（它会把页面顶出视口）；最后一行 `minmax(0,1fr)` 里两张卡各自内部滚。
  */
+/** 总览用的 wide 容器（设计总成 §8.5：wide 1440 档就是给「总览页 Bento / 数据看板」的）。
+ *  其余页仍走 `.page-shell` 的 default 1200 档。 */
+.page-wide {
+  @apply mx-auto w-full max-w-[1440px];
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -470,7 +477,18 @@
   }
 }
 
+/** 两侧栏（校历 / 接下来节点）：贯穿整个模块带的左右两列。 */
+.overview-rail {
+  min-height: 0;
+}
+
 @media (min-width: 1024px) and (min-height: 900px) {
+  .overview-rail {
+    align-self: stretch;
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 800px) {
   .overview-pane {
     height: 100dvh;
     overflow: hidden;
@@ -479,8 +497,11 @@
   .overview-pane .overview-grid {
     height: 100%;
     min-height: 0;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-    align-items: stretch;
+    /* 焦点卡 auto；下面「模块带」两行等分剩余高度 —— 两侧栏 row-span-2 贯穿这两行。 */
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+    /* 中间卡片按**自然高度**顶部对齐（拉满会让卡片内部出现大片空白），
+       两侧栏用 .overview-rail 单独拉伸到整个模块带高度。 */
+    align-items: start;
   }
 
   .overview-pane .overview-footer {

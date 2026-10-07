@@ -343,7 +343,9 @@ export default function App() {
           加 key 不会额外重置任何状态；换周/换视图不走这里，避免打断周计划的会话状态。 */}
       <main
         key={mainTab}
-        className={`page-shell view-enter flex-1 px-4 sm:px-6 ${
+        className={`view-enter flex-1 px-4 sm:px-6 ${
+          isOverviewDash ? 'page-wide' : 'page-shell'
+        } ${
           isLbaoTab || isOverviewDash ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'
         }`}
       >
