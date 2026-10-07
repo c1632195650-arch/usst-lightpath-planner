@@ -9,6 +9,7 @@ import { Icon } from '@/components/icons/Icon';
 import type { IconName } from '@/components/icons/Icon';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
+import { ImportScheduleStep } from '@/features/welcome/ImportScheduleStep';
 import { initialView } from '@/features/welcome/basicInfo';
 import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { addTimetableFacts } from '@/lib/api';
@@ -31,7 +32,7 @@ import { ImportTester } from '@/features/import/ImportTester';
 import MemoPanel from '@/features/memo/MemoPanel';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
 
-type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
+type View = 'welcome' | 'basicinfo' | 'import' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
 
 /** WP12-H7：导入入口正式化 —— 正式构建也常驻（解析服务缺席时 ImportTester 自带降级提示，不白屏） */
@@ -196,7 +197,32 @@ export default function App() {
   }
 
   if (view === 'basicinfo') {
-    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('persona')} />;
+    // 全新用户 → 先给一次导入课表的机会（可跳过），再进问卷（2026-10-07 RAY 新增引导步）。
+    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('import')} />;
+  }
+
+  /**
+   * 导入课表（2026-10-07 RAY 新增引导步，本树接入）。
+   * 位置 = 基础信息之后、问卷之前 —— 课表不依赖画像，越早进来，
+   * 画像结果页 / 总览 / 周计划就越早围绕真实上课时间安排（原先要进主界面
+   * 看到样例后才能绕到「课表」页）。整步**可跳过不阻塞**：跳过与完成同去问卷；
+   * 解析服务不在时界面明说 + 保留跳过出口（ImportScheduleStep 内部处理）。
+   */
+  if (view === 'import') {
+    return (
+      <ImportScheduleStep
+        existingCourseCount={
+          state.schedule && state.schedule.source !== 'demo' ? state.schedule.courses.length : 0
+        }
+        onApply={(s) => {
+          patchState({ schedule: s });
+          // WP12-C2：课表事实回写（与「课表」页导入同一条通道）；失败静默 —— 不挡引导流
+          addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
+        }}
+        onNext={() => setView('persona')}
+        onBack={() => setView('basicinfo')}
+      />
+    );
   }
 
   if (view === 'persona') {
@@ -206,6 +232,15 @@ export default function App() {
         onAnswer={setAnswer}
         onComplete={handleComplete}
         onExit={() => setView('welcome')}
+        // 「暂时跳过测评」= **跳过整份问卷**，直接进入 App（2026-10-07 RAY 拍板）。
+        // 必须**落 `onboarded`**：冷启动闸门 `initialView` 在 !onboarded 时永远回欢迎页，
+        // 只切视图的话刷新一次就被弹回去（用户会以为"跳过根本没生效"）。
+        // 画像留空 —— 引擎本就支持（保守默认值），画像页随时可用「开始画像测评」补测。
+        onSkipAll={() => {
+          patchState({ onboarded: true });
+          setView('main');
+          setMainTab(state.schedule && state.schedule !== MOCK_SCHEDULE ? 'calendar' : 'import');
+        }}
       />
     );
   }
