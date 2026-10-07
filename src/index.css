@@ -160,6 +160,177 @@
   .nav-item-active {
     @apply bg-brand text-white shadow-sm hover:bg-brand-dark hover:text-white;
   }
+
+  /* ── 欢迎页居中深色面（UI v2 批次 B，设计总成 §3.5 落地表照抄）─────────────
+     令牌映射：--gold→#E8B44E / --gold-soft→#F2C879（tailwind gold）；
+     --usst-red-mid→#9E1B32（本仓 school.red，正式 VI 核对前的既定值）；
+     --display→tailwind font-display（霞鹜文楷 Screen）；--r-xl→22px。 */
+  .hc {
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    border-radius: 22px;
+    background: linear-gradient(132deg, #131e38 0%, #1b3068 54%, #2b4c9b 100%);
+    color: #fff;
+    box-shadow: 0 30px 70px rgba(19, 30, 56, 0.26);
+  }
+
+  .hc .sym-beam {
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    width: 54%;
+    pointer-events: none;
+    opacity: 0.5;
+    background: linear-gradient(96deg, transparent 40%, rgba(255, 255, 255, 0.1) 52%, transparent 64%);
+  }
+
+  .hc .sym-beam.l {
+    left: 0;
+    transform: scaleX(-1);
+  }
+
+  .hc .sym-beam.r {
+    right: 0;
+  }
+
+  .hc .gridc {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.42;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse 78% 70% at 50% 46%, #000, transparent 74%);
+    -webkit-mask-image: radial-gradient(ellipse 78% 70% at 50% 46%, #000, transparent 74%);
+  }
+
+  .hc .ring {
+    position: absolute;
+    left: 50%;
+    top: 68px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  .hc .glowc {
+    position: absolute;
+    left: 50%;
+    top: 68px;
+    transform: translate(-50%, -50%);
+    width: 460px;
+    height: 460px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(74, 115, 209, 0.4), transparent 62%);
+  }
+
+  .hc .hcin {
+    position: relative;
+    z-index: 3;
+    padding: 46px 40px 34px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .hc .kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .hc h2 {
+    font-family: "LXGW WenKai Screen", "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif;
+    font-size: 31px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.42;
+    color: #fff;
+    margin: 14px 0 12px;
+  }
+
+  .hc h2 em {
+    font-style: normal;
+    color: #f2c879;
+  }
+
+  .hc .sub {
+    font-size: 13.5px;
+    color: rgba(255, 255, 255, 0.74);
+    line-height: 1.88;
+    margin: 0 auto;
+    max-width: 40ch;
+  }
+
+  .hc .acts {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+
+  .hc .spec-rule {
+    position: relative;
+    z-index: 3;
+    margin: 30px auto 0;
+    max-width: 520px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hc .spec-rule::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16) 16%, rgba(255, 255, 255, 0.16) 84%, transparent);
+  }
+
+  .hc .spec-rule .sp {
+    position: relative;
+    height: 3px;
+    width: 64px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #f2c879, #e8b44e);
+    box-shadow: 0 0 14px rgba(232, 180, 78, 0.5);
+  }
+
+  .hc .spec-rule .sp.r {
+    background: linear-gradient(90deg, #e8b44e, #9e1b32);
+    box-shadow: 0 0 14px rgba(158, 27, 50, 0.42);
+  }
+
+  .hc .spec-rule .tick {
+    position: absolute;
+    width: 1px;
+    height: 7px;
+    background: rgba(255, 255, 255, 0.22);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* 梨宝品牌渐变（UI v2 批次 B）：头像位与气泡装饰用，不作正文底色。 */
+  .libao-gradient {
+    background: linear-gradient(135deg, #f2d45c 0%, #9ed46b 100%);
+  }
+
+  /**
+   * 「改动已写入 · 可撤销」提示条样式（UI v2 批次 B 交付，D6 梨宝常驻呼出接线）：
+   * sparkle 图标位 + 文本 + 撤销动作位；金端点缀、绿色确认底。
+   * 用法：<div class="hint-undo"><svg …/><span>改动已写入 · 可撤销 5s</span><button>撤销</button></div>
+   */
+  .hint-undo {
+    @apply flex items-center gap-2 rounded-xl border border-gold/40 bg-ok/10 px-3 py-2 text-xs font-medium leading-5 text-ink-soft;
+  }
 }
 
 @layer utilities {

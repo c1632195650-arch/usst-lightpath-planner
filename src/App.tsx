@@ -4,7 +4,7 @@ import { MOCK_SCHEDULE, normalizeLifeMode } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, diffDays, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
-import { Logo120 } from '@/components/Logo120';
+import { LightpathMark } from '@/components/LightpathMark';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
 import { initialView } from '@/features/welcome/basicInfo';
@@ -233,7 +233,7 @@ export default function App() {
       {/* 紧凑导航把主要空间留给日程与对话内容。 */}
       <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
-          <Logo120 size={32} />
+          <LightpathMark tone="plate" size={32} />
           {/* S1a：账号 chip 在 Logo 右侧标题行（左上角区域，CY 反馈④）；窄屏 flex-wrap 自然换行 */}
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 leading-tight">
             <div className="min-w-0">

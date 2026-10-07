@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Logo120 } from '@/components/Logo120';
+import { LightpathMark, LightpathWordmark } from '@/components/LightpathMark';
 
 interface Props {
   onStart: () => void;
@@ -8,66 +8,96 @@ interface Props {
   footer?: ReactNode;
 }
 
+/** 同心刻度环（设计总成 §3.5 落地表原样照抄，纯装饰） */
+function RingOrnament() {
+  return (
+    <svg
+      className="ring"
+      width="368"
+      height="368"
+      viewBox="0 0 280 280"
+      fill="none"
+      stroke="#fff"
+      aria-hidden="true"
+    >
+      <path d="M30.4 163.3A112 112 0 1 1 249.6 163.3" strokeOpacity=".09" />
+      <path d="M69.6 155.0A72 72 0 1 1 210.4 155.0" strokeOpacity=".06" strokeDasharray="2.5 6" />
+      <line x1="140.0" y1="56.0" x2="140.0" y2="47.0" strokeWidth="1.5" opacity="0.9" />
+      <line x1="149.2" y1="52.5" x2="149.7" y2="47.5" strokeWidth="1.0" opacity="0.42" />
+      <line x1="158.3" y1="53.9" x2="159.3" y2="49.0" strokeWidth="1.0" opacity="0.42" />
+      <line x1="167.2" y1="56.3" x2="168.7" y2="51.6" strokeWidth="1.0" opacity="0.42" />
+      <line x1="175.8" y1="59.6" x2="177.8" y2="55.0" strokeWidth="1.0" opacity="0.42" />
+      <line x1="182.0" y1="67.3" x2="186.5" y2="59.5" strokeWidth="1.5" opacity="0.9" />
+      <line x1="224.0" y1="140.0" x2="233.0" y2="140.0" strokeWidth="1.5" opacity="0.9" />
+      <line x1="227.5" y1="149.2" x2="232.5" y2="149.7" strokeWidth="1.0" opacity="0.42" />
+      <line x1="52.5" y1="149.2" x2="47.5" y2="149.7" strokeWidth="1.0" opacity="0.42" />
+      <line x1="56.0" y1="140.0" x2="47.0" y2="140.0" strokeWidth="1.5" opacity="0.9" />
+      <line x1="52.5" y1="130.8" x2="47.5" y2="130.3" strokeWidth="1.0" opacity="0.42" />
+      <line x1="67.3" y1="98.0" x2="59.5" y2="93.5" strokeWidth="1.5" opacity="0.9" />
+      <line x1="98.0" y1="67.3" x2="93.5" y2="59.5" strokeWidth="1.5" opacity="0.9" />
+      <line x1="212.7" y1="98.0" x2="220.5" y2="93.5" strokeWidth="1.5" opacity="0.9" />
+    </svg>
+  );
+}
+
 export function Welcome({ onStart, onSkip, footer }: Props) {
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 sm:py-8">
-      {/* 暖色重点面只停留在首屏上半区，避免整页被深红压暗。 */}
-      <div className="hero-surface absolute inset-x-0 top-0 h-[42vh]" />
+      <div className="page-shell relative z-10 flex min-h-[calc(100vh-48px)] flex-col items-center justify-center gap-5">
+        {/* 居中深色面：符号居中锚点，四层装饰（sym-beam ×2 / gridc / ring + glowc） */}
+        <div className="hc w-full max-w-[860px]">
+          <div className="sym-beam l" />
+          <div className="sym-beam r" />
+          <div className="gridc" />
+          <RingOrnament />
+          <div className="glowc" />
 
-      <div className="page-shell relative z-10 flex min-h-[calc(100vh-48px)] items-center">
-        <div className="grid w-full overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_24px_72px_rgba(22,35,63,0.16)] lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="hero-surface flex min-h-[430px] flex-col justify-between px-7 py-8 text-white sm:px-10 sm:py-12">
-            <div className="flex items-center gap-3">
-              {/* B2 彩蛋：徽标垫一层校红浅底 + 细描边，纯装饰、可整体拔掉 */}
-              <span className="grid place-items-center rounded-full bg-school-light p-0.5 ring-1 ring-school-red/60">
-                <Logo120 size={40} />
-              </span>
-              <div>
-                <div className="text-sm font-semibold">上理生活助手</div>
-                <div className="mt-1 text-[11px] font-medium tracking-[0.16em] text-white/50">USST · STUDENT LIFE</div>
-              </div>
-              </div>
+          <div className="hcin">
+            <div className="mb-2 flex justify-center">
+              <LightpathMark tone="on-dark" size={54} />
+            </div>
+            <p className="kicker">USST · LIGHTPATH</p>
+            <h2>
+              让校园生活，
+              <em>有自己的节奏</em>。
+            </h2>
+            <p className="sub">
+              从课表、校园节点和你的习惯出发，梳理学习、休息与日常生活。计划不必填满，重要的是能被执行。
+            </p>
 
-            <div className="my-12 max-w-xl lg:my-20">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/50">MAKE ROOM FOR LIFE</p>
-              <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">让校园生活<br />有自己的节奏。</h1>
-              <p className="mt-5 max-w-md text-sm leading-7 text-white/65">从课表、校园节点和你的习惯出发，梳理学习、休息与日常生活。计划不必填满，重要的是能被执行。</p>
+            <div className="acts">
+              <button onClick={onStart} className="button-on-dark">
+                开始画像测评
+              </button>
+              <button
+                onClick={onSkip}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/25 px-5 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+              >
+                先浏览应用
+              </button>
             </div>
 
-            <div className="flex items-center justify-between border-t border-white/10 pt-5 text-[11px] font-medium tracking-[0.1em] text-white/45">
-              <span>UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY</span>
-              <span>1906–2026</span>
-            </div>
-          </section>
+            <p className="mt-5 text-xs leading-5 text-white/45">
+              画像可以随时重做；暂时跳过也不影响浏览校历与课表。
+            </p>
+          </div>
 
-          <section className="flex flex-col justify-center bg-white px-7 py-10 sm:px-10 sm:py-12">
-            <p className="section-label">FIRST SETUP</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">先让安排认识你</h2>
-            <p className="mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，系统会把课表、校园节点和你的日常习惯放在同一个安排里。</p>
+          <div className="spec-rule">
+            <span className="sp" />
+            <span className="tick" style={{ left: '24%' }} />
+            <span className="tick" style={{ left: '38%' }} />
+            <span className="tick" style={{ left: '62%' }} />
+            <span className="tick" style={{ left: '76%' }} />
+            <span className="sp r" />
+          </div>
 
-            <dl className="mt-8 divide-y divide-ink/10 border-y border-ink/10">
-              <div className="flex items-baseline justify-between gap-4 py-4">
-                <dt className="text-sm text-ink-soft">测评内容</dt>
-                <dd className="text-sm font-semibold text-ink">按你年级定制的日常选择</dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-4 py-4">
-                <dt className="text-sm text-ink-soft">结果用途</dt>
-                <dd className="text-sm font-semibold text-ink">用于调整建议强度</dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-4 py-4">
-                <dt className="text-sm text-ink-soft">数据位置</dt>
-                <dd className="text-sm font-semibold text-ink">仅保存在此设备</dd>
-              </div>
-            </dl>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button onClick={onStart} className="button-primary flex-1">开始画像测评</button>
-              <button onClick={onSkip} className="button-secondary flex-1">先浏览应用</button>
-            </div>
-            <p className="mt-4 text-xs leading-5 text-ink-faint">画像可以随时重做；暂时跳过也不影响浏览校历与课表。</p>
-            {footer && <div className="mt-6">{footer}</div>}
-          </section>
+          <div className="relative z-[3] flex items-center justify-between gap-3 px-8 pb-5 pt-4 text-[10px] font-medium tracking-[0.14em] text-white/40">
+            <span>UNIVERSITY OF SHANGHAI FOR SCIENCE AND TECHNOLOGY</span>
+            <span>1906–2026</span>
+          </div>
         </div>
+
+        {footer && <div className="w-full max-w-[860px]">{footer}</div>}
       </div>
     </div>
   );

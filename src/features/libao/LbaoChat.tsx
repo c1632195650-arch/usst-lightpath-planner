@@ -1980,7 +1980,10 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
     <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-ink/[0.07] bg-white shadow-[0_12px_32px_rgba(22,35,63,0.06)] lg:grid-cols-[264px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[264px_minmax(0,1fr)_300px]">
       <aside className="hero-surface flex flex-col px-5 py-5 text-white sm:px-6 lg:py-6">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/10 text-sm font-semibold" aria-hidden="true">梨</span>
+          {/* UI v2 批次 B：>32px 头像位用梨宝形象（public/libao/libao-main.png）；≤32px 场景维持内联 SVG */}
+          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/15" aria-hidden="true">
+            <img src="/libao/libao-main.png" alt="" className="h-full w-full scale-[1.75] object-cover" />
+          </span>
           <div>
             <h1 className="text-base font-semibold">梨宝</h1>
             <p className="mt-0.5 text-xs text-white/50">校园问答与本周建议</p>
@@ -2076,8 +2079,14 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
               <div className={`flex max-w-[88%] flex-col gap-2 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
                 {message.role === 'lbao' && (
                   <div className="flex items-center gap-2 pl-1">
-                    <span className="grid h-6 w-6 place-items-center rounded-md bg-ink text-[10px] font-bold text-white" aria-hidden="true">梨</span>
+                    <span className="libao-gradient grid h-6 w-6 place-items-center rounded-md text-[10px] font-bold text-ink" aria-hidden="true">梨</span>
                     <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-faint">梨宝{message.mode === 'llm' ? ' · AI' : ''}</span>
+                    {/* UI v2 批次 B：AI 生成内容挂 sparkle 标识（纯样式节点，不改文案） */}
+                    {message.mode === 'llm' && (
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" className="text-gold-deep" aria-hidden="true">
+                        <path d="M12 2.6l1.9 5.6 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6-5.6-1.9 5.6-1.9z" />
+                      </svg>
+                    )}
                   </div>
                 )}
                 {(() => {
@@ -2092,7 +2101,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                     <>
                       <div
                         className={`rounded-xl border px-3.5 py-3 text-sm leading-6 whitespace-pre-wrap ${
-                          message.role === 'user' ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink'
+                          message.role === 'user'
+                            ? 'rounded-br-[4px] border-brand bg-brand text-white'
+                            : 'rounded-bl-[4px] border-ink/10 bg-paper text-ink'
                         } ${collapsed ? 'line-clamp-4' : ''}`}
                         data-testid={collapsed ? 'lbao-msg-collapsed' : undefined}
                       >
@@ -2310,7 +2321,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
           {loading && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 border border-ink/10 bg-paper px-3.5 py-3 text-sm text-ink-soft">
-                <span className="grid h-6 w-6 place-items-center rounded-md bg-ink text-[10px] font-bold text-white animate-pulse" aria-hidden="true">梨</span>
+                <span className="libao-gradient grid h-6 w-6 place-items-center rounded-md text-[10px] font-bold text-ink animate-pulse" aria-hidden="true">梨</span>
                 梨宝掐指一算中…
               </div>
             </div>
