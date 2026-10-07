@@ -25,6 +25,8 @@ import TodoList from './TodoList.tsx';
 import TodoEditor, { type TodoDraft } from './TodoEditor.tsx';
 import GoalPanel from './GoalPanel.tsx';
 import { Icon } from '@/components/icons/Icon';
+import { Segmented } from '@/components/ui/Segmented';
+import { Tag } from '@/components/ui/Tag';
 import { monthOptions, periodLabel, periodValues, suggestPeriod } from './milestonePicker.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -34,6 +36,9 @@ export interface MemoPlanAnchor {
   termStart: string;
   weekNo: number;
 }
+
+/** §11.5 顶部范围分段的三个取值（与 TodoFilter.state 同域）。 */
+type StateScope = 'open' | 'done' | 'all';
 
 export default function MemoPanel({ planAnchor, onGotoPlan }: {
   /** S3b：由 App 传（schedule.termStart + 当前教学周）；缺省 = 不显示状态条 */
@@ -184,6 +189,8 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
   };
   const recentBoard = groupProps(recent);
   const longtermBoard = groupProps(longterm);
+  /** §11.5：筛选行右侧的逾期计数（逾期本来就是筛选时要看的第一眼）。 */
+  const overdueCount = recentBoard.groups.overdue.length + longtermBoard.groups.overdue.length;
   /** UI v2 D4：本周作业条（assignmentStore 只读；不新增存储、不写回） */
   const weekAssignments = planAnchor
     ? loadAssignments().filter((a) => a.weekNo === planAnchor.weekNo)
@@ -293,25 +300,34 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
         </div>
       )}
 
-      {/* 筛选/搜索（网页端专属） */}
+      {/* 筛选行（§11.5：顶部范围分段控件 + 右侧逾期计数 Tag）——
+          原来这里是一个 <select>，规范要求分段控件（选项 ≤4 且是「同一份清单的不同范围」），
+          顺带改用 ui/Segmented（组件库既有件）。 */}
       <div className="panel flex flex-wrap items-center gap-2 p-3">
         <input
           data-testid="memo-search"
           value={filter.q}
           onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
           placeholder="搜标题或备注…"
-          className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-3 py-1.5 text-[12px] outline-none focus:border-ink/40"
+          className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-3 py-1.5 text-[12px] outline-none focus:border-ink/15 focus:shadow-[0_0_0_2px_#fff,0_0_0_4px_#4A73D1]"
         />
-        <select
-          data-testid="memo-state-filter"
-          value={filter.state}
-          onChange={(e) => setFilter((f) => ({ ...f, state: e.target.value as TodoFilter['state'] }))}
-          className="rounded-xl border border-ink/15 bg-paper px-2 py-1.5 text-[12px]"
-        >
-          <option value="open">未完成</option>
-          <option value="done">已完成</option>
-          <option value="all">全部</option>
-        </select>
+        <Segmented<StateScope>
+          testId="memo-state-filter"
+          label="待办范围"
+          value={(filter.state ?? 'open') as StateScope}
+          onChange={(v) => setFilter((f) => ({ ...f, state: v }))}
+          options={[
+            { value: 'open', label: '未完成' },
+            { value: 'done', label: '已完成' },
+            { value: 'all', label: '全部' },
+          ]}
+        />
+        {overdueCount > 0 && (
+          <Tag tone="danger" className="shrink-0">
+            <Icon name="flag" size="xs" className="shrink-0" />
+            逾期 {overdueCount}
+          </Tag>
+        )}
         {tags.length > 0 && (
           <div className="flex w-full flex-wrap items-center gap-1" data-testid="memo-tag-bar">
             <button

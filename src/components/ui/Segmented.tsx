@@ -15,6 +15,8 @@ interface Props<V extends string> {
   label: string;
   disabled?: boolean;
   className?: string;
+  /** 测试锚点（data-testid，落到 role=group 容器上） */
+  testId?: string;
 }
 
 /**
@@ -23,11 +25,12 @@ interface Props<V extends string> {
  * 选项 ≤4 个；role="group" + aria-pressed 表达选中（读屏可达）。
  * 选中态三重差异：底色 + 文字色 + 3px 左竖条，不靠单一颜色。
  */
-export function Segmented<V extends string>({ options, value, onChange, label, disabled = false, className = '' }: Props<V>) {
+export function Segmented<V extends string>({ options, value, onChange, label, disabled = false, className = '', testId }: Props<V>) {
   return (
     <div
       role="group"
       aria-label={label}
+      data-testid={testId}
       className={`inline-flex rounded-xl border border-ink/10 bg-paper p-0.5 ${disabled ? 'opacity-40' : ''} ${className}`}
     >
       {options.map((opt) => {

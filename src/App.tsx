@@ -475,6 +475,10 @@ export default function App() {
             selectedDate={state.selectedDays[state.selectedDays.length - 1]}
             onOpenWeek={openWeek}
             onStartPersona={() => setView('persona')}
+            /* §11.3 ④：总览数字卡的下钻出口（待办 / 投入 → 各自一级页） */
+            onGotoTodos={() => setMainTab('memo')}
+            onGotoGoals={() => setMainTab('goals')}
+            onGotoProfile={() => setMainTab('profile')}
             onboardingCard={(
               <OnboardingChecklist
                 hasSchedule={!!state.schedule && state.schedule !== MOCK_SCHEDULE}

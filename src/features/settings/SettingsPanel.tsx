@@ -112,6 +112,17 @@ export function SettingsPanel() {
           row('ICS 订阅链接', '登录后生成（系统日历免备案提醒通道）', 'ics', 'download')
         )}
       </div>
+
+      {/* §11.7：分组列表 + 行上直显当前值。这里两行的值都读真实状态 ——
+          「外观」的诚实值是**固定浅色**（本产品只设计了浅色，见 index.css 的 color-scheme 钉法），
+          不是「跟随系统」；「关于」读 package.json 注入的 __APP_VERSION__。
+          其余规范示例行（隐私与权限 / 登录与安全 / 导入课表）本页没有可跳的真实目标，
+          按本面板既有纪律**不上占位行**（防假按钮）。 */}
+      <div className="mt-4">
+        <p className="px-1 pb-1 text-[11px] font-semibold text-ink-faint">外观与关于</p>
+        {row('外观', '固定浅色（未做深色主题）', 'appearance', 'palette')}
+        {row('关于光溯', `v${__APP_VERSION__} · 上理生涯规划助手`, 'about', 'prism')}
+      </div>
     </section>
   );
 }

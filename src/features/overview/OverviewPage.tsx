@@ -7,6 +7,7 @@ import { MonthCalendar } from '@/features/calendar/MonthCalendar';
 import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
 import { TodayCard } from '@/features/overview/TodayCard';
 import { WeekStrip } from '@/features/overview/WeekStrip';
+import { OverviewStats } from '@/features/overview/OverviewStats';
 
 interface Props {
   schedule: Schedule;
@@ -16,6 +17,10 @@ interface Props {
   selectedDate?: string;
   onOpenWeek: (iso: string) => void;
   onStartPersona: () => void;
+  /** §11.3 ④ 每张卡可下钻：数字卡点了去对应页（缺省则该卡不显示可点样式） */
+  onGotoTodos?: () => void;
+  onGotoGoals?: () => void;
+  onGotoProfile?: () => void;
   /** V0-3：onboarding checklist 卡（App 组装，全部完成时组件自隐藏） */
   onboardingCard?: React.ReactNode;
 }
@@ -26,9 +31,18 @@ interface Props {
  * 排列顺序就是回答问题的顺序：现在要干嘛（今日卡）→ 这周什么节奏（七天条）
  * → 学期上还有什么（校历 / 节点）。校历默认收起，因为它的职能是导航而不是内容，
  * 不该比实际内容占更大面积。
+ *
+ * 设计总成 §11.3 版式对账（2026-10-08 页面模板批）：
+ *   ① 深色焦点卡全页唯一 ✅（TodayCard；校历与节点都是浅色卡）
+ *   ② 一张「一周节奏」横条 + 今天高亮 ✅（WeekStrip 已按 34px 横条重做，
+ *      取代原先那张「把课表搬来」的七列竖柱图）
+ *   ③ 3–4 个数字卡、每张配 `.dz` 迷你示意 ✅（OverviewStats，四张）
+ *   ④ 每张卡可下钻 ✅（节奏格进那一周；待办 / 投入 / 画像卡进对应页）
+ *   跨度只用 4/6/8/12（§8.5）：左 8 右 4，checklist 整行 12。
  */
 export function OverviewPage({
-  schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona, onboardingCard,
+  schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona,
+  onGotoTodos, onGotoGoals, onGotoProfile, onboardingCard,
 }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -53,6 +67,16 @@ export function OverviewPage({
           persona={persona}
           onOpenWeek={() => onOpenWeek(todayIso)}
           onStartPersona={onStartPersona}
+        />
+
+        <OverviewStats
+          schedule={schedule}
+          weekNo={weekNo}
+          todayIso={todayIso}
+          persona={persona}
+          onGotoTodos={onGotoTodos}
+          onGotoGoals={onGotoGoals}
+          onGotoProfile={onGotoProfile}
         />
 
         <WeekStrip
