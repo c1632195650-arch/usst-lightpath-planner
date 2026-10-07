@@ -6,12 +6,28 @@
  *   · `NearEventsPanel` —— 本周节点：说明这些截止日是怎么进了日程的。
  * 纯展示：不取数、不落库；「从此刻开始排」开关经回调上抛（状态在会话 store）。
  */
+import { useEffect, useState } from 'react';
 import type { PlanPersistState, Phase } from '@/types';
 import type { Diagnostics } from '@/lib/planner/model';
 import type { Deadline } from '@/data/usst';
 import { lockCount } from '@/features/plan/planLock';
 import { diffDays, todayISO } from '@/lib/date';
 import { PersonaImpactPanel } from './PersonaImpactPanel';
+import { fromNowSwitchCopy, nowMinutes } from './weekViewUtils';
+
+/**
+ * 切换「从此刻开始排」的就地提示 —— **模块级**缓存（跨"骨架屏卸载"存活）。
+ *
+ * 切换该开关会触发重排 ⟹ `WeekPlanView` 先渲染骨架屏 ⟹ `PhaseHeader` 被卸载重建。
+ * 纯组件内 `useState` 活不过那一下（实测：按钮文案翻了、提示一个字没显示）。
+ * 与 `WeekTimelineGrid` 的 `rememberedScrollTop` 同一个坑：要点必须活在骨架屏之外。
+ * 连**过期时刻**一起记，重挂载后按剩余时长重新计时。
+ */
+let fromNowNoteCache: { text: string; until: number } | null = null;
+
+/** 提示停留时长：够读完一句，又不至于赖在页面上 */
+const NOTE_MS = 9000;
+
 
 /* ============================================================
  * 阶段头
@@ -33,6 +49,31 @@ export function PhaseHeader({
   /** 「去改画像」的目标路由 —— 由组合根（App.tsx）注入，组件自己不碰路由。 */
   onGoProfile?: () => void;
 }) {
+  /**
+   * 切换「从此刻开始排」后的**就地提示**（RAY 2026-10-08 00:18 拍板要「切换反馈」）。
+   *
+   * 🔴 为什么要跨挂载活下来：切换这个开关会**触发重排**（`fromNowOn` 在引擎重算依赖里），
+   *    `WeekPlanView` 会先渲染**骨架屏** ⟹ `PhaseHeader` 被**卸载重建** ⟹
+   *    纯局部 state 当场清空，提示一个字都来不及显示（实测：按钮文案翻了、提示没出现）。
+   *    这与 `WeekTimelineGrid` 的 `rememberedScrollTop` 是**同一个坑**：
+   *    凡是"要点"都必须活在骨架屏之外。这里把**过期时刻**一起记，
+   *    重挂载后按剩余时长重新计时，不会被"重置"成永不消失。
+   *
+   * 为什么用就地提示而不是 toast：① 这个开关立即生效，要回答的是"我这一下改变了什么"，
+   * 贴在控件旁边最省事；② 实测把 `notify` 从 `WeekPlanView` 透传下来并没有到位
+   * （点了没 toast），就地渲染不依赖任何跨文件传参。
+   *
+   * 为什么必须说清：**凌晨**切换时 `softFloor = max(07:00, 现在)` 等于没变
+   * （实测块数 94→94），没有这句话用户会当成坏了 —— 见 `fromNowSwitchCopy`。
+   */
+  const [fromNowNote, setFromNowNote] = useState<string | null>(() =>
+    (fromNowNoteCache && fromNowNoteCache.until > Date.now() ? fromNowNoteCache.text : null));
+  useEffect(() => {
+    if (!fromNowNote) return;
+    const left = Math.max(400, (fromNowNoteCache?.until ?? 0) - Date.now());
+    const t = window.setTimeout(() => { fromNowNoteCache = null; setFromNowNote(null); }, left);
+    return () => window.clearTimeout(t);
+  }, [fromNowNote]);
   return (
     <div className="panel px-4 py-3.5 sm:px-5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -78,7 +119,13 @@ export function PhaseHeader({
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink/10 pt-2">
           <button
             type="button"
-            onClick={() => setFromNowOn((v) => !v)}
+            onClick={() => {
+              const next = !fromNowOn;
+              setFromNowOn(next);
+              const text = fromNowSwitchCopy(next, nowMinutes());
+              fromNowNoteCache = { text, until: Date.now() + NOTE_MS };
+              setFromNowNote(text);
+            }}
             className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
               fromNowOn
                 ? 'bg-slate-800 text-white'
@@ -92,6 +139,17 @@ export function PhaseHeader({
               ? '今天已经过去的时间不再安排，其余日子不受影响'
               : '完整排满这一周（默认）'}
           </span>
+        </div>
+      )}
+      {/* 切换后的就地提示（几秒后自动收走）—— 回答"我这一下改变了什么"。
+          尤其凌晨：计划不会变，必须明说「还没到今天的起点」，否则看着就像坏了。 */}
+      {isCurrentWeek && fromNowNote && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-1.5 rounded-md border border-brand/25 bg-brand-light/45 px-2.5 py-1.5 text-[11.5px] leading-relaxed text-ink"
+        >
+          {fromNowNote}
         </div>
       )}
 

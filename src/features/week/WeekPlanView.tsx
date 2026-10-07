@@ -65,10 +65,10 @@ import { fillGap } from '@/lib/planner/ripple';
 import { loadGoals } from '@/features/activity/goalStore';
 import type { UserTask } from '@/lib/planner/templates';
 // ── 阶段 B/E：偏好校正层 + 自然语言意图 ──────────────────────────
-import { upsertRule } from '@/features/feedback/store';
+import { upsertRule, makeRuleId } from '@/features/feedback/store';
 import { detectScope, scopeReason } from '@/features/feedback/parseCorrection';
-import type { TaskDraft } from '@/features/feedback/planIntent';
-import type { CorrectionRule } from '@/lib/planner/corrections';
+import { parsePlanIntent, type TaskDraft } from '@/features/feedback/planIntent';
+import { summarizeCorrections, type CorrectionRule } from '@/lib/planner/corrections';
 import { BlockCard } from './BlockCard';
 import { DAY_LABELS } from './weekViewUtils';
 import { NearEventsPanel, PhaseHeader } from './WeekPlanHeader';
@@ -773,6 +773,59 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
   }, [plan, updateLayer, notify, setReplanToken, undoAction]);
 
   /**
+   * 混合体 · 规则快层执行器（2026-10-07，RAY：「输入要求解析，默认都是调用混合体」）：
+   * 注入给排程对话抽屉（LbaoChat 的 fastTry）—— 对话里说得清的句子由**本地规则**
+   * 当场执行（零 LLM 成本、不进状态机），认不出返回 null 落回 LLM 理解层。
+   * 与 CorrectionCapture 的确认回显刻意分工：抽屉是会话语境，快而准的立即办；
+   * 缺信息的（说了周几没说几点 / 长期还是一次性拿不准）交回 LLM 追问 —— 那正是
+   * 对话层存在的意义，硬猜反而违背「不猜」纪律。
+   */
+  const runFastIntent = useCallback((text: string): string | null => {
+    const intent = parsePlanIntent(text, todayISO());
+    switch (intent.type) {
+      case 'constraint': {
+        const d = intent.draft;
+        const rule: CorrectionRule = {
+          id: makeRuleId(),
+          kind: d.kind,
+          payload: d.payload,
+          active: true,
+          source: 'text',
+          utterance: text.trim(),
+          createdAt: new Date().toISOString(),
+          mapsTo: d.mapsTo,
+          ...(d.axisKey ? { axisKey: d.axisKey } : {}),
+          ...(d.scenarioKey ? { scenarioKey: d.scenarioKey } : {}),
+        };
+        handleAddRule(rule);
+        return `已直接处理（本地规则）：${summarizeCorrections([rule])[0].title} —— 已生效并重排。`;
+      }
+      case 'add-task': {
+        const t = intent.task;
+        const needAsk = (t.dayOfWeek != null && t.startMin == null)
+          || detectScope(t.utterance ?? '') === 'ask';
+        if (needAsk) return null; // 交给 LLM 追问，不硬猜
+        handleAddTaskFromDraft(t);
+        const when = t.dayOfWeek != null && t.startMin != null
+          ? `周${DAY_LABELS[t.dayOfWeek - 1]} ${toHHmm(t.startMin)} 起`
+          : '交给引擎找空位';
+        return `已直接处理（本地规则）：把「${t.title}」加进这周（${when} · ${t.durationMin} 分钟）—— 位置定下来周表上直接看得到。`;
+      }
+      case 'remove-block': {
+        handleRemoveBlocks(intent.days, intent.blockKind, intent.titleKw);
+        const where = intent.titleKw
+          ? `所有「${intent.titleKw}」`
+          : `${intent.days.map((dd) => DAY_LABELS[dd - 1]).join('、')}${intent.blockKind ? '的部分安排' : '的安排'}`;
+        return `已直接处理（本地规则）：拿掉${where} —— 已重排，下次也不再排回来。`;
+      }
+      case 'explain':
+        return '这个问题的答案就在抽屉后面周页的阶段头「为什么这么排」里 —— 那里每一条都是引擎排程时真实用到的依据，不是事后编的。收起对话就能看到。';
+      default:
+        return null;
+    }
+  }, [handleAddRule, handleAddTaskFromDraft, handleRemoveBlocks]);
+
+  /**
    * 排程对话抽屉（2026-10-07，RAY：「接手之后不需要跳转，直接处理」）：
    * 周页输入解析不动的句子 → 原句在**本页右侧抽屉**里进排程模式对话
    * （LLM 理解 → 追问 → 草稿卡确认 → 执行器操作本地引擎），边看课表边聊。
@@ -837,6 +890,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
                 schedule={schedule}
                 seedQuestion={schedDrawer.q}
                 seedMode="sched"
+                fastTry={runFastIntent}
               />
             </div>
           </div>

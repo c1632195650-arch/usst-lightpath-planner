@@ -46,7 +46,7 @@ interface Props {
   onAddTask: (task: TaskDraft) => void;
   /** 拿掉某几天（可限类型）的安排 */
   onRemoveBlocks: (days: DayOfWeek[], blockKind?: BlockKind, titleKw?: string) => void;
-  /** 规则解析搞不定的句子 → 原句跳梨宝页排程模式（2026-10-07） */
+  /** 规则解析搞不定的句子 → 原句进本页排程对话抽屉（混合体默认路由，2026-10-07） */
   onAskSched?: (q: string) => void;
 }
 
@@ -67,7 +67,17 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks, onAskSched
   }
 
   function handleParse() {
-    setIntent(parsePlanIntent(text, todayISO()));
+    const parsed = parsePlanIntent(text, todayISO());
+    // 混合体（2026-10-07，RAY：「输入要求解析，默认都是调用混合体」）：规则认不出
+    // 的句子不再停在「没看懂」的静态示弱 —— 原句自动进**本页右侧排程对话抽屉**
+    // （LLM 理解层接管，就地处理不跳页）。抽屉内部同样是混合体：对话里说得清的
+    // 句子由本地规则快层（LbaoChat.fastTry）当场执行，认不出才走 LLM。
+    if (parsed.type === 'unknown' && onAskSched && text.trim()) {
+      onAskSched(text.trim());
+      reset();
+      return;
+    }
+    setIntent(parsed);
   }
 
   function commitDraft(d: CorrectionDraft, utterance?: string) {
@@ -113,7 +123,7 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks, onAskSched
       <div className="flex flex-wrap items-baseline gap-x-2">
         <h3 className="text-[13.5px] font-semibold text-ink">跟梨宝说一句</h3>
         <span className="text-[11.5px] text-ink-faint">
-          提要求、加事、删安排、问原因，都行
+          提要求、加事、删安排、问原因都行；说不清的自动转排程对话
         </span>
       </div>
 
@@ -133,14 +143,15 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks, onAskSched
         >
           解析
         </button>
-        {/* 2026-10-07（RAY）：一句话搞不定就交给排程模式 —— 原句跳梨宝页，
-            直进排程对话（LLM 理解 → 追问 → 草稿卡确认 → 执行），不靠关键词 */}
+        {/* 2026-10-07（RAY）：手动逃生口 —— 跳过快速解析，原句直接进排程模式对话
+            （本页右侧抽屉：LLM 理解 → 追问 → 草稿卡确认 → 执行）。
+            默认路径已是混合体（解析自动路由），这个按钮留给「规则认错了想走对话」的场合 */}
         {onAskSched && (
           <button
             type="button"
             onClick={() => { const q = text.trim(); if (!q) return; onAskSched(q); reset(); }}
             disabled={!text.trim()}
-            title="跳到梨宝页，以排程模式处理这句话（会追问细节、出草稿让你确认）"
+            title="跳过快速解析，原句直接进排程模式对话（本页抽屉，会追问细节、出草稿让你确认）"
             className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-brand ring-1 ring-brand/30 transition hover:bg-brand/5 disabled:opacity-40"
           >
             排程模式接手

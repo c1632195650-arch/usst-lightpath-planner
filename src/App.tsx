@@ -335,7 +335,18 @@ export default function App() {
   return (
     <div className={`flex flex-col bg-paper ${isLbaoTab ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
       {/* 紧凑导航把主要空间留给日程与对话内容。 */}
-      <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
+      {/*
+        顶栏（「今天 / 周计划 / 目标 / 我的画像 / 梨宝」）—— 应用外壳，必须**盖住一切页面内容**。
+        🔴 z 从 `z-20` 抬到 `z-[38]`（2026-10-08 修 RAY：「下滑后 周一~周日 那行把顶栏遮掉」）：
+           周计划时间轴的**吸顶列头带**是 `sticky top-0 z-[35]`（它还必须在块 hover 的
+           `z-30` 之上，否则块会盖住它）—— 而顶栏只有 `z-20` ⟹ 页面下滑、时间轴面板
+           钻到顶栏下方时，**列头带反而盖在了顶栏上**。
+           z 阶梯（本仓约定，改动前先看这张表）：
+             z-10/20 页面内容 · z-30 块 hover · **z-[35] 时间轴吸顶列头带**
+             · **z-[38] 顶栏** · z-40 对话框 · z-50 块浮卡/右键菜单 · z-[60] toast
+           所以顶栏落在 35 与 40 之间：盖住列头带，又被对话框和 toast 盖住。
+      */}
+      <header className="sticky top-0 z-[38] shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
           <Logo120 size={32} />
           <div className="min-w-0 flex-1 leading-tight">
