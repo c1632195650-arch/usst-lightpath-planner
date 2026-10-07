@@ -274,7 +274,10 @@ export function WeekDayColumn({
           className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-1.5 py-1"
           style={{ top: minToY(ghost.startMin), height: spanToH(ghost.startMin, ghost.endMin) }}
         >
-          <div className="truncate text-[11px] font-medium text-brand">📍 {ghost.title}</div>
+          <div className="flex items-center gap-1 truncate text-[11px] font-medium text-brand">
+            <Icon name="map-pin" size="xs" className="shrink-0" />
+            <span className="truncate">{ghost.title}</span>
+          </div>
           <div className="font-mono text-[10px] text-brand/70">
             {toHHmm(ghost.startMin)}–{toHHmm(ghost.endMin)}
           </div>

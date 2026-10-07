@@ -386,7 +386,7 @@ export function BlockCard({
             <div title={block.title} className={`min-w-0 truncate text-[12px] font-semibold leading-tight ${style.text}`}>
               {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
               {block.emoji ? `${block.emoji} ` : ''}{block.title}
-              {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">🆕 新</span>}
+              {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">新</span>}
             </div>
             {/* 时间行 + ⋯（右键菜单的「看得见的入口」，见文件头 T3 改造 ⑤）。
                 触摸设备没有右键 —— 这个按钮是那类用户唯一入口，不能只靠 title
@@ -499,7 +499,7 @@ export function BlockCard({
           <div className={`text-[12px] font-semibold leading-snug ${style.text}`}>
             {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
             {block.emoji ? `${block.emoji} ` : ''}{block.title}
-            {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">🆕 新</span>}
+            {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">新</span>}
           </div>
           <div className="font-mono text-[10.5px] leading-tight text-ink-faint">
             {toHHmm(block.startMin)}–{toHHmm(block.endMin)}

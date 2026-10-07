@@ -9,13 +9,18 @@
  * 无排程副作用：关闭抽屉不影响 Today 页任何状态。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+// 🔴 2026-10-08 修（用户实测「手机端梨宝还是有问题」的根因）：本文件原先自算
+// `VITE_MOBILE_API_BASE ?? ''` —— 在 APK 包内模式（origin = https://localhost）里
+// 空串会让 fetch('/api/chat/stream') 打到**包内资源**而不是服务器（梨宝全程连不上）。
+// 统一走 resolveApiBase()（包内模式自动回落公网地址，与 lib/api.ts 同一解析）。
+import { resolveApiBase } from '@/lib/apiBase';
 
 interface ChatMsg {
   role: 'user' | 'assistant';
   text: string;
 }
 
-const API_BASE = (import.meta.env.VITE_MOBILE_API_BASE as string | undefined) ?? '';
+const API_BASE = resolveApiBase();
 
 export default function LbaoDrawer({ open, onClose, userId }: {
   open: boolean;

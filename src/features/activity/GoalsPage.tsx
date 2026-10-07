@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import type { Schedule } from '@/types';
 import { currentWeekNo, todayISO, weekdayOf } from '@/lib/date';
+import { Icon } from '@/components/icons/Icon';
 import {
   loadGoals, saveGoals, makeGoalId,
   CATEGORY_TO_KIND,
@@ -122,7 +123,9 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
               {orderGoalsByPriority(active, weekNo, schedule.termStart).map((g, i) => (
                 <div key={g.id} className="rounded-lg bg-paper px-3 py-2.5 ring-1 ring-ink/5">
                   <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
-                    <span className="text-ink-faint">{i === 0 ? '👑' : `${i + 1}.`}</span>
+                    <span className="text-ink-faint">
+                      {i === 0 ? <Icon name="trophy" size="xs" /> : `${i + 1}.`}
+                    </span>
                     <span>{g.emoji}</span>
                     <span>{g.title}</span>
                   </div>

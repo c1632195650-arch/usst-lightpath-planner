@@ -136,16 +136,21 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   await expect(page.getByTestId('m-now-banner').or(page.getByTestId('m-next-banner')).first()).toBeVisible();
   // F7 / F10 节点（F10 已由 M3 WeekBoard 替换 WeekGlance —— 周切换/回到现在/点天展开）
   await expect(page.getByTestId('m-tomorrow')).toBeVisible();
+  // 2026-10-08 底部导航批次：周视图在「本周」页签
+  await page.getByTestId('m-tab-week').click();
   await expect(page.getByTestId('m-week-board')).toBeVisible();
 
-  // F6/F17 已降级到「提醒与帮助」折叠区（P6-2）：先展开
-  await page.getByTestId('m-more-toggle').click();
+  // F6/F17 在「我的」页签的「提醒与帮助」区（2026-10-08 底部导航批次：原折叠区改常展开）
+  await page.getByTestId('m-tab-me').click();
   await page.getByTestId('m-ics').getByRole('button').first().click();
   await expect(page.getByTestId('m-ics-url')).toHaveValue(/\/api\/sync\/plan\.ics\?token=ics-e2e-token/);
   await expect(page.getByTestId('m-ics-copy')).toBeVisible();
 
   await page.getByTestId('m-whitelist-toggle').click();
   await expect(page.getByTestId('m-whitelist-guide')).toContainText('华为 / 鸿蒙');
+
+  // 回到今天页签（后续块操作在今日时间轴上）
+  await page.getByTestId('m-tab-today').click();
 
   // F4 顺延 +15：写覆盖层（唯一写法）→ debounce 上报
   await firstBlock.click();
@@ -233,6 +238,8 @@ test('最近待办：记一条 → 点按露出动作 → 打勾即完成（不�
   const { putStateBodies } = await stubCoreApi(page);
   await registerAndReady(page);
 
+  // 2026-10-08 底部导航批次：待办卡在「待办」页签
+  await page.getByTestId('m-tab-todo').click();
   await page.getByTestId('m-todo-input').fill('还图书馆的书');
   await page.getByTestId('m-todo-add-recent').click();
   const row = page.getByTestId('m-todo-row').filter({ hasText: '还图书馆的书' });
@@ -258,6 +265,8 @@ test('中长期待办：打勾 → 必须填粗粒度时段（选择器拦截）
   const { putStateBodies } = await stubCoreApi(page);
   await registerAndReady(page);
 
+  // 2026-10-08 底部导航批次：待办卡在「待办」页签
+  await page.getByTestId('m-tab-todo').click();
   await page.getByTestId('m-todo-input').fill('背完六级词');
   await page.getByTestId('m-todo-add-long').click();
   const row = page.getByTestId('m-todo-row').filter({ hasText: '背完六级词' });
@@ -300,6 +309,8 @@ test('云端待办采纳：GET 带 todos → 待办卡显示（两端闭环的�
   });
   await registerAndReady(page);
 
+  // 2026-10-08 底部导航批次：待办卡在「待办」页签
+  await page.getByTestId('m-tab-todo').click();
   await expect(page.getByTestId('m-goal-card')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('m-goal-card')).toContainText('网页端记的事');
   await expect(page.getByTestId('m-goal-card')).toContainText('拿下六级');
@@ -341,6 +352,8 @@ test('通知可见性：浏览器环境显示「网页版」诚实文案（M5a�
   await stubCoreApi(page);
   await registerAndReady(page);
 
+  // 2026-10-08 底部导航批次：通知状态在「我的」页签
+  await page.getByTestId('m-tab-me').click();
   const status = page.getByTestId('m-notify-status');
   await expect(status).toBeVisible({ timeout: 15_000 });
   await expect(status).toContainText('当前是网页版', 'web 环境不假装有时点通知（诚实口径，M5a 三段式）');
@@ -477,7 +490,9 @@ test('同步被拒：云端更新时（accepted=false）→ 采纳云端副本 +
 test('退出登录：清掉本地身份 → 回到登录页', async ({ page }) => {
   await stubCoreApi(page);
   await registerAndReady(page);
-  await page.getByRole('button', { name: '退出' }).click();
+  // 2026-10-08 底部导航批次：退出入口移「我的」页签
+  await page.getByTestId('m-tab-me').click();
+  await page.getByTestId('m-logout').click();
   await expect(page.getByTestId('m-login-user')).toBeVisible({ timeout: 15_000 });
   // 刷新后仍是未登录（身份确实清掉了，不是 UI 假象）
   await page.reload();
@@ -610,7 +625,9 @@ test('评估动线②：有 gap 的语料 → 复核建议出「采纳」→ 进
   // 点「采纳」→ 任务进覆盖层草稿（layer.tasks），toast 明说「重排后」才上表
   await page.getByTestId('plan-review-adopt').first().click();
   await expect(page.getByText(/已加入「快走 30 分钟」/)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/重排后会标注 🆕/)).toBeVisible({ timeout: 15_000 });
+  // 2026-10-08 改锚（Ray 周页批次）：采纳后立即重排，落位回执 =「已排进 周X HH:MM」
+  //（排不下时如实报「这周没排进去」——两种结果都算诚实通过，仍不许悄悄改表）
+  await expect(page.getByText(/「快走 30 分钟」已排进|「快走 30 分钟」这周没排进去/)).toBeVisible({ timeout: 15_000 });
 
   // 草稿流证据：覆盖层里确有这条任务（不断言日程表直接变化 —— L4：重排才生效）
   const layerHasTask = await page.evaluate(() => {

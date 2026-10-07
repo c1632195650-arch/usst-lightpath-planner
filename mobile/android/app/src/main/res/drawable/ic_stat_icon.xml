@@ -1,26 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 光溯通知小图标（2026-10-07）：capacitor.config.ts LocalNotifications.small 一直
-     引用 ic_stat_icon 但 res/ 里没有此文件（回退系统默认图标）—— 这里补上。
-     规范：状态栏小图标只用 alpha 通道，纯白剪影、透明背景；48 视窗原样缩放。 -->
+<!-- 光溯通知小图标（2026-10-08 重做）：状态栏只用 alpha 通道 → 纯白剪影、透明背景。
+     与启动图标同一「图标化」几何（实心棱镜 + 加粗光路）。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
     <path
-        android:pathData="M5.25,24h8.5"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round" />
-    <path
         android:pathData="M20.75,12L34.15,35H7.35z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M5.25,24h6.5"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
     <path
         android:pathData="M30.85,18L35.85,15.98M34.34,24L39.35,24M37.84,30L42.84,32.02"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
+        android:strokeWidth="4"
         android:strokeLineCap="round" />
 </vector>

@@ -11,6 +11,7 @@
  * 纯展示 + 顺序 state：不读时钟、不碰存储（落库经回调）。
  */
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import { orderGoalsByPriority, priorityForIndex } from './priorityOrder';
 import type { Goal } from './goalStore';
 
@@ -79,7 +80,9 @@ export function PriorityStrip({ goals, weekNo, termStart, onChange }: {
               } ${isDragging ? 'opacity-50 ring-2 ring-brand' : ''}`}
             >
               <div className="flex items-center gap-1">
-                <span className="text-[11px]">{i === 0 ? '👑' : `${i + 1}`}</span>
+                <span className="text-[11px]">
+                  {i === 0 ? <Icon name="trophy" size="xs" /> : `${i + 1}`}
+                </span>
                 <span className="min-w-0 truncate text-[12px] font-medium text-ink" title={g.title}>
                   {g.emoji ? `${g.emoji} ` : ''}{g.title}
                 </span>

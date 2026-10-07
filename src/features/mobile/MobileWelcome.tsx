@@ -9,12 +9,14 @@
  * 不承载任何账号/画像逻辑 —— 画像与课表在网页端完成，这里只负责分工说明。
  */
 import { LightpathMark } from '@/components/LightpathMark';
+import { Icon, type IconName } from '@/components/icons/Icon';
 import { Button } from '@/components/ui/Button';
 
-const POINTS: Array<{ icon: string; title: string; desc: string }> = [
-  { icon: '🖥️', title: '规划在网页端', desc: '画像、课表导入、周计划调整，都在电脑上完成' },
-  { icon: '🔔', title: '执行在手机端', desc: '到点前 10 分钟提醒，一键顺延 15 分钟，完成即打卡' },
-  { icon: '🧠', title: '它记得你', desc: '说过的偏好会被记住 —— 但每一条都由你确认才生效' },
+// 图标统一走本仓图鉴（2026-10-08 CY：图标再优化）——不再用 emoji
+const POINTS: Array<{ icon: IconName; title: string; desc: string }> = [
+  { icon: 'dashboard', title: '规划在网页端', desc: '画像、课表导入、周计划调整，都在电脑上完成' },
+  { icon: 'bell', title: '执行在手机端', desc: '到点前 10 分钟提醒，一键顺延 15 分钟，完成即打卡' },
+  { icon: 'sparkle', title: '它记得你', desc: '说过的偏好会被记住 —— 但每一条都由你确认才生效' },
 ];
 
 export default function MobileWelcome({ onStart }: { onStart: () => void }) {
@@ -35,7 +37,7 @@ export default function MobileWelcome({ onStart }: { onStart: () => void }) {
       <main className="flex flex-1 flex-col gap-3 px-6 pt-6">
         {POINTS.map((p) => (
           <div key={p.title} className="flex items-start gap-3 rounded-2xl border border-ink/10 bg-white px-4 py-3.5">
-            <span className="text-xl leading-7" aria-hidden="true">{p.icon}</span>
+            <Icon name={p.icon} size="lg" className="text-brand" />
             <div>
               <p className="text-[14px] font-semibold text-ink">{p.title}</p>
               <p className="mt-0.5 text-[12px] leading-5 text-ink-soft">{p.desc}</p>

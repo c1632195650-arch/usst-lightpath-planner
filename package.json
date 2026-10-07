@@ -1,7 +1,7 @@
 {
   "name": "usst-lightpath-planner",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.2",
   "type": "module",
   "description": "光溯 · 上理生涯规划助手 (第18届光电杯参赛作品)",
   "scripts": {

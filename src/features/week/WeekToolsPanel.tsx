@@ -243,7 +243,10 @@ export function WeekToolsPanel({
             };
             return (
               <div key={w.goalId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span>⚠️ {w.message}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="warn-tri" size="xs" className="shrink-0" />
+                  {w.message}
+                </span>
                 {g?.dueAt && (
                   <button type="button" onClick={() => apply({ dueAt: addDays(g.dueAt!, 14) }, '已延长截止 2 周')} className="rounded bg-white px-1.5 py-0.5 font-semibold underline-offset-2 hover:underline">
                     延 2 周

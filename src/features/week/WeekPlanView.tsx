@@ -769,7 +769,7 @@ export function WeekPlanView({
       };
       updateLayer((prev) => ({ ...prev, slots: addSlot(prev.slots, slot) }));
       setReplanToken((v) => v + 1);
-      notify('add', `已记入不可时段：${slot.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(slot.fromMin)}–${toHHmm(slot.toMin)}（⚙️ 调整 → 偏好校正 可查看/删除）`);
+      notify('add', `已记入不可时段：${slot.days.map((d) => `周${'一二三四五六日'[d - 1]}`).join('/')} ${toHHmm(slot.fromMin)}–${toHHmm(slot.toMin)}（「调整」→ 偏好校正 可查看/删除）`);
       return;
     }
     writeRules((prev) => upsertRule(prev, rule));

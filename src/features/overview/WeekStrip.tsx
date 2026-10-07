@@ -46,21 +46,21 @@ export function WeekStrip({ schedule, weekNo, weekMonday, todayIso, onSelectDay 
               aria-label={`${iso}，${count} 节课，点击进入该周并定位到这一天`}
               className={`flex flex-col items-center gap-2 rounded-xl border px-1 py-3 transition-colors duration-fast ease-out ${
                 isToday
-                  ? 'border-brand bg-brand-light'
+                  ? 'border-school-red/60 bg-school-light'
                   : 'border-ink/10 bg-white hover:border-brand/30 hover:bg-brand-light/60'
               }`}
             >
-              <span className={`text-xs font-medium ${isToday ? 'text-brand' : 'text-ink-faint'}`}>
+              <span className={`text-xs font-medium ${isToday ? 'text-school-red' : 'text-ink-faint'}`}>
                 {DAY_LABELS[index]}
               </span>
-              <span className={`text-sm font-semibold tabular-nums ${isToday ? 'text-brand' : 'text-ink'}`}>
+              <span className={`text-sm font-semibold tabular-nums ${isToday ? 'text-school-red' : 'text-ink'}`}>
                 {Number(iso.slice(8, 10))}
               </span>
 
               <span className="flex h-12 w-full items-end justify-center" aria-hidden="true">
                 <span
                   className={`w-2 rounded-full transition-[height] duration-base ease-out ${
-                    count === 0 ? 'bg-ink/10' : isToday ? 'bg-brand' : 'bg-chart-indigo/70'
+                    count === 0 ? 'bg-ink/10' : isToday ? 'bg-school-red' : 'bg-chart-indigo/70'
                   }`}
                   style={{ height: count === 0 ? '6px' : `${Math.max(24, (count / peak) * 100)}%` }}
                 />

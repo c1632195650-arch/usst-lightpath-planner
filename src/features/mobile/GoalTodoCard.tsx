@@ -12,6 +12,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { plannedDoneLabel, todoScheduleHint, type Todo } from './lib/memoTypes.ts';
+import { Icon } from '@/components/icons/Icon';
 import {
   canAddGoal, openTodoCount, sortTodosForView,
   type MemoData,
@@ -190,7 +191,7 @@ export default function GoalTodoCard({ data, attention, syncError, h }: {
           <div className="mt-2 space-y-1" data-testid="m-goal-list">
             {goals.map((g) => (
               <div key={g.id} className="rounded-xl bg-brand-light/60 px-3 py-2">
-                <p className="text-xs font-semibold text-ink">🎯 {g.title}</p>
+                <p className="flex items-center gap-1 text-xs font-semibold text-ink"><Icon name="target" size="xs" className="shrink-0" />{g.title}</p>
                 {(g.milestones ?? []).map((m) => (
                   <button key={m.id} type="button" onClick={() => h.onToggleMilestone(g.id, m.id)}
                     className={`mt-0.5 block text-left text-[11px] ${m.done ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>

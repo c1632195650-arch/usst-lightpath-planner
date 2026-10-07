@@ -323,3 +323,6 @@ export function useTodayData(identity: { token: string; username: string }, now:
     onAction, memoHandlers, retry: load,
   };
 }
+
+/** 钩子返回类型（供页签子组件声明 props；页面宿主保持单一钩子实例） */
+export type TodayData = ReturnType<typeof useTodayData>;

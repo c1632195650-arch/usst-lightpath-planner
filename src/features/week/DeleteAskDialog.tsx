@@ -38,7 +38,9 @@ export function DeleteAskDialog({
             onClick={onFill}
             className="flex min-h-11 items-center gap-3 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-left text-[13px] font-medium text-ink transition-colors hover:border-brand/40 hover:bg-brand-light/45"
           >
-            <span className="text-base">⬆</span>
+            <span className="relative top-[2px] shrink-0 text-ink-faint">
+              <Icon name="chevron-down" size="sm" className="rotate-180" />
+            </span>
             <span>
               后面的日程补上来
               <span className="block text-[11px] font-normal text-ink-faint">
@@ -64,7 +66,7 @@ export function DeleteAskDialog({
             onClick={onReplan}
             className="flex min-h-11 items-center gap-3 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-left text-[13px] font-medium text-ink transition-colors hover:border-brand/40 hover:bg-brand-light/45"
           >
-            <span className="text-base">🔄</span>
+            <span className="relative top-[2px] shrink-0 text-ink-faint"><Icon name="rotate" size="sm" /></span>
             <span>
               整周重新排
               <span className="block text-[11px] font-normal text-ink-faint">

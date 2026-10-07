@@ -52,9 +52,13 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint
               aria-label={done ? `撤销完成：${t.title}` : `完成：${t.title}`}
             />
             <div className="min-w-0 flex-1">
-              {/* D4 逾期双编码：⚑（形状）+ 危险色（颜色）+ aria 标注；完成项划线保留 */}
-              <p className={`text-[13px] leading-5 text-ink ${done ? 'line-through' : 'font-medium'} ${overdue ? 'text-[#B0402F]' : ''}`}>
-                {overdue && <span aria-hidden="true" className="mr-1">⚑</span>}
+              {/* D4 逾期双编码：flag 图标（形状）+ 危险色（颜色）+ aria 标注；完成项划线保留 */}
+              <p className={`text-[13px] leading-5 text-ink ${done ? 'line-through' : 'font-medium'} ${overdue ? 'text-danger-text' : ''}`}>
+                {overdue && (
+                  <span className="mr-1 inline-flex align-[-2px]" aria-hidden="true">
+                    <Icon name="flag" size="xs" />
+                  </span>
+                )}
                 {t.title}
                 {overdue && <span className="sr-only">（已逾期）</span>}
               </p>

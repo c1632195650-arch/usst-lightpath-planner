@@ -10,6 +10,7 @@ import type { PlanPersistState, Phase } from '@/types';
 import type { Diagnostics } from '@/lib/planner/model';
 import type { Deadline } from '@/data/usst';
 import { lockCount } from '@/features/plan/planLock';
+import { Icon } from '@/components/icons/Icon';
 import { diffDays, todayISO } from '@/lib/date';
 import { PersonaImpactPanel } from './PersonaImpactPanel';
 
@@ -79,13 +80,14 @@ export function PhaseHeader({
           <button
             type="button"
             onClick={() => setFromNowOn((v) => !v)}
-            className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
               fromNowOn
                 ? 'bg-ink text-white'
                 : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-paper'
             }`}
           >
-            {fromNowOn ? '⏱ 只排剩下的时间' : '⏱ 从此刻开始排'}
+            <Icon name="clock" size="xs" className="shrink-0" />
+            {fromNowOn ? '只排剩下的时间' : '从此刻开始排'}
           </button>
           <span className="text-[11px] text-ink-faint">
             {fromNowOn

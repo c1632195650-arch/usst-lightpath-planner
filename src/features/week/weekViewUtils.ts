@@ -100,6 +100,13 @@ export function localizedDaysFor(
 
 /**
  * 今天列的整列底色（T3 时间轴 · WeekTimelineGrid 列头/泳道用）。
- * 值 = 原型真机实测 rgb(159,173,208)；对比度跟进项见 `_T3落地设计-2026-10-07.md` §4.4。
+ *
+ * 2026-10-08 改值（UI v2 收口批）：原值 `#9fadd0` = 原型真机实测的中调蓝紫，
+ * 三处「今天」各说各话 —— 总览课程分布条（WeekStrip）用品牌蓝、周概览密度卡
+ * （WeekBoard）用上理红、时间轴整列用这个中调蓝。设计总成 §4.2 / §7.4 定的是
+ * **上理红**（身份色配额位③：今天的日期数字与描边 + 红软底），且中调满铺底会与
+ * 块自身的浅底（靛/琥珀/绿）抢明度 —— 块浮在中调底上不如浮在浅底上分得清。
+ * 现统一取 usst-red-soft（= tailwind `school-light` 同族浅底），今天列的红描边与
+ * 日期红字由列头承担（见 WeekTimelineGrid 的「今天」徽章）。
  */
-export const TODAY_COL_BG = '#9fadd0';
+export const TODAY_COL_BG = '#FBEAED';
