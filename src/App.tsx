@@ -26,6 +26,7 @@ import { WeekTimetable } from '@/features/week/WeekTimetable';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 import MemoPanel from '@/features/memo/MemoPanel';
+import { SettingsPanel } from '@/features/settings/SettingsPanel';
 
 type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'memo' | 'profile' | 'import';
@@ -328,13 +329,21 @@ export default function App() {
                   重看引导
                 </button>
               </div>
+              {/* UI v2 D5：设置面板（分组列表行上直显当前值；真实状态源，无占位行） */}
+              <div className="px-4 pb-4 sm:px-6">
+                <SettingsPanel />
+              </div>
             </div>
           ) : (
-            <div className="content-shell panel px-6 py-16 text-center sm:px-10">
-              <p className="section-label">PROFILE</p>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
-              <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
+            <div className="content-shell space-y-3">
+              <div className="panel px-6 py-16 text-center sm:px-10">
+                <p className="section-label">PROFILE</p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
+                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">开始画像测评</button>
+              </div>
+              {/* UI v2 D5：画像未完成时设置同样可达（真实状态源不依赖画像） */}
+              <SettingsPanel />
             </div>
           )
         ) : weekMonday ? (
