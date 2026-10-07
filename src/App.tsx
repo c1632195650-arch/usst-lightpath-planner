@@ -9,6 +9,7 @@ import { hashOf, parseRoute, TAB_LABEL, type MainTab, type Route } from '@/lib/r
 import { Logo120 } from '@/components/Logo120';
 import { Welcome } from '@/features/welcome/Welcome';
 import { BasicInfoStep } from '@/features/welcome/BasicInfoStep';
+import { ImportScheduleStep } from '@/features/welcome/ImportScheduleStep';
 import { initialView } from '@/features/welcome/basicInfo';
 import { loadBasicInfo } from '@/lib/identity';
 import { PersonaFlow } from '@/features/persona/PersonaFlow';
@@ -30,18 +31,22 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { PersonaLab } from '@/lab/PersonaLab';
 
 /**
- * onboarding 的四个阶段：
- * 欢迎 → **个人信息（含住处 / 作息）** → 问卷 → 画像结果 → 主界面。
+ * onboarding 的五个阶段：
+ * 欢迎 → **个人信息（含住处 / 作息）** → **导入课表（可跳过）** → 问卷 → 画像结果 → 主界面。
  *
  * · `basicinfo` 放在问卷之前：年级决定出卷范围（`buildPersonaSequence(grade)`，
  *   WP2 题库分层），所以必须先有基础信息；
+ * · 「导入课表」跟在基础信息后面（2026-10-07 RAY：别等进主界面看到样例后才
+ *   能导）：课表不依赖画像，越早进来，画像结果页 / 今天页 / 周计划就越早围绕
+ *   真实上课时间安排。整步**可跳过不阻塞**（弹窗三纪律同款），跳过之后随时在
+ *   「课表」页 / dev 的「导入课表」页补导；
  * · 「住处 + 作息」原本是问卷之后的一个独立阶段（旧 `RoutineSetup`）。2026-09-28
  *   按拍板**合并成一步**：它们跟「你是谁」一样都是硬边界事实，没理由让用户分两次填 ——
  *   于是收进 `basicinfo` 同一张卡（`<BasicInfoStep>{children}</BasicInfoStep>`，
  *   子块由 week 域提供，避免 welcome → week 跨域 import）。
  * · 住处/作息都**不进画像**（问卷规格书 §6.1 禁语义污染），只是各存一份独立 store。
  */
-type View = 'welcome' | 'basicinfo' | 'persona' | 'result' | 'main';
+type View = 'welcome' | 'basicinfo' | 'import' | 'persona' | 'result' | 'main';
 
 /** 课表导入联调页只在开发环境出现，正式构建里 nav 不会有这个入口 */
 const SHOW_IMPORT = true;
@@ -248,12 +253,30 @@ export default function App() {
     return (
       <BasicInfoStep
         // 老账号只是「补齐基础信息」（画像已在）→ 存完直接回主界面，不让人重答一遍问卷；
-        // 全新用户 → 接着走画像。
-        onComplete={() => (state.onboarded ? enterMain() : setView('persona'))}
+        // 全新用户 → 先给一次导入课表的机会（可跳过），再进问卷。
+        onComplete={() => (state.onboarded ? enterMain() : setView('import'))}
         onBack={() => setView('welcome')}
       >
         <OnboardingSetup />
       </BasicInfoStep>
+    );
+  }
+
+  /**
+   * 导入课表（2026-10-07 新增引导步，RAY：「一开始就在个人信息后提供导入窗口」）。
+   * 可跳过 —— 跳过与完成同去问卷；解析服务不在时界面明说 + 保留跳过出口。
+   * 已有真实课表时重导 = 覆盖，组件内会提前一句话告知。
+   */
+  if (view === 'import') {
+    return (
+      <ImportScheduleStep
+        existingCourseCount={
+          state.schedule && state.schedule.source !== 'demo' ? state.schedule.courses.length : 0
+        }
+        onApply={(s) => patchState({ schedule: s })}
+        onNext={() => setView('persona')}
+        onBack={() => setView('basicinfo')}
+      />
     );
   }
 
@@ -265,6 +288,24 @@ export default function App() {
         // 问卷答完即出画像并落 onboarded（「住处/作息」已在前一步 basicinfo 采过）
         onComplete={handleComplete}
         onExit={() => setView('welcome')}
+        /*
+         * 「暂时跳过测评」= **跳过整份问卷**，直接进入 App（RAY 2026-10-07 拍板）。
+         *
+         * 🔴 必须**落 `onboarded`**，不能只 `enterMain()`：
+         *    冷启动闸门 `initialView` 是 `!onboarded → 'welcome'`，而 `onboarded`
+         *    原先只有答完问卷（`handleComplete`）才置真 ⟹ 只切视图的话，
+         *    **刷新一次就被弹回欢迎页**，用户会以为"跳过根本没生效"。
+         *    （欢迎页那颗「先浏览应用」就是这种「不落盘」的写法，同一个坑的另一半。）
+         *
+         * 画像**留空**（`state.persona` 保持 null）—— 引擎本就支持：
+         * `buildPhases.applyPersona` 在没有画像时给保守默认值，并在理由里写明
+         * 「还没有画像，先用保守的默认值」。之后随时可在「我的画像」页
+         * （`state.persona` 为 null 时渲染的那张卡）用「开始画像测评」补测。
+         *
+         * 已答的题**保留**在 `state.answers` 里（不清空）—— "暂时"跳过，回来能接着答。
+         * 不新增存储字段：`types.ts` 契约锁死，`onboarded` 语义本就是"引导流程结束"。
+         */
+        onSkipAll={() => { patchState({ onboarded: true }); enterMain(); }}
       />
     );
   }
