@@ -114,6 +114,72 @@ export function todosToPendingTodos(todos: readonly Todo[], termStart: string, w
 }
 
 /* ============================================================
+ * 二.5、看板分组（UI v2 批次 D4：今天 / 本周 / 逾期 / 未排 / 已完成）
+ * ------------------------------------------------------------
+ * 全部由既有字段推导（Todo 契约定型不改）：
+ *   排程天 ← scheduledBlockId 内的 `-d{1-7}-`（dayFromBlockId，同源）；
+ *   旬粒度目标 ← longterm 的 plannedDone（'YYYY-MM-上旬|中旬|下旬'）。
+ * 纯函数；时钟由调用方传入（todayDow / todayIso），与 lib/today 同一纪律。
+ * ========================================================== */
+
+export type TodoBoardGroup = 'overdue' | 'today' | 'week' | 'unscheduled' | 'done';
+
+/** '2026-09-上旬' → 可比较序数（年*36 + 月*3 + 旬序）；解析不了 → NaN */
+export function xunRank(plannedDone: string): number {
+  const m = /^(\d{4})-(\d{2})-(上旬|中旬|下旬)$/.exec(plannedDone ?? '');
+  if (!m) return NaN;
+  const xunIdx = { 上旬: 0, 中旬: 1, 下旬: 2 }[m[3]] ?? 0;
+  return Number(m[1]) * 36 + Number(m[2]) * 3 + xunIdx;
+}
+
+/** 今天 ISO → 所在旬的 plannedDone 记法 */
+export function currentXun(iso: string): string {
+  const d = parseDate(iso) ?? new Date(`${iso}T00:00:00`).getTime() / 86400000;
+  const dt = new Date(d as number);
+  const day = dt.getDate();
+  const xun = day <= 10 ? '上旬' : day <= 20 ? '中旬' : '下旬';
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${xun}`;
+}
+
+/**
+ * 单条待办的看板归属（确定性规则，不看着办）：
+ *   done                                          → done
+ *   longterm 未完成 且 plannedDone 旬 < 今天所在旬   → overdue（旬已整体过去）
+ *   已排进块 且 块天 === 今天                        → today
+ *   longterm 未完成 且 plannedDone === 今天所在旬    → week（本旬要办，非精确天）
+ *   已排进块（本周期别的天）                        → week
+ *   其余                                          → unscheduled
+ */
+export function todoGroupOf(
+  todo: Pick<Todo, 'completion' | 'kind' | 'plannedDone' | 'scheduledBlockId'>,
+  todayDow: number,
+  todayIso: string,
+): TodoBoardGroup {
+  if (todo.completion === 'done') return 'done';
+  const schedDay = todo.scheduledBlockId ? dayFromBlockId(todo.scheduledBlockId) : null;
+  if (todo.kind === 'longterm' && todo.plannedDone) {
+    const want = xunRank(todo.plannedDone);
+    const now = xunRank(currentXun(todayIso));
+    if (Number.isFinite(want) && Number.isFinite(now) && want < now) return 'overdue';
+    if (want === now) return 'week';
+  }
+  if (schedDay === todayDow) return 'today';
+  if (schedDay != null) return 'week';
+  return 'unscheduled';
+}
+
+/** 看板分组：入参顺序不敏感，出组内保持原排序（sortTodosForView 已定序） */
+export function groupTodosForBoard<T extends Pick<Todo, 'id' | 'completion' | 'kind' | 'plannedDone' | 'scheduledBlockId'>>(
+  todos: readonly T[],
+  todayDow: number,
+  todayIso: string,
+): Record<TodoBoardGroup, T[]> {
+  const out: Record<TodoBoardGroup, T[]> = { overdue: [], today: [], week: [], unscheduled: [], done: [] };
+  for (const t of todos) out[todoGroupOf(t, todayDow, todayIso)].push(t);
+  return out;
+}
+
+/* ============================================================
  * 三、scheduledBlockId 回填匹配与回显（W2-P2-3）
  * ========================================================== */
 

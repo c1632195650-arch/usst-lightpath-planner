@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 134,
-    "engineFiles": 98,
+    "testFiles": 135,
+    "engineFiles": 99,
     "uiFiles": 36,
     "guardedSources": 122,
-    "reverseVerified": 85,
+    "reverseVerified": 86,
     "orphans": 1
   },
   "domains": {
@@ -1270,6 +1270,12 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/todo-board-groups.test.ts": {
+      "suite": "engine",
+      "guards": [],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
     "tests/ui-cmp-avatar.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1735,7 +1741,8 @@
     ],
     "src/features/memo/memoLogic": [
       "scripts/memo-web-workspace.test.ts",
-      "tests/syncContract.test.ts"
+      "tests/syncContract.test.ts",
+      "tests/todo-board-groups.test.ts"
     ],
     "src/features/memo/milestonePicker": [
       "scripts/memo-web-workspace.test.ts"

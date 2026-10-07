@@ -17,9 +17,11 @@ export interface TodoListProps {
   /** S3a（CY 反馈③）：排程状态回显口径 —— 未排进时给「登录后…/未排进本周+出口」。
    *  已排进的仍走 scheduledLabel（todo-scheduled-chip），缺省 = 不显示。 */
   schedHint?: { loggedIn: boolean; onGotoPlan?: () => void };
+  /** UI v2 D4：逾期集合 —— 逾期行 ⚑ + 危险文字色（形状+颜色双编码，不靠单一颜色）。 */
+  overdueIds?: ReadonlySet<string>;
 }
 
-export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint }: TodoListProps) {
+export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint, overdueIds }: TodoListProps) {
   if (todos.length === 0) {
     return <p className="px-1 py-3 text-[12px] text-ink-faint">还没有待办。想起什么就记一条，办好打个勾就行。</p>;
   }
@@ -27,12 +29,13 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint
     <ul className="space-y-1.5" data-testid="todo-list">
       {todos.map((t) => {
         const done = t.completion === 'done';
+        const overdue = !done && (overdueIds?.has(t.id) ?? false);
         const chip = scheduledLabel(t, resolveBlock);
         return (
           <li
             key={t.id}
             data-testid={`todo-item-${t.id}`}
-            className={`flex items-start gap-2 rounded-xl border border-ink/[0.07] bg-white px-3 py-2 ${done ? 'opacity-60' : ''}`}
+            className={`flex items-start gap-2 rounded-xl border border-ink/[0.07] bg-white px-3 py-2 ${done ? 'opacity-60' : ''} ${overdue ? 'border-[#B0402F]/40' : ''}`}
           >
             <input
               type="checkbox"
@@ -43,7 +46,12 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint
               aria-label={done ? `撤销完成：${t.title}` : `完成：${t.title}`}
             />
             <div className="min-w-0 flex-1">
-              <p className={`text-[13px] leading-5 text-ink ${done ? 'line-through' : 'font-medium'}`}>{t.title}</p>
+              {/* D4 逾期双编码：⚑（形状）+ 危险色（颜色）+ aria 标注；完成项划线保留 */}
+              <p className={`text-[13px] leading-5 text-ink ${done ? 'line-through' : 'font-medium'} ${overdue ? 'text-[#B0402F]' : ''}`}>
+                {overdue && <span aria-hidden="true" className="mr-1">⚑</span>}
+                {t.title}
+                {overdue && <span className="sr-only">（已逾期）</span>}
+              </p>
               {t.note && <p className="mt-0.5 whitespace-pre-wrap text-[12px] leading-5 text-ink-soft">{t.note}</p>}
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 {(t.tags ?? []).map((tag) => (

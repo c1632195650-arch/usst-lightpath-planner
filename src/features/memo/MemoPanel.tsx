@@ -18,7 +18,8 @@ import {
 } from '@/features/mobile/lib/memoStore.ts';
 import { plannedDoneLabel, type Goal, type Todo } from '@/features/mobile/lib/memoTypes.ts';
 import { loadIdentity } from '@/features/mobile/lib/auth.ts';
-import { filterTodos, tagsOf, updateTodoTitle, todosToPendingTodos, type TodoFilter } from './memoLogic.ts';
+import { filterTodos, tagsOf, updateTodoTitle, todosToPendingTodos, groupTodosForBoard, type TodoFilter } from './memoLogic.ts';
+import { loadAssignments } from '@/features/week/assignmentStore';
 import { readCachedMemo, withCloudMemo, writeCachedMemo } from './webMemo.ts';
 import TodoList from './TodoList.tsx';
 import TodoEditor, { type TodoDraft } from './TodoEditor.tsx';
@@ -169,6 +170,51 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
     : null;
   const schedHint = { loggedIn: !!token, onGotoPlan };
 
+  /* UI v2 D4：看板分组（今天/本周/逾期/未排/已完成）。分组推导全在 memoLogic 纯函数，
+     今天由本机时钟给出（UI 层读时钟允许）；逾期行由 TodoList 按 overdueIds 双编码。 */
+  const todayDow = (() => { const wd = new Date().getDay(); return wd === 0 ? 7 : wd; })();
+  const todayIso = nowIso();
+  const groupProps = (list: Todo[]) => {
+    const g = groupTodosForBoard(list, todayDow, todayIso);
+    return {
+      groups: g,
+      overdueIds: new Set(g.overdue.map((t) => t.id)),
+    };
+  };
+  const recentBoard = groupProps(recent);
+  const longtermBoard = groupProps(longterm);
+  /** UI v2 D4：本周作业条（assignmentStore 只读；不新增存储、不写回） */
+  const weekAssignments = planAnchor
+    ? loadAssignments().filter((a) => a.weekNo === planAnchor.weekNo)
+    : [];
+  /** 分组渲染：只在「该组有东西且不止一组有」时出小标；单组时保持原样（少一层噪声）。 */
+  const renderGrouped = (board: ReturnType<typeof groupProps>, groupOrder: Array<keyof typeof board.groups>) => {
+    const present = groupOrder.filter((k) => board.groups[k].length > 0);
+    if (present.length === 0) {
+      return <TodoList todos={[]} onToggle={onToggle} onArchive={() => {}} onEdit={() => {}} schedHint={schedHint} overdueIds={board.overdueIds} />;
+    }
+    if (present.length === 1) {
+      return <TodoList todos={board.groups[present[0]]} onToggle={onToggle} onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))} onEdit={(t) => setEditorFor(t)} schedHint={schedHint} overdueIds={board.overdueIds} />;
+    }
+    const GROUP_LABEL: Record<string, string> = {
+      overdue: '已逾期', today: '今天', week: '本周 / 本旬', unscheduled: '未排', done: '已完成',
+    };
+    return (
+      <div className="flex flex-col gap-3">
+        {present.map((k) => (
+          <div key={k}>
+            <p className={`px-1 text-[11px] font-semibold ${k === 'overdue' ? 'text-[#B0402F]' : 'text-ink-faint'}`} data-testid={`todo-group-${k}`}>
+              {GROUP_LABEL[k]} · {board.groups[k].length}
+            </p>
+            <div className="mt-1">
+              <TodoList todos={board.groups[k]} onToggle={onToggle} onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))} onEdit={(t) => setEditorFor(t)} schedHint={schedHint} overdueIds={board.overdueIds} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-4" data-testid="memo-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -287,13 +333,7 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
         <h3 className="text-sm font-semibold text-ink">最近待办</h3>
         <p className="mt-0.5 text-[11px] text-ink-faint">办好打勾就行，不用填时间。</p>
         <div className="mt-2">
-          <TodoList
-            todos={recent}
-            onToggle={onToggle}
-            onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))}
-            onEdit={(t) => setEditorFor(t)}
-            schedHint={schedHint}
-          />
+          {renderGrouped(recentBoard, ['today', 'week', 'unscheduled', 'done'])}
         </div>
       </section>
 
@@ -301,15 +341,17 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
         <h3 className="text-sm font-semibold text-ink">中长期待办</h3>
         <p className="mt-0.5 text-[11px] text-ink-faint">完成时要填一个粗略时段 —— 怕你忘掉自己是哪天办成的。</p>
         <div className="mt-2">
-          <TodoList
-            todos={longterm}
-            onToggle={onToggle}
-            onArchive={(t) => mutate((d) => archiveTodo(d, t.id, nowIso()))}
-            onEdit={(t) => setEditorFor(t)}
-            schedHint={schedHint}
-          />
+          {renderGrouped(longtermBoard, ['overdue', 'today', 'week', 'unscheduled', 'done'])}
         </div>
       </section>
+
+      {/* UI v2 D4：本周作业（assignmentStore 只读，不新增存储）——
+          作业在课程块上由 T6 通道排进计划，这里只给「这周记了多少」的可见性。 */}
+      {weekAssignments.length > 0 && (
+        <p className="px-1 text-[11px] text-ink-faint" data-testid="memo-assignments-line">
+          本周已记作业 {weekAssignments.length} 门 · 合计约 {weekAssignments.reduce((n, a) => n + a.estimatedMin, 0)} 分钟（在课程块上排进计划）
+        </p>
+      )}
 
       <GoalPanel
         goals={data.goals}
