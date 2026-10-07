@@ -128,7 +128,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
               <p className="shrink-0 text-sm font-medium text-ink-faint tabular-nums">已完成 {answeredTotal} / {total}</p>
             </div>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-ink/10" role="progressbar" aria-label="测评进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-              <div className="h-full bg-brand transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
+              <div className="h-full bg-brand transition-[width] duration-base ease-out" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </div>
@@ -202,7 +202,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                           onClick={() => { answer(value); advance(); }}
                           disabled={advancing}
                           aria-pressed={active}
-                          className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 ease-out sm:min-h-[132px] sm:flex-col sm:items-center sm:justify-between sm:px-2 sm:text-center ${
+                          className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-fast ease-out sm:min-h-[132px] sm:flex-col sm:items-center sm:justify-between sm:px-2 sm:text-center ${
                             active ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
                           }`}
                         >
@@ -224,7 +224,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                           onClick={() => { answer(option.key); advance(); }}
                           disabled={advancing}
                           aria-pressed={active}
-                          className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-200 ease-out ${
+                          className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-fast ease-out ${
                             active ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
                           }`}
                         >
@@ -255,7 +255,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
                           onClick={() => handleSortTap(option.key)}
                           disabled={picked || advancing}
                           aria-pressed={picked}
-                          className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-200 ease-out disabled:cursor-default ${
+                          className={`flex min-h-16 items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors duration-fast ease-out disabled:cursor-default ${
                             picked ? 'border-brand bg-brand text-white' : 'border-ink/10 bg-paper text-ink hover:border-brand/40 hover:bg-brand-light/45'
                           }`}
                         >

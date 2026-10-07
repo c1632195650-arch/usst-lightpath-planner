@@ -73,7 +73,7 @@ export function MonthCalendar({ events, selectedDate, onSelectDate }: Props) {
             <button
               key={iso}
               onClick={() => inMonth && onSelectDate(iso)}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition-all duration-300 ease-in-out ${
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition-all duration-base ease-standard ${
                 !inMonth ? 'text-transparent pointer-events-none' : ''
               } ${
                 isToday

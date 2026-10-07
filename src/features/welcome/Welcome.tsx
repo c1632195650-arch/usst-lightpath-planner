@@ -72,7 +72,7 @@ export function Welcome({ onStart, onSkip, footer }: Props) {
               </button>
               <button
                 onClick={onSkip}
-                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/25 px-5 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/25 px-5 py-2 text-sm font-semibold text-white transition-colors duration-fast hover:bg-white/10"
               >
                 先浏览应用
               </button>

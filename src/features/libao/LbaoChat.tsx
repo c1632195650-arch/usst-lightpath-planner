@@ -2007,7 +2007,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion }: {
                 className="group flex min-h-11 items-center justify-between gap-2 rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white/75 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="min-w-0 flex-1">{question}</span>
-                <Icon name="chevron-right" size="sm" className="shrink-0 text-white/40 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-white/80" />
+                <Icon name="chevron-right" size="sm" className="shrink-0 text-white/40 transition-transform duration-fast ease-out group-hover:translate-x-0.5 group-hover:text-white/80" />
               </button>
             ))}
           </div>

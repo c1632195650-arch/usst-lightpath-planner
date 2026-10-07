@@ -143,7 +143,7 @@
 
   /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
   .button-on-dark {
-    @apply min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
+    @apply min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-fast hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
   }
 
   /**
@@ -157,19 +157,19 @@
   }
 
   .button-primary {
-    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-btn transition-colors duration-200 ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-btn transition-colors duration-fast ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
   }
 
   .icon-button {
-    @apply grid h-10 w-10 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-200 ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
+    @apply grid h-10 w-10 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
   }
 
   .nav-item {
-    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-200 ease-out hover:bg-brand-light hover:text-brand;
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-fast ease-out hover:bg-brand-light hover:text-brand;
   }
 
   .nav-item-active {
@@ -389,8 +389,9 @@
 }
 
 @layer utilities {
+  /* UI v2 §05：入场统一 slow 档 360ms（原 450ms 超「入场禁超 slow」上限）。 */
   .fade-item {
-    animation: fadeUp 0.45s ease-out both;
+    animation: fadeUp 0.36s ease-out both;
   }
 }
 

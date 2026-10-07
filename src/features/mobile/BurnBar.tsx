@@ -30,7 +30,7 @@ export default function BurnBar({ startMin, endMin, nowMin, tone = 'dark' }: {
     <div data-testid="m-burn-bar" className="mt-2">
       <div className={`h-2 w-full overflow-hidden rounded-full ${tone === 'dark' ? 'bg-white/25' : 'bg-ink/10'}`}>
         <div
-          className={`h-full rounded-full transition-[width] duration-500 ${PHASE_COLOR[b.phase] ?? 'bg-ok'}`}
+          className={`h-full rounded-full transition-[width] duration-base ${PHASE_COLOR[b.phase] ?? 'bg-ok'}`}
           style={{ width: `${Math.round(b.ratio * 100)}%` }}
         />
       </div>

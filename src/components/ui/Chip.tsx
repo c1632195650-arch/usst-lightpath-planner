@@ -14,7 +14,7 @@ export function Chip({ children, active = false, onClick, className = '' }: Prop
       type="button"
       onClick={onClick}
       className={[
-        'rounded-xl border px-3 py-2 text-xs font-medium transition-all duration-300 ease-in-out',
+        'rounded-xl border px-3 py-2 text-xs font-medium transition-all duration-base ease-standard',
         active
           ? 'border-brand bg-brand text-white shadow-sm'
           : 'border-ink/10 bg-white text-ink-soft hover:border-brand/25 hover:text-brand',

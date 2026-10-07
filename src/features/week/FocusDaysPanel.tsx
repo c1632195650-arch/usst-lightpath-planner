@@ -47,7 +47,7 @@ export function FocusDaysPanel({ weekMonday, selectedDays, focusedDay, onToggleD
           return (
             <div
               key={d}
-              className={`relative flex min-h-16 flex-col rounded-xl border transition-all duration-200 ease-out ${
+              className={`relative flex min-h-16 flex-col rounded-xl border transition-all duration-fast ease-out ${
                 isFocused ? 'ring-2 ring-brand ring-offset-1' : ''
               } ${sel ? 'border-brand bg-brand text-white shadow-sm' : 'border-ink/10 bg-white text-ink-soft hover:border-brand/30 hover:bg-brand-light/30'}`}
             >

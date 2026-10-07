@@ -43,7 +43,7 @@ export function SettingsPanel() {
   const icsUrl = identity?.icsToken ? `${window.location.origin}/api/sync/plan.ics?token=${identity.icsToken}` : null;
 
   const row = (label: string, value: React.ReactNode, key: string, icon?: IconName) => (
-    <div key={key} className="flex min-h-11 items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 transition-colors duration-200 first:border-t-0 hover:bg-ink/[0.02]">
+    <div key={key} className="flex min-h-11 items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 transition-colors duration-fast first:border-t-0 hover:bg-ink/[0.02]">
       <span className="flex items-center gap-2 text-[13px] text-ink">
         {icon && <Icon name={icon} size="md" className="shrink-0 text-ink-soft" />}
         {label}
