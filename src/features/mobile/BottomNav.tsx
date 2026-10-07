@@ -1,8 +1,11 @@
 /**
- * 光溯移动端 · 底部导航栏（2026-10-08，按 CY 要求新增）
+ * 光溯移动端 · 底部导航栏（2026-10-08 新增；同日二改：梨宝并入同形态页签）
  * ============================================================
- * 五格：今天 / 本周 / 梨宝（中，品牌色）/ 待办 / 我的。
- * · 梨宝中键 = 打开既有 LbaoDrawer（沿用 m-lbao-toggle 锚点，e2e 零改动）；
+ * 四格：日程 / 待办 / 梨宝 / 我的 —— **四个形态完全一致**。
+ * · 2026-10-08 二改（CY 指令）：去掉梨宝的「高光」——原先它是品牌色圆钮、
+ *   上浮 5、带投影（`-mt-5 h-14 w-14 rounded-full bg-brand shadow-lg`），现在
+ *   与其它页签同一形态（同高、同色、同字号），点击语义也统一为**切到全屏页**
+ *   （不再是弹抽屉）；`m-lbao-toggle` 锚点保留（e2e 只改断言内容，不改定位）。
  * · 固定底栏 + iOS 安全区；当前页 aria-current=page；
  * · 图标统一走本仓图鉴（Icon 组件）——不再有 emoji/字符图标。
  * 语义：导航只管切页（状态在 MobileApp），不碰任何数据。
@@ -14,26 +17,20 @@ import type { IconName } from '@/components/icons/Icon';
  * 页签标识。`week` 保留在联合类型里仅为兼容既有引用（WeekTab/WeekBoard 组件未删，
  * 万一要回退只需把 TABS 里那一项加回来）；当前导航不再有该页签。
  */
-export type MobileTab = 'today' | 'week' | 'todo' | 'me';
+export type MobileTab = 'today' | 'week' | 'todo' | 'me' | 'lbao';
 
-/** 三个页签 + 梨宝中键 = 四格（2026-10-08 页面模板批：今天/本周合并为「日程」）。 */
+/** 四个页签（含梨宝）——同一形态，从左到右：日程 / 待办 / 梨宝 / 我的。 */
 const TABS: Array<{ id: MobileTab; label: string; icon: IconName }> = [
   { id: 'today', label: '日程', icon: 'calendar-days' },
   { id: 'todo', label: '待办', icon: 'check-square' },
+  { id: 'lbao', label: '梨宝', icon: 'sparkle' },
   { id: 'me', label: '我的', icon: 'user-round' },
 ];
 
-/** 梨宝圆钮插在第几格（0-based）。四格时放第 3 格 —— 右手拇指最容易够到的位置。 */
-const LBAO_SLOT = 2;
-
-export default function BottomNav({ tab, onTab, onLbao }: {
+export default function BottomNav({ tab, onTab }: {
   tab: MobileTab;
   onTab: (t: MobileTab) => void;
-  /** 梨宝中键：打开抽屉（不切页） */
-  onLbao: () => void;
 }) {
-  const before = TABS.slice(0, LBAO_SLOT);
-  const after = TABS.slice(LBAO_SLOT);
   return (
     <nav
       aria-label="主导航"
@@ -43,43 +40,25 @@ export default function BottomNav({ tab, onTab, onLbao }: {
     >
       <div
         className="mx-auto grid w-full max-w-md items-end px-2 pb-1.5 pt-1.5"
-        style={{ gridTemplateColumns: `repeat(${TABS.length + 1}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
       >
-        {before.map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
-        {/* 梨宝：品牌色圆钮，语义 = 打开对话抽屉（沿用 m-lbao-toggle 锚点） */}
-        <button
-          type="button"
-          data-testid="m-lbao-toggle"
-          onClick={onLbao}
-          aria-label="问梨宝"
-          className="mx-auto -mt-5 flex h-14 w-14 flex-col items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/30 transition-transform duration-fast active:scale-[0.985]"
-        >
-          <Icon name="sparkle" size="lg" />
-        </button>
-        {after.map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            data-testid={t.id === 'lbao' ? 'm-lbao-toggle' : `m-tab-${t.id}`}
+            aria-current={tab === t.id ? 'page' : undefined}
+            onClick={() => onTab(t.id)}
+            aria-label={t.id === 'lbao' ? '问梨宝' : undefined}
+            className={`mx-auto flex min-h-11 w-full flex-col items-center justify-end gap-0.5 rounded-lg pb-0.5 text-[11px] font-medium transition-colors active:scale-[0.985] ${
+              tab === t.id ? 'text-brand' : 'text-ink-faint'
+            }`}
+          >
+            <Icon name={t.icon} size="md" />
+            {t.label}
+          </button>
+        ))}
       </div>
     </nav>
-  );
-}
-
-function NavItem({ t, tab, onTab }: {
-  t: { id: MobileTab; label: string; icon: IconName };
-  tab: MobileTab;
-  onTab: (t: MobileTab) => void;
-}) {
-  const active = tab === t.id;
-  return (
-    <button
-      type="button"
-      data-testid={`m-tab-${t.id}`}
-      aria-current={active ? 'page' : undefined}
-      onClick={() => onTab(t.id)}
-      className={`mx-auto flex min-h-11 w-full flex-col items-center justify-end gap-0.5 rounded-lg pb-0.5 text-[11px] font-medium transition-colors active:scale-[0.985] ${
-        active ? 'text-brand' : 'text-ink-faint'
-      }`}
-    >
-      <Icon name={t.icon} size="md" />
-      {t.label}
-    </button>
   );
 }

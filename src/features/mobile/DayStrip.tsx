@@ -1,4 +1,3 @@
-import { Icon } from '@/components/icons/Icon';
 import { mondayOfWeekNo, weekDates } from '@/lib/date';
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -11,8 +10,6 @@ interface Props {
   /** 今天（1–7）；不在本周时为 null —— 那就不描红。 */
   todayDow: number | null;
   onSelect: (dow: number) => void;
-  /** 回到今天（非今天视图时出现）。 */
-  onBackToToday?: () => void;
 }
 
 /**
@@ -26,10 +23,13 @@ interface Props {
  * 「换一天看」的职责，周网格（WeekBoard）按 §11.8 退出移动端。今天用上理红描边
  * （身份色配额位③），选中用品牌靛蓝实底，两者可同时出现（选中今天）。
  *
+ * 2026-10-08 二改（CY 指令）：**删掉「回到今天」按钮** —— 视图总共就一周 7 天，
+ * 点日期条上"今天"那一格即可返回，固定按钮既占宽度又有实测 bug；今天的格子上
+ * 仍保留上理红描边（身份锚点没丢）。
+ *
  * 命中区：每格 min-h-[44px]（§11.8 硬约束①）。
  */
-export default function DayStrip({ days, selectedDow, todayDow, onSelect, onBackToToday }: Props) {
-  const isTodayView = todayDow != null && selectedDow === todayDow;
+export default function DayStrip({ days, selectedDow, todayDow, onSelect }: Props) {
   return (
     <div className="flex items-center gap-2 pb-1">
       {/* 日期条：唯一允许横滑的区域 */}
@@ -64,18 +64,6 @@ export default function DayStrip({ days, selectedDow, todayDow, onSelect, onBack
           );
         })}
       </div>
-      {/* 非今天视图 → 给一条明确的回程路（不给死胡同，§13.5） */}
-      {!isTodayView && (
-        <button
-          type="button"
-          data-testid="m-strip-today"
-          onClick={onBackToToday}
-          className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-xl border border-ink/10 bg-paper-card px-3 text-xs font-medium text-ink-soft"
-        >
-          <Icon name="clock" size="sm" className="shrink-0" />
-          回到今天
-        </button>
-      )}
     </div>
   );
 }

@@ -3,10 +3,11 @@
  * ============================================================
  * 本文件只承担**宿主**职责（硬指标：≤260 行，禁止回填业务逻辑）：
  *   · 单一 useTodayData 实例（数据/同步/覆盖层/待办仓/通知决策全在 lib/）；
- *   · 页签状态（今天/本周/待办/我的）+ 编辑抽屉/梨宝抽屉开合；
- *   · 内容区按页签渲染四个小页签组件（TodayTab/WeekTab/TodoTab/MeTab），
+ *   · 页签状态（日程/待办/梨宝/我的）+ 编辑抽屉开合；
+ *   · 内容区按页签渲染小页签组件（TodayTab/WeekTab/TodoTab/MeTab），
  *     今日视图 displayed 与 displayedRef 回写在本层算一次、向子页传。
- * 底部：BottomNav（含梨宝中键 → LbaoDrawer；m-lbao-toggle 锚点保留）。
+ * 底部：BottomNav（四个页签同形态）；梨宝页签 = **全屏页**（LbaoDrawer `variant="page"`，
+ * 2026-10-08 二改：取消中键高光后不再用半屏抽屉）。
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { TimeBlock } from '@/types';
@@ -25,7 +26,7 @@ import TodoTab from './TodoTab.tsx';
 import MeTab from './MeTab.tsx';
 
 const TAB_LABEL: Record<MobileTab, string> = {
-  today: '日程', week: '日程', todo: '待办', me: '我的',
+  today: '日程', week: '日程', todo: '待办', me: '我的', lbao: '梨宝',
 };
 
 export default function TodayPage({ identity, onLogout }: { identity: MobileIdentity; onLogout: () => void }) {
@@ -35,7 +36,6 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
 
   const [tab, setTab] = useState<MobileTab>('today');
   const [sheetBlock, setSheetBlock] = useState<TimeBlock | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   /** 日期条选中的星期（1–7）；null = 跟随今天。 */
   const [selDow, setSelDow] = useState<number | null>(null);
 
@@ -97,7 +97,6 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
             selectedDow={viewDow}
             todayDow={d.weekNo ? d.dow : null}
             onSelect={(dow) => setSelDow(dow === d.dow ? null : dow)}
-            onBackToToday={() => setSelDow(null)}
           />
         </div>
       )}
@@ -116,9 +115,18 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
         {tab === 'week' && <WeekTab d={d} />}
         {tab === 'todo' && <TodoTab d={d} />}
         {tab === 'me' && <MeTab d={d} displayed={todayView} nowMin={nowMin} identity={identity} onLogout={handleLogout} />}
+        {/* 梨宝页签：全屏页（2026-10-08 二改）——高度 = 视口 − 页头(≈68px) − 底栏留白(4.75rem+safe) */}
+        {tab === 'lbao' && (
+          <div
+            className="flex w-full flex-col"
+            style={{ height: 'calc(100dvh - 9.25rem - env(safe-area-inset-bottom))' }}
+          >
+            <LbaoDrawer open onClose={() => setTab('today')} userId={identity.username} variant="page" />
+          </div>
+        )}
       </main>
 
-      <BottomNav tab={tab} onTab={setTab} onLbao={() => setDrawerOpen(true)} />
+      <BottomNav tab={tab} onTab={setTab} />
 
       <EditSheet
         block={sheetBlock}
@@ -126,7 +134,6 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
         onClose={() => setSheetBlock(null)}
         onAction={onAction}
       />
-      <LbaoDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userId={identity.username} />
     </div>
   );
 }

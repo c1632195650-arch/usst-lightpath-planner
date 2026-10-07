@@ -143,8 +143,11 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   await expect(strip).toBeVisible();
   await expect(page.getByTestId('m-day-chip')).toHaveCount(7);
   await page.locator('[data-testid="m-day-chip"]:not([aria-pressed="true"])').first().click();
-  await expect(page.getByTestId('m-strip-today')).toBeVisible(); // 非今天视图 → 有回程路
-  await page.getByTestId('m-strip-today').click();
+  // 回程路 = 直接点日期条上「今天」那一格
+  // （2026-10-08 二改：固定「回到今天」按钮已按 CY 指令删掉，日期条自足即可返回）。
+  // 按 data-dow 精确点，不靠位置 —— 后续步骤要回到今天的块上继续操作。
+  const todayDow = ((new Date().getDay() + 6) % 7) + 1; // 1=周一 … 7=周日
+  await page.locator(`[data-testid="m-day-chip"][data-dow="${todayDow}"]`).click();
   await expect(page.getByTestId('m-today-list')).toBeVisible();
 
   // F6/F17 在「我的」页签的「提醒与帮助」区（2026-10-08 底部导航批次：原折叠区改常展开）
@@ -339,17 +342,20 @@ test('梨宝抽屉：流式渲染回答；抽屉内没有改计划入口；关�
   await registerAndReady(page);
 
   await page.getByTestId('m-lbao-toggle').click();
-  await expect(page.getByTestId('m-drawer')).toBeVisible();
+  // 2026-10-08 二改（CY 指令）：梨宝从半屏抽屉改为**全屏页**（与其它页签同形态）。
+  // 负向锁：不得再出现抽屉容器（防回退）；消息/输入/发送锚点在面板内保持不变。
+  await expect(page.getByTestId('m-lbao-page')).toBeVisible();
+  await expect(page.getByTestId('m-drawer')).toHaveCount(0);
   await page.getByTestId('m-drawer-input').fill('今天状态不好怎么办');
   await page.getByTestId('m-drawer-send').click();
   await expect(page.getByTestId('m-drawer-msg').filter({ hasText: '宝子，稳住节奏！' })).toBeVisible({ timeout: 10_000 });
 
-  // 🔴 排程权已砍：抽屉里没有任何「重排/改计划」按钮
-  expect(await page.getByTestId('m-drawer').getByTestId('m-notify-reshuffle').count()).toBe(0);
+  // 🔴 排程权已砍：梨宝页里没有任何「重排/改计划」按钮
+  expect(await page.getByTestId('m-lbao-page').getByTestId('m-notify-reshuffle').count()).toBe(0);
 
-  // 关抽屉：主界面原样（Today 状态不变）
-  await page.getByTestId('m-drawer-close').click();
-  await expect(page.getByTestId('m-drawer')).toHaveCount(0);
+  // 离开梨宝页 = 切回「日程」页签（全屏页无关闭按钮，与其它页签同语义）；主界面原样
+  await page.getByTestId('m-tab-today').click();
+  await expect(page.getByTestId('m-lbao-page')).toHaveCount(0);
   await expect(page.getByTestId('m-today-list')).toBeVisible();
 });
 

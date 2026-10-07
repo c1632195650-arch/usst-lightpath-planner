@@ -109,7 +109,7 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock, viewDow, i
           <section className="space-y-2" data-testid="m-today-list">
             {!isTodayView && (
               <p className="px-1 text-xs font-medium text-ink-faint">
-                正在看 周{DOW_CN[(viewDow ?? 1) - 1]} —— 点上方「回到今天」回到此刻
+                正在看 周{DOW_CN[(viewDow ?? 1) - 1]} —— 点上方日期条切回今天
               </p>
             )}
             {displayed && displayed.blocks.length === 0 && (
