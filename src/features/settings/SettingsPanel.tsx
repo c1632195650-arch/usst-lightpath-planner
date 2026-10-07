@@ -3,6 +3,21 @@ import { loadBasicInfo } from '@/lib/identity';
 import { Icon, type IconName } from '@/components/icons/Icon';
 import { loadIdentity } from '@/features/mobile/lib/auth';
 import { LAST_SYNC_KEY, SWITCH_KEY } from '@/features/mobile/lib/webSync';
+import { LIFE_MODES } from '@/data/usst';
+
+interface Props {
+  /** 当前生活模式 id（读 App state，不在本组件另存一份）。 */
+  lifeMode?: string | null;
+  /**
+   * 打开「这一周想过什么节奏」窗。
+   *
+   * ⚠️ 2026-10-08：这个入口是**补位**的 —— 原先模式窗有两个入口（导入完成自动弹 +
+   * 总览引导清单的「选个节奏」）。CY 指令删掉引导清单后，老用户就再也打不开模式窗了
+   * （只剩「重新导入一次课表」这条离谱路径）。设置页补一行真实入口，
+   * 值直接显示当前模式名（§11.7：当前值必须显示在行上）。
+   */
+  onOpenModeSetup?: () => void;
+}
 
 /**
  * 设置面板（UI v2 批次 D5，设计稿 §11 /settings 的网页落地）
@@ -11,11 +26,12 @@ import { LAST_SYNC_KEY, SWITCH_KEY } from '@/features/mobile/lib/webSync';
  * 每一行都读真实状态源：
  *   校区     ← 画像档案（persona.campus）
  *   日程视图 ← usst.scheduleViewV2（D2 双层开关，显式 '0' 关）
+ *   生活节奏 ← App state.lifeMode（本行可点，进模式窗）
  *   云同步   ← usst.mobile.cloudSync（默认关）+ usst.mobile.webSyncAt 上次同步
  *   日历订阅 ← 登录身份的 icsToken（复用既有 /api/sync/plan.ics 端点输出）
  * 挂载点：画像 Tab 底部（App 渲染）；不新增路由（D2 决策）。
  */
-export function SettingsPanel() {
+export function SettingsPanel({ lifeMode, onOpenModeSetup }: Props = {}) {
   const [v2Enabled, setV2Enabled] = useState(true);
   const [syncOn, setSyncOn] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -42,15 +58,29 @@ export function SettingsPanel() {
 
   const icsUrl = identity?.icsToken ? `${window.location.origin}/api/sync/plan.ics?token=${identity.icsToken}` : null;
 
-  const row = (label: string, value: React.ReactNode, key: string, icon?: IconName) => (
-    <div key={key} className="flex min-h-11 items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 transition-colors duration-fast first:border-t-0 hover:bg-ink/[0.02]">
-      <span className="flex items-center gap-2 text-[13px] text-ink">
-        {icon && <Icon name={icon} size="md" className="shrink-0 text-ink-soft" />}
-        {label}
-      </span>
-      <span className="text-right text-[12.5px] font-medium text-ink-soft" data-testid={`settings-value-${key}`}>{value}</span>
-    </div>
-  );
+  /** 行。给了 onClick 才是可点行（配 chevron-right，§11.7 ④ / §9.6）。 */
+  const row = (label: string, value: React.ReactNode, key: string, icon?: IconName, onClick?: () => void) => {
+    const body = (
+      <>
+        <span className="flex items-center gap-2 text-[13px] text-ink">
+          {icon && <Icon name={icon} size="md" className="shrink-0 text-ink-soft" />}
+          {label}
+        </span>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-right text-[12.5px] font-medium text-ink-soft" data-testid={`settings-value-${key}`}>{value}</span>
+          {onClick && <Icon name="chevron-right" size="sm" className="shrink-0 text-ink-faint" />}
+        </span>
+      </>
+    );
+    const cls = 'flex min-h-11 w-full items-center justify-between gap-3 border-t border-ink/[0.06] px-1 py-2 transition-colors duration-fast first:border-t-0';
+    return onClick ? (
+      <button key={key} type="button" data-testid={`settings-row-${key}`} onClick={onClick} className={`${cls} text-left hover:bg-ink/[0.02]`}>
+        {body}
+      </button>
+    ) : (
+      <div key={key} className={`${cls} hover:bg-ink/[0.02]`}>{body}</div>
+    );
+  };
 
   return (
     <section className="panel p-4 sm:p-5" data-testid="settings-panel">
@@ -59,6 +89,13 @@ export function SettingsPanel() {
       <div className="mt-3">
         <p className="px-1 pb-1 text-[11px] font-semibold text-ink-faint">通用</p>
         {row('校区', campus || '未设置（完成画像后带入）', 'campus', 'map-pin')}
+        {row(
+          '生活节奏',
+          LIFE_MODES.find((m) => m.id === lifeMode)?.name ?? '未设置（按默认节奏排）',
+          'life-mode',
+          'gauge',
+          onOpenModeSetup,
+        )}
         {row(
           '日程双层视图',
           <button

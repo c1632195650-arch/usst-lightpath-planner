@@ -406,7 +406,10 @@ export default function App() {
               <HardBoundaryCard />
               {/* UI v2 D5：设置面板（分组列表行上直显当前值；真实状态源，无占位行） */}
               <div className="px-4 pb-4 sm:px-6">
-                <SettingsPanel />
+                <SettingsPanel
+                  lifeMode={normalizeLifeMode(state.lifeMode)}
+                  onOpenModeSetup={() => setModeSetupOpen(true)}
+                />
               </div>
             </div>
           ) : (
@@ -425,7 +428,10 @@ export default function App() {
               {/* 2026-10-08：硬边界卡（我的作息）——不依赖画像，未完成画像时同样可设 */}
               <HardBoundaryCard />
               {/* UI v2 D5：画像未完成时设置同样可达（真实状态源不依赖画像） */}
-              <SettingsPanel />
+              <SettingsPanel
+                  lifeMode={normalizeLifeMode(state.lifeMode)}
+                  onOpenModeSetup={() => setModeSetupOpen(true)}
+                />
             </div>
           )
         ) : weekMonday ? (
@@ -475,23 +481,14 @@ export default function App() {
             selectedDate={state.selectedDays[state.selectedDays.length - 1]}
             onOpenWeek={openWeek}
             onStartPersona={() => setView('persona')}
-            /* §11.3 ④：总览数字卡的下钻出口（待办 / 投入 → 各自一级页） */
+            /* §11.3 ④：总览数字卡的下钻出口（待办 / 连续记录 / 状态 → 各自一级页） */
             onGotoTodos={() => setMainTab('memo')}
             onGotoGoals={() => setMainTab('goals')}
             onGotoProfile={() => setMainTab('profile')}
-            onboardingCard={(
-              <OnboardingChecklist
-                hasSchedule={!!state.schedule && state.schedule !== MOCK_SCHEDULE}
-                lifeMode={state.lifeMode}
-                userDeadlineCount={loadUserDeadlines().length}
-                onGotoImport={() => setMainTab('import')}
-                onOpenModeSetup={() => setModeSetupOpen(true)}
-                onGotoLibao={() => {
-                  setLibaoSeed({ text: '帮我记一个重要日：', nonce: Date.now() });
-                  setMainTab('libao');
-                }}
-              />
-            )}
+            /* 2026-10-08（CY 指令）：「开始使用」引导清单卡**已下线** —— 总览只做分流，
+               不再在首屏挂一张自检表。`OnboardingChecklist` 组件与 checklist.ts 保留
+               （可逆：把 onboardingCard 一行加回来即可），三处入口（导入课表 / 选节奏 /
+               记重要日）都在各自的一级页里真实存在，不缺出口。 */
           />
         )}
       </main>

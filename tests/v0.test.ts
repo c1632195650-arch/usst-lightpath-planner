@@ -52,12 +52,19 @@ test('V0-2 源码: 结果页 onEnter 首落点 = 有课表落总览、没课表�
   assert.match(src, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/);
 });
 
-test('V0-3 源码: OverviewPage 渲染 onboardingCard；梨宝 seedQuestion 预填链路在位', () => {
+test('V0-3 源码（2026-10-08 改锚：卡已下线）: 总览不再挂 onboardingCard；梨宝 seedQuestion 预填链路仍在位', () => {
+  // ⚠️ 改锚留痕（commit message 同款申报）：CY 2026-10-08 指令「开始使用这个删掉」——
+  //   总览首屏不再挂引导清单卡。本用例从**正向锁**改为**负向锁**（同仓既有手法，
+  //   例见 tests/v1.test.ts 的「周页不再挂 AchievementPanel」），语义 =
+  //   「卡不许回流到总览」；checklistStatus 纯函数用例（本文件前三条）保留不动，
+  //   OnboardingChecklist 组件与 checklist.ts 均未删除，可一行加回。
   const overview = readFileSync(
     fileURLToPath(new URL('../src/features/overview/OverviewPage.tsx', import.meta.url)), 'utf8');
-  assert.match(overview, /\{onboardingCard\}/);
+  assert.equal(overview.includes('{onboardingCard}'), false, '总览不再挂引导清单卡（已下线）');
   const app = APP_SRC();
-  assert.match(app, /onboardingCard=\{\(/);
+  assert.equal(app.includes('onboardingCard={('), false, 'App 不再组装引导清单卡');
+  assert.equal(app.includes('<OnboardingChecklist'), false, 'App 不再引用 OnboardingChecklist');
+  // 预填链路本身仍是活能力（梨宝 tab 的 seedQuestion 接缝）—— 正向锁保留
   const libao = readFileSync(
     fileURLToPath(new URL('../src/features/libao/LbaoChat.tsx', import.meta.url)), 'utf8');
   assert.match(libao, /useState\(seedQuestion \?\? ''\)/);

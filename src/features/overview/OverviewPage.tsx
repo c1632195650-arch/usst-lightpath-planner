@@ -7,7 +7,7 @@ import { MonthCalendar } from '@/features/calendar/MonthCalendar';
 import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
 import { TodayCard } from '@/features/overview/TodayCard';
 import { WeekStrip } from '@/features/overview/WeekStrip';
-import { OverviewStats } from '@/features/overview/OverviewStats';
+import { OverviewStats, PersonaStatusCard } from '@/features/overview/OverviewStats';
 
 interface Props {
   schedule: Schedule;
@@ -17,32 +17,34 @@ interface Props {
   selectedDate?: string;
   onOpenWeek: (iso: string) => void;
   onStartPersona: () => void;
-  /** §11.3 ④ 每张卡可下钻：数字卡点了去对应页（缺省则该卡不显示可点样式） */
+  /** §11.3 ④ 每张卡可下钻：数字卡点了去对应页（缺省则该卡不渲染可点样式与箭头） */
   onGotoTodos?: () => void;
   onGotoGoals?: () => void;
   onGotoProfile?: () => void;
-  /** V0-3：onboarding checklist 卡（App 组装，全部完成时组件自隐藏） */
-  onboardingCard?: React.ReactNode;
 }
 
 /**
- * 总览页。
+ * 总览页 · 12 列 Bento（设计总成 §11.3）
+ * ============================================================
+ * **2026-10-08 版式对齐（页面模板批）**：此前是「左 8 右 4 两栏堆叠」——数字卡与节奏条
+ * 都挤在左 8 里，与升级案 HTML 的 Bento 结构对不上。现按 §11.3 的 mock 原样排：
  *
- * 排列顺序就是回答问题的顺序：现在要干嘛（今日卡）→ 这周什么节奏（七天条）
- * → 学期上还有什么（校历 / 节点）。校历默认收起，因为它的职能是导航而不是内容，
- * 不该比实际内容占更大面积。
+ *   ┌ 深色焦点卡（span 12，全页唯一的「重」）─────────────────┐
+ *   ├ 本周课时 (4) │ 待办 (4)     │ 连续记录 (4)             ┤
+ *   ├ 一周节奏 (8) ──────────────│ 状态 (4)                 ┤
+ *   ├ 校历 (6) ──────────────────│ 接下来的节点 (6)          ┤
  *
- * 设计总成 §11.3 版式对账（2026-10-08 页面模板批）：
- *   ① 深色焦点卡全页唯一 ✅（TodayCard；校历与节点都是浅色卡）
- *   ② 一张「一周节奏」横条 + 今天高亮 ✅（WeekStrip 已按 34px 横条重做，
- *      取代原先那张「把课表搬来」的七列竖柱图）
- *   ③ 3–4 个数字卡、每张配 `.dz` 迷你示意 ✅（OverviewStats，四张）
- *   ④ 每张卡可下钻 ✅（节奏格进那一周；待办 / 投入 / 画像卡进对应页）
- *   跨度只用 4/6/8/12（§8.5）：左 8 右 4，checklist 整行 12。
+ * 跨度只用 4 / 6 / 8 / 12（§8.5 明令不用 5 和 7 —— 既切不出三等分也切不出两等分）。
+ * 「必须有 / 绝不能有」四条逐条对账：
+ *   ① 深色焦点卡全页唯一 ✅（TodayCard；其余全是浅色卡）
+ *   ② 一张「一周节奏」横条 + 今天高亮 ✅（WeekStrip 已按 34px 横条重做）
+ *   ③ 3 个数字卡、每张配 `.dz` 迷你示意 ✅（OverviewStats；状态卡另占一格，同规范 mock）
+ *   ④ 每张卡可下钻 ✅（节奏格 → 那一周；待办/连续记录/状态卡 → 对应页；节点行 → 那一周）
+ *   ✕ 第二张深色卡 / 完整课表搬到总览 / 纯数字卡堆叠 / 不可点的信息砖 —— 均无
  */
 export function OverviewPage({
   schedule, weekNo, todayIso, persona, selectedDate, onOpenWeek, onStartPersona,
-  onGotoTodos, onGotoGoals, onGotoProfile, onboardingCard,
+  onGotoTodos, onGotoGoals, onGotoProfile,
 }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -55,11 +57,9 @@ export function OverviewPage({
   }).length;
 
   return (
-    /* UI v2 D3：12 列 Bento（跨度只用 4/6/8/12，设计稿 §10 容器纪律）——
-       左 8 右 4；onboardingCard 占整行 12。三档容器由 page-shell（1200px=default 档）承担。 */
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
-      {onboardingCard && <div className="lg:col-span-12">{onboardingCard}</div>}
-      <div className="flex flex-col gap-4 lg:col-span-8">
+    /* 三档容器由 page-shell（1200px = default 档）承担。 */
+    <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 lg:items-start">
+      <div className="lg:col-span-12">
         <TodayCard
           schedule={schedule}
           todayIso={todayIso}
@@ -68,17 +68,19 @@ export function OverviewPage({
           onOpenWeek={() => onOpenWeek(todayIso)}
           onStartPersona={onStartPersona}
         />
+      </div>
 
-        <OverviewStats
-          schedule={schedule}
-          weekNo={weekNo}
-          todayIso={todayIso}
-          persona={persona}
-          onGotoTodos={onGotoTodos}
-          onGotoGoals={onGotoGoals}
-          onGotoProfile={onGotoProfile}
-        />
+      {/* 三张数字卡自带 lg:col-span-4（它们是本栅格的直接子元素） */}
+      <OverviewStats
+        schedule={schedule}
+        weekNo={weekNo}
+        todayIso={todayIso}
+        persona={persona}
+        onGotoTodos={onGotoTodos}
+        onGotoGoals={onGotoGoals}
+      />
 
+      <div className="lg:col-span-8">
         <WeekStrip
           schedule={schedule}
           weekNo={weekNo}
@@ -86,45 +88,46 @@ export function OverviewPage({
           todayIso={todayIso}
           onSelectDay={onOpenWeek}
         />
-
-        <section className="panel p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="section-label">CALENDAR</p>
-              <h2 className="mt-2 flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
-                <Icon name="calendar-days" size="md" className="shrink-0 text-brand" />
-                校历
-              </h2>
-              {!calendarOpen && (
-                <p className="mt-1 text-sm text-ink-soft">
-                  本月 {monthEventCount} 个校园节点 · 展开可按日期跳到那一周
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setCalendarOpen((open) => !open)}
-              aria-expanded={calendarOpen}
-              className="button-secondary shrink-0 px-4 py-2 text-sm"
-            >
-              {calendarOpen ? '收起' : '展开'}
-            </button>
-          </div>
-
-          {calendarOpen && (
-            <div className="mt-6 border-t border-ink/10 pt-6">
-              <MonthCalendar
-                events={CAL_EVENTS}
-                selectedDate={selectedDate}
-                onSelectDate={onOpenWeek}
-              />
-            </div>
-          )}
-        </section>
       </div>
 
-      <aside className="lg:col-span-4 lg:sticky lg:top-20">
+      <PersonaStatusCard persona={persona} onGotoProfile={onGotoProfile} />
+
+      <section className="panel p-4 sm:p-5 lg:col-span-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ink">
+              <Icon name="calendar-days" size="sm" className="shrink-0 text-brand" />
+              校历
+            </h2>
+            {!calendarOpen && (
+              <p className="mt-1 text-[12px] text-ink-soft">
+                本月 {monthEventCount} 个校园节点 · 展开可按日期跳到那一周
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setCalendarOpen((open) => !open)}
+            aria-expanded={calendarOpen}
+            className="button-secondary shrink-0 px-3 py-1.5 text-[12.5px]"
+          >
+            {calendarOpen ? '收起' : '展开'}
+          </button>
+        </div>
+
+        {calendarOpen && (
+          <div className="mt-4 border-t border-ink/10 pt-4">
+            <MonthCalendar
+              events={CAL_EVENTS}
+              selectedDate={selectedDate}
+              onSelectDate={onOpenWeek}
+            />
+          </div>
+        )}
+      </section>
+
+      <div className="lg:col-span-6">
         <DeadlineBoard />
-      </aside>
+      </div>
     </div>
   );
 }

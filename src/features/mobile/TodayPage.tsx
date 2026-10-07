@@ -18,13 +18,14 @@ import { useTodayData } from './lib/useTodayData.ts';
 import EditSheet, { type EditAction } from './EditSheet.tsx';
 import LbaoDrawer from './LbaoDrawer.tsx';
 import BottomNav, { type MobileTab } from './BottomNav.tsx';
+import DayStrip, { weekDaysOf } from './DayStrip.tsx';
 import TodayTab from './TodayTab.tsx';
 import WeekTab from './WeekTab.tsx';
 import TodoTab from './TodoTab.tsx';
 import MeTab from './MeTab.tsx';
 
 const TAB_LABEL: Record<MobileTab, string> = {
-  today: '今天', week: '本周', todo: '待办', me: '我的',
+  today: '日程', week: '日程', todo: '待办', me: '我的',
 };
 
 export default function TodayPage({ identity, onLogout }: { identity: MobileIdentity; onLogout: () => void }) {
@@ -35,14 +36,34 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
   const [tab, setTab] = useState<MobileTab>('today');
   const [sheetBlock, setSheetBlock] = useState<TimeBlock | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  /** 日期条选中的星期（1–7）；null = 跟随今天。 */
+  const [selDow, setSelDow] = useState<number | null>(null);
 
-  /** 今日视图 = 重算计划 ∘ 覆盖层（excluded / moves / done）；在宿主算一次，四页共用 */
-  const displayed = useMemo(
+  /** 今日视图 = 重算计划 ∘ 覆盖层（excluded / moves / done）；在宿主算一次。 */
+  const todayView = useMemo(
     () => (d.plan && d.weekNo ? applyLayerToBlocks(d.plan, d.layer, d.weekNo, d.dow) : null),
     [d.plan, d.layer, d.weekNo, d.dow],
   );
-  // 同步成功后的通知重排、通知动作按钮都吃这份视图（钩子经 ref 读取）
-  d.displayedRef.current = displayed;
+  // 同步成功后的通知重排、通知动作按钮都吃**今天**这份视图（钩子经 ref 读取）——
+  // 日期条切到别的天不能影响提醒（提醒永远关于此刻）。
+  d.displayedRef.current = todayView;
+
+  /**
+   * 日期条选中的那一天（2026-10-08 页面模板批）：
+   * 今天/本周合并为一个「日程」屏 —— 日期条切换要看的那天，正文渲染那天的流水；
+   * 选中的就是今天时复用 todayView，不重算。
+   */
+  const viewDow = selDow ?? d.dow;
+  const isTodayView = viewDow === d.dow;
+  const viewDisplayed = useMemo(
+    () => (isTodayView ? todayView : (d.plan && d.weekNo ? applyLayerToBlocks(d.plan, d.layer, d.weekNo, viewDow) : null)),
+    [isTodayView, todayView, d.plan, d.layer, d.weekNo, viewDow],
+  );
+  /** 本周 7 天（周一 → 周日）：宿主算一次给日期条。termStart 取自同步态（与周次同源）。 */
+  const weekDays = useMemo(
+    () => (d.weekNo && d.serverState?.termStart ? weekDaysOf(d.serverState.termStart, d.weekNo) : []),
+    [d.weekNo, d.serverState?.termStart],
+  );
 
   const handleLogout = useCallback(() => { clearIdentity(); onLogout(); }, [onLogout]);
   const onAction = useCallback((b: TimeBlock, a: EditAction) => {
@@ -68,18 +89,40 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
         <p className="text-xs text-ink-faint">{identity.username} · 懂上理的智能决策伙伴</p>
       </header>
 
+      {/* 日期条贴在页头下方：换一天看是这一屏最常用的动作（§11.8 ② 移动端唯一允许横滑区） */}
+      {tab === 'today' && weekDays.length === 7 && (
+        <div className="sticky top-[68px] z-20 bg-paper/95 px-4 pb-1.5 pt-1.5 backdrop-blur">
+          <DayStrip
+            days={weekDays}
+            selectedDow={viewDow}
+            todayDow={d.weekNo ? d.dow : null}
+            onSelect={(dow) => setSelDow(dow === d.dow ? null : dow)}
+            onBackToToday={() => setSelDow(null)}
+          />
+        </div>
+      )}
+
       <main className="mx-auto w-full max-w-md space-y-3 px-4">
-        {tab === 'today' && <TodayTab d={d} displayed={displayed} nowMin={nowMin} onOpenBlock={setSheetBlock} />}
+        {tab === 'today' && (
+          <TodayTab
+            d={d}
+            displayed={viewDisplayed}
+            nowMin={nowMin}
+            onOpenBlock={setSheetBlock}
+            viewDow={viewDow}
+            isTodayView={isTodayView}
+          />
+        )}
         {tab === 'week' && <WeekTab d={d} />}
         {tab === 'todo' && <TodoTab d={d} />}
-        {tab === 'me' && <MeTab d={d} displayed={displayed} nowMin={nowMin} identity={identity} onLogout={handleLogout} />}
+        {tab === 'me' && <MeTab d={d} displayed={todayView} nowMin={nowMin} identity={identity} onLogout={handleLogout} />}
       </main>
 
       <BottomNav tab={tab} onTab={setTab} onLbao={() => setDrawerOpen(true)} />
 
       <EditSheet
         block={sheetBlock}
-        done={sheetBlock ? (displayed?.doneIds.has(sheetBlock.id) ?? false) : false}
+        done={sheetBlock ? (viewDisplayed?.doneIds.has(sheetBlock.id) ?? false) : false}
         onClose={() => setSheetBlock(null)}
         onAction={onAction}
       />

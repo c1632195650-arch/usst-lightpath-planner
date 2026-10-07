@@ -20,36 +20,43 @@ import { Icon } from '@/components/icons/Icon';
 /** 宿主算好的「今日视图」= 重算计划 ∘ 覆盖层（excluded / moves / done） */
 export type Displayed = ReturnType<typeof applyLayerToBlocks>;
 
-export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
+export default function TodayTab({ d, displayed, nowMin, onOpenBlock, viewDow, isTodayView = true }: {
   d: TodayData;
   displayed: Displayed | null;
   nowMin: number;
   /** 点块 → 打开编辑抽屉（状态归宿主） */
   onOpenBlock: (b: TimeBlock) => void;
+  /** 日期条选中的星期（1–7），仅用于文案与空态。 */
+  viewDow?: number;
+  /** 选中的就是今天 —— 「当前块 / 接下来 / 页内提醒 / 明日预览」这些「此刻」概念只在今天成立。 */
+  isTodayView?: boolean;
 }) {
-  const current = displayed?.blocks.find((b) => b.startMin <= nowMin && nowMin < b.endMin && !displayed.doneIds.has(b.id)) ?? null;
-  const next = displayed ? displayed.blocks
+  const current = isTodayView
+    ? displayed?.blocks.find((b) => b.startMin <= nowMin && nowMin < b.endMin && !displayed.doneIds.has(b.id)) ?? null
+    : null;
+  const next = isTodayView && displayed ? displayed.blocks
     .filter((b) => b.endMin > nowMin && !displayed.doneIds.has(b.id))
     .sort((a, b) => a.startMin - b.startMin)[0] ?? null : null;
   const doneIds = displayed?.doneIds ?? new Set<string>();
-  // M5b：块开始前 10 分钟 → 页内横幅（useNow(30s) 驱动，网页版的真实提醒通道）
-  const banner = bannerBlock(displayed?.blocks ?? [], nowMin, doneIds);
+  // M5b：块开始前 10 分钟 → 页内横幅（useNow(30s) 驱动）—— 只在今天有意义
+  const banner = isTodayView ? bannerBlock(displayed?.blocks ?? [], nowMin, doneIds) : null;
+  const DOW_CN = ['一', '二', '三', '四', '五', '六', '日'];
 
   return (
     <>
-      {d.changed && (
+      {isTodayView && d.changed && (
         <div data-testid="m-changed-banner" className="rounded-xl bg-accent-light px-4 py-2.5 text-sm text-ink">
           今天的安排有更新 —— 以这里显示的为准。
           <button type="button" className="ml-2 underline" onClick={() => d.setChanged(false)}>知道了</button>
         </div>
       )}
-      {d.updateUrl && (
+      {isTodayView && d.updateUrl && (
         <div data-testid="m-update" className="rounded-xl bg-brand-light px-4 py-2.5 text-sm text-ink">
           有新版本。<a className="ml-2 underline" href={d.updateUrl}>下载更新 APK</a>
         </div>
       )}
-      {d.permDenied && (
-        <div data-testid="m-perm-banner" className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+      {isTodayView && d.permDenied && (
+        <div data-testid="m-perm-banner" className="rounded-xl bg-warn-light px-4 py-2.5 text-sm text-warn-text">
           通知没开，提醒收不到 —— 去「我的」页查看提醒与帮助。
         </div>
       )}
@@ -78,8 +85,8 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
 
       {d.phase === 'ready' && (
         <>
-          {/* 当前块（绝对核心）｜ 接下来（次级·小） */}
-          {current ? (
+          {/* 当前块（绝对核心）｜ 接下来（次级·小）—— 只在今天 */}
+          {isTodayView && (current ? (
             <>
               <NowBlock
                 block={current} nowMin={nowMin} done={doneIds.has(current.id)}
@@ -92,16 +99,29 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
             </>
           ) : (
             <NextList next={next} nowMin={nowMin} />
+          ))}
+
+          {isTodayView && (
+            <QuickBar displayed={displayed} nowMin={nowMin} onShift={(b) => d.onAction(b, { type: 'shift', deltaMin: 15 })} />
           )}
 
-          <QuickBar displayed={displayed} nowMin={nowMin} onShift={(b) => d.onAction(b, { type: 'shift', deltaMin: 15 })} />
-
-          {/* 当日时间轴（上下滑 = 只看当天） */}
+          {/* 时间轴（上下滑 = 只看选中那一天） */}
           <section className="space-y-2" data-testid="m-today-list">
+            {!isTodayView && (
+              <p className="px-1 text-xs font-medium text-ink-faint">
+                正在看 周{DOW_CN[(viewDow ?? 1) - 1]} —— 点上方「回到今天」回到此刻
+              </p>
+            )}
             {displayed && displayed.blocks.length === 0 && (
               <div data-testid="m-empty" className="rounded-card bg-paper-card p-6 text-center shadow-sm">
-                <p className="font-display text-base font-semibold text-ink">今天还没有安排</p>
-                <p className="mt-2 text-sm leading-6 text-ink-soft">去网页端「周计划」把今天排上，或者把手机上的偏好告诉梨宝。</p>
+                <p className="font-display text-base font-semibold text-ink">
+                  {isTodayView ? '今天还没有安排' : `周${DOW_CN[(viewDow ?? 1) - 1]}没有安排`}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-ink-soft">
+                  {isTodayView
+                    ? '去网页端「周计划」把今天排上，或者把手机上的偏好告诉梨宝。'
+                    : '这一天是空的 —— 留白也是安排。去网页端可以把它排上。'}
+                </p>
               </div>
             )}
             {displayed?.blocks.map((b) => (
@@ -110,7 +130,7 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock }: {
             ))}
           </section>
 
-          <TomorrowPreview blocks={d.tomorrow.blocks} tomorrowDow={d.tomorrowDow} loading={d.tomorrow.loading} />
+          {isTodayView && <TomorrowPreview blocks={d.tomorrow.blocks} tomorrowDow={d.tomorrowDow} loading={d.tomorrow.loading} />}
         </>
       )}
     </>

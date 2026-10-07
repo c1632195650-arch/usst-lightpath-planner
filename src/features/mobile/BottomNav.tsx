@@ -10,14 +10,21 @@
 import { Icon } from '@/components/icons/Icon';
 import type { IconName } from '@/components/icons/Icon';
 
+/**
+ * 页签标识。`week` 保留在联合类型里仅为兼容既有引用（WeekTab/WeekBoard 组件未删，
+ * 万一要回退只需把 TABS 里那一项加回来）；当前导航不再有该页签。
+ */
 export type MobileTab = 'today' | 'week' | 'todo' | 'me';
 
+/** 三个页签 + 梨宝中键 = 四格（2026-10-08 页面模板批：今天/本周合并为「日程」）。 */
 const TABS: Array<{ id: MobileTab; label: string; icon: IconName }> = [
-  { id: 'today', label: '今天', icon: 'clock' },
-  { id: 'week', label: '本周', icon: 'calendar-days' },
+  { id: 'today', label: '日程', icon: 'calendar-days' },
   { id: 'todo', label: '待办', icon: 'check-square' },
   { id: 'me', label: '我的', icon: 'user-round' },
 ];
+
+/** 梨宝圆钮插在第几格（0-based）。四格时放第 3 格 —— 右手拇指最容易够到的位置。 */
+const LBAO_SLOT = 2;
 
 export default function BottomNav({ tab, onTab, onLbao }: {
   tab: MobileTab;
@@ -25,6 +32,8 @@ export default function BottomNav({ tab, onTab, onLbao }: {
   /** 梨宝中键：打开抽屉（不切页） */
   onLbao: () => void;
 }) {
+  const before = TABS.slice(0, LBAO_SLOT);
+  const after = TABS.slice(LBAO_SLOT);
   return (
     <nav
       aria-label="主导航"
@@ -32,9 +41,12 @@ export default function BottomNav({ tab, onTab, onLbao }: {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-paper/95 backdrop-blur"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end px-2 pb-1.5 pt-1.5">
-        {TABS.slice(0, 2).map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
-        {/* 梨宝：中键（品牌色圆钮，语义 = 打开对话抽屉） */}
+      <div
+        className="mx-auto grid w-full max-w-md items-end px-2 pb-1.5 pt-1.5"
+        style={{ gridTemplateColumns: `repeat(${TABS.length + 1}, minmax(0, 1fr))` }}
+      >
+        {before.map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
+        {/* 梨宝：品牌色圆钮，语义 = 打开对话抽屉（沿用 m-lbao-toggle 锚点） */}
         <button
           type="button"
           data-testid="m-lbao-toggle"
@@ -44,7 +56,7 @@ export default function BottomNav({ tab, onTab, onLbao }: {
         >
           <Icon name="sparkle" size="lg" />
         </button>
-        {TABS.slice(2).map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
+        {after.map((t) => <NavItem key={t.id} t={t} tab={tab} onTab={onTab} />)}
       </div>
     </nav>
   );

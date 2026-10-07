@@ -136,9 +136,16 @@ test('移动今日页闭环：注册 → 今日块渲染 → 顺延/完成写覆
   await expect(page.getByTestId('m-now-banner').or(page.getByTestId('m-next-banner')).first()).toBeVisible();
   // F7 / F10 节点（F10 已由 M3 WeekBoard 替换 WeekGlance —— 周切换/回到现在/点天展开）
   await expect(page.getByTestId('m-tomorrow')).toBeVisible();
-  // 2026-10-08 底部导航批次：周视图在「本周」页签
-  await page.getByTestId('m-tab-week').click();
-  await expect(page.getByTestId('m-week-board')).toBeVisible();
+  // ⚠️ 2026-10-08 改锚（页面模板批，CY 指令）：今天 / 本周两个页签合并为「日程」一屏，
+  //    周网格按设计总成 §11.8 退出移动端，改由**顶部横向日期条**承担换天。
+  //    语义不变且更强：原来只验「周视图能打开」，现在验「能换到别的天、且能回到今天」。
+  const strip = page.getByTestId('m-day-strip');
+  await expect(strip).toBeVisible();
+  await expect(page.getByTestId('m-day-chip')).toHaveCount(7);
+  await page.locator('[data-testid="m-day-chip"]:not([aria-pressed="true"])').first().click();
+  await expect(page.getByTestId('m-strip-today')).toBeVisible(); // 非今天视图 → 有回程路
+  await page.getByTestId('m-strip-today').click();
+  await expect(page.getByTestId('m-today-list')).toBeVisible();
 
   // F6/F17 在「我的」页签的「提醒与帮助」区（2026-10-08 底部导航批次：原折叠区改常展开）
   await page.getByTestId('m-tab-me').click();

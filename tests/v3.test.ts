@@ -22,18 +22,26 @@ test('V3: 首访旅程 ①→④ 连线（标题→基本信息→问卷→结�
   assert.match(app, /view === 'result' && state\.persona/, '④ 结果页入口'); // 5
   // 验收修正（2026-09-27）：MOCK 兜底按引用判别——真课表才落「总览」，否则首落「导入」
   assert.match(app, /setMainTab\(state\.schedule && state\.schedule !== MOCK_SCHEDULE \? 'calendar' : 'import'\)/, '⑤ 首落点=导入（MOCK 不算已有课表）'); // 6
-  assert.match(app, /hasSchedule=\{!!state\.schedule && state\.schedule !== MOCK_SCHEDULE\}/, '⑤ checklist 导入项：MOCK 兜底不亮勾'); // 6b
+  // ⚠️ 2026-10-08 改锚（CY 指令「开始使用这个删掉」）：总览引导清单卡下线，其导入项 prop 随之消失。
+  //    首落点判定本身仍在（上面 // 6 那条）——本行改为**负向锁**「卡不许回流」。
+  assert.equal(app.includes('hasSchedule={'), false, '⑤ 引导清单卡的导入项已随卡下线'); // 6b
 });
 
-test('V3: ⑥→⑦ 模式窗双入口 + 确认落 lifeMode', () => {
+test('V3: ⑥→⑦ 模式窗入口 + 确认落 lifeMode', () => {
   const app = src('/src/App.tsx');
   assert.match(app, /<ModeSetupDialog/, '⑥ ModeSetupDialog 挂载');          // 7
   assert.match(app, /addTimetableFacts\(s, getUserId\(\)\)/, '⑤ 导入后回写事实'); // 8
   assert.match(app, /setModeSetupOpen\(true\)/, '⑤ 导入完成自动弹窗'); // 8b
   assert.match(app, /onConfirm=\{\(id\) => \{ patchState\(\{ lifeMode: id \}\)/, '⑦ 确认落 lifeMode'); // 9
-  // ⚠️ 2026-10-08 改锚（CY 截图裁决）：操作条按 Ray 设计收敛，「换个节奏」不再占周页操作条；
-  // 模式窗其余两个入口（导入完成自动弹 8b + 总览 checklist）即本步的「双入口」。
-  assert.match(app, /onOpenModeSetup=\{\(\) => setModeSetupOpen\(true\)\}/, '总览 checklist 节奏入口'); // 10
+  // ⚠️ 2026-10-08 改锚（同上）：总览引导清单下线后，模式窗只剩「导入完成自动弹」一个入口 ——
+  //    老用户从此打不开（只剩重新导入课表这条离谱路径）。故本批把入口改由**设置页「生活节奏」行**
+  //    承接（值直显当前模式名），本行断言同步改指设置页那一处。语义 = 「模式窗有一个老用户够得着的入口」。
+  assert.equal(app.includes('<OnboardingChecklist'), false, '总览引导清单已下线（不许回流）');
+  assert.match(
+    app,
+    /<SettingsPanel[\s\S]{0,140}onOpenModeSetup=\{\s*\(\) => setModeSetupOpen\(true\)\s*\}/,
+    '设置页「生活节奏」行承接模式窗入口',
+  ); // 10
 });
 
 test('V3: ⑧⑨⑩ 日程区三件套（满溢度/编辑开关/留白块）', () => {
