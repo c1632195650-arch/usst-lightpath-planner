@@ -33,6 +33,8 @@ export interface WeekPlanPageProps {
   onToggleDay: (iso: string) => void;
   onSelectWholeWeek: () => void;
   onClearDays: () => void;
+  /** 「去改画像」→ 组合根注入（组件自己不碰路由，见 §架构护栏 R5：week 不 import 跨域路由） */
+  onGoProfile?: () => void;
 }
 
 /** 周视图子模式：课表网格 vs 排程计划时间轴 */
@@ -41,7 +43,7 @@ type WeekSubTab = 'timetable' | 'plan';
 export function WeekPlanPage(props: WeekPlanPageProps) {
   const {
     schedule, weekMonday, onWeekMondayChange, persona, planState, onPlanStateChange,
-    selectedDays, onToggleDay, onSelectWholeWeek, onClearDays,
+    selectedDays, onToggleDay, onSelectWholeWeek, onClearDays, onGoProfile,
   } = props;
 
   // 默认落在「周计划」：这是编辑主场（课表网格随时可切回）
@@ -51,12 +53,23 @@ export function WeekPlanPage(props: WeekPlanPageProps) {
     ? currentWeekNo(schedule.termStart, weekMonday)
     : currentWeekNo(schedule.termStart);
 
+  /**
+   * 换周基准 —— `weekMonday === null`（默认口径，路由上就是不带参数的 `#/week`）时，
+   * 用**本周的周一**当基准。
+   *
+   * 🔴 2026-10-07 修（RAY：「周计划不能切换周次，固定在当下周」）：
+   *    原实现 `shiftWeekBy` 里第一句是 `if (!base) return;`，键盘监听里还有一句
+   *    `if (weekMonday === null) return;` —— 而用户日常访问的正是**不带参数的 `#/week`**
+   *    ⟹ 键盘 ← → 与课表里的 ‹ › **全部静默失效**，表现就是「钉死在本周」。
+   *    基准不能是"空"，必须是"本周的周一"；换成功后写回 hash，之后就有具体周了。
+   */
+  const baseMonday = weekMonday
+    ?? mondayOfWeekNo(schedule.termStart, currentWeekNo(schedule.termStart));
+
   /** 平移 delta 周，并限定在 [第1周, 第 totalWeeks 周] 内（边界内停下，不循环）。
    *  鼠标 ‹ › 按钮与键盘左右键共用，保证两者行为一致。（原 App 实现原样搬入） */
   const shiftWeekBy = (d: number) => {
-    const base = weekMonday;
-    if (!base) return;
-    const next = shiftWeekMonday(base, d);
+    const next = shiftWeekMonday(baseMonday, d);
     const n = currentWeekNo(schedule.termStart, next);
     if (n < 1 || n > schedule.totalWeeks) return; // 已在首/末周，不越界
     onWeekMondayChange(next);
@@ -66,7 +79,6 @@ export function WeekPlanPage(props: WeekPlanPageProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      if (weekMonday === null) return; // 与原口径一致：默认本周（无参数）时不响应
       // 排除输入框 / 文本域 / 可编辑区聚焦（聊天输入、文件选择等不被劫持）
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName;
@@ -77,7 +89,7 @@ export function WeekPlanPage(props: WeekPlanPageProps) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekMonday, schedule.termStart, schedule.totalWeeks]);
+  }, [baseMonday, schedule.termStart, schedule.totalWeeks]);
 
   return (
     <div className="space-y-3">
@@ -105,6 +117,7 @@ export function WeekPlanPage(props: WeekPlanPageProps) {
           onPlanStateChange={onPlanStateChange}
           // 「📍 回到今天」：口径原样 —— weekMonday 置空 = 回到本周（路由上即 `#/week`）
           onGoToToday={() => onWeekMondayChange(null)}
+          onGoProfile={onGoProfile}
         />
       ) : (
         <WeekView

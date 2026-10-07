@@ -20,6 +20,8 @@ import { InterestAskDialog, INTEREST_ASK_DISMISSED_KEY } from '@/features/activi
 import { interestAskHit } from '@/features/activity/goalTemplates';
 import { WeekPlanPage } from '@/features/week/WeekPlanPage';
 import { OnboardingSetup } from '@/features/week/OnboardingSetup';
+// 「作息与住处」卡（2026-10-07 从周计划页工具面板搬到「我的画像」页）
+import { HardBoundaryCard } from '@/features/week/HardBoundaryCard';
 import { LbaoChat } from '@/features/libao/LbaoChat';
 import { ImportTester } from '@/features/import/ImportTester';
 import { fetchMe, type AuthStatus } from '@/lib/auth';
@@ -338,7 +340,12 @@ export default function App() {
                 profile={state.persona}
                 onEnter={() => navigate('today')}
                 onRetake={() => setView('persona')}
-              />
+              >
+                {/* 「作息与住处」修改入口（2026-10-07 自周计划页搬来）：
+                    由**组合根**注入，避免 persona → week 跨域 import（AC-6·R5 只许缩短）。
+                    手法与下面 basicinfo 分支注入 OnboardingSetup 完全一致。 */}
+                <HardBoundaryCard />
+              </PersonaResult>
               {/*
                 引导重看入口（WP1 落地时补，设计取自 beta-v2 的 V0-1）：
                 已 onboard 的用户 `initialView` 直接进 main，**新加的「个人信息」这一步
@@ -380,6 +387,8 @@ export default function App() {
             onToggleDay={toggleDay}
             onSelectWholeWeek={selectWholeWeek}
             onClearDays={() => patchState({ selectedDays: [] })}
+            // 「画像影响排程 → 去改画像」：路由由组合根持有，组件不自己碰
+            onGoProfile={() => setView('persona')}
           />
         ) : (
           <OverviewPage

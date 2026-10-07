@@ -3,7 +3,6 @@ import type { AnswerEntry, AnswerMap } from '@/types';
 import { buildPersonaSequence, SECTION_META } from '@/data/personaBank';
 import { isAnswered } from '@/lib/persona';
 import { loadBasicInfo } from '@/lib/identity';
-import { GoalPrefsAsk } from '@/features/activity/GoalPrefsAsk';
 
 interface Props {
   answers: AnswerMap;
@@ -30,10 +29,12 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   const items = useMemo(() => buildPersonaSequence(loadBasicInfo().grade), []);
   const [idx, setIdx] = useState(0);
   /**
-   * G1（本地保留，合并时从 beta-v2 版补回）：35 题答完后的「目标偏好」附加组。
-   * 数据走独立 `goalPrefs` 存储（**不进 PersonaProfile**，types.ts 零改动）。
+   * 🔴 2026-10-07（RAY 拍板）：35 题答完后的「目标偏好」附加组（GoalPrefsAsk）**已移除** ——
+   * 它是 G1 时代的初步机制：focusMinutes 已被画像推断替代（goalDecompose.inferFocusMinutes）、
+   * 精力偏好由「我的画像 → ⚡ 精力高峰」承接、freeDays/weeklyCaps 走缺省值。
+   * goalPrefs 存储保留（loadGoalPrefs 缺省值兜底），问卷不再打断用户。
+   * 原 [prefsStage, setPrefsStage] state 与 GoalPrefsAsk 分支一并删除。
    */
-  const [prefsStage, setPrefsStage] = useState(false);
   const [sortPick, setSortPick] = useState<string[]>(() => {
     const saved = answers.B05;
     return Array.isArray(saved) ? (saved as string[]) : [];
@@ -63,9 +64,7 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   /** 所有题都由明确操作进入下一步，旧答案不会在页面打开时触发跳题。 */
   const goNext = () => {
     if (isLast) {
-      // G1：本卷题目完成 → 先收集「目标偏好」附加组（可跳过），再真正完成
-      if (!prefsStage) setPrefsStage(true);
-      else onComplete();
+      onComplete();
       return;
     }
     setIdx((current) => current + 1);
@@ -124,11 +123,6 @@ export function PersonaFlow({ answers, onAnswer, onComplete, onExit }: Props) {
   };
 
   const sortDone = sortPick.length >= 5;
-
-  // G1：目标偏好附加组 —— 本卷题目完成后、生成画像前收集（可跳过）
-  if (prefsStage) {
-    return <GoalPrefsAsk onDone={() => onComplete()} />;
-  }
 
   return (
     <div className="min-h-screen bg-paper">

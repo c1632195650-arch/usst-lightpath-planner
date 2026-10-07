@@ -128,13 +128,19 @@ export function RoutineSetting({ defaultOpen = false, embedded = false }: Props)
 
       {expanded && (
         <div className="mt-1.5 space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={embedded ? 'w-10 shrink-0 text-xs text-ink-faint' : 'w-14 shrink-0 text-[11.5px] text-ink-soft'}>起床</span>
-            <TimeWheelPicker value={draft.wake} onChange={(v) => apply(v, draft.sleep)} />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={embedded ? 'w-10 shrink-0 text-xs text-ink-faint' : 'w-14 shrink-0 text-[11.5px] text-ink-soft'}>入睡</span>
-            <TimeWheelPicker value={draft.sleep} onChange={(v) => apply(draft.wake, v)} />
+          {/* 起床 / 入睡 **并排同一行**（2026-10-07 RAY 要求：不再上下堆叠）。
+              用 `flex-wrap` 而不是 `grid-cols-2`：两项按内容宽度**自然相邻**成一组，
+              不会在宽卡（「我的画像」页）里被拉开到两端；窄屏放不下时自动换行成上下。
+              本组件同时服务「我的画像」页与首次设置，故两处一并生效。 */}
+          <div className="flex flex-wrap items-center gap-x-10 gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={embedded ? 'w-10 shrink-0 text-xs text-ink-faint' : 'w-14 shrink-0 text-[11.5px] text-ink-soft'}>起床</span>
+              <TimeWheelPicker value={draft.wake} onChange={(v) => apply(v, draft.sleep)} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={embedded ? 'w-10 shrink-0 text-xs text-ink-faint' : 'w-14 shrink-0 text-[11.5px] text-ink-soft'}>入睡</span>
+              <TimeWheelPicker value={draft.sleep} onChange={(v) => apply(draft.wake, v)} />
+            </div>
           </div>
 
           {problem && (

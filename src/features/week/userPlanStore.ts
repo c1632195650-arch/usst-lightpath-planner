@@ -243,22 +243,62 @@ export function removeOverride(list: readonly CourseOverride[], id: string): Cou
  *
  * ⚠️ `blockId` 一律**原样保留**：拖到别的天也只改 `dayOfWeek` 字段，
  * 不重写 id —— 否则引擎会认成「删一个 + 新增一个」（见 `MoveRecord` 注释）。
+ *
+ * ── 2026-10-07 补：**套用前先查碰撞** ──────────────────────────
+ * 原实现是「盲写」：`moves` 里每一条都无条件盖到计划上。问题在于
+ * `moves` 是**历史记录**，引擎每次重排都会产出**新的**布局 ——
+ * 一条当初合法的改动，可能在重排后正好压住新排出来的块。
+ * 而且引擎的 `diagnostics.hardViolations` 是在**它自己那份 plan** 上算的，
+ * 看不见这里的套用结果 ⟹ 屏幕上真叠着，头部却仍报「硬约束违反 0」。
+ * （RAY 2026-10-07 报的「周二 16:05 跑步 + 16:10 长目标」正是这一类。）
+ *
+ * 现在的口径（与拖拽「放不下就不让放」一致）：**撞了就不套用这一条**，
+ * 退回引擎排的位置，并**如实报一条 `lock-conflict`** 让用户知道该去改哪一块。
+ * 宁可回到合法位置，也不要在屏幕上叠着两块。
  */
 export function applyPendingMoves(
   plan: import('@/types').WeekPlan,
   moves: ReadonlyMap<string, MoveRecord>,
 ): import('@/types').WeekPlan {
   if (moves.size === 0) return plan;
-  const blocks = plan.blocks.map((b) => {
-    const m = moves.get(b.id);
-    if (!m) return b;
+  const blocks = [...plan.blocks];
+  const issues = [...plan.issues];
+  const idxOf = new Map(blocks.map((b, i) => [b.id, i] as const));
+
+  // 按 blockId 排序处理：同样的输入必须得到同样的输出（纯函数纪律，测试可复现）
+  for (const id of [...moves.keys()].sort()) {
+    const i = idxOf.get(id);
+    if (i === undefined) continue; // 这次没排出这个块（被删/被排除）—— 交给别处如实报
+    const m = moves.get(id) as MoveRecord;
+    const b = blocks[i];
     const dur = m.endMin - m.startMin;
-    const next = { ...b, dayOfWeek: m.dayOfWeek as import('@/types').DayOfWeek, startMin: m.startMin, endMin: m.startMin + dur };
-    if (m.place === undefined) delete next.place; else next.place = m.place;
-    if (m.room === undefined) delete next.room; else next.room = m.room;
-    return next;
-  });
-  return { ...plan, blocks };
+    const moved = {
+      ...b,
+      dayOfWeek: m.dayOfWeek as import('@/types').DayOfWeek,
+      startMin: m.startMin,
+      endMin: m.startMin + dur,
+    };
+    if (m.place === undefined) delete moved.place; else moved.place = m.place;
+    if (m.room === undefined) delete moved.room; else moved.room = m.room;
+
+    // 半开区间 [start, end) 判交：相接（前一块的 end == 后一块的 start）不算撞
+    const clash = blocks.find(
+      (x, j) => j !== i && x.dayOfWeek === moved.dayOfWeek
+        && moved.startMin < x.endMin && x.startMin < moved.endMin,
+    );
+    if (clash) {
+      issues.push({
+        level: 'warn',
+        code: 'lock-conflict',
+        blockId: b.id,
+        message: `你之前改动的「${b.title}」现在和「${clash.title}」撞了，这一处先按引擎排的位置显示 `
+          + `—— 在那个块上右键「✏️ 改时间」重设一次，或点「重新排一遍」`,
+      });
+      continue;
+    }
+    blocks[i] = moved;
+  }
+  return { ...plan, blocks, issues };
 }
 
 /* ---------- 作业 ---- */
@@ -508,4 +548,65 @@ export function redoDepth(): number {
 /** 重做：弹出最近一次被撤销的状态；栈空返回 null */
 export function popRedo(): UserPlanLayer | null {
   return redoStack.pop() ?? null;
+}
+
+/* ============================================================
+ * 计划事件环形缓冲（WP12-C2，随 CY 排程壳搬运 2026-10-07）
+ * ------------------------------------------------------------
+ * 谁吃：LbaoChat 调 chat() 时带上 getRecentPlanEvents() → 后端
+ * memory.summarize_plan_events 转成一行人话注入 prompt（只转述不抽取）。
+ * 与 CY 版逐字对齐（_libao-port/CY_userPlanStore.ts L462-512）。
+ * ========================================================== */
+
+export type PlanEventType =
+  | 'task_added' | 'task_removed'
+  | 'blocks_excluded' | 'blocks_restored'
+  | 'move_added';
+
+export interface PlanEvent {
+  type: PlanEventType;
+  /** 人话摘要（块/任务标题；excluded 用 blockId） */
+  title: string;
+  ts: number;
+}
+
+const PLAN_EVENT_LIMIT = 20;
+let planEvents: PlanEvent[] = [];
+
+/** 追加事件（超出 20 条丢最旧）；ts 在入队时刻生成 —— diff 纯函数不碰时钟 */
+export function pushPlanEvents(events: ReadonlyArray<Omit<PlanEvent, 'ts'>>): void {
+  if (events.length === 0) return;
+  const now = Date.now();
+  planEvents = [...planEvents, ...events.map((e) => ({ ...e, ts: now }))].slice(-PLAN_EVENT_LIMIT);
+}
+
+/** 最近日程变动（LbaoChat 调 chat 时带上）；返回副本，防外泄可变引用 */
+export function getRecentPlanEvents(): PlanEvent[] {
+  return [...planEvents];
+}
+
+/**
+ * 前后两层 diff → 事件列表。纯函数（ts 由 pushPlanEvents 填）：
+ *   · tasks 按 id 增删 → task_added / task_removed（title = 任务标题）
+ *   · excluded 集合差 → blocks_excluded / blocks_restored（title = blockId）
+ *   · moves 数量增加 → move_added（title 汇总条数）
+ */
+export function diffPlanEvents(prev: UserPlanLayer, next: UserPlanLayer): Array<Omit<PlanEvent, 'ts'>> {
+  const events: Array<Omit<PlanEvent, 'ts'>> = [];
+  const prevTasks = new Map(prev.tasks.map((t) => [t.id, t.title]));
+  const nextTasks = new Map(next.tasks.map((t) => [t.id, t.title]));
+  for (const [id, title] of nextTasks) {
+    if (!prevTasks.has(id)) events.push({ type: 'task_added', title });
+  }
+  for (const [id, title] of prevTasks) {
+    if (!nextTasks.has(id)) events.push({ type: 'task_removed', title });
+  }
+  const prevEx = new Set(prev.excluded);
+  const nextEx = new Set(next.excluded);
+  for (const id of nextEx) if (!prevEx.has(id)) events.push({ type: 'blocks_excluded', title: id });
+  for (const id of prevEx) if (!nextEx.has(id)) events.push({ type: 'blocks_restored', title: id });
+  if (next.moves.length > prev.moves.length) {
+    events.push({ type: 'move_added', title: '挪动了 ' + (next.moves.length - prev.moves.length) + ' 处安排' });
+  }
+  return events;
 }

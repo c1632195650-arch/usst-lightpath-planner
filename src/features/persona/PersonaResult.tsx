@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { PersonaProfile } from '@/types';
 import { AXIS_KEYS, AXIS_META, SCENARIO_META } from '@/lib/persona';
 import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBasicInfo, type BasicInfo } from '@/lib/identity';
@@ -9,6 +9,17 @@ interface Props {
   profile: PersonaProfile;
   onEnter: () => void;
   onRetake: () => void;
+  /**
+   * 额外区块插槽（**由组合根 `App.tsx` 注入**）—— 目前放「你的作息与住处」卡。
+   *
+   * 为什么不在这里直接 import week 域组件：那会新增 `persona → week` 跨域依赖，
+   * 而架构护栏（`tests/arch-guards.test.ts` AC-6·R5）把跨域域对冻结为**只许缩短**。
+   * 插槽手法与 `BasicInfoStep` 的 `children`（注入 `OnboardingSetup`）完全同构：
+   * 本组件只认一个 `ReactNode`，对 week 域一无所知。
+   *
+   * ⚠️ 只在「我的画像」页注入；onboarding 的画像结果页不传 = 那里不出现该卡。
+   */
+  children?: ReactNode;
 }
 
 const CONF_LABEL = { high: '较稳定', mid: '待校准', low: '参考' } as const;
@@ -70,7 +81,7 @@ function BasicInfoCard() {
 }
 
 /** 将 35 题的输出收束为可用于排程的个人信号，而不是一张“人格报告”。 */
-export function PersonaResult({ profile, onEnter, onRetake }: Props) {
+export function PersonaResult({ profile, onEnter, onRetake, children }: Props) {
   const { primary, secondary } = profile.archetype;
   // E3：一句话 blurb（按周轮换）+ 趣味称呼。挂载时算一次，重渲染不换台词。
   const [blurb] = useState(() => pickBlurb(profile));
@@ -181,6 +192,9 @@ export function PersonaResult({ profile, onEnter, onRetake }: Props) {
         </div>
 
         <BasicInfoCard />
+
+        {/* 组合根注入的额外区块（「我的画像」页放「你的作息与住处」卡） */}
+        {children}
 
         <section className="panel mt-6 overflow-hidden">
           <div className="flex flex-col justify-between gap-3 border-b border-ink/10 px-5 py-5 sm:flex-row sm:items-end sm:px-7 sm:py-6">

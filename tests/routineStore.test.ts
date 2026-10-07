@@ -296,13 +296,28 @@ test('Q1b 守卫：组装层确实把作息窗口展开进了 PlanRequest（否�
   );
 });
 
-test('Q1b 守卫：采集 UI 的两个入口都还在（周计划页工具面板 + 首次设置）', () => {
+test('Q1b 守卫：采集 UI 的两个入口都还在（我的画像页 + 首次设置）', () => {
+  // 2026-10-07：入口从「周计划页工具面板」搬到「我的画像」页 ——
+  // 搬到 `HardBoundaryCard`（week 域），由组合根注入 `PersonaResult` 的 children 插槽
+  // （不这么做就会新增 `persona → week` 跨域依赖，撞 AC-6·R5）。
+  // 本用例的**原意不变**：老用户必须有一个「随时改作息」的入口，谁搬走了就得在守卫里补上。
+  const card = srcOf('src/features/week/HardBoundaryCard.tsx');
   assert.match(
-    srcOf('src/features/week/WeekToolsPanel.tsx'),
+    card,
     /<RoutineSetting\b/,
-    '工具面板不再挂 RoutineSetting —— 老用户没有改作息的入口了',
+    'HardBoundaryCard 不再挂 RoutineSetting —— 老用户没有改作息的入口了',
+  );
+  assert.match(
+    card,
+    /<HomeBaseSetting\b/,
+    'HardBoundaryCard 不再挂 HomeBaseSetting —— 老用户没有改住处的入口了',
   );
   const app = srcOf('src/App.tsx');
+  assert.match(
+    app,
+    /<HardBoundaryCard\s*\/>/,
+    'App 不再把 HardBoundaryCard 注入「我的画像」页 —— 卡片写了也没人渲染',
+  );
   // 2026-09-28：作息从「问卷之后独立一阶段（RoutineSetup）」合并进「个人信息」那一步，
   // 入口变成 week 域的 OnboardingSetup，由组合根注入 BasicInfoStep 的 children。
   assert.match(app, /import \{ OnboardingSetup \}/, 'App 不再引入首次设置的住处/作息采集块');

@@ -11,6 +11,7 @@ import type { Diagnostics } from '@/lib/planner/model';
 import type { Deadline } from '@/data/usst';
 import { lockCount } from '@/features/plan/planLock';
 import { diffDays, todayISO } from '@/lib/date';
+import { PersonaImpactPanel } from './PersonaImpactPanel';
 
 /* ============================================================
  * 阶段头
@@ -18,7 +19,7 @@ import { diffDays, todayISO } from '@/lib/date';
 
 export function PhaseHeader({
   weekNo, phase, diag, planState, isCurrentWeek,
-  fromNowOn, setFromNowOn, transferInfo, backendOk,
+  fromNowOn, setFromNowOn, transferInfo, backendOk, onGoProfile,
 }: {
   weekNo: number;
   phase: Phase;
@@ -29,6 +30,8 @@ export function PhaseHeader({
   setFromNowOn: (next: boolean | ((v: boolean) => boolean)) => void;
   transferInfo: { rounds: number; uncovered: string[] } | null;
   backendOk: boolean;
+  /** 「去改画像」的目标路由 —— 由组合根（App.tsx）注入，组件自己不碰路由。 */
+  onGoProfile?: () => void;
 }) {
   return (
     <div className="panel px-4 py-3.5 sm:px-5">
@@ -41,11 +44,12 @@ export function PhaseHeader({
           周末{phase.policy.weekendWork ? '排' : '不排'}
         </span>
       </div>
-      <ul className="mt-2 space-y-0.5">
-        {phase.reasons.slice(0, 3).map((r, i) => (
-          <li key={i} className="text-[11.5px] leading-relaxed text-ink-faint">· {r}</li>
-        ))}
-      </ul>
+      {/* 画像影响监测（2026-10-07，提案第 13 条）。
+          ⚠️ 这里原先是 `phase.reasons.slice(0, 3)` —— 第 4 条之后**全部丢弃**：
+          引擎（`buildPhases.applyPersona`）逐条算出了「哪一项画像 → 哪个参数变了」，
+          界面上却只给看 3 条。现在改成**全量展示**（默认收起，点开才看）。
+          组件内不含任何计算：数据全部来自 `phase.reasons`。 */}
+      <PersonaImpactPanel phase={phase} onGoProfile={onGoProfile} />
       {/* 求解器诊断：排得「好不好」的量化凭据。
           刻意不用绿色高亮 —— 它是给人核对的事实，不是「成功了」的庆祝。 */}
       {diag && (
