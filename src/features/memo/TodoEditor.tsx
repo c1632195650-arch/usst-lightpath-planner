@@ -3,10 +3,20 @@
  * ============================================================
  * 网页端专属：长文本 note（textarea）+ 标签（逗号分隔）+ 挂目标。
  * kind 建后不可改（两端同口径：recent/longterm 的完成流程不同，改种类会混语义）。
+ *
+ * 2026-10-08（组件层批次三 · 表单控件）：四个字段从手写 `<input>/<textarea>/<select>`
+ * 换成 `components/ui/FormControls` 三件套，类型切换换成 `ui/Segmented`。收益不只是样式统一：
+ *   · §10.2.3 三条规则一次到位 —— **标签在输入框外上方**（原先全靠 placeholder，
+ *     一输入就看不见在填什么）、占位符 `#6E7688`（4.56:1）、聚焦 2px 外环 + 3px 光晕；
+ *   · 文本域按规范收到两行可见高度 + 内部滚动（原先 `rows={4}` 撑高弹窗）；
+ *   · 类型切换拿回 `role="group"` + `aria-pressed` 的选中三重差异（原先靠 nav-item 类名）。
+ * data-testid 一字未动（`todo-editor-title/note/tags/goal` 仍在原生控件上），e2e 零改锚。
  */
 import { useState } from 'react';
 import type { Todo, TodoKind } from '@/features/mobile/lib/memoTypes.ts';
 import type { Goal } from '@/features/mobile/lib/memoTypes.ts';
+import { Input, Select, Textarea } from '@/components/ui/FormControls';
+import { Segmented } from '@/components/ui/Segmented';
 
 export interface TodoDraft {
   title: string;
@@ -61,59 +71,75 @@ export default function TodoEditor({ editing, goals, onCancel, onSubmit }: TodoE
         onSubmit={(e) => { e.preventDefault(); void submit(); }}
       >
         <h3 className="text-sm font-semibold text-ink">{editing ? '编辑待办' : '新待办'}</h3>
-        <input
-          data-testid="todo-editor-title"
+
+        <Input
+          label="要做什么"
+          required
+          testId="todo-editor-title"
+          wrapClassName="mt-3"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="要做什么？（最多 120 字）"
+          placeholder="最多 120 字"
           maxLength={120}
-          className="mt-3 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-[13px] outline-none focus:border-ink/40"
         />
+
         {!editing && (
-          <div className="mt-3 flex gap-1 rounded-xl border border-ink/10 bg-paper p-1" data-testid="todo-editor-kind">
-            {(['recent', 'longterm'] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                className={`nav-item flex-1 whitespace-nowrap ${kind === k ? 'nav-item-active' : ''}`}
-              >
-                {k === 'recent' ? '最近待办' : '中长期待办'}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="mt-3">
+              <span className="mb-1.5 block text-xs font-semibold text-ink-soft">类型</span>
+              <Segmented<TodoKind>
+                testId="todo-editor-kind"
+                label="待办类型"
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { value: 'recent', label: '最近待办' },
+                  { value: 'longterm', label: '中长期待办' },
+                ]}
+                className="w-full [&>button]:flex-1"
+              />
+            </div>
+            <p className="mt-1 px-1 text-[11px] text-ink-faint">
+              {kind === 'recent'
+                ? '办好打勾就行，不用填时间。'
+                : '完成打勾时要填一个粗略时段（如 2026 年 10 月中旬），防忘。'}
+            </p>
+          </>
         )}
-        <p className="mt-1 px-1 text-[11px] text-ink-faint">
-          {kind === 'recent' ? '办好打勾就行，不用填时间。' : '完成打勾时要填一个粗略时段（如 2026 年 10 月中旬），防忘。'}
-        </p>
-        <textarea
-          data-testid="todo-editor-note"
+
+        <Textarea
+          label="补充说明"
+          testId="todo-editor-note"
+          wrapClassName="mt-3"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="补充说明（可空）—— 网页端可写长文本"
-          rows={4}
-          className="mt-3 w-full resize-y rounded-xl border border-ink/15 bg-paper px-3 py-2 text-[13px] outline-none focus:border-ink/40"
+          placeholder="可空 —— 超出两行可滚动"
         />
-        <input
-          data-testid="todo-editor-tags"
+
+        <Input
+          label="标签"
+          testId="todo-editor-tags"
+          wrapClassName="mt-3"
+          hint="用逗号分隔，例如：读书，备考"
           value={tags}
           onChange={(e) => setTags(e.target.value)}
-          placeholder="标签，用逗号分隔（如：读书，备考）"
-          className="mt-3 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-[13px] outline-none focus:border-ink/40"
         />
+
         {openGoals.length > 0 && (
-          <select
-            data-testid="todo-editor-goal"
+          <Select
+            label="挂到目标"
+            testId="todo-editor-goal"
+            wrapClassName="mt-3"
             value={goalId}
             onChange={(e) => setGoalId(e.target.value)}
-            className="mt-3 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-[13px] outline-none focus:border-ink/40"
           >
             <option value="">不挂到目标</option>
             {openGoals.map((g) => (
               <option key={g.id} value={g.id}>挂到目标：{g.title}</option>
             ))}
-          </select>
+          </Select>
         )}
+
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="rounded-lg px-4 py-1.5 text-[12px] text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper">取消</button>
           <button

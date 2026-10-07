@@ -58,10 +58,10 @@ export function Welcome({ onStart, onSkip, footer }: Props) {
               <LightpathMark tone="on-dark" size={54} />
             </div>
             <p className="kicker">USST · LIGHTPATH</p>
-            <h2>
+            <h1>
               让校园生活，
               <em>有自己的节奏</em>
-            </h2>
+            </h1>
             <p className="sub">
               从课表、校园节点和你的习惯出发，梳理学习、休息与日常生活。计划不必填满，重要的是能被执行。
             </p>

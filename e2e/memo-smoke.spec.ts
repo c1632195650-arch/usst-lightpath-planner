@@ -89,7 +89,7 @@ test('网页端建待办 → PUT 上行 → 刷新后云端仍在（持久化闭
   await gotoWebWithIdentity(page);
 
   // 进入待办工作区
-  await page.getByRole('button', { name: '待办' }).click();
+  await page.getByRole('button', { name: '待办', exact: true }).click();
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('memo-sync-state')).toContainText('已同步', { timeout: 15_000 });
 
@@ -117,7 +117,7 @@ test('网页端建待办 → PUT 上行 → 刷新后云端仍在（持久化闭
 
   // 刷新 → 云端（打桩已"存"下这条）→ 面板仍显示
   await page.reload();
-  await page.getByRole('button', { name: '待办' }).click();
+  await page.getByRole('button', { name: '待办', exact: true }).click();
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('todo-list')).toContainText('买考研英语真题', { timeout: 15_000 });
   // S3a：已登录但尚未排进计划 → 条目级状态 chip 给出口（不再零提示）
@@ -136,7 +136,7 @@ test('移动端写的待办 → 网页端读到并可补 note/标签 → PUT 不
   const putBodies = await stubSyncApi(page, serverMemo);
   await gotoWebWithIdentity(page);
 
-  await page.getByRole('button', { name: '待办' }).click();
+  await page.getByRole('button', { name: '待办', exact: true }).click();
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
 
   // 移动端写的待办出现在网页端（跨端读取）
@@ -182,7 +182,7 @@ test('P0-1：回车即提交待办/目标（不得依赖点按钮）+ P0-2：云
   await stubSyncApi(page, serverMemo);
   await gotoWebWithIdentity(page);
 
-  await page.getByRole('button', { name: '待办' }).click();
+  await page.getByRole('button', { name: '待办', exact: true }).click();
   await expect(page.getByTestId('memo-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('memo-sync-state')).toContainText('已同步', { timeout: 15_000 });
 

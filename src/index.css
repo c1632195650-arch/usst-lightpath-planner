@@ -315,6 +315,7 @@
     text-transform: uppercase;
   }
 
+  .hc h1,
   .hc h2 {
     font-family: "LXGW WenKai Screen", "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif;
     font-size: 31px;
@@ -325,6 +326,7 @@
     margin: 14px 0 12px;
   }
 
+  .hc h1 em,
   .hc h2 em {
     font-style: normal;
     color: #f2c879;

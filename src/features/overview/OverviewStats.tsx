@@ -165,6 +165,10 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
+      /* 可点卡给一个**自足的**无障碍名：卡片正文是「数字 + 迷你图 + 提示」，
+         单念一遍不成句；而且总览页现在会出现与主导航同名的按钮（导航「待办」vs
+         本卡「待办」）—— 名字带上数值与去向，读屏才分得清是哪一个。 */
+      aria-label={`${label}：${value}${unit ?? ''}，${hint}。点击进入`}
       className={`${base} lift transition-colors duration-fast hover:border-brand/30 focus-visible:outline-none`}
     >
       {body}
