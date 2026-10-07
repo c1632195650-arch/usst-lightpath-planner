@@ -74,9 +74,11 @@ import { DAY_LABELS } from './weekViewUtils';
 import { NearEventsPanel, PhaseHeader } from './WeekPlanHeader';
 import { useWeekPlanDrag } from './useWeekPlanDrag';
 import { WeekToolsPanel } from './WeekToolsPanel';
+import { WeekPlanSkeleton } from './PendingEditsBar';
 import { AdjustDrawer } from './AdjustDrawer';
 import { DeleteAskSection, DropToDeleteZone, WeekIssuesPanel } from './WeekDiagnostics';
-import { WeekDayColumn, type DragPreview } from './WeekDayColumn';
+import { WeekTimelineGrid } from './WeekTimelineGrid';
+import type { DragPreview } from './WeekDayColumn';
 
 interface Props {
   schedule: Schedule;
@@ -89,9 +91,11 @@ interface Props {
    * 「📍 回到今天」：周次状态由 App（weekMonday）持有，点击回到本周
    */
   onGoToToday?: () => void;
+  /** 「去改画像」→ 由组合根经WeekPlanPage 层层透传（组件自己不碰路由） */
+  onGoProfile?: () => void;
 }
 
-export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, onGoToToday }: Props) {
+export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanStateChange, onGoToToday, onGoProfile }: Props) {
   /**
    * 「从此刻开始排」开关（P2-T2.3）。
    *
@@ -453,7 +457,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
     return { ...moved, blocks: moved.blocks.filter((b) => !excluded.has(b.id)) };
   }, [plan, moveMap, layer.excluded]);
 
-  /** 本周被用户改过的块 id 集合 —— BlockCard 用它决定「✏️ 已改」的常显样式 */
+/** 本周被用户改过的块 id 集合 —— BlockCard 用它决定「✏️ 已改」的常显样式 */
   const editedBlockIds = useMemo(() => new Set(moveMap.keys()), [moveMap]);
 
   /**
@@ -597,13 +601,23 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
    * ========================================================== */
 
   if (loading) {
-    return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">正在排这一周……</div>;
+    /* 🔴 2026-10-07：原先是一句 12px 灰字，界面在此期间**完全空白**（像是点了没反应），
+       内容出来时整页从空跳到满。改成同尺寸骨架屏，替换时不位移。 */
+    return <WeekPlanSkeleton />;
   }
   if (!phase || !plan) {
     return <div className="panel px-6 py-10 text-center text-sm text-ink-soft">这个周次不在学期范围内。</div>;
   }
 
-  const issues: PlanIssue[] = plan.issues;
+  /**
+   * 问题清单取**屏幕上那一版**（`shownPlan`）的 issues，而不是引擎原生的 `plan.issues`。
+   *
+   * 🔴 2026-10-07 修：`applyPendingMoves` 现在会**拒掉会撞车的旧改动**并补一条
+   * `lock-conflict` 说明（"你之前改动的「X」现在和「Y」撞了…"）。那条 issue 长在
+   * `shownPlan` 上；若这里仍读 `plan.issues`，用户看到的就是「块悄悄弹回原位、
+   * 一句解释都没有」—— 比不拦还糟。
+   */
+  const issues: PlanIssue[] = shownPlan?.issues ?? plan.issues;
   /** 本周与下周的校历节点 —— 让「为什么这周多出准备块」有出处 */
   const nearEvents = eventsNearWeek(DEADLINES, schedule.termStart, weekNo);
 
@@ -619,7 +633,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         fromNowOn={fromNowOn}
         setFromNowOn={setFromNowOn}
         transferInfo={transferInfo}
-        backendOk={backendOk}
+        backendOk={backendOk} onGoProfile={onGoProfile}
       />
       <NearEventsPanel events={nearEvents} />
 
@@ -628,8 +642,6 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         weekNo={weekNo}
         goals={goals}
         rules={rules}
-        layer={layer}
-        updateLayer={updateLayer}
         onGoalsChange={setGoals}
         notify={notify}
         onGoToToday={onGoToToday}
@@ -639,8 +651,7 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         redoDepth={redoDepth}
         setReplanToken={setReplanToken}
         onOpenAdjust={() => setAdjustOpen(true)}
-        pendingEdits={pendingEdits}
-        edits={edits}
+        pendingEdits={pendingEdits} editedBlockIds={editedBlockIds} edits={edits}
         handleRestoreAll={handleRestoreAll}
         timeAskNote={timeAskNote}
         handleAddRule={handleAddRule}
@@ -669,39 +680,32 @@ export function WeekPlanView({ schedule, weekNo, persona, planState, onPlanState
         derivedApplied={derived.applied}
       />
 
-      {/* 七天时间轴（F2d/A5：日列拆为 WeekDayColumn 纯展示子组件） */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {DAY_LABELS.map((name, idx) => (
-          <WeekDayColumn
-            key={name}
-            day={idx + 1}
-            name={name}
-            allBlocks={(shownPlan ?? plan).blocks}
-            todayDow={todayDow}
-            dateISO={dateOfDay(idx + 1)}
-            weatherByDate={weatherByDate}
-            adviceByDate={adviceByDate}
-            recentTaskIds={recentTaskIds}
-            onDismissNew={(tid) => setRecentTaskIds((prev) => prev.filter((x) => x !== tid))}
-            planState={planState}
-            weekNo={weekNo}
-            assignmentByCourse={assignmentByCourse}
-            editedBlockIds={editedBlockIds}
-            draggingId={draggingId}
-            preview={preview}
-            setDraggingId={setDraggingId}
-            updatePreview={updatePreview}
-            clearPreview={clearPreview}
-            handleDrop={handleDrop}
-            onToggleLock={toggleLock}
-            onExclude={handleExcludeBlock}
-            onSetAssignment={handleSetAssignment}
-            onClearAssignment={handleClearAssignment}
-            onEditBlock={handleEditBlock}
-            onRevertEdit={handleRevertEdit}
-          />
-        ))}
-      </div>
+      {/* 七天时间轴（T3：七列共享时间基准 · WeekTimelineGrid + WeekDayColumn 泳道） */}
+      <WeekTimelineGrid
+        allBlocks={(shownPlan ?? plan).blocks}
+        todayDow={todayDow}
+        dateOfDay={dateOfDay}
+        weatherByDate={weatherByDate}
+        adviceByDate={adviceByDate}
+        recentTaskIds={recentTaskIds}
+        onDismissNew={(tid) => setRecentTaskIds((prev) => prev.filter((x) => x !== tid))}
+        planState={planState}
+        weekNo={weekNo}
+        assignmentByCourse={assignmentByCourse}
+        editedBlockIds={editedBlockIds}
+        draggingId={draggingId}
+        preview={preview}
+        setDraggingId={setDraggingId}
+        updatePreview={updatePreview}
+        clearPreview={clearPreview}
+        handleDrop={handleDrop}
+        onToggleLock={toggleLock}
+        onExclude={handleExcludeBlock}
+        onSetAssignment={handleSetAssignment}
+        onClearAssignment={handleClearAssignment}
+        onEditBlock={handleEditBlock}
+        onRevertEdit={handleRevertEdit}
+      />
 
       {/* 拖拽删除投放区（F2d/A5：拆为 WeekDiagnostics 纯展示组件） */}
       {draggingId && (

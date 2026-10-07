@@ -97,3 +97,9 @@ export function localizedDaysFor(
   }
   return unionAffectedDays(rules, weekNo);
 }
+
+/**
+ * 今天列的整列底色（T3 时间轴 · WeekTimelineGrid 列头/泳道用）。
+ * 值 = 原型真机实测 rgb(159,173,208)；对比度跟进项见 `_T3落地设计-2026-10-07.md` §4.4。
+ */
+export const TODAY_COL_BG = '#9fadd0';

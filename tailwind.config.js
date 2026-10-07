@@ -1,6 +1,31 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  /**
+   * safelist —— **动态拼接的类名必须登记**，否则 Tailwind 扫不到就静默丢弃。
+   *
+   * Tailwind 只扫源码里出现的**完整字面量**类名。日程块的颜色收口在
+   * `src/constants/chartColors.ts`，那边是 `KIND_PALETTE` 表 + `kindCls()` 拼接，
+   * 扫不到 `bg-indigo-50` 这类只在字符串里拼出来的名字 —— 不登记就是**无样式**
+   * （不报错、不构建失败，只是界面没颜色）。
+   *
+   * ⚠️ 因此纪律是：**KIND_PALETTE 增删改任何一档，必须同步这里。**
+   * `tests/kindPalette.test.ts` 的 Q6 会核对本清单 —— 它读的是构建产物 CSS，
+   * 真正漏了会红，不会静默。
+   */
+  safelist: [
+    // 课程：靛蓝
+    'bg-indigo-50', 'border-l-indigo-500', 'text-indigo-900',
+    // 用餐：琥珀
+    'bg-amber-50', 'border-l-amber-500', 'text-amber-900',
+    // 自习：绿
+    'bg-emerald-50', 'border-l-emerald-600', 'text-emerald-900',
+    // 活动：紫
+    'bg-violet-50', 'border-l-violet-500', 'text-violet-900',
+    // 通勤/空档：灰
+    'bg-slate-100', 'border-l-slate-400', 'text-slate-700',
+    'bg-white', 'border-l-slate-200', 'text-slate-400',
+  ],
   theme: {
     extend: {
       colors: {

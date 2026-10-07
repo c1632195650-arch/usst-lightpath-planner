@@ -1,16 +1,30 @@
 /**
- * 日列（F2d/A5 拆出的第 ② 个纯展示子组件 · 前端架构规格书 §8.1）
+ * 日列泳道（T3 七列时间轴 · 2026-10-07 重写）
  * ============================================================
- * 从 `WeekPlanView.tsx` 原样搬出：一周里「某一天」的整列 ——
- * 列头（星期/日期/今天强调/自习时长）+ 天气条 + 卡片流（块 + 空闲块 + 拖拽影子）。
- * 纯展示：不取数、不落库；拖拽中间态仍由视图持有（🔴 不触发重排的既定语义），
- * 本组件只接收中间态快照与回调。
+ * 从「卡片流」改为「真实时间轴泳道」：块按 startMin 绝对定位于 06:00–24:00
+ * 的纵向坐标上，块高 = 时长 × PPM（严格守时；装不下的内容由 BlockCard 的
+ * 块内滚动承担）。跨列可直接比高低 —— 这是周视图唯一不可替代的能力。
+ *
+ * 列头（星期/日期/自习/天气）已上移到 `WeekTimelineGrid`（列头必须是一条
+ * 跨七列严格对齐的 sticky 带，单个泳道组件承担不了）。本组件负责：
+ * 泳道背景 + 小时网格线 + 空档 + 块 + 拖拽影子 + 「现在」高亮判定。
+ *
+ * 🔴 拖拽落位换算（与原卡片流的唯一语义差异）：
+ *   原实现「悬停在哪 → 放到哪」靠顺序推导（列末尾 = tailMin + 10）；
+ *   时间轴里改为**按鼠标 Y 反算时刻**（`yToMin` + `snap10`）：鼠标指到 14:00
+ *   那条线附近，松手就是 14:00 —— 更精确，且影子严格画在松手结果上
+ *   （与 `dragTo` 同一基准，所见即所得）。越界值不做 clamp，交给 `dragTo`
+ *   的 day 区间判定（显示「放不下」比偷偷吸附到边界更诚实）。
+ *   ⚠️ 块级/空档级不再各自拦截 dragover/drop（旧实现的 stopPropagation
+ *   优先级逻辑随顺序推导一起废弃）—— 全部走泳道这一个入口。
  */
+import { useRef } from 'react';
 import type { PlanPersistState, TimeBlock } from '@/types';
-import type { WeatherAdvice, WeatherDay } from '@/features/weather/weather';
 import { humanizeMinutes, toHHmm } from '@/constants/time';
-import { freeGapsOf, type TimeGap } from './timeScale';
+import { freeGapsOf, snap10 } from './timeScale';
+import { AXIS_HEIGHT, hourRules, minToY, spanToH, yToMin } from './timeAxis';
 import { isLockedThisWeek } from '@/features/plan/planLock';
+import { nowMinutes, TODAY_COL_BG } from './weekViewUtils';
 import { BlockCard } from './BlockCard';
 
 /** 拖拽实时预览的形状（原 WeekPlanView 组件内声明，随拆解上提导出） */
@@ -29,15 +43,12 @@ export interface DragPreview {
 
 export interface WeekDayColumnProps {
   day: number;
-  name: string;
   /** 整周块（本组件按 `day` 过滤并按时间排序） */
   allBlocks: TimeBlock[];
   /** 今天的 dayOfWeek（1–7）；非本周为 null */
   todayDow: number | null;
   /** 该列的 ISO 日期（供天气索引与 BlockCard 标注） */
   dateISO: string;
-  weatherByDate: Map<string, WeatherDay>;
-  adviceByDate: Map<string, WeatherAdvice>;
   /** 🆕 新日程标注：刚添加的任务 id（块 id 以 `-{taskId}` 结尾即命中） */
   recentTaskIds: string[];
   onDismissNew: (taskId: string) => void;
@@ -62,9 +73,12 @@ export interface WeekDayColumnProps {
   onRevertEdit: (block: TimeBlock) => void;
 }
 
+/** 小时网格线（两档深浅，模块级常量 —— 七列共用，不随渲染重算） */
+const RULES = hourRules();
+
 export function WeekDayColumn({
-  day, name, allBlocks, todayDow, dateISO,
-  weatherByDate, adviceByDate, recentTaskIds, onDismissNew,
+  day, allBlocks, todayDow, dateISO,
+  recentTaskIds, onDismissNew,
   planState, weekNo, assignmentByCourse, editedBlockIds,
   draggingId, preview, setDraggingId, updatePreview, clearPreview, handleDrop,
   onToggleLock, onExclude, onSetAssignment, onClearAssignment, onEditBlock, onRevertEdit,
@@ -72,17 +86,13 @@ export function WeekDayColumn({
   const baseBlocks = allBlocks
     .filter((b) => b.dayOfWeek === day)
     .sort((a, b) => a.startMin - b.startMin);
-  const study = baseBlocks.filter((b) => b.kind === 'study')
-    .reduce((n, b) => n + (b.endMin - b.startMin), 0);
 
   /**
-   * 拖拽实时预览（悬停块式）：影子画在卡片流里；源块保留原位（不卸载）。
+   * 拖拽实时预览（悬停块式）：影子画在泳道上；源块保留原位（不卸载）。
    * 🔴 源块不许卸载：dragend 派发给源元素，卸载则事件丢失（透明度卡死）。
    */
   const dayPreview = preview && preview.day === day ? preview : null;
   const gaps = freeGapsOf(baseBlocks, day);
-  /** 这一天最后一件事的结束时间 —— 拖到空白处的默认落点 */
-  const tailMin = baseBlocks.length ? baseBlocks[baseBlocks.length - 1].endMin : 8 * 60;
   const movedBlocks = dayPreview?.ok
     ? baseBlocks.map((b) => {
         const d = dayPreview.displaced.get(b.id);
@@ -95,31 +105,39 @@ export function WeekDayColumn({
         ok: dayPreview.ok, title: dayPreview.title, reason: dayPreview.reason,
       }
     : null;
-  /** 渲染序列：块 + 空闲块 + 影子（按时间合并） */
-  const renderItems: Array<
-    | { kind: 'block'; startMin: number; block: TimeBlock }
-    | { kind: 'gap'; startMin: number; gap: TimeGap }
-    | { kind: 'ghost'; startMin: number; ghost: NonNullable<typeof ghost> }
-  > = [
-    ...movedBlocks.map((b) => ({ kind: 'block' as const, startMin: b.startMin, block: b })),
-    ...gaps.map((g) => ({ kind: 'gap' as const, startMin: g.startMin, gap: g })),
-    ...(ghost ? [{ kind: 'ghost' as const, startMin: ghost.startMin, ghost }] : []),
-  ].sort((a, b) => a.startMin - b.startMin);
-  /** 今天列（2026-09-20）：查看本周时，今天那一列整体强调、日程块特别着色 */
+  /** 今天列（2026-09-20）：查看本周时，今天那一列整体强调 */
   const isToday = todayDow === day;
-  /** 该列日期的「月/日」显示（用户要求 M/D 形式，不补零） */
-  const [mm, dd] = dateISO.slice(5).split('-').map(Number);
+  /**
+   * 「现在」—— 只在今天列判定进行中的块（整块高亮，替代横贯七列的红线）。
+   * 每次渲染读一次时钟（UI 层读时钟是允许的，见 weekViewUtils.nowMinutes）；
+   * 不挂定时器：重渲染时自然刷新，静止页面上高亮不自行走动（可接受的折中）。
+   */
+  const nowMin = isToday ? nowMinutes() : -1;
+  /** 泳道容器 —— 拖拽落点的坐标基准（getBoundingClientRect） */
+  const laneRef = useRef<HTMLDivElement | null>(null);
+
+  /** 鼠标 Y → 泳道内时刻（拖拽落位的唯一换算；snap10 吸附到 10 分钟档） */
+  const atMinFromEvent = (e: React.DragEvent): number => {
+    const rect = laneRef.current?.getBoundingClientRect();
+    if (!rect) return 8 * 60; // 理论不可达（调用点必然带着泳道事件）；兜底到 08:00
+    return snap10(yToMin(e.clientY - rect.top));
+  };
+
   return (
     <div
-      key={day}
-      data-today-col={isToday ? '' : undefined}
-      className="panel p-3"
-      style={isToday ? { backgroundColor: '#9fadd0' } : undefined}
+      ref={laneRef}
+      data-day={day}
+      /* 🔴 泳道不设 overflow-hidden：① 块 hover 的阴影/描边可完整溢出到邻列；
+         ② BlockCard 的编辑面板浮出块体外（top-full）—— 在轴底附近的块上打开
+         时面板会落到泳道外，泳道裁剪会把它整个吃掉。溢出部分计入滚动容器的
+         scrollHeight，用户滚一下就能看到。 */
+      className="relative"
+      style={{ height: AXIS_HEIGHT, backgroundColor: isToday ? TODAY_COL_BG : '#ffffff' }}
       /* 🔴 dragover 不 preventDefault 的话 drop 不会触发（HTML5 铁律）——
-         昨晚回退时间轴时漏掉了这里，导致整页没有合法 drop 目标、拖拽失效。 */
+         09-19 回退时间轴时漏掉了这里，导致整页没有合法 drop 目标、拖拽失效。 */
       onDragOver={(e) => {
         e.preventDefault();
-        if (draggingId) updatePreview(day, tailMin + 10, `${e.clientX}:${e.clientY}`);
+        if (draggingId) updatePreview(day, atMinFromEvent(e), `${e.clientX}:${e.clientY}`);
       }}
       onDragLeave={(e) => {
         // 只在真正离开这一列（而不是移进列内某个子元素）时清预览
@@ -128,182 +146,124 @@ export function WeekDayColumn({
       onDrop={(e) => {
         e.preventDefault();
         const id = e.dataTransfer.getData('text/plain') || draggingId;
-        // 没有悬停预览时（直接落到空白），退回「列末尾」
-        const atMin = preview && preview.day === day ? preview.atMin : tailMin + 10;
+        // 有悬停预览时与影子同落点；直接落到空白则按松手位置现算 —— 两者同口径
+        const atMin = preview && preview.day === day ? preview.atMin : atMinFromEvent(e);
         if (id) handleDrop(id, day, atMin);
         setDraggingId(null);
         clearPreview();
       }}
     >
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-[13px] font-semibold text-ink">
-          {name}
-          <span className={`ml-1.5 font-mono text-[11px] font-normal ${isToday ? 'text-brand' : 'text-ink-faint'}`}>
-            {mm}/{dd}
-          </span>
-          {isToday && (
-            <span className="ml-1.5 rounded bg-brand px-1.5 py-0.5 align-middle text-[9.5px] font-semibold text-white">今天</span>
-          )}
-        </span>
-        {study > 0 && (
-          <span className="text-[11px] text-ink-faint">自习 {Math.round(study / 60 * 10) / 10}h</span>
-        )}
-      </div>
+      {/* 小时网格线：整点淡线 + 每 3 小时略深；七列同 top ⟹ 视觉连成整周基准 */}
+      {RULES.map((r) => (
+        <div
+          key={r.min}
+          className="pointer-events-none absolute inset-x-0 h-px"
+          style={{ top: r.y, backgroundColor: r.major ? 'rgba(22,35,63,.07)' : 'rgba(22,35,63,.035)' }}
+        />
+      ))}
 
-      {/* 天气 —— 就在星期名称下面（2026-09-19 改版）。
-          有提醒（下雨/高低温/大风）显示带时段的人话提醒，
-          平常日子显示一行概况；那天没有数据（过去的日子）就不显示 —— 不猜。 */}
-      {(() => {
-        const wd = weatherByDate.get(dateISO);
-        if (!wd) return null;
-        const adv = adviceByDate.get(dateISO);
-        const range = wd.tMin != null && wd.tMax != null ? `${wd.tMin}–${wd.tMax}℃` : '';
-        if (adv) {
-          return (
-            <div
-              title={adv.detail}
-              className={`mb-1.5 rounded border-l-2 px-2 py-1 text-[11px] leading-relaxed ${
-                adv.severity === 'warn'
-                  ? 'border-amber-400 bg-amber-50 text-amber-900'
-                  : 'border-slate-300 bg-slate-50 text-ink-soft'
-              }`}
-            >
-              {adv.emoji} <strong>{adv.label}</strong> · {wd.text} {range}：{adv.detail}
-            </div>
-          );
-        }
-        const emoji = wd.rainProb >= 50 ? '🌧️' : wd.rainProb >= 20 ? '⛅' : '☀️';
+      {/* 空档（≥30 分钟）：不再是「卡片」，而是泳道上的虚线区域 ——
+          拖到空档 = 按鼠标位置排进去（沿用 R1 的 dragTo 判定，不另立逻辑）。
+          整块 pointer-events-none：事件穿透到泳道，落点统一按 Y 换算。 */}
+      {gaps.map((g) => (
+        <div
+          key={`gap-${g.startMin}`}
+          className={`pointer-events-none absolute inset-x-1 overflow-hidden rounded-md border border-dashed ${
+            draggingId ? 'border-brand/40 bg-brand-light/30' : 'border-ink/20 bg-paper/60'
+          }`}
+          style={{ top: minToY(g.startMin), height: spanToH(g.startMin, g.endMin) }}
+        >
+          <div className="truncate px-1.5 pt-0.5 text-[10px] leading-tight text-ink-faint">
+            空闲 {toHHmm(g.startMin)}–{toHHmm(g.endMin)}
+          </div>
+          <div className="truncate px-1.5 text-[10px] leading-tight text-ink-faint/80">
+            {humanizeMinutes(g.endMin - g.startMin)}
+            {draggingId && <span className="ml-1 text-brand/70">· 可拖到这里</span>}
+          </div>
+        </div>
+      ))}
+
+      {/* 块：绝对定位，高 = 时长 × PPM（严格守时）；hover 提 z 让阴影不被邻块压住 */}
+      {movedBlocks.map((b) => {
+        const newTaskId = recentTaskIds.find((tid) => b.id.endsWith(`-${tid}`));
+        const live = isToday && b.startMin <= nowMin && nowMin < b.endMin;
         return (
-          <div className="mb-1.5 rounded bg-slate-50 px-2 py-1 text-[11px] text-ink-soft">
-            {emoji} {wd.text} {range}
+          <div
+            key={b.id}
+            /* 🔴 平时**不加 z-index**：一旦有 z（哪怕 z-10）就创建层叠上下文，
+               BlockCard 的编辑面板（z-50）会被困在这个上下文里，盖不住相邻块
+               （同 z 的后者按 DOM 顺序赢）。无 z 时块按 DOM 顺序正常层叠；
+               hover 时才提 z-30，让阴影/描边盖住邻块。 */
+            className="absolute inset-x-1 hover:z-30"
+            style={{ top: minToY(b.startMin), height: spanToH(b.startMin, b.endMin) }}
+          >
+            <BlockCard
+              block={b}
+              date={dateISO}
+              weekNo={weekNo}
+              locked={isLockedThisWeek(planState, weekNo, b)}
+              onToggleLock={onToggleLock}
+              onExclude={onExclude}
+              assignmentMin={b.courseId ? assignmentByCourse.get(b.courseId) : undefined}
+              onSetAssignment={onSetAssignment}
+              onClearAssignment={onClearAssignment}
+              edited={editedBlockIds.has(b.id)}
+              onEditBlock={onEditBlock}
+              onRevertEdit={onRevertEdit}
+              dragging={draggingId === b.id}
+              live={live}
+              onDragStartCard={(blk) => {
+                // 🔴 setDraggingId 推迟到下一帧（2026-09-20）：
+                //    dragstart 同步帧内的重渲染会让 Chrome 偶发**静默取消拖拽**
+                //    —— 「有时拖不动」的机制②。第一个 dragover 紧随其后，
+                //    状态就位，视觉上无感知差异。
+                window.setTimeout(() => { setDraggingId(blk.id); clearPreview(); }, 0);
+              }}
+              onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
+              isNew={!!newTaskId}
+              onDismissNew={newTaskId ? () => onDismissNew(newTaskId) : undefined}
+              /* 悬停详情浮卡弹向：右半周（周四~周日）朝左弹，免得最右列的卡溢出时间轴 */
+              floatLeft={day >= 5}
+              /* 当天的全部块 —— 供「改这块」面板做碰撞校验（2026-10-07 补） */
+              dayBlocks={movedBlocks}
+            />
           </div>
         );
-      })()}
+      })}
 
-      {/* 卡片流 + 空闲块（≥30 分钟）+ 拖拽影子 */}
-      <div className="space-y-1.5">
-          {renderItems.length === 0 && (
-            <div className="rounded-lg border border-dashed border-ink/15 px-3 py-4 text-center text-[12px] text-ink-faint">
-              这一天没有安排
-            </div>
-          )}
-          {renderItems.map((item) => {
-            // 影子块：拖动预览的落点（半透明虚线）或不可落位警告（红色）
-            if (item.kind === 'ghost') {
-              const g = item.ghost;
-              // 影子上必须拦住 dragover：不拦的话事件冒到列容器，落点会被重算
-              const ghostProps = {
-                onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
-              };
-              return g.ok ? (
-                <div
-                  key="drag-ghost"
-                  {...ghostProps}
-                  className="rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-2.5 py-2 text-[12.5px] font-medium text-brand opacity-60"
-                >
-                  📍 {g.title}
-                  <span className="ml-1 font-mono text-[11px]">{toHHmm(g.startMin)}–{toHHmm(g.endMin)}</span>
-                  <div className="mt-0.5 text-[10.5px] font-normal text-brand/70">松手放到这里</div>
-                </div>
-              ) : (
-                <div
-                  key="drag-ghost"
-                  {...ghostProps}
-                  className="rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-2.5 py-2 text-[12.5px] font-medium text-red-700"
-                >
-                  🚫 放不到这里 —— {g.reason ?? '放不下'}
-                </div>
-              );
-            }
-            if (item.kind === 'gap') {
-              // 空闲块也是 drop 目标：拖到「⬜ 空闲 11:00–13:00」= 排到空档开头
-              const gapProps = {
-                onDragOver: (e: React.DragEvent) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (draggingId && draggingId !== '__drag-ghost__') {
-                    updatePreview(day, item.gap.startMin, `${e.clientX}:${e.clientY}`);
-                  }
-                },
-                onDrop: (e: React.DragEvent) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const id = e.dataTransfer.getData('text/plain') || draggingId;
-                  const atMin = preview && preview.day === day ? preview.atMin : item.gap.startMin;
-                  if (id && id !== '__drag-ghost__') handleDrop(id, day, atMin);
-                  setDraggingId(null);
-                  clearPreview();
-                },
-              };
-              return (
-                <div
-                  key={`gap-${item.gap.startMin}`}
-                  {...gapProps}
-                  className={`rounded-lg border border-dashed px-2.5 py-1.5 text-[11px] text-ink-faint ${
-                    draggingId ? 'border-brand/40 bg-brand-light/30' : 'border-ink/20 bg-paper/60'
-                  }`}
-                >
-                  ⬜ 空闲 {toHHmm(item.gap.startMin)}–{toHHmm(item.gap.endMin)}
-                  （{humanizeMinutes(item.gap.endMin - item.gap.startMin)}）
-                  {draggingId && <span className="ml-1 text-brand/70">· 可拖到这里</span>}
-                </div>
-              );
-            }
-            const b = item.block;
-            const newTaskId = recentTaskIds.find((tid) => b.id.endsWith(`-${tid}`));
-            return (
-              /* R1：落在某张卡上 = 放到**这一张的位置**，它之后的软块自动顺延。
-                  卡自己也是拖拽源（见 BlockCard），所以这里的 drop 必须先 stopPropagation，
-                  否则会把事件继续冒到「列末尾」那条 branches 上，落点变成最后。 */
-              <div
-                key={`wrap-${b.id}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (draggingId && draggingId !== b.id) {
-                    updatePreview(day, b.startMin, `${e.clientX}:${e.clientY}`);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const id = e.dataTransfer.getData('text/plain') || draggingId;
-                  // 与预览同一落点：影子画在哪，就落在哪
-                  const atMin = preview && preview.day === day ? preview.atMin : b.startMin;
-                  if (id && id !== b.id) handleDrop(id, day, atMin);
-                  setDraggingId(null);
-                  clearPreview();
-                }}
-              >
-                <BlockCard
-                  key={b.id}
-                  block={b}
-                  date={dateISO}
-                  locked={isLockedThisWeek(planState, weekNo, b)}
-                  onToggleLock={onToggleLock}
-                  onExclude={onExclude}
-                  assignmentMin={b.courseId ? assignmentByCourse.get(b.courseId) : undefined}
-                  onSetAssignment={onSetAssignment}
-                  onClearAssignment={onClearAssignment}
-                  edited={editedBlockIds.has(b.id)}
-                  onEditBlock={onEditBlock}
-                  onRevertEdit={onRevertEdit}
-                  dragging={draggingId === b.id}
-                  onDragStartCard={(blk) => {
-                  // 🔴 setDraggingId 推迟到下一帧（2026-09-20）：
-                  //    dragstart 同步帧内的重渲染会让 Chrome 偶发**静默取消拖拽**
-                  //    —— 「有时拖不动」的机制②。第一个 dragover 紧随其后，
-                  //    状态就位，视觉上无感知差异。
-                  window.setTimeout(() => { setDraggingId(blk.id); clearPreview(); }, 0);
-                }}
-                  onDragEndCard={() => { setDraggingId(null); clearPreview(); }}
-                  isNew={!!newTaskId}
-                  onDismissNew={newTaskId ? () => onDismissNew(newTaskId) : undefined}
-                />
-              </div>
-            );
-          })}
+      {/* 拖拽影子：可落位（虚线品牌色）/ 不可落位（红色 + 原因）——
+          画在真实落点上（与松手结果同基准，所见即所得） */}
+      {ghost && (ghost.ok ? (
+        <div
+          key="drag-ghost"
+          className="absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-brand/60 bg-brand/5 px-1.5 py-1"
+          style={{ top: minToY(ghost.startMin), height: spanToH(ghost.startMin, ghost.endMin) }}
+        >
+          <div className="truncate text-[11px] font-medium text-brand">📍 {ghost.title}</div>
+          <div className="font-mono text-[10px] text-brand/70">
+            {toHHmm(ghost.startMin)}–{toHHmm(ghost.endMin)}
+          </div>
         </div>
+      ) : (
+        <div
+          key="drag-ghost"
+          className="absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-1.5 py-1"
+          style={{
+            top: minToY(ghost.startMin),
+            /* 拒绝提示不守时：至少 36px 高，否则 20 分钟的块放不下这行字 */
+            height: Math.max(spanToH(ghost.startMin, ghost.endMin), 36),
+          }}
+        >
+          <div className="truncate text-[11px] font-medium text-red-700">🚫 {ghost.reason ?? '放不下'}</div>
+        </div>
+      ))}
+
+      {/* 空列提示：时间轴自带网格，只在真的没安排时说一句（不占交互） */}
+      {baseBlocks.length === 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-32 text-center text-[11px] text-ink-faint/70">
+          这一天没有安排
+        </div>
+      )}
     </div>
   );
 }
