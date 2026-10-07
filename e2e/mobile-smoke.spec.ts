@@ -98,9 +98,16 @@ async function stubCoreApi(page: Page, opts: { state?: unknown; todos?: unknown[
   return { putStateBodies, putPlanBodies };
 }
 
+/** M-W1 欢迎页（2026-10-07）：首次打开且未登录时先见品牌页 —— e2e 统一从这里过 */
+async function openMobile(page: Page) {
+  await openMobile(page);
+  const start = page.getByTestId('m-welcome-start');
+  if (await start.isVisible({ timeout: 2_000 }).catch(() => false)) await start.click();
+}
+
 async function registerAndReady(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
+  await openMobile(page);
   await page.getByTestId('m-login-user').fill('端到端宝');
   await page.getByTestId('m-login-pass').fill('e2e-pass-123');
   await page.getByTestId('m-register-submit').click();
@@ -174,7 +181,7 @@ test('移动空态：云端没计划时给引导（F2 空态分支）', async ({
   await page.route('**/api/version', (route) => route.fulfill({ status: 404, json: { error: 'version_unavailable' } }));
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
+  await openMobile(page);
   await page.getByTestId('m-login-user').fill('空空如也');
   await page.getByTestId('m-login-pass').fill('e2e-pass-123');
   await page.getByTestId('m-register-submit').click();
@@ -341,7 +348,7 @@ test('通知可见性：浏览器环境显示「网页版」诚实文案（M5a�
 test('移动登录路径：老账号登录（非注册）→ 今日页正常渲染', async ({ page }) => {
   await stubCoreApi(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
+  await openMobile(page);
   await page.getByTestId('m-login-user').fill('老用户宝');
   await page.getByTestId('m-login-pass').fill('e2e-pass-123');
   await page.getByTestId('m-login-submit').click();
@@ -355,7 +362,7 @@ test('移动登录失败：密码错 → 页内报错文案，不进今日页', 
   await page.route('**/api/auth/login', (route) =>
     route.fulfill({ status: 401, json: { error: 'bad_credentials' } }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
+  await openMobile(page);
   await page.getByTestId('m-login-user').fill('输错密码的宝');
   await page.getByTestId('m-login-pass').fill('wrong-pass');
   await page.getByTestId('m-login-submit').click();
@@ -425,7 +432,7 @@ test('同步失败可见：GET 状态 500 → 错误态 + 重试按钮，不进�
   await page.route('**/api/version', (route) => route.fulfill({ status: 404, json: { error: 'version_unavailable' } }));
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/m.html');
+  await openMobile(page);
   await page.getByTestId('m-login-user').fill('断网宝');
   await page.getByTestId('m-login-pass').fill('e2e-pass-123');
   await page.getByTestId('m-register-submit').click();
