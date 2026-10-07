@@ -34,9 +34,16 @@ function periodEndDayKey(pd: string): string {
   return `${y}-${mo}-${String(endDay).padStart(2, '0')}`;
 }
 
-/** M4b：dev 样例通道开关 —— 仅 DEV 生效；?demoEval 或 localStorage['usst.mobile.demoEval']==='1' */
+/**
+ * M4b 样例通道开关 —— **显式开启才生效**（?demoEval 或 localStorage['usst.mobile.demoEval']==='1'）。
+ *
+ * 🔴 2026-10-08 修正：原实现第一行 `if (!import.meta.env.DEV) return false;` 把**所有生产端**
+ * （公网网页版 / 演示 APK）整段关死 —— 手机端永远看不到执行状态数据（用户实测反馈），
+ * 而 APK 里又没有 URL 参数/ localStorage 控制台可用。现在改为**任意环境都认两种显式开关**：
+ * 普通用户不会触发（不碰 URL 不加参数）；演示时在「我的 → 执行力评估」一键载入（见下方按钮），
+ * 结果面板自带「样例数据」角标（诚实纪律，作战方案 §9.2）。
+ */
 function demoEvalOn(): boolean {
-  if (!import.meta.env.DEV) return false;
   try {
     if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('demoEval')) return true;
     return localStorage.getItem('usst.mobile.demoEval') === '1';
@@ -56,8 +63,8 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
 }) {
   const [shownRows, setShownRows] = useState<ShownRecord[]>(() => loadShown(localStorage));
   const [quiz, setQuiz] = useState<{ dayKey: string; questions: QuizQuestion[] } | null>(null);
-  // M4b：样例通道状态（挂载时定一次；轮询 URL 不值得）
-  const [demo] = useState(() => demoEvalOn());
+  // M4b：样例通道状态（挂载时定一次；轮询 URL 不值得；2026-10-08 起可现场载入）
+  const [demo, setDemo] = useState(() => demoEvalOn());
 
   const evalDays = useMemo(() => {
     const out: string[] = [];
@@ -126,7 +133,22 @@ export default function EvalSection({ plan, serverState, layer, phase, todayKey,
 
   return (
     <>
-      {/* 任务二 P3-1 · 「我的执行状态」（Today 页底部，不干扰执行）；M4b：样例通道带角标 */}
+      {/* 任务二 P3-1 · 「我的执行状态」；M4b：样例通道带角标。
+          2026-10-08：生产端（含 APK）也给出**显式载入**入口 —— 记录不足时一键 8 天样例，
+          结果仍是真函数现算 +「样例数据」角标，不假装真实数据。 */}
+      {!demo && (
+        <button
+          type="button"
+          data-testid="m-eval-demo-load"
+          onClick={() => {
+            try { localStorage.setItem('usst.mobile.demoEval', '1'); } catch { /* 隐私模式静默 */ }
+            setDemo(true);
+          }}
+          className="w-full rounded-xl border border-dashed border-ink/15 px-3 py-2 text-[11.5px] text-ink-faint transition-colors hover:border-ink/30"
+        >
+          记录还不够？载入 8 天样例，先看执行力评估的样子
+        </button>
+      )}
       <EvalPanel profile={profile} series={series} demoBadge={demo} />
       {quiz && (
         <DailyQuizSheet
