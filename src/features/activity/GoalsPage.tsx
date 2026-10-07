@@ -91,7 +91,7 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
       {goals.length === 0 && (
         <div className="panel px-4 py-2 sm:px-5">
           <EmptyState
-            icon="🎯"
+            icon="target"
             title="还没有目标"
             description="在上面输入一句话就能开始 —— 比如「考研初试」「学编程」「跑步 1km 跑进 3 分钟」。建完之后，分解出的任务会进周程。"
           />

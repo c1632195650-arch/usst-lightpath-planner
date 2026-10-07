@@ -53,11 +53,11 @@ export default function TodoEditor({ editing, goals, onCancel, onSubmit }: TodoE
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="todo-editor">
+    <div className="overlay-in fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="todo-editor">
       {/* P0-1a：包 <form> —— 标题输入框回车 = 提交（浏览器默认表单提交）；
           textarea 备注保留回车换行（textarea 内回车不会触发提交） */}
       <form
-        className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl"
+        className="overlay-in-panel w-full max-w-md rounded-2xl bg-white p-4 shadow-xl"
         onSubmit={(e) => { e.preventDefault(); void submit(); }}
       >
         <h3 className="text-sm font-semibold text-ink">{editing ? '编辑待办' : '新待办'}</h3>

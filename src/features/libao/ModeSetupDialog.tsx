@@ -33,8 +33,8 @@ export function ModeSetupDialog({ schedule, profile, weekNo, currentMode, onConf
   const stats = preview && !('error' in preview) ? preview.stats : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="选择这一周的节奏">
-      <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-[0_24px_72px_rgba(22,35,63,0.2)] sm:p-7">
+    <div className="overlay-in fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="选择这一周的节奏">
+      <div className="overlay-in-panel max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-[0_24px_72px_rgba(22,35,63,0.2)] sm:p-7">
         <p className="section-label">WEEK MODE</p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight text-ink">这一周想过什么节奏？</h2>
         <p className="mt-2 text-sm leading-6 text-ink-soft">

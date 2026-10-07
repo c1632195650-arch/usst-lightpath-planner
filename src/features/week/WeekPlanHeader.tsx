@@ -37,7 +37,7 @@ export function PhaseHeader({
   return (
     <div className="panel px-4 py-3.5 sm:px-5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
+        <h2 className="font-sans text-[15px] font-semibold text-ink">第 {weekNo} 周 · {phase.name}</h2>
         <span className="text-[12px] text-ink-soft">
           每天自习目标 {phase.policy.dailyStudyMin} 分 · 单块 ≤{phase.policy.maxBlockMin} 分 ·
           留白 {Math.round(phase.policy.blankRatio * 100)}% ·

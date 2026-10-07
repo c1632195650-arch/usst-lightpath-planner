@@ -50,7 +50,7 @@ export function WeatherStrip({ report, weekNo, termStart }: {
               className={`min-w-[76px] flex-1 rounded-lg border px-2 py-1.5 text-center ${
                 advice
                   ? 'border-warn/25 bg-warn-light'
-                  : 'border-black/5 bg-black/[0.015]'
+                  : 'border-ink/5 bg-ink/[0.015]'
               }`}
             >
               <div className="text-[11px] text-ink-soft">周{WEEKDAY_CN[dow % 7]}</div>

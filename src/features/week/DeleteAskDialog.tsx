@@ -26,8 +26,8 @@ export function DeleteAskDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
+    <div className="overlay-in fixed inset-0 z-40 flex items-center justify-center bg-ink/30 px-4">
+      <div className="overlay-in-panel w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
         <h3 className="text-[14px] font-semibold text-ink">已删除「{title}」</h3>
         <p className="mt-1 text-[11.5px] leading-relaxed text-ink-soft">
           {timeText}空出来了 —— 这个空档怎么处理？

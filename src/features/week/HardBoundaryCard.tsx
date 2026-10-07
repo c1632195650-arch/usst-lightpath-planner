@@ -15,6 +15,7 @@
  * 清除 clearRoutine；**写 store 不触发重排** —— 引擎日窗在重排时重读（见 useWeekPlan）。
  */
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import {
   clearRoutine, loadRoutine, minutesToHHMM, routineFromHHMM, saveRoutine,
 } from './routineStore';
@@ -61,7 +62,8 @@ export function HardBoundaryCard() {
           className="mt-2"
           onToggle={(e) => openPanel((e.currentTarget as HTMLDetailsElement).open)}
         >
-          <summary className="cursor-pointer text-[13px] font-medium text-ink">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-ink">
+            <Icon name="bed" size="sm" className="shrink-0 text-brand" />
             我的作息
             <span className="ml-2 text-[11px] font-normal text-ink-faint">
               起床/就寝决定引擎给你排事的时段（不排「你还没起床」的块）

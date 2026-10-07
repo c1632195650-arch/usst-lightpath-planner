@@ -80,8 +80,8 @@ export function MemoryPanel({ open, userId, onClose }: Props) {
   const applied = facts.filter((f) => f.status === 'applied');
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="梨宝的记忆">
-      <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-ink/10 bg-white p-5 shadow-[0_18px_44px_rgba(22,35,63,0.18)]">
+    <div className="overlay-in fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="梨宝的记忆">
+      <div className="overlay-in-panel max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-ink/10 bg-white p-5 shadow-[0_18px_44px_rgba(22,35,63,0.18)]">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-ink">梨宝的记忆</h2>

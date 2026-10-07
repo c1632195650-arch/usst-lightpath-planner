@@ -12,6 +12,7 @@
  * `features/week/weekViewModel.ts::blockDetail()` 组装（纯函数、可单测）。
  */
 import { useEffect, useRef } from 'react';
+import { Icon } from '@/components/icons/Icon';
 
 export interface DetailRow { label: string; value: string }
 
@@ -42,15 +43,16 @@ export function DetailDrawer({
     >
       <div className="flex h-full flex-col">
         <header className="flex items-start justify-between gap-3 border-b border-paper-sunken px-4 py-3">
-          <h2 className="text-sm font-semibold leading-snug">{title}</h2>
+          <h2 className="font-sans text-sm font-semibold leading-snug">{title}</h2>
+          {/* §9.6 `x` 图鉴（Esc 等效）+ §12.5.8 命中区 44×44（原为 ✕ 字符、约 24×22）。 */}
           <button
             type="button"
             data-testid="detail-close"
             onClick={() => ref.current?.close()}
             aria-label="关闭详情"
-            className="shrink-0 rounded px-2 py-0.5 text-sm text-ink-soft hover:bg-paper-sunken"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft transition-colors duration-fast hover:bg-paper-sunken active:scale-[0.985]"
           >
-            ✕
+            <Icon name="x" size="sm" />
           </button>
         </header>
         <dl className="flex-1 overflow-y-auto px-4 py-3">

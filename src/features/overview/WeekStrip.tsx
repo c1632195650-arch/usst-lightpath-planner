@@ -1,4 +1,5 @@
 import type { Schedule } from '@/types';
+import { Icon } from '@/components/icons/Icon';
 import { weekDates } from '@/lib/date';
 import { dailySlotCounts } from '@/lib/today';
 
@@ -30,7 +31,10 @@ export function WeekStrip({ schedule, weekNo, weekMonday, todayIso, onSelectDay 
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="section-label">THIS WEEK</p>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight text-ink">第 {weekNo} 周的课程分布</h2>
+          <h2 className="mt-2 flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
+            <Icon name="bar-chart" size="md" className="shrink-0 text-brand" />
+            第 {weekNo} 周的课程分布
+          </h2>
         </div>
         <span className="shrink-0 text-xs text-ink-faint tabular-nums">共 {total} 节</span>
       </div>

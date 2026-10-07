@@ -31,7 +31,13 @@
     /* UI v2 E2（§13）：产品只设计了浅色——显式钉住 light，
        防系统深色模式下浏览器把表单控件/滚动条渲染成深色。 */
     color-scheme: light;
-    font-family: "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif;
+    /*
+     * ⚠️ 2026-10-08（UI 收口批）：这里原先写死了 `"PingFang SC", …` 一条栈，
+     * 而 :root 与 preflight 的 html 同元素、它排在后面 —— 于是把 tailwind.config.js
+     * 的 `fontFamily.sans`（**Inter 前置**）整条盖掉了。后果正是设计总成 §6.3 点名的
+     * 「英文数字不精致」：西文与数字落到中文字体/系统默认字体上渲染。
+     * 字体栈的唯一真源是 tailwind.config.js，此处不再声明（body 走 font-sans）。
+     */
 
     /*
      * UI v2 语义变量（设计总成 §7.8 对比度修复四处）：
@@ -48,6 +54,21 @@
     --danger-text: #b0402f;
     /* 双环焦点环的品牌亮端（tailwind brand.bright 同源） */
     --brand-bright: #4a73d1;
+
+    /*
+     * 动效令牌（设计总成 §05 / §14.1 第 1 项：「:root 补齐全部动效令牌」）。
+     * 与 tailwind.config.js 的 transitionDuration / transitionTimingFunction **同值**
+     * —— Tailwind 侧供 utility（duration-fast 等），这里供 CSS 关键帧与自定义类引用；
+     * 改一处必须同步另一处。四档之外不允许新增（§5.2）。
+     */
+    --dur-instant: 90ms;
+    --dur-fast: 140ms;
+    --dur-base: 220ms;
+    --dur-slow: 360ms;
+    --ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+    --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   html {
@@ -55,9 +76,10 @@
   }
 
   body {
-    @apply min-h-screen bg-paper antialiased;
+    /* 字体栈唯一真源 = tailwind.config.js 的 fontFamily（Inter 前置，§6.3）。 */
+    @apply min-h-screen bg-paper font-sans antialiased;
     overflow-x: hidden;
-    /* UI v2 正文度量（设计总成 §7.2）：14.5px / 1.82 / 400，墨色 #1F2A44。 */
+    /* UI v2 正文度量（设计总成 §7.2/§6.4）：14.5px / 1.82 / 400，墨色 #1F2A44。 */
     font-size: 14.5px;
     line-height: 1.82;
     font-weight: 400;
@@ -65,6 +87,21 @@
     /* 页面底极淡的琥珀光晕，呼应光谱暖端，不参与信息表达。 */
     background-image: radial-gradient(circle at 84% -12%, rgba(217, 131, 36, 0.09), transparent 32rem);
   }
+
+  /**
+   * 标题层用霞鹜文楷 Screen（设计总成 §6.2 分层策略：**只在标题层加载 webfont**，
+   * 正文与用户输入走系统字体）。§6.5 的「display / 欢迎页 h2 / 旧 hero h2」三条
+   * 本就是标题层 —— 全站 h1/h2 统一吃 display 栈，标题层才真的换得动脸。
+   *
+   * 例外（显式写 `font-sans` 盖回）：**工具性 chrome 标题** —— 抽屉标题、梨宝对话头、
+   * 记忆面板头、周计划阶段头、移动端顶栏。它们是控件标签而不是内容标题，
+   * 楷体会让密集界面的控件区显得散。h3 一律 sans（实测多为 12–14px 卡内小标签）。
+   */
+  h1,
+  h2 {
+    @apply font-display;
+  }
+
 
   button,
   a,
@@ -143,7 +180,7 @@
 
   /** 深色面上的按钮：禁用态不能只降透明度，白底会塌成一块灰。 */
   .button-on-dark {
-    @apply min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-fast hover:bg-brand-light disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
+    @apply min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors duration-fast hover:bg-brand-light active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/45;
   }
 
   /**
@@ -157,19 +194,19 @@
   }
 
   .button-primary {
-    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-btn transition-colors duration-fast ease-out hover:bg-brand-dark active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-btn transition-colors duration-fast ease-out hover:bg-brand-dark active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40;
   }
 
   .button-secondary {
-    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.99];
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm font-medium text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.985];
   }
 
   .icon-button {
-    @apply grid h-10 w-10 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand;
+    @apply grid h-10 w-10 place-items-center rounded-xl border border-ink/10 bg-white text-ink-soft transition-colors duration-fast ease-out hover:border-brand/30 hover:bg-brand-light hover:text-brand active:scale-[0.985];
   }
 
   .nav-item {
-    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-fast ease-out hover:bg-brand-light hover:text-brand;
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-ink-faint transition-colors duration-fast ease-out hover:bg-brand-light hover:text-brand active:scale-[0.985];
   }
 
   .nav-item-active {
@@ -391,20 +428,70 @@
 @layer utilities {
   /* UI v2 §05：入场统一 slow 档 360ms（原 450ms 超「入场禁超 slow」上限）。 */
   .fade-item {
-    animation: fadeUp 0.36s ease-out both;
+    animation: fadeUp var(--dur-slow) var(--ease-out) both;
+  }
+
+  /**
+   * §5.4 转场一 · **同级切换**：淡入 + 8px 位移 / 220ms ease-out。
+   * 用在「同一个东西换了内容」的地方 —— Tab 之间、周与周之间、上下层视图切换。
+   * 不用左右滑动（左右会暗示上下级关系）。
+   */
+  .view-enter {
+    animation: viewIn var(--dur-base) var(--ease-out) both;
+  }
+
+  /**
+   * §5.4 转场二 · **浮层**：遮罩淡入 + 面板上滑 24px。
+   * 容器挂 `.overlay-in`（遮罩淡入），面板挂 `.overlay-in-panel`（上滑 + 淡入）。
+   * 打开 220ms ease-out；关闭按 §5.4 应走 140ms ease-in —— 自绘浮层是整块卸载，
+   * 浏览器不做退场动画，故退场由「挂载即进场」承担，退场留给 reduced-motion 静默。
+   * 原生 `<dialog>` 走下面的 `dialog[open]` 规则，不必加类。
+   */
+  .overlay-in {
+    animation: maskIn var(--dur-base) linear both;
+  }
+
+  .overlay-in-panel {
+    animation: panelIn var(--dur-base) var(--ease-out) both;
   }
 }
 
-@keyframes fadeUp {
+@keyframes viewIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
+}
+
+@keyframes maskIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 原生 dialog（唯一用户 = components/ui/DetailDrawer）：遮罩与面板一起进场，无需加类。 */
+dialog[open] {
+  animation: panelIn var(--dur-base) var(--ease-out) both;
+}
+
+dialog[open]::backdrop {
+  animation: maskIn var(--dur-base) linear both;
 }
 
 @media (prefers-reduced-motion: reduce) {

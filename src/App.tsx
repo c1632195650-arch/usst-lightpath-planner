@@ -319,7 +319,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`page-shell flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}>
+      {/* §5.4 同级切换：Tab 之间淡入 + 8px 位移（220ms ease-out）。
+          key 只跟 mainTab 走 —— Tab 内容本来就是条件渲染（切 Tab 必然重挂载），
+          加 key 不会额外重置任何状态；换周/换视图不走这里，避免打断周计划的会话状态。 */}
+      <main
+        key={mainTab}
+        className={`page-shell view-enter flex-1 px-4 sm:px-6 ${isLbaoTab ? 'flex min-h-0 flex-col py-4' : 'py-6 sm:py-8'}`}
+      >
         {/* 批 4.2（8B）：示例课表横幅 —— 新用户首启看到的是演示课表，必须告知与引导；
             导入成功（source 变更）后自然消失 */}
         {schedule.source === 'demo' && (

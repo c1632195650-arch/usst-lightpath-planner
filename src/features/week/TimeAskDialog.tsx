@@ -47,8 +47,8 @@ export function TimeAskDialog({
   const [long, setLong] = useState(req.scopeKnown === 'long');
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
+    <div className="overlay-in fixed inset-0 z-40 flex items-center justify-center bg-ink/30 px-4">
+      <div className="overlay-in-panel w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
         <h3 className="text-[14px] font-semibold text-ink">「{req.title}」还差一点信息</h3>
         {hintText && (
           <p className="mt-1 text-[11px] text-ink-faint">{hintText}</p>

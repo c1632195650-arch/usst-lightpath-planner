@@ -37,13 +37,13 @@ export function Modal({ open, onClose, title, children, actions, testId = 'modal
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
-      <div className="absolute inset-0 bg-ink/45" onClick={onClose} aria-hidden="true" />
+      <div className="overlay-in absolute inset-0 bg-ink/45" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         data-testid={testId}
-        className="relative w-full max-w-sm rounded-2xl border border-ink/10 bg-white p-5 shadow-[0_24px_72px_rgba(22,35,63,0.24)]"
+        className="overlay-in-panel relative w-full max-w-sm rounded-2xl border border-ink/10 bg-white p-5 shadow-[0_24px_72px_rgba(22,35,63,0.24)]"
       >
         <h3 className="text-base font-semibold text-ink">{title}</h3>
         <div className="mt-2 text-sm leading-6 text-ink-soft">{children}</div>
@@ -78,13 +78,13 @@ export function Drawer({ open, onClose, title, children, actions, side = 'right'
     : 'bottom-0 inset-x-0 rounded-t-2xl';
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-ink/30" onClick={onClose} aria-hidden="true" />
+      <div className="overlay-in absolute inset-0 bg-ink/30" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         data-testid={testId}
-        className={`absolute ${pos} border border-ink/10 bg-white p-5 shadow-[0_18px_44px_rgba(22,35,63,0.18)]`}
+        className={`overlay-in-panel absolute ${pos} border border-ink/10 bg-white p-5 shadow-[0_18px_44px_rgba(22,35,63,0.18)]`}
       >
         <h3 className="text-base font-semibold text-ink">{title}</h3>
         <div className="mt-2 text-sm leading-6 text-ink-soft">{children}</div>

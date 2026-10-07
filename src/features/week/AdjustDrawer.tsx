@@ -83,12 +83,12 @@ export function AdjustDrawer({
     >
       {/* 遮罩：点击关闭（关闭时透明度 0，且不再吃点击） */}
       <div
-        className={`absolute inset-0 bg-ink/30 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-ink/30 transition-opacity duration-base ${open ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
         aria-hidden
       />
       <aside
-        className={`absolute right-0 top-0 flex h-full w-[22rem] max-w-[90vw] flex-col overflow-y-auto bg-paper shadow-2xl transition-transform duration-200 ${open ? 'visible translate-x-0' : 'invisible translate-x-full'}`}
+        className={`absolute right-0 top-0 flex h-full w-[22rem] max-w-[90vw] flex-col overflow-y-auto bg-paper shadow-2xl transition-transform duration-base ${open ? 'visible translate-x-0' : 'invisible translate-x-full'}`}
         role="dialog"
         aria-modal={open}
         aria-label="调整"

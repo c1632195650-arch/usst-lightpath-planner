@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Icon } from '@/components/icons/Icon';
 import type { PersonaProfile, Schedule } from '@/types';
 import { CAL_EVENTS } from '@/data/usst';
 import { fromISO, mondayOf } from '@/lib/date';
@@ -66,7 +67,10 @@ export function OverviewPage({
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="section-label">CALENDAR</p>
-              <h2 className="mt-2 text-lg font-semibold tracking-tight text-ink">校历</h2>
+              <h2 className="mt-2 flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
+                <Icon name="calendar-days" size="md" className="shrink-0 text-brand" />
+                校历
+              </h2>
               {!calendarOpen && (
                 <p className="mt-1 text-sm text-ink-soft">
                   本月 {monthEventCount} 个校园节点 · 展开可按日期跳到那一周

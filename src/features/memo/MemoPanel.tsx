@@ -220,7 +220,10 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
     <div className="mx-auto max-w-2xl space-y-4" data-testid="memo-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight text-ink">待办</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
+            <Icon name="inbox" size="md" className="shrink-0 text-brand" />
+            待办
+          </h2>
           <p className="mt-0.5 text-[12px] text-ink-soft">记下来，剩下的交给排程 —— 网页端排计划时会带上这里的未完成事项。</p>
         </div>
         <div className="flex items-center gap-2">
@@ -379,9 +382,9 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
       {/* 中长期待办完成确认：未选时段不能确认（阻止并提示，不静默跳过）
           P0-1c：包 <form> —— 回车确认；「还没办成」保持 type=button 防误触 */}
       {askDone && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="planned-done-dialog">
+        <div className="overlay-in fixed inset-0 z-40 flex items-end justify-center bg-ink/30 p-4 sm:items-center" data-testid="planned-done-dialog">
           <form
-            className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
+            className="overlay-in-panel w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
             onSubmit={(e) => { e.preventDefault(); confirmLongtermDone(); }}
           >
             <h3 className="text-sm font-semibold text-ink">什么时候办成的？</h3>

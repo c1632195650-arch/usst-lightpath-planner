@@ -241,8 +241,8 @@ export function GoalEditor({
 
       {/* 节奏三选一 —— 用户拍板的流程：设立带截止日期的目标后弹窗询问 */}
       {paceAsk && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
+        <div className="overlay-in fixed inset-0 z-40 flex items-center justify-center bg-ink/30 px-4">
+          <div className="overlay-in-panel w-full max-w-sm rounded-xl bg-white p-4 shadow-lg">
             <h3 className="text-[14px] font-semibold text-ink">「{paceAsk.title}」打算怎么投入？</h3>
             <p className="mt-1 text-[11.5px] text-ink-soft">
               截止 {paceAsk.dueAt}。以后随时可以在目标列表里改。
@@ -334,7 +334,7 @@ export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termSt
                 )}
               </div>
               {g.targetMinutes && (
-                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-black/5">
+                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-ink/5">
                   <div
                     className="h-full rounded-full bg-chart-cyan"
                     style={{ width: `${Math.min(100, Math.round((g.minutes / g.targetMinutes) * 100))}%` }}
