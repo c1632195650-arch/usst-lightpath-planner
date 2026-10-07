@@ -66,7 +66,9 @@ export default function TodayPage({ identity, onLogout }: { identity: MobileIden
   const banner = bannerBlock(displayed?.blocks ?? [], nowMin, doneIds);
 
   return (
-    <div className="min-h-screen w-full bg-paper pb-10">
+    /* UI v2 D7：底部留白叠加 iOS 安全区（m.html 已 viewport-fit=cover；
+       无底栏设计，动作按钮 h-11=44px 命中达标）。 */
+    <div className="min-h-screen w-full bg-paper pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-30 bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-lg font-bold text-ink">光溯 · 今天</h1>
