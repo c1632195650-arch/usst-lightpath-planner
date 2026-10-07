@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 135,
-    "engineFiles": 99,
+    "testFiles": 136,
+    "engineFiles": 100,
     "uiFiles": 36,
-    "guardedSources": 122,
-    "reverseVerified": 86,
+    "guardedSources": 124,
+    "reverseVerified": 87,
     "orphans": 1
   },
   "domains": {
@@ -124,7 +124,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 37,
+      "testCount": 38,
       "tests": [
         "scripts/miniWeekPreview.test.ts",
         "tests/agenda-model.test.ts",
@@ -151,6 +151,7 @@
         "tests/ui-cmp-switch.test.ts",
         "tests/ui-cmp-tag.test.ts",
         "tests/ui-cmp-toast.test.ts",
+        "tests/ui-icons.test.ts",
         "tests/userPlanStore.test.ts",
         "tests/userPlanUndo.test.ts",
         "tests/v1.test.ts",
@@ -165,6 +166,8 @@
         "tests/wp9.test.ts"
       ],
       "sources": [
+        "src/components/icons/Icon",
+        "src/components/icons/iconPaths",
         "src/components/ui/Avatar",
         "src/components/ui/Button",
         "src/components/ui/DetailDrawer",
@@ -1372,6 +1375,14 @@
       "guardCount": 2,
       "reverseVerified": true
     },
+    "tests/ui-icons.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "week-view"
+      ],
+      "guardCount": 2,
+      "reverseVerified": true
+    },
     "tests/userPlanStore.test.ts": {
       "suite": "engine",
       "guards": [
@@ -2119,6 +2130,12 @@
     ],
     "src/components/ui/Toast": [
       "tests/ui-cmp-toast.test.ts"
+    ],
+    "src/components/icons/iconPaths": [
+      "tests/ui-icons.test.ts"
+    ],
+    "src/components/icons/Icon": [
+      "tests/ui-icons.test.ts"
     ],
     "src/features/onboarding/checklist": [
       "tests/v0.test.ts"
