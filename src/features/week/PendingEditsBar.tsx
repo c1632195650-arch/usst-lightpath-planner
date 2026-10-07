@@ -3,7 +3,7 @@
  * ============================================================
  * 要解决的问题：T3「攒批」语义的关键反馈原先混在操作条里，是一个小黄字标签：
  *   `WeekToolsPanel.tsx:171-176` 的
- *   `<span className="... bg-amber-50 ...">改动已记下，点左边「重新排一遍」才会生效</span>`
+ *   `<span className="... bg-warn-light ...">改动已记下，点左边「重新排一遍」才会生效</span>`
  *   它和四个操作按钮并排躺在同一个 `flex-wrap` 容器里 ⟹ **位置随窗口宽度漂移**，
  *   而且「点左边」这种方位词在换行后就指错了地方。
  *
@@ -46,23 +46,23 @@ export function PendingEditsBar({
     <div
       role="status"
       aria-live="polite"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-600/25 bg-amber-50 px-3.5 py-2.5"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warn/25 bg-warn-light px-3.5 py-2.5"
     >
       <span className="flex shrink-0 items-center gap-2">
         {/* 状态点：不闪、不动 —— 静态的一点点视觉锚点就够了 */}
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600" aria-hidden />
-        <span className="text-[12.5px] font-medium text-amber-900">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" aria-hidden />
+        <span className="text-[12.5px] font-medium text-warn-text">
           有 {edits.length} 项改动还没生效
         </span>
       </span>
-      <span className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-amber-800">
+      <span className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-warn-text">
         {summary}
       </span>
       {onInspect && (
         <button
           type="button"
           onClick={onInspect}
-          className="shrink-0 rounded-md bg-white px-2.5 py-1 text-[11.5px] font-medium text-amber-900 ring-1 ring-amber-700/20 transition hover:bg-amber-100"
+          className="shrink-0 rounded-md bg-white px-2.5 py-1 text-[11.5px] font-medium text-warn-text ring-1 ring-warn/20 transition hover:bg-warn-light"
         >
           查看改动
         </button>
@@ -75,8 +75,8 @@ export function PendingEditsBar({
         title="按当前改动重新排一遍这一周"
         className={`shrink-0 rounded-md px-3 py-1 text-[11.5px] font-semibold transition ${
           running
-            ? 'cursor-not-allowed bg-amber-700/40 text-white'
-            : 'bg-slate-800 text-white hover:bg-slate-700'
+            ? 'cursor-not-allowed bg-warn/40 text-white'
+            : 'bg-ink text-white hover:bg-ink-soft'
         }`}
       >
         {running ? '正在重排…' : '重新排一遍'}

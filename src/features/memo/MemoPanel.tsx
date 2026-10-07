@@ -227,8 +227,8 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
           <span
             data-testid="memo-sync-state"
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
-              sync === 'synced' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                : sync === 'offline' ? 'bg-amber-50 text-amber-700 ring-amber-200'
+              sync === 'synced' ? 'bg-ok-light text-ok ring-ok/25'
+                : sync === 'offline' ? 'bg-warn-light text-warn-text ring-warn/25'
                   : 'bg-paper text-ink-faint ring-ink/10'}`}
           >
             <Icon name={sync === 'synced' ? 'cloud' : 'cloud-off'} size="xs" className="inline-block align-[-2px]" />
@@ -251,13 +251,13 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
       {writeError && (
         <div
           data-testid="memo-write-error"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warn/30 bg-warn-light px-4 py-2.5 text-[12px] text-warn-text"
         >
           <span>这次没连上云端，已先存在本机 —— 联网后会自动补传。</span>
           <button
             type="button"
             onClick={retryLastMutate}
-            className="rounded-lg bg-white px-3 py-1 font-medium text-amber-800 ring-1 ring-amber-300 transition-colors hover:bg-amber-100"
+            className="rounded-lg bg-white px-3 py-1 font-medium text-warn-text ring-1 ring-warn/30 transition-colors hover:bg-warn-light"
           >
             重试
           </button>
@@ -276,12 +276,12 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
               : '待办还没进本周计划 —— 去「日程」页生成一次'}
           </span>
           <span className="flex items-center gap-2">
-            {flash && <span className="text-emerald-700">{flash}</span>}
+            {flash && <span className="text-ok">{flash}</span>}
             {onGotoPlan && (
               <button
                 type="button"
                 onClick={onGotoPlan}
-                className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper"
               >
                 去「日程」页 →
               </button>

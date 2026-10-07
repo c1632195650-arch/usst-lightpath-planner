@@ -72,7 +72,7 @@ export function EditBlockPanel({
   const clash = (occupied ?? []).find((o) => start < o.endMin && o.startMin < end) ?? null;
 
   return (
-    <div className="space-y-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
+    <div className="space-y-1.5 rounded-md bg-paper px-2 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="shrink-0">开始</span>
         <TimeWheelPicker value={startText} onChange={setStartText} step={10} />
@@ -101,7 +101,7 @@ export function EditBlockPanel({
       </div>
       {/* 碰撞提示：说清**和谁**撞了、怎么办 —— 只写「冲突」等于没说 */}
       {clash && (
-        <div className="rounded bg-amber-50 px-2 py-1 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-700/20">
+        <div className="rounded bg-warn-light px-2 py-1 text-[10.5px] leading-relaxed text-warn-text ring-1 ring-warn/20">
           这个时间和「{clash.title}」（{toHHmm(clash.startMin)}–{toHHmm(clash.endMin)}）撞了，所以先不记下 ——
           换个开始时间或时长，或者先把那一块挪开。
         </div>
@@ -120,8 +120,8 @@ export function EditBlockPanel({
           }}
           className={`rounded px-2 py-0.5 text-[11px] font-medium ${
             clash
-              ? 'cursor-not-allowed bg-slate-300 text-white/80'
-              : 'bg-slate-800 text-white'
+              ? 'cursor-not-allowed bg-ink/15 text-white/80'
+              : 'bg-ink text-white'
           }`}
         >
           记下（点「重新排一遍」生效）

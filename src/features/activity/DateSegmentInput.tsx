@@ -107,7 +107,7 @@ export function DateSegmentInput({ value, onChange, ariaLabel }: {
     || (d.length > 0 && (di < 1 || di > 31))
     || (y.length === 4 && m.length > 0 && d.length > 0
       && (() => { const dt = new Date(Date.UTC(Number(y), mi - 1, di)); return dt.getUTCMonth() !== mi - 1 || dt.getUTCDate() !== di; })());
-  const ringCls = invalid ? ' ring-red-400' : ' ring-ink/15';
+  const ringCls = invalid ? ' ring-danger/40' : ' ring-ink/15';
 
   const segCls = 'w-12 rounded border-0 bg-white px-1 py-0.5 text-center text-[11.5px] text-ink ring-1 focus:outline-none focus:ring-2 focus:ring-brand';
 

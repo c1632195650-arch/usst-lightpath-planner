@@ -73,7 +73,7 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint
                 {chip && (
                   <span
                     data-testid="todo-scheduled-chip"
-                    className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                    className="rounded-full bg-ok-light px-1.5 py-0.5 text-[10px] font-medium text-ok ring-1 ring-ok/25"
                   >
                     {chip}
                   </span>
@@ -84,7 +84,7 @@ export default function TodoList({ todos, onToggle, onArchive, onEdit, schedHint
                     type="button"
                     data-testid="memo-todo-sched-state"
                     onClick={schedHint.onGotoPlan}
-                    className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                    className="rounded-full bg-warn-light px-1.5 py-0.5 text-[10px] font-medium text-warn-text ring-1 ring-warn/25 transition-colors hover:bg-warn-light"
                   >
                     未排进本周 · 排进本周 →
                   </button>

@@ -366,7 +366,7 @@ export function BlockCard({
         onClick={() => { if (isNew && onDismissNew) onDismissNew(); }}
         onMouseEnter={() => setPeek(true)}
         onMouseLeave={() => setPeek(false)}
-        className={`group relative h-full overflow-hidden rounded-lg border-l-4 ${style.bg} ${isEvent ? 'ring-1 ring-purple-300' : ''} ${dragging ? 'opacity-50 ring-2 ring-brand' : ''} ${isNew ? 'ring-2 ring-green-400' : ''} ${live ? 'ring-2 ring-brand' : ''} ${editable ? 'cursor-grab' : ''}`}
+        className={`group relative h-full overflow-hidden rounded-lg border-l-4 ${style.bg} ${isEvent ? 'ring-1 ring-chart-violet/30' : ''} ${dragging ? 'opacity-50 ring-2 ring-brand' : ''} ${isNew ? 'ring-2 ring-ok/40' : ''} ${live ? 'ring-2 ring-brand' : ''} ${editable ? 'cursor-grab' : ''}`}
       >
         {/* 块内滚动区（见文件头 T3 改造 ①）：内容装不下时原生滚轮上下滚，
             滚到底后继续滚会链式交给外层时间轴（浏览器原生行为）。
@@ -386,7 +386,7 @@ export function BlockCard({
             <div title={block.title} className={`min-w-0 truncate text-[12px] font-semibold leading-tight ${style.text}`}>
               {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
               {block.emoji ? `${block.emoji} ` : ''}{block.title}
-              {isNew && <span className="ml-1 rounded bg-green-600 px-1 align-middle text-[9px] text-white">🆕 新</span>}
+              {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">🆕 新</span>}
             </div>
             {/* 时间行 + ⋯（右键菜单的「看得见的入口」，见文件头 T3 改造 ⑤）。
                 触摸设备没有右键 —— 这个按钮是那类用户唯一入口，不能只靠 title
@@ -410,12 +410,12 @@ export function BlockCard({
               </button>
             </div>
             {mark === 'done' && (
-              <div className="mt-0.5 inline-block rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              <div className="mt-0.5 inline-block rounded bg-ok px-1.5 py-0.5 text-[10px] font-medium text-white">
                 ✓ 已做{actual != null ? ` · 实际 ${actual} 分` : ''}
               </div>
             )}
             {mark === 'skipped' && (
-              <div className="mt-0.5 inline-block rounded bg-slate-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              <div className="mt-0.5 inline-block rounded bg-ink-faint px-1.5 py-0.5 text-[10px] font-medium text-white">
                 ✗ 没做
               </div>
             )}
@@ -448,7 +448,7 @@ export function BlockCard({
               </div>
             )}
             {t && (
-              <div className={`mt-0.5 text-[10.5px] leading-tight ${t.tight ? 'rounded bg-white/70 px-1 py-px text-red-700' : 'text-ink-soft'}`}>
+              <div className={`mt-0.5 text-[10.5px] leading-tight ${t.tight ? 'rounded bg-white/70 px-1 py-px text-danger-text' : 'text-ink-soft'}`}>
                 🚶 {t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
                 （余 {t.slackMin}{t.tight ? ' · 紧' : ''}）
               </div>
@@ -499,7 +499,7 @@ export function BlockCard({
           <div className={`text-[12px] font-semibold leading-snug ${style.text}`}>
             {locked && <span title="已定住：重排时不动" className="mr-0.5 inline-flex align-[-2px]"><Icon name="lock" size="xs" /></span>}
             {block.emoji ? `${block.emoji} ` : ''}{block.title}
-            {isNew && <span className="ml-1 rounded bg-green-600 px-1 align-middle text-[9px] text-white">🆕 新</span>}
+            {isNew && <span className="ml-1 rounded bg-ok px-1 align-middle text-[9px] text-white">🆕 新</span>}
           </div>
           <div className="font-mono text-[10.5px] leading-tight text-ink-faint">
             {toHHmm(block.startMin)}–{toHHmm(block.endMin)}
@@ -515,7 +515,7 @@ export function BlockCard({
             </div>
           )}
           {t && (
-            <div className={`mt-0.5 text-[10.5px] leading-snug ${t.tight ? 'rounded bg-white/70 px-1 py-px text-red-700' : 'text-ink-soft'}`}>
+            <div className={`mt-0.5 text-[10.5px] leading-snug ${t.tight ? 'rounded bg-white/70 px-1 py-px text-danger-text' : 'text-ink-soft'}`}>
               🚶 {t.fromPlace} → {t.toPlace}：{t.reliable === false || /estimate/i.test(t.source ?? '') ? '≈' : ''}{t.minutes} 分钟
               （余 {t.slackMin}{t.tight ? ' · 紧' : ''}）
             </div>
@@ -540,7 +540,7 @@ export function BlockCard({
           <div
             onMouseDown={startEditDrag}
             title="按住拖动面板"
-            className="mb-1.5 flex cursor-move select-none items-center justify-between rounded-md bg-slate-100 px-2 py-1"
+            className="mb-1.5 flex cursor-move select-none items-center justify-between rounded-md bg-sunken px-2 py-1"
           >
             <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold text-ink-soft">
               <Icon name="sliders" size="xs" className="shrink-0" />
@@ -566,7 +566,7 @@ export function BlockCard({
           输入框里的 60 只是个起点，确认前用户能看到并改掉。
           （与编辑面板天然互斥：作业只课程块有、编辑只非课程块有。） */}
       {asgOpen && block.kind === 'course' && block.courseId && (
-        <div className="absolute inset-x-0 top-full z-50 mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md bg-indigo-50 px-2 py-1.5 text-[11px] text-indigo-900 shadow-sm ring-1 ring-indigo-200">
+        <div className="absolute inset-x-0 top-full z-50 mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md bg-brand-light px-2 py-1.5 text-[11px] text-brand shadow-sm ring-1 ring-brand/25">
           <span>这门课的作业要多久？</span>
           <input
             type="number"
@@ -575,7 +575,7 @@ export function BlockCard({
             step={10}
             value={asgMin}
             onChange={(e) => setAsgMin(Number(e.target.value))}
-            className="w-16 rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-[11.5px]"
+            className="w-16 rounded border border-brand/30 bg-white px-1.5 py-0.5 text-[11.5px]"
           />
           <span>分钟</span>
           <button
@@ -584,7 +584,7 @@ export function BlockCard({
               onSetAssignment(block.courseId as string, block.title, asgMin);
               setAsgOpen(false);
             }}
-            className="rounded bg-indigo-700 px-2 py-0.5 text-[11px] font-medium text-white"
+            className="rounded bg-brand-dark px-2 py-0.5 text-[11px] font-medium text-white"
           >
             记下
           </button>
@@ -592,7 +592,7 @@ export function BlockCard({
             <button
               type="button"
               onClick={() => { onClearAssignment(block.courseId as string); setAsgOpen(false); }}
-              className="rounded bg-white px-2 py-0.5 text-[11px] text-indigo-900 ring-1 ring-indigo-300"
+              className="rounded bg-white px-2 py-0.5 text-[11px] text-brand ring-1 ring-brand/30"
             >
               取消标记
             </button>
@@ -708,7 +708,7 @@ export function BlockCard({
               role="menuitem"
               onClick={() => { it.run(); setMenu(null); }}
               className={`block w-full px-3 py-1.5 text-left text-[12px] font-medium ${
-                it.danger ? 'text-red-700 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-100'
+                it.danger ? 'text-danger-text hover:bg-danger-light' : 'text-ink-soft hover:bg-sunken'
               }`}
             >
               {it.label}

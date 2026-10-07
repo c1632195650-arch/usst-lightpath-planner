@@ -23,12 +23,12 @@ export function MilestoneTimeline({
         <button key={m.id} type="button"
           onClick={() => onToggle(m.id)}
           className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[11.5px] transition ${
-            m.done ? 'bg-green-50 text-green-800' : 'bg-slate-50 text-ink-soft hover:bg-slate-100'
+            m.done ? 'bg-ok-light text-ok' : 'bg-paper text-ink-soft hover:bg-sunken'
           }`}>
           <span className="mr-1.5 font-mono text-[10px] text-ink-faint">{m.dueAt.slice(5)}</span>
           <span className={m.done ? 'line-through opacity-60' : ''}>{m.title}</span>
           {m.evidence && <span className="ml-1 text-[10px] text-ink-faint">· {m.evidence}</span>}
-          {m.done && <span className="ml-1 text-green-600">✓</span>}
+          {m.done && <span className="ml-1 text-ok">✓</span>}
         </button>
       ))}
     </div>

@@ -283,14 +283,14 @@ export function WeekDayColumn({
         <div
           key="drag-ghost"
           /* 同上：不可落位的红色影子也必须对指针透明，否则同样会吃掉 `drop` */
-          className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-red-400 bg-red-50 px-1.5 py-1"
+          className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-lg border-2 border-dashed border-danger/40 bg-danger-light px-1.5 py-1"
           style={{
             top: minToY(ghost.startMin),
             /* 拒绝提示不守时：至少 36px 高，否则 20 分钟的块放不下这行字 */
             height: Math.max(spanToH(ghost.startMin, ghost.endMin), 36),
           }}
         >
-          <div className="flex items-center gap-1 truncate text-[11px] font-medium text-red-700"><Icon name="x-circle" size="xs" className="shrink-0" />{ghost.reason ?? '放不下'}</div>
+          <div className="flex items-center gap-1 truncate text-[11px] font-medium text-danger-text"><Icon name="x-circle" size="xs" className="shrink-0" />{ghost.reason ?? '放不下'}</div>
         </div>
       ))}
 

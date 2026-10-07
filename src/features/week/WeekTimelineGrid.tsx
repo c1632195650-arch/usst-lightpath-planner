@@ -261,8 +261,8 @@ export function WeekTimelineGrid({
                     title={adv.detail}
                     className={`mt-0.5 truncate rounded border-l-2 px-1 text-left text-[10px] leading-[1.35] ${
                       adv.severity === 'warn'
-                        ? 'border-amber-400 bg-amber-50 text-amber-900'
-                        : 'border-slate-300 bg-slate-50 text-ink-soft'
+                        ? 'border-warn/40 bg-warn-light text-warn-text'
+                        : 'border-ink/15 bg-paper text-ink-soft'
                     }`}
                   >
                     {adv.emoji} {adv.label}

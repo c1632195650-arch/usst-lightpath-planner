@@ -26,10 +26,10 @@ export interface ToastItem {
 }
 
 const STYLE: Record<ToastKind, { bg: string; icon: 'trash' | 'sliders' | 'plus' | 'info' }> = {
-  delete: { bg: 'bg-red-50 border-red-300 text-red-800', icon: 'trash' },
-  move: { bg: 'bg-blue-50 border-blue-300 text-blue-800', icon: 'sliders' },
-  add: { bg: 'bg-green-50 border-green-300 text-green-800', icon: 'plus' },
-  info: { bg: 'bg-slate-50 border-slate-300 text-ink-soft', icon: 'info' },
+  delete: { bg: 'bg-danger-light border-danger/30 text-danger-text', icon: 'trash' },
+  move: { bg: 'bg-brand-light border-brand/30 text-brand', icon: 'sliders' },
+  add: { bg: 'bg-ok-light border-ok/30 text-ok', icon: 'plus' },
+  info: { bg: 'bg-paper border-ink/15 text-ink-soft', icon: 'info' },
 };
 
 export const DEFAULT_TOAST_MS: Record<ToastKind, number> = {

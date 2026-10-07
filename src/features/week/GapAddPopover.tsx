@@ -97,7 +97,7 @@ export function GapAddPopover({ day, startMin, capacityMin, x, y, onSubmit, onCl
           type="button"
           aria-label="关闭"
           onClick={onClose}
-          className="rounded px-1 text-[12px] leading-none text-ink-faint hover:bg-slate-100 hover:text-ink-soft"
+          className="rounded px-1 text-[12px] leading-none text-ink-faint hover:bg-sunken hover:text-ink-soft"
         >
           <Icon name="x" size="sm" />
         </button>
@@ -147,7 +147,7 @@ export function GapAddPopover({ day, startMin, capacityMin, x, y, onSubmit, onCl
       </div>
 
       {choices.length === 0 && (
-        <p className="mt-2 text-[11.5px] text-warn">
+        <p className="mt-2 text-[11.5px] text-warn-text">
           空档在前后各 20 分钟转场缓冲后不足 15 分钟，塞不下事 —— 换个空档右键试试。
         </p>
       )}

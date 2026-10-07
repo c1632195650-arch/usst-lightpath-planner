@@ -14,7 +14,7 @@ function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
           style={{ background: deadlineColor(d.tag) }}
         />
         {urgent && (
-          <Icon name="zap" size="xs" className="absolute -right-1.5 -top-1 text-danger" />
+          <Icon name="zap" size="xs" className="absolute -right-1.5 -top-1 text-danger-text" />
         )}
       </div>
 
@@ -34,10 +34,10 @@ function DeadlineRow({ d, days }: { d: Deadline; days: number }) {
 
       <div className="shrink-0 text-right pl-1">
         {days === 0 ? (
-          <span className="text-xs font-semibold text-danger">今天</span>
+          <span className="text-xs font-semibold text-danger-text">今天</span>
         ) : (
           <>
-            <div className={`text-lg font-semibold leading-none tabular-nums ${urgent ? 'text-danger' : 'text-ink'}`}>
+            <div className={`text-lg font-semibold leading-none tabular-nums ${urgent ? 'text-danger-text' : 'text-ink'}`}>
               {days}<span className="ml-0.5 text-[10px] font-medium text-ink-faint">天</span>
             </div>
             <div className="mt-1 text-[10px] text-ink-faint">{urgent ? '临近' : '剩余'}</div>

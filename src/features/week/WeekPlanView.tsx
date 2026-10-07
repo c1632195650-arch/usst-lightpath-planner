@@ -946,7 +946,7 @@ export function WeekPlanView({
             <button
               type="button"
               onClick={() => setRestoreAsk(false)}
-              className="rounded-md px-3 py-1.5 text-[12.5px] font-medium text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+              className="rounded-md px-3 py-1.5 text-[12.5px] font-medium text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
             >
               先不了
             </button>
@@ -954,7 +954,7 @@ export function WeekPlanView({
               type="button"
               onClick={handleRestoreEngine}
               data-testid="week-restore-engine-confirm"
-              className="rounded-md bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-red-700"
+              className="rounded-md bg-danger px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-danger"
             >
               还原并重排
             </button>
@@ -991,7 +991,7 @@ export function WeekPlanView({
               <button
                 type="button"
                 onClick={() => setSchedDrawer(null)}
-                className="ml-auto rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+                className="ml-auto rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
               >
                 收起（对话保留）
               </button>
@@ -1008,7 +1008,10 @@ export function WeekPlanView({
           </div>
         </div>
       )}
-      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮） */}
+      {/* 操作反馈 Toast（右上角，自动消失；删除类带撤销按钮）
+          🔴 2026-10-08 修复：Ray 批次接入时漏了这一行渲染 —— notify() 状态一直在写、
+          组件从未挂载 ⟹ 加事/删除/撤销的回执全部静默（E2E「评估动线②」抓出）。 */}
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
     </>
   );
 

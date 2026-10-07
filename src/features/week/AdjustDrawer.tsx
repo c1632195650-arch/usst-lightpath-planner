@@ -109,7 +109,7 @@ export function AdjustDrawer({
                 title="清掉本周所有手动改动（挪动/删除/新加/定住），回到引擎排的最初版"
                 className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium ring-1 transition ${
                   (restoreCount ?? 0) > 0
-                    ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+                    ? 'bg-white text-ink-soft ring-ink/15 hover:bg-paper'
                     : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
                 }`}
               >
@@ -129,7 +129,7 @@ export function AdjustDrawer({
 
         {/* T3：改动攒着没生效 —— 抽屉里也要说。收起后提示仍在操作条上（两处一致） */}
         {pendingEdits && (
-          <div className="mx-4 mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900 ring-1 ring-amber-700/20">
+          <div className="mx-4 mt-2 rounded-md bg-warn-light px-2.5 py-1.5 text-[11px] leading-relaxed text-warn-text ring-1 ring-warn/20">
             改动已记下 —— 收起抽屉后点操作条上的「重新排一遍」才会生效
           </div>
         )}
@@ -161,7 +161,7 @@ export function AdjustDrawer({
                 onChange={(next) => updateLayer((prev) => ({ ...prev, courseOverrides: next }))}
               />
               {derivedApplied.length > 0 && (
-                <div className="rounded-md bg-slate-50 px-3 py-2 text-[11.5px] text-ink-soft">
+                <div className="rounded-md bg-paper px-3 py-2 text-[11.5px] text-ink-soft">
                   这周已应用 {derivedApplied.length} 处调课/停课：
                   {derivedApplied
                     .map((a) => `${a.courseName} ${a.periodLabel} ${a.action === 'cancel' ? '停课' : '调课'}`)

@@ -65,7 +65,7 @@ export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemove
       {open && (
         <div className="mt-2">
           {/* 诚实说明：本期只记录，不反哺排程 */}
-          <div className="rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
+          <div className="rounded-md bg-paper px-2.5 py-1.5 text-[11px] text-ink-soft ring-1 ring-ink/10">
             这些是你提过的要求。其中「不可时段」类**已经真实生效**（重排时硬排除）；
             其余记录类要求会随重排逐步体现。
           </div>
@@ -80,11 +80,11 @@ export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemove
                 {unavailable.map((u) => (
                   <li key={u.id} className="flex flex-wrap items-baseline gap-x-2 rounded-md bg-white px-2.5 py-1.5 ring-1 ring-ink/10">
                     <span className="text-[12.5px] font-medium text-ink">{u.label}</span>
-                    {u.sub && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-ink-soft">{u.sub}</span>}
+                    {u.sub && <span className="rounded bg-sunken px-1.5 py-0.5 text-[10.5px] text-ink-soft">{u.sub}</span>}
                     <button
                       type="button"
                       onClick={() => onRemoveSlot(u.id)}
-                      className="ml-auto rounded bg-white px-2 py-0.5 text-[11px] text-red-600 ring-1 ring-red-200 hover:bg-red-50"
+                      className="ml-auto rounded bg-white px-2 py-0.5 text-[11px] text-danger-text ring-1 ring-danger/25 hover:bg-danger-light"
                     >
                       删除
                     </button>
@@ -107,13 +107,13 @@ export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemove
                   className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md px-2.5 py-1.5 ring-1 ${
                     it.active
                       ? 'bg-white ring-ink/10'
-                      : 'bg-slate-50/70 ring-ink/5 opacity-60'
+                      : 'bg-paper/70 ring-ink/5 opacity-60'
                   }`}
                 >
                   <span className={`text-[12.5px] font-medium ${it.active ? 'text-ink' : 'text-ink-soft line-through'}`}>
                     {it.title}
                   </span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-ink-soft">
+                  <span className="rounded bg-sunken px-1.5 py-0.5 text-[10.5px] text-ink-soft">
                     {it.group}
                   </span>
                   {it.source === 'text' && it.utterance && (
@@ -123,14 +123,14 @@ export function LearnedPreferencesPanel({ rules, onChange, unavailable, onRemove
                     <button
                       type="button"
                       onClick={() => toggle(it.id, !it.active)}
-                      className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+                      className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
                     >
                       {it.active ? '撤销' : '重新生效'}
                     </button>
                     <button
                       type="button"
                       onClick={() => drop(it.id)}
-                      className="rounded bg-white px-2 py-0.5 text-[11px] text-red-600 ring-1 ring-red-200 hover:bg-red-50"
+                      className="rounded bg-white px-2 py-0.5 text-[11px] text-danger-text ring-1 ring-danger/25 hover:bg-danger-light"
                     >
                       删除
                     </button>

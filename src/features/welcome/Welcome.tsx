@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { LightpathMark, LightpathWordmark } from '@/components/LightpathMark';
+import { LightpathMark } from '@/components/LightpathMark';
 import { Icon } from '@/components/icons/Icon';
 
 interface Props {

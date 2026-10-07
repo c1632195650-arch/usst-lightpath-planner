@@ -127,7 +127,7 @@ export function AddTaskPanel({ onAdd, weekNo }: Props) {
           type="button"
           onClick={submit}
           disabled={!canSubmit}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40"
+          className="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40"
         >
           加进去
         </button>

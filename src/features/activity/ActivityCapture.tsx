@@ -64,7 +64,7 @@ export function ActivityCapture({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+        className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
       >
         ＋ 记一笔
       </button>
@@ -72,7 +72,7 @@ export function ActivityCapture({
   }
 
   return (
-    <div className="mt-1.5 rounded-md bg-teal-50 px-2.5 py-2 text-[11.5px] text-teal-900 ring-1 ring-teal-600/20">
+    <div className="mt-1.5 rounded-md bg-chart-cyan-soft px-2.5 py-2 text-[11.5px] text-chart-cyan-deep ring-1 ring-chart-cyan/20">
       <p className="font-medium">这段时间打算干嘛？（答了一句，以后才排得准）</p>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <input
@@ -80,7 +80,7 @@ export function ActivityCapture({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="做了什么"
-          className="min-w-0 flex-1 rounded border border-teal-300 bg-white px-1.5 py-0.5 text-[11.5px]"
+          className="min-w-0 flex-1 rounded border border-chart-cyan/30 bg-white px-1.5 py-0.5 text-[11.5px]"
         />
         <input
           type="number"
@@ -89,7 +89,7 @@ export function ActivityCapture({
           step={10}
           value={min}
           onChange={(e) => setMin(Number(e.target.value))}
-          className="w-16 rounded border border-teal-300 bg-white px-1.5 py-0.5 text-[11.5px]"
+          className="w-16 rounded border border-chart-cyan/30 bg-white px-1.5 py-0.5 text-[11.5px]"
         />
         <span className="text-[11px]">分钟</span>
       </div>
@@ -100,7 +100,7 @@ export function ActivityCapture({
             type="button"
             onClick={() => setTag(t)}
             className={`rounded px-2 py-0.5 text-[11px] ${
-              tag === t ? 'bg-teal-700 text-white' : 'bg-white text-teal-900 ring-1 ring-teal-300'
+              tag === t ? 'bg-chart-cyan text-white' : 'bg-white text-chart-cyan-deep ring-1 ring-chart-cyan/30'
             }`}
           >
             {TAG_LABEL[t]}
@@ -110,7 +110,7 @@ export function ActivityCapture({
           <select
             value={goalId}
             onChange={(e) => setGoalId(e.target.value)}
-            className="rounded border border-teal-300 bg-white px-1.5 py-0.5 text-[11.5px]"
+            className="rounded border border-chart-cyan/30 bg-white px-1.5 py-0.5 text-[11.5px]"
           >
             {goals.map((g) => (
               <option key={g.id} value={g.id}>{g.emoji} {g.title}</option>
@@ -122,7 +122,7 @@ export function ActivityCapture({
         <button
           type="button"
           onClick={submit}
-          className="rounded bg-teal-700 px-2.5 py-1 text-[11.5px] font-medium text-white"
+          className="rounded bg-chart-cyan px-2.5 py-1 text-[11.5px] font-medium text-white"
         >
           记下
         </button>
@@ -130,7 +130,7 @@ export function ActivityCapture({
         <button
           type="button"
           onClick={() => { setOpen(false); onDismiss(); }}
-          className="rounded px-2 py-0.5 text-[11px] text-teal-800/70"
+          className="rounded px-2 py-0.5 text-[11px] text-chart-cyan-deep/70"
         >
           跳过
         </button>
@@ -162,7 +162,7 @@ export function RecentActivityList({
               saveActivityLog(next);
               onChanged(next);
             }}
-            className="rounded px-1 text-[10.5px] text-ink-faint hover:text-red-600"
+            className="rounded px-1 text-[10.5px] text-ink-faint hover:text-danger-text"
           >
             删除
           </button>

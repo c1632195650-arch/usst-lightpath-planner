@@ -62,13 +62,13 @@ export function GoalMonitor({ goal, records, weekNo, termStart, onToggleMileston
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
             <span className="font-medium text-ink">截止 {goal.dueAt}</span>
             {weeksLeft != null && (
-              <span className={weeksLeft <= 2 ? 'font-medium text-red-700' : 'text-ink-soft'}>
+              <span className={weeksLeft <= 2 ? 'font-medium text-danger-text' : 'text-ink-soft'}>
                 {weeksLeft <= 0 ? '本周到期' : `还剩 ${weeksLeft} 周`}
               </span>
             )}
             <span className="text-ink-faint">临近度 {Math.round(proximity * 100)}%</span>
           </div>
-          <Bar ratio={proximity} className="bg-amber-400" />
+          <Bar ratio={proximity} className="bg-warn" />
         </div>
       )}
 
@@ -93,25 +93,25 @@ export function GoalMonitor({ goal, records, weekNo, termStart, onToggleMileston
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
           <span className="text-ink-soft">
             本周计划 <b className="text-ink">{Math.round(demand)}</b> 分钟
-            {proximity > 0.3 && <span className="ml-1 text-amber-700">（临近截止，预算已上调）</span>}
+            {proximity > 0.3 && <span className="ml-1 text-warn-text">（临近截止，预算已上调）</span>}
           </span>
-          <span className={stats.weekDoneMin >= demand - 4 ? 'font-medium text-green-700' : 'text-ink-soft'}>
+          <span className={stats.weekDoneMin >= demand - 4 ? 'font-medium text-ok' : 'text-ink-soft'}>
             本周完成 {stats.weekDoneMin} 分钟
           </span>
         </div>
       )}
       {!hasBudget && (
-        <div className="rounded bg-amber-50 px-2 py-1 text-[10.5px] text-amber-800">
+        <div className="rounded bg-warn-light px-2 py-1 text-[10.5px] text-warn-text">
           这个目标还没有截止/总量，周计划里只排最小固定投入（Q4 定向周会引导你想方向）。
         </div>
       )}
 
       {/* 欠账 */}
       {debt > 0 && (
-        <div className="rounded bg-red-50 px-2 py-1 text-[10.5px] text-red-700">
+        <div className="rounded bg-danger-light px-2 py-1 text-[10.5px] text-danger-text">
           上周欠账 {debt} 次
           {debtPrev > 0 && ' · 连续两周欠账：建议调低档（延后截止 / 减少总时长）'}
-          {stats.debtWeeks.length > 0 && <span className="ml-1 text-red-400">（历史欠账周：第 {stats.debtWeeks.join('、')} 周）</span>}
+          {stats.debtWeeks.length > 0 && <span className="ml-1 text-danger-text/70">（历史欠账周：第 {stats.debtWeeks.join('、')} 周）</span>}
         </div>
       )}
 

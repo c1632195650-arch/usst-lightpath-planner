@@ -47,8 +47,16 @@ export default {
           deep: '#C08A45',
         },
         ok: { DEFAULT: '#1E7A4F', light: '#E6F2EC' },
-        warn: { DEFAULT: '#B9762A', light: '#FBF1E3' },
-        danger: { DEFAULT: '#C24B3A', light: '#FAEAE7' },
+        /**
+         * 语义色必须成对（设计总成 §7.3）：`.DEFAULT` 只做图形与底色，
+         * `.light` 是做底的那层，`.text` 才是**浅底/白底上承载文字**的那档。
+         * 与 index.css 的 --warn-text / --danger-text 同一份值，改一处必须同步另一处。
+         *   warn.text   #965C18 → 白底 5.47:1 / warn-light 上 4.89:1（AA）
+         *   danger.text #B0402F → 白底 5.80:1 / danger-light 上 4.97:1（AA）
+         * 直接用 DEFAULT 当小字文字色是不达标的（warn 3.69:1 / danger 在浅红底 4.12:1）。
+         */
+        warn: { DEFAULT: '#B9762A', light: '#FBF1E3', text: '#965C18' },
+        danger: { DEFAULT: '#C24B3A', light: '#FAEAE7', text: '#B0402F' },
 
         /**
          * 数据色：按波长从短到长排列（紫→靛→青→绿→琥珀→珊瑚）。
@@ -63,6 +71,13 @@ export default {
           amber: '#B9762A',
           coral: '#C24B3A',
           slate: '#5A6377',
+          /**
+           * 青·深 / 青·浅（设计总成 §7.6「自定义」类的文字与块底，#147A8B 作小字
+           * 只有 4.36:1 不够 AA，深一档才达标）。不进 SPECTRUM —— 那是「按波长排列」
+           * 的 7 色契约，这两档是同一色的明度变体，只服务块内文字与底色。
+           */
+          'cyan-deep': '#0D5560',
+          'cyan-soft': '#E7F3F5',
         },
 
         /**

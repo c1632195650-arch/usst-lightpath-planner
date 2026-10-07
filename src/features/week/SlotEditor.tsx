@@ -72,7 +72,7 @@ export function SlotEditor({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+          className="rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
         >
           {open ? '收起' : '＋ 声明'}
         </button>
@@ -87,7 +87,7 @@ export function SlotEditor({
       {/* 多条并存：这就是 R4 的核心 —— 两次声明互不覆盖 */}
       <ul className="mt-2 space-y-1.5">
         {slots.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11.5px] text-ink-soft">
+          <li key={s.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md bg-paper px-2.5 py-1.5 text-[11.5px] text-ink-soft">
             <span className="font-medium text-ink">
               {s.title || '不排'}
             </span>
@@ -95,7 +95,7 @@ export function SlotEditor({
               {s.days.map((d) => DAY_LABELS[d - 1]).join('、')} {humanizeMinutes(s.fromMin)}–{humanizeMinutes(s.toMin)}
             </span>
             <span className={`rounded px-1.5 py-0.5 text-[10.5px] ${
-              s.scope === 'long' ? 'bg-indigo-100 text-indigo-800' : 'bg-white text-ink-faint ring-1 ring-ink/15'
+              s.scope === 'long' ? 'bg-brand-light text-brand' : 'bg-white text-ink-faint ring-1 ring-ink/15'
             }`}>
               {s.scope === 'long'
                 ? `第 ${s.createdAtWeek} 周起（长期）`
@@ -104,7 +104,7 @@ export function SlotEditor({
             <button
               type="button"
               onClick={() => onChange(removeSlot(slots, s.id))}
-              className="rounded px-1.5 text-[10.5px] text-ink-faint hover:text-red-600"
+              className="rounded px-1.5 text-[10.5px] text-ink-faint hover:text-danger-text"
             >
               撤销
             </button>
@@ -149,7 +149,7 @@ export function SlotEditor({
           <button
             type="button"
             onClick={submit}
-            className="rounded bg-slate-800 px-2.5 py-1 text-[11.5px] font-medium text-white"
+            className="rounded bg-ink px-2.5 py-1 text-[11.5px] font-medium text-white"
           >
             记下（点「重新排一遍」生效）
           </button>

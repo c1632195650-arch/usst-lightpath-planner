@@ -86,7 +86,7 @@ export function CourseOverrideEditor({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+          className="rounded-md bg-white px-2.5 py-1 text-[11.5px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
         >
           {open ? '收起' : '＋ 记一次'}
         </button>
@@ -106,7 +106,7 @@ export function CourseOverrideEditor({
             return (
               <li
                 key={o.id}
-                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11.5px] text-ink-soft"
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md bg-paper px-2.5 py-1.5 text-[11.5px] text-ink-soft"
               >
                 <span className="font-medium text-ink">{c?.name ?? o.courseId}</span>
                 <span>
@@ -114,7 +114,7 @@ export function CourseOverrideEditor({
                 </span>
                 <span className="text-[10.5px] text-ink-faint">第{o.startPeriod}节</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10.5px] ${
-                  o.weekNo === null ? 'bg-indigo-100 text-indigo-800' : 'bg-white text-ink-faint ring-1 ring-ink/15'
+                  o.weekNo === null ? 'bg-brand-light text-brand' : 'bg-white text-ink-faint ring-1 ring-ink/15'
                 }`}>
                   {o.weekNo === null ? '长期' : `第 ${o.weekNo} 周`}
                 </span>
@@ -174,14 +174,14 @@ export function CourseOverrideEditor({
             <button
               type="button"
               onClick={() => setAction('cancel')}
-              className={`rounded px-2 py-0.5 ${action === 'cancel' ? 'bg-slate-800 text-white' : 'bg-white text-ink-soft ring-1 ring-ink/20'}`}
+              className={`rounded px-2 py-0.5 ${action === 'cancel' ? 'bg-ink text-white' : 'bg-white text-ink-soft ring-1 ring-ink/20'}`}
             >
               停课（不排）
             </button>
             <button
               type="button"
               onClick={() => setAction('move')}
-              className={`rounded px-2 py-0.5 ${action === 'move' ? 'bg-slate-800 text-white' : 'bg-white text-ink-soft ring-1 ring-ink/20'}`}
+              className={`rounded px-2 py-0.5 ${action === 'move' ? 'bg-ink text-white' : 'bg-white text-ink-soft ring-1 ring-ink/20'}`}
             >
               调课（换时间）
             </button>
@@ -235,7 +235,7 @@ export function CourseOverrideEditor({
               type="button"
               onClick={submit}
               disabled={!canSubmit}
-              className="rounded bg-slate-800 px-2.5 py-1 text-[11.5px] font-medium text-white disabled:opacity-40"
+              className="rounded bg-ink px-2.5 py-1 text-[11.5px] font-medium text-white disabled:opacity-40"
             >
               记下（点「重新排一遍」生效）
             </button>

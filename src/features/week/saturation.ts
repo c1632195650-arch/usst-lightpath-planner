@@ -22,10 +22,10 @@ export interface DaySaturation {
 }
 
 export const SATURATION_STYLE: Record<DaySaturation['level'], { bar: string; text: string; label: string }> = {
-  ok: { bar: 'bg-green-500', text: 'text-green-700', label: '还有余地' },
-  warm: { bar: 'bg-amber-400', text: 'text-amber-700', label: '偏满' },
-  full: { bar: 'bg-orange-500', text: 'text-orange-700', label: '很满' },
-  over: { bar: 'bg-red-500', text: 'text-red-700', label: '过载' },
+  ok: { bar: 'bg-ok', text: 'text-ok', label: '还有余地' },
+  warm: { bar: 'bg-warn', text: 'text-warn-text', label: '偏满' },
+  full: { bar: 'bg-warn', text: 'text-warn-text', label: '很满' },
+  over: { bar: 'bg-danger', text: 'text-danger-text', label: '过载' },
 };
 
 /** 纯函数：一天块集 → 满溢度。确定性，同输入必得同输出。 */

@@ -79,7 +79,7 @@ export function ImportScheduleStep({ onApply, onNext, onBack, existingCourseCoun
 
           {online === false && (
             <div className="mt-8 rounded-xl border border-warn/30 bg-warn/5 px-4 py-3 text-sm leading-6 text-ink-soft">
-              <strong className="text-warn">课表解析服务没连上。</strong>
+              <strong className="text-warn-text">课表解析服务没连上。</strong>
               解析随后端一起提供（先启动后端即可：{' '}
               <code className="rounded bg-paper px-1.5 py-0.5 text-ink-soft">python server/app.py</code>
               ）；先跳过也不影响继续设置，之后在服务连上时随时回「课表」页导入。
@@ -125,7 +125,7 @@ export function ImportScheduleStep({ onApply, onNext, onBack, existingCourseCoun
 
           {err && (
             <div className="mt-5 rounded-xl border border-danger/25 bg-danger-light px-4 py-3">
-              <div className="text-[13.5px] font-semibold text-danger">导入失败</div>
+              <div className="text-[13.5px] font-semibold text-danger-text">导入失败</div>
               <div className="mt-1 whitespace-pre-wrap text-[12.5px] text-ink-soft">{err}</div>
             </div>
           )}
@@ -138,7 +138,7 @@ export function ImportScheduleStep({ onApply, onNext, onBack, existingCourseCoun
                 </span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    result.term.exact ? 'bg-brand-light text-brand' : 'bg-warn-light text-warn'
+                    result.term.exact ? 'bg-brand-light text-brand' : 'bg-warn-light text-warn-text'
                   }`}
                 >
                   {result.term.exact ? '校历精确' : '估算 · 待核对'}
@@ -157,10 +157,10 @@ export function ImportScheduleStep({ onApply, onNext, onBack, existingCourseCoun
               {errors.length + warns.length > 0 && (
                 <div className="mt-2 text-[12px] leading-6">
                   {errors.map((i, k) => (
-                    <div key={`e${k}`} className="text-red-600">[error] {i.message}</div>
+                    <div key={`e${k}`} className="text-danger-text">[error] {i.message}</div>
                   ))}
                   {warns.slice(0, 3).map((i, k) => (
-                    <div key={`w${k}`} className="text-amber-700">[warn] {i.message}</div>
+                    <div key={`w${k}`} className="text-warn-text">[warn] {i.message}</div>
                   ))}
                   {warns.length > 3 && <div className="text-ink-faint">… 还有 {warns.length - 3} 条 warn</div>}
                 </div>

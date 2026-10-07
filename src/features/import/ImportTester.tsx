@@ -62,13 +62,13 @@ export function ImportTester({ onApply }: Props) {
         <div className="mb-2 flex items-center gap-2">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
-              online === null ? 'bg-ink-faint' : online ? 'bg-brand' : 'bg-red-500'
+              online === null ? 'bg-ink-faint' : online ? 'bg-brand' : 'bg-danger'
             }`}
           />
           <Icon
             name={online ? 'ok-circle' : 'warn-tri'}
             size="sm"
-            className={online ? 'text-brand' : 'text-danger'}
+            className={online ? 'text-brand' : 'text-danger-text'}
           />
           <h2 className="text-base font-semibold tracking-tight text-ink">课表解析服务</h2>
           <span className="text-xs text-ink-faint">
@@ -147,7 +147,7 @@ export function ImportTester({ onApply }: Props) {
 
       {err && (
         <section className="panel border-danger/25 bg-danger-light p-5">
-          <div className="mb-1 text-[13.5px] font-semibold text-danger">导入失败</div>
+          <div className="mb-1 text-[13.5px] font-semibold text-danger-text">导入失败</div>
           <div className="text-[12.5px] text-ink-soft whitespace-pre-wrap">{err}</div>
         </section>
       )}
@@ -159,7 +159,7 @@ export function ImportTester({ onApply }: Props) {
               <h3 className="text-[15px] font-semibold text-ink">{result.schedule.semesterName || '（未命名学期）'}</h3>
               <span
                 className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                  result.term.exact ? 'bg-brand-light text-brand' : 'bg-warn-light text-warn'
+                  result.term.exact ? 'bg-brand-light text-brand' : 'bg-warn-light text-warn-text'
                 }`}
               >
                 {result.term.exact ? '校历精确' : '估算 · 待核对'}
@@ -208,7 +208,7 @@ export function ImportTester({ onApply }: Props) {
 
           {result.roomConflicts.length > 0 && (
             <section className="panel border-warn/25 bg-warn-light p-5">
-              <div className="mb-1 text-[13.5px] font-semibold text-warn">
+              <div className="mb-1 text-[13.5px] font-semibold text-warn-text">
                 教室冲突 {result.roomConflicts.length} 条（一门课应只有一个教室）
               </div>
               {result.roomConflicts.map((rc) => (
@@ -221,7 +221,7 @@ export function ImportTester({ onApply }: Props) {
 
           {result.skipped.length > 0 && (
             <section className="panel border-warn/25 bg-warn-light p-5">
-              <div className="mb-1 text-[13.5px] font-semibold text-warn">
+              <div className="mb-1 text-[13.5px] font-semibold text-warn-text">
                 跳过 {result.skipped.length} 条（解析不出来，未静默丢弃）
               </div>
               {result.skipped.map((s, i) => (
@@ -237,10 +237,10 @@ export function ImportTester({ onApply }: Props) {
               自检：{errors.length} 个 error，{warns.length} 个 warn
             </div>
             {errors.map((i, k) => (
-              <div key={`e${k}`} className="text-[12.5px] text-red-600">[error] {i.message}</div>
+              <div key={`e${k}`} className="text-[12.5px] text-danger-text">[error] {i.message}</div>
             ))}
             {warns.map((i, k) => (
-              <div key={`w${k}`} className="text-[12.5px] text-amber-700">[warn] {i.message}</div>
+              <div key={`w${k}`} className="text-[12.5px] text-warn-text">[warn] {i.message}</div>
             ))}
             {errors.length + warns.length === 0 && (
               <div className="text-[12.5px] text-ink-faint">没有问题</div>

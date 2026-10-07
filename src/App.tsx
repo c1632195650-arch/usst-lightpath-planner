@@ -4,7 +4,7 @@ import { MOCK_SCHEDULE, normalizeLifeMode } from '@/data/usst';
 import { buildProfile } from '@/lib/persona';
 import { useAppState, saveState } from '@/lib/storage';
 import { currentWeekNo, diffDays, mondayOf, shiftWeekMonday, todayISO } from '@/lib/date';
-import { LightpathMark } from '@/components/LightpathMark';
+import { LightpathMark, LightpathWordmark } from '@/components/LightpathMark';
 import { Icon } from '@/components/icons/Icon';
 import type { IconName } from '@/components/icons/Icon';
 import { Welcome } from '@/features/welcome/Welcome';
@@ -285,13 +285,13 @@ export default function App() {
       {/* 紧凑导航把主要空间留给日程与对话内容。 */}
       <header className="sticky top-0 z-20 shrink-0 border-b border-ink/[0.07] bg-paper/85 backdrop-blur-xl">
         <div className="page-shell flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
+          {/* UI v2 收口（设计总成 §00 根问题 / §1.4 字标）：顶栏此前只有产品描述名，
+              全站唯一的品牌署名位置看不到「光溯」。此处换成字标 —— 与移动端欢迎页
+              （MobileWelcome h1「光溯」）、欢迎页 kicker「USST · LIGHTPATH」同一套口径。 */}
           <LightpathMark tone="plate" size={32} />
           {/* S1a：账号 chip 在 Logo 右侧标题行（左上角区域，CY 反馈④）；窄屏 flex-wrap 自然换行 */}
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 leading-tight">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold tracking-tight text-ink">上理生活助手</div>
-              <div className="mt-0.5 text-[11px] font-medium tracking-[0.14em] text-ink-faint">USST · STUDENT LIFE</div>
-            </div>
+            <LightpathWordmark tone="ink" size="sm" />
             <AccountChip identity={identity} onIdentityChange={setIdentity} />
           </div>
           <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] overflow-x-auto border-t border-ink/10 px-4 pt-3 sm:order-none sm:mx-0 sm:w-auto sm:border-0 sm:p-0" aria-label="主导航">
@@ -325,14 +325,14 @@ export default function App() {
         {schedule.source === 'demo' && (
           <div
             data-testid="demo-schedule-banner"
-            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warn/30 bg-warn-light px-4 py-2.5 text-[12px] text-warn-text"
           >
             <span>你现在的课表是<b>示例数据</b>，不是你的真实课表 —— 排程会按它来。</span>
             <button
               type="button"
               data-testid="demo-schedule-goto-import"
               onClick={() => setMainTab('import')}
-              className="rounded-lg bg-white px-3 py-1 font-medium text-amber-800 ring-1 ring-amber-300 transition-colors hover:bg-amber-100"
+              className="rounded-lg bg-white px-3 py-1 font-medium text-warn-text ring-1 ring-warn/30 transition-colors hover:bg-warn-light"
             >
               去「课表」页导入 →
             </button>
@@ -380,7 +380,7 @@ export default function App() {
                   type="button"
                   data-testid="replay-onboarding"
                   onClick={() => { patchState({ onboarded: false }); setView('welcome'); }}
-                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+                  className="rounded-xl bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper"
                 >
                   重看引导
                 </button>

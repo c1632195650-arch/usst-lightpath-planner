@@ -86,7 +86,7 @@ export function TimeWheelPicker({ value, onChange, step = 5 }: Props) {
               data-on={x === h}
               onClick={() => setHM(x, m)}
               className={`block w-full py-1 ${
-                x === h ? 'bg-slate-800 font-medium text-white' : 'text-ink-soft hover:bg-slate-50'
+                x === h ? 'bg-ink font-medium text-white' : 'text-ink-soft hover:bg-paper'
               }`}
             >
               {pad(x)}
@@ -106,7 +106,7 @@ export function TimeWheelPicker({ value, onChange, step = 5 }: Props) {
               data-on={x === m}
               onClick={() => setHM(h, x)}
               className={`block w-full py-1 ${
-                x === m ? 'bg-slate-800 font-medium text-white' : 'text-ink-soft hover:bg-slate-50'
+                x === m ? 'bg-ink font-medium text-white' : 'text-ink-soft hover:bg-paper'
               }`}
             >
               {pad(x)}

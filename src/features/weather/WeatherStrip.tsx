@@ -49,7 +49,7 @@ export function WeatherStrip({ report, weekNo, termStart }: {
               key={d.date}
               className={`min-w-[76px] flex-1 rounded-lg border px-2 py-1.5 text-center ${
                 advice
-                  ? 'border-amber-200 bg-amber-50'
+                  ? 'border-warn/25 bg-warn-light'
                   : 'border-black/5 bg-black/[0.015]'
               }`}
             >
@@ -61,12 +61,12 @@ export function WeatherStrip({ report, weekNo, termStart }: {
                   : '—'}
               </div>
               {d.rainProb > 0 && (
-                <div className="mt-0.5 text-[10.5px] text-sky-700">
+                <div className="mt-0.5 text-[10.5px] text-brand">
                   💧{d.rainProb}%{wet ? '（下午）' : ''}
                 </div>
               )}
               {advice && (
-                <div className="mt-1 truncate text-[10.5px] font-medium text-amber-800" title={advice.detail}>
+                <div className="mt-1 truncate text-[10.5px] font-medium text-warn-text" title={advice.detail}>
                   {advice.emoji}{advice.label}
                 </div>
               )}

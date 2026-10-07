@@ -80,7 +80,7 @@ export function MealPlaceSetting({ value, onChange, defaultOpen = false }: Props
                 <button
                   type="button"
                   onClick={() => onChange(setMealPlace(value, key, undefined))}
-                  className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+                  className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
                 >
                   清除
                 </button>

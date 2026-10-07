@@ -125,7 +125,7 @@ export function GoalEditor({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50"
+          className="rounded bg-white px-2 py-0.5 text-[11px] text-ink-soft ring-1 ring-ink/15 hover:bg-paper"
         >
           {open ? '收起' : '＋ 加一个'}
         </button>
@@ -147,7 +147,7 @@ export function GoalEditor({
                 <span className="text-[10.5px] text-ink-faint">{GOAL_KIND_LABEL[g.kind]}</span>
                 {g.targetMinutes && <span className="text-[10.5px] text-ink-faint">目标 {humanHours(g.targetMinutes)}</span>}
                 {left != null && (
-                  <span className={`text-[10.5px] ${left <= 14 ? 'font-semibold text-red-600' : 'text-ink-faint'}`}>
+                  <span className={`text-[10.5px] ${left <= 14 ? 'font-semibold text-danger-text' : 'text-ink-faint'}`}>
                     {left < 0 ? '已过截止' : `距截止 ${left} 天`}
                   </span>
                 )}
@@ -158,7 +158,7 @@ export function GoalEditor({
                     saveGoals(next);
                     onChange(next);
                   }}
-                  className="rounded px-1 text-[10.5px] text-ink-faint hover:text-red-600"
+                  className="rounded px-1 text-[10.5px] text-ink-faint hover:text-danger-text"
                 >
                   删除
                 </button>
@@ -175,8 +175,8 @@ export function GoalEditor({
                       title="改动会在下次「重新排一遍」时生效"
                       className={`rounded px-1.5 py-0.5 text-[10px] ${
                         g.pace === p
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-indigo-50'
+                          ? 'bg-brand text-white'
+                          : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-brand-light'
                       }`}
                     >
                       {GOAL_PACE_LABEL[p]}
@@ -232,7 +232,7 @@ export function GoalEditor({
           <button
             type="button"
             onClick={submit}
-            className="rounded bg-slate-800 px-2.5 py-0.5 text-[11.5px] font-medium text-white"
+            className="rounded bg-ink px-2.5 py-0.5 text-[11.5px] font-medium text-white"
           >
             记下
           </button>
@@ -336,7 +336,7 @@ export function AchievementPanel({ weekNo, termStart }: { weekNo: number; termSt
               {g.targetMinutes && (
                 <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-black/5">
                   <div
-                    className="h-full rounded-full bg-teal-500"
+                    className="h-full rounded-full bg-chart-cyan"
                     style={{ width: `${Math.min(100, Math.round((g.minutes / g.targetMinutes) * 100))}%` }}
                   />
                 </div>

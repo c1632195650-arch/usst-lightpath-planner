@@ -111,7 +111,7 @@ export function WeekToolsPanel({
               data-testid="weekplan-prev-week"
               aria-label="上一周"
               title="上一周（键盘 ←）"
-              className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
+              className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-paper"
             >
               ‹
             </button>
@@ -121,7 +121,7 @@ export function WeekToolsPanel({
               data-testid="weekplan-next-week"
               aria-label="下一周"
               title="下一周（键盘 →）"
-              className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
+              className="grid h-8 w-8 place-items-center rounded-md bg-white text-[13px] text-ink-soft ring-1 ring-ink/15 transition hover:bg-paper"
             >
               ›
             </button>
@@ -139,7 +139,7 @@ export function WeekToolsPanel({
             }}
             data-testid="week-goto-today"
             title="回到今天所在的那一周，并定位到今天"
-            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
+            className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-paper"
           >
             <span className="inline-flex items-center gap-1.5"><Icon name="map-pin" size="xs" />回到今天</span>
           </button>
@@ -151,7 +151,7 @@ export function WeekToolsPanel({
           title="撤销上一步改动（Ctrl+Z）"
           className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
             undoDepth > 0
-              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-paper'
               : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
           }`}
         >
@@ -164,7 +164,7 @@ export function WeekToolsPanel({
           title="重做（Ctrl+Shift+Z）"
           className={`rounded-md px-3 py-1.5 text-[12px] font-medium ring-1 transition ${
             redoDepth > 0
-              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+              ? 'bg-white text-ink-soft ring-ink/15 hover:bg-paper'
               : 'cursor-not-allowed bg-white/50 text-ink-faint/50 ring-ink/10'
           }`}
         >
@@ -179,7 +179,7 @@ export function WeekToolsPanel({
           type="button"
           onClick={onOpenAdjust}
           title="加一件事 / 调课停课 / 不可时段 / 指定食堂 / 偏好校正 / 回到最初版"
-          className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-slate-50"
+          className="rounded-md bg-white px-3 py-1.5 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition hover:bg-paper"
         >
           <span className="inline-flex items-center gap-1.5"><Icon name="settings" size="xs" />调整</span>
         </button>
@@ -208,7 +208,7 @@ export function WeekToolsPanel({
           本面板不再重复挂载 —— 两处入口同一份 store 的老口径不变，只是位置换了。 */}
 
       {timeAskNote && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
+        <div className="rounded-md bg-warn-light px-3 py-2 text-[11.5px] text-warn-text">
           {timeAskNote}
         </div>
       )}
@@ -223,14 +223,14 @@ export function WeekToolsPanel({
 
       {/* R1：拖拽如实提示（放不下/课程不能删） */}
       {dragNote && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
+        <div className="rounded-md bg-warn-light px-3 py-2 text-[11.5px] text-warn-text">
           {dragNote}
         </div>
       )}
 
       {/* 目标分解容量预警（诚实原则：排不下就明说，三选项由用户定） */}
       {goalWarnings.filter((w) => !dismissedWarnings.includes(w.goalId)).length > 0 && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+        <div className="rounded-md border border-warn/30 bg-warn-light px-3 py-2 text-[11.5px] leading-relaxed text-warn-text">
           {goalWarnings.filter((w) => !dismissedWarnings.includes(w.goalId)).map((w) => {
             const g = goals.find((x) => x.id === w.goalId);
             const apply = (patch: Partial<Goal>, message: string) => {

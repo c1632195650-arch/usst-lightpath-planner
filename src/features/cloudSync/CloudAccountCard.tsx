@@ -64,7 +64,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
             type="button"
             data-testid="cloud-account-logout"
             onClick={() => { logout(); onIdentityChange(null); }}
-            className="rounded-lg px-2 py-1 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-slate-50"
+            className="rounded-lg px-2 py-1 text-[12px] font-medium text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper"
           >
             退出登录
           </button>
@@ -135,7 +135,7 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
           注册
         </button>
       </form>
-      {error && <p data-testid="web-login-error" className="mt-2 text-[12px] text-danger">{error}</p>}
+      {error && <p data-testid="web-login-error" className="mt-2 text-[12px] text-danger-text">{error}</p>}
     </div>
   );
 }

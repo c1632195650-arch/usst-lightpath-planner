@@ -80,7 +80,7 @@ export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: stri
         />
       </div>
       {showConfirm && draft && (
-        <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-ink/10">
+        <div className="mt-2 rounded-lg bg-paper px-3 py-2.5 ring-1 ring-ink/10">
           <div className="text-[12px] text-ink-soft">
             类别：<b className="text-ink">{GOAL_CATEGORY_LABEL[draft.category]}</b>
             <span className="ml-1 text-ink-faint">（自动识别，可改）</span>

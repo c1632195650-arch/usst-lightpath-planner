@@ -102,7 +102,7 @@ export function TimeAskDialog({
           <button
             type="button"
             onClick={() => onConfirm(minutesOf(text), long)}
-            className="rounded-md bg-slate-800 px-3 py-1 text-[11.5px] font-medium text-white"
+            className="rounded-md bg-ink px-3 py-1 text-[11.5px] font-medium text-white"
           >
             记下
           </button>

@@ -31,8 +31,8 @@ import { resolveSkeleton } from './resolveSkeleton';import { EmptyState } from '
 const CATEGORIES: GoalCategory[] = ['contest', 'academic', 'skill', 'growth', 'health', 'social'];
 
 const STATUS_STYLE: Record<GoalStatus, string> = {
-  active: 'bg-green-100 text-green-800', paused: 'bg-amber-100 text-amber-800',
-  done: 'bg-slate-100 text-slate-600', archived: 'bg-slate-50 text-slate-400',
+  active: 'bg-ok-light text-ok', paused: 'bg-warn-light text-warn-text',
+  done: 'bg-sunken text-ink-soft', archived: 'bg-paper text-ink-faint',
 };
 
 export function GoalsPage({ schedule }: { schedule: Schedule }) {
@@ -109,10 +109,10 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
             <span className="text-[12px] font-medium text-ink">
               长目标总览：活跃 {active.length} 个
             </span>
-            <span className="text-[11.5px] text-amber-700">
+            <span className="text-[11.5px] text-warn-text">
               临近截止（≤2 周）{active.filter((g) => g.dueAt && deadlineProximity(g, weekNo, schedule.termStart) >= 0.75).length} 个
             </span>
-            <span className={`text-[11.5px] ${(goalDebtByGoal(records, weekNo - 1).size ?? 0) > 0 ? 'text-red-700' : 'text-ink-faint'}`}>
+            <span className={`text-[11.5px] ${(goalDebtByGoal(records, weekNo - 1).size ?? 0) > 0 ? 'text-danger-text' : 'text-ink-faint'}`}>
               上周欠账目标 {goalDebtByGoal(records, weekNo - 1).size} 个
             </span>
             <span className="ml-auto text-[11px] text-ink-faint">{overviewOpen ? '▲ 收起' : '▼ 展开全部监测'}</span>
@@ -120,7 +120,7 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
           {overviewOpen && (
             <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
               {orderGoalsByPriority(active, weekNo, schedule.termStart).map((g, i) => (
-                <div key={g.id} className="rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-ink/5">
+                <div key={g.id} className="rounded-lg bg-paper px-3 py-2.5 ring-1 ring-ink/5">
                   <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
                     <span className="text-ink-faint">{i === 0 ? '👑' : `${i + 1}.`}</span>
                     <span>{g.emoji}</span>
@@ -164,7 +164,7 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                 const hasDirection = !!g.achievement || !!g.subAreas?.length || !!g.weekThemes;
                 const isExp = expandedId === g.id;
                 return (
-                  <div key={g.id} className={`rounded-lg px-3 py-2.5 ring-1 ${st === 'active' ? 'bg-white ring-ink/10' : 'bg-slate-50 ring-ink/5'}`}>
+                  <div key={g.id} className={`rounded-lg px-3 py-2.5 ring-1 ${st === 'active' ? 'bg-white ring-ink/10' : 'bg-paper ring-ink/5'}`}>
                     {/* 行 1 · 标题 */}
                     <div className="flex items-center gap-2">
                       <span>{g.emoji}</span>
@@ -198,7 +198,7 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                           const weeksLeft = Math.max(1, dueWeek - weekNo + 1);
                           const weeklyMin = Math.round((g.totalHours * 60) / weeksLeft);
                           return (
-                            <div className="rounded bg-slate-50 px-2.5 py-2 ring-1 ring-ink/5">
+                            <div className="rounded bg-paper px-2.5 py-2 ring-1 ring-ink/5">
                               <div className="flex items-baseline justify-between text-[11px]">
                                 <span className="text-ink-faint">总投入</span>
                                 <span className="font-medium text-ink">{g.totalHours} 小时
@@ -252,10 +252,10 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                         </div>
                         {/* 定向提示 */}
                         {!hasDirection && (
-                          <div className="rounded bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                          <div className="rounded bg-warn-light px-2.5 py-1.5 text-[11px] text-warn-text">
                             这个目标还没定方向。可以先探索，也可以现在写一个方向或产出。
                             <input type="text" placeholder="比如：先学 Python 基础"
-                              className="mt-1 w-full rounded border border-amber-200 px-2 py-1 text-[11px]"
+                              className="mt-1 w-full rounded border border-warn/25 px-2 py-1 text-[11px]"
                               onKeyDown={(e) => {
                                 if (e.key !== 'Enter' || !e.currentTarget.value.trim()) return;
                                 const v = e.currentTarget.value.trim();
@@ -277,16 +277,16 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                         <div className="flex flex-wrap gap-1">
                           {st === 'active' && (
                             <button type="button" onClick={() => patchGoal(g.id, { status: 'paused' as GoalStatus })}
-                              className="rounded bg-amber-50 px-2 py-0.5 text-[10.5px] text-amber-800">暂停</button>
+                              className="rounded bg-warn-light px-2 py-0.5 text-[10.5px] text-warn-text">暂停</button>
                           )}
                           {st === 'paused' && (
                             <button type="button" onClick={() => patchGoal(g.id, { status: 'active' as GoalStatus })}
-                              className="rounded bg-green-50 px-2 py-0.5 text-[10.5px] text-green-800">恢复</button>
+                              className="rounded bg-ok-light px-2 py-0.5 text-[10.5px] text-ok">恢复</button>
                           )}
                           <button type="button" onClick={() => patchGoal(g.id, { status: 'archived' as GoalStatus })}
-                            className="rounded bg-slate-100 px-2 py-0.5 text-[10.5px] text-slate-600">归档</button>
+                            className="rounded bg-sunken px-2 py-0.5 text-[10.5px] text-ink-soft">归档</button>
                           <button type="button" onClick={() => handleGoalsChange(goals.filter((x) => x.id !== g.id))}
-                            className="rounded bg-red-50 px-2 py-0.5 text-[10.5px] text-red-700">删除</button>
+                            className="rounded bg-danger-light px-2 py-0.5 text-[10.5px] text-danger-text">删除</button>
                         </div>
                       </div>
                     )}
@@ -309,7 +309,7 @@ export function GoalsPage({ schedule }: { schedule: Schedule }) {
                 <span className={g.status === 'done' ? 'line-through' : ''}>{g.title}</span>
                 <span className="ml-auto">{GOAL_STATUS_LABEL[g.status ?? 'active']}</span>
                 <button type="button" onClick={() => patchGoal(g.id, { status: 'active' as GoalStatus })}
-                  className="text-green-600 hover:underline">恢复</button>
+                  className="text-ok hover:underline">恢复</button>
               </div>
             ))}
           </div>

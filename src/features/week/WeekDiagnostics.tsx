@@ -17,9 +17,9 @@ import { DeleteAskDialog } from './DeleteAskDialog';
 
 /** 问题清单的分项样式（原 WeekPlanView 常量，随拆解搬入） */
 export const ISSUE_STYLE = {
-  error: 'bg-red-50 border-red-300 text-red-800',
-  warn: 'bg-amber-50 border-amber-300 text-amber-800',
-  info: 'bg-blue-50 border-blue-300 text-blue-800',
+  error: 'bg-danger-light border-danger/30 text-danger-text',
+  warn: 'bg-warn-light border-warn/30 text-warn-text',
+  info: 'bg-brand-light border-brand/30 text-brand',
 } as const;
 
 /* ============================================================
@@ -40,8 +40,8 @@ export function DropToDeleteZone({
       onDrop={onDrop}
       className={`fixed right-4 top-1/2 z-50 -translate-y-1/2 select-none rounded-xl border-2 border-dashed px-3.5 py-6 text-center text-[12.5px] font-semibold leading-relaxed shadow-lg transition-colors ${
         deleteHover
-          ? 'scale-105 border-red-500 bg-red-100 text-red-700'
-          : 'border-red-300 bg-white/95 text-red-600'
+          ? 'scale-105 border-danger bg-danger-light text-danger-text'
+          : 'border-danger/30 bg-white/95 text-danger-text'
       }`}
     >
       <span className="mx-auto inline-flex"><Icon name="trash" size="md" /></span><br />拖到这里<br />删除
@@ -74,11 +74,11 @@ export function WeekIssuesPanel({
       {(() => {
         const s = summarizeIssues(issues);
         if (!s.headline) {
-          return <p className="mt-2 text-[12px] text-green-700">没有发现问题 —— 转场余量都在安全范围内。</p>;
+          return <p className="mt-2 text-[12px] text-ok">没有发现问题 —— 转场余量都在安全范围内。</p>;
         }
         return (
           <details data-testid="issue-summary-bar" className="mt-2">
-            <summary className={`cursor-pointer text-[12px] font-medium ${s.errorCount > 0 ? 'text-red-700' : 'text-ink-soft'}`}>
+            <summary className={`cursor-pointer text-[12px] font-medium ${s.errorCount > 0 ? 'text-danger-text' : 'text-ink-soft'}`}>
               {s.headline}
             </summary>
             <ul className="mt-2 space-y-1.5">

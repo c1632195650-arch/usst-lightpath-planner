@@ -57,8 +57,9 @@ export function LightpathMark({ tone = 'mono', size = 32, className }: Props) {
 }
 
 /**
- * 光溯字标：中文「光溯」（霞鹜文楷 Screen / display 栈）+ 西文副标 LIGHTPATH。
- * 用于欢迎页与需要完整品牌署名的场景；顶栏窄位用 LightpathMark 即可。
+ * 光溯字标（设计总成 §1.4）：中文「光溯」用 display 栈（霞鹜文楷 Screen）+ 600 + .06em；
+ * 西文副标用 mono + 500 + .36em，末字留白由 padding-left 补齐（规则：中文松、拉丁更松）。
+ * 用于顶栏、欢迎页与需要完整品牌署名的场景。
  */
 export function LightpathWordmark({
   tone = 'on-dark',
@@ -72,13 +73,15 @@ export function LightpathWordmark({
   className?: string;
 }) {
   const titleSize = { sm: 'text-xl', md: 'text-2xl', lg: 'text-4xl' }[size];
-  const color = tone === 'ink' ? 'text-[#1F2A44]' : tone === 'mono' ? '' : 'text-white';
+  const color = tone === 'ink' ? 'text-ink' : tone === 'mono' ? '' : 'text-white';
   const subColor = tone === 'on-dark' ? 'text-white/55' : 'text-ink-faint';
   return (
     <span className={`inline-flex flex-col leading-tight ${className ?? ''}`}>
-      <span className={`font-display font-semibold tracking-[0.01em] ${titleSize} ${color}`}>光溯</span>
+      <span className={`font-display font-semibold leading-[1.2] tracking-[0.06em] ${titleSize} ${color}`}>光溯</span>
       {subtitle && (
-        <span className={`mt-0.5 text-[10px] font-semibold tracking-[0.28em] ${subColor}`}>{subtitle}</span>
+        <span className={`mt-px pl-[0.36em] font-mono text-[10px] font-medium tracking-[0.36em] ${subColor}`}>
+          {subtitle}
+        </span>
       )}
     </span>
   );

@@ -31,8 +31,8 @@ export default function AccountChip({ identity, onIdentityChange }: Props) {
         aria-expanded={open}
         className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium ring-1 transition-colors ${
           identity
-            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100'
-            : 'bg-white text-ink-soft ring-ink/15 hover:bg-slate-50'
+            ? 'bg-ok-light text-ok ring-ok/25 hover:bg-ok-light'
+            : 'bg-white text-ink-soft ring-ink/15 hover:bg-paper'
         }`}
       >
         {identity ? <>✓ {identity.username}</> : '连接手机端'}

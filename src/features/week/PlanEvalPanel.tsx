@@ -36,14 +36,14 @@ import type { TimeBlock } from '@/types';
  * ========================================================== */
 
 const SEV_STYLE: Record<Severity, { dot: string; chip: string; label: string }> = {
-  serious: { dot: 'bg-rose-500', chip: 'bg-rose-50 text-rose-700 border-rose-200', label: '需要调整' },
-  warn: { dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-800 border-amber-200', label: '建议关注' },
-  info: { dot: 'bg-sky-500', chip: 'bg-sky-50 text-sky-800 border-sky-200', label: '供参考' },
+  serious: { dot: 'bg-danger', chip: 'bg-danger-light text-danger-text border-danger/25', label: '需要调整' },
+  warn: { dot: 'bg-warn', chip: 'bg-warn-light text-warn-text border-warn/25', label: '建议关注' },
+  info: { dot: 'bg-brand', chip: 'bg-brand-light text-brand border-brand/25', label: '供参考' },
 };
 
 const STATUS_MARK: Record<EvalFinding['status'], { text: string; cls: string }> = {
-  good: { text: '达标', cls: 'text-emerald-700' },
-  gap: { text: '不足', cls: 'text-amber-700' },
+  good: { text: '达标', cls: 'text-ok' },
+  gap: { text: '不足', cls: 'text-warn-text' },
   unknown: { text: '看不到', cls: 'text-ink-faint' },
 };
 
@@ -158,7 +158,7 @@ function DimensionBlock({
   const gaps = dim.findings.filter((f) => f.status === 'gap');
   const goods = dim.findings.filter((f) => f.status === 'good');
   const unknowns = dim.findings.filter((f) => f.status === 'unknown');
-  const tone = gaps.length > 0 ? 'text-amber-700' : 'text-emerald-700';
+  const tone = gaps.length > 0 ? 'text-warn-text' : 'text-ok';
   const scoreText = dim.score == null ? '—' : String(dim.score);
 
   return (
@@ -232,22 +232,22 @@ export function PlanEvalPanel({
   return (
     <div className="space-y-4" data-testid="plan-eval-panel">
       {/* 覆盖度横幅：先说「能判多少」，再给结论 */}
-      <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">
-        <p className="text-[12px] leading-5 text-sky-900">
+      <div className="rounded-xl border border-brand/25 bg-brand-light/60 px-4 py-3">
+        <p className="text-[12px] leading-5 text-brand">
           这一版日程里，<span className="font-semibold">{judged.length} / {evaluation.dimensions.length}</span> 个维度能判，
           另有 <span className="font-semibold">{unknownCount}</span> 条「日程里看不到」。
-          <span className="ml-1 text-sky-800/80">
+          <span className="ml-1 text-brand/80">
             看不到不等于你没做 —— 线下运动、没排进日程的事，这里都看不到。
           </span>
         </p>
       </div>
 
       {evaluation.topAdvice.length > 0 && (
-        <section className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3.5">
-          <h3 className="text-[13px] font-semibold text-amber-900">优先看这几条</h3>
+        <section className="rounded-xl border border-warn/25 bg-warn-light/50 px-4 py-3.5">
+          <h3 className="text-[13px] font-semibold text-warn-text">优先看这几条</h3>
           <ul className="mt-1.5 space-y-1">
             {evaluation.topAdvice.map((a, i) => (
-              <li key={i} className="text-[12px] leading-5 text-amber-900/90">
+              <li key={i} className="text-[12px] leading-5 text-warn-text/90">
                 <span className="mr-1 opacity-60">{i + 1}.</span>
                 {a}
               </li>

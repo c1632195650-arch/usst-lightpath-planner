@@ -64,7 +64,7 @@ export function PhaseHeader({
       )}
       {/* 锁太多会挤掉引擎的自由度 —— 与其让用户自己发现排不出来，不如先说一句 */}
       {lockCount(planState) >= 6 && (
-        <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
+        <div className="mt-2 rounded-md bg-warn-light px-2.5 py-1.5 text-[11.5px] text-warn-text">
           已经定住 {lockCount(planState)} 块了 —— 定住的越多，引擎能腾挪的空间越小，排出来可能比较勉强
         </div>
       )}
@@ -81,8 +81,8 @@ export function PhaseHeader({
             onClick={() => setFromNowOn((v) => !v)}
             className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition ${
               fromNowOn
-                ? 'bg-slate-800 text-white'
-                : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-slate-50'
+                ? 'bg-ink text-white'
+                : 'bg-white text-ink-soft ring-1 ring-ink/15 hover:bg-paper'
             }`}
           >
             {fromNowOn ? '⏱ 只排剩下的时间' : '⏱ 从此刻开始排'}
@@ -100,15 +100,16 @@ export function PhaseHeader({
           只有「还有路没问到」才提示 —— 这时块上的分钟数是估算值，
           用户有权知道，而不是把一个猜的数字当实测值看。 */}
       {transferInfo && transferInfo.uncovered.length > 0 && (
-        <div className="mt-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11.5px] text-ink-soft">
-          有 {transferInfo.uncovered.length} 处转场时间仍是**估算值**
+        <div className="mt-2 rounded-md bg-paper px-2.5 py-1.5 text-[11.5px] text-ink-soft">
+          有 {transferInfo.uncovered.length} 处转场时间仍是
+          <b className="font-semibold text-ink">估算值</b>
           （后端暂无这些路线的实测数据）：{transferInfo.uncovered.slice(0, 3).join('、')}
           {transferInfo.uncovered.length > 3 ? ' 等' : ''}
         </div>
       )}
 
       {!backendOk && (
-        <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
+        <div className="mt-2 rounded-md bg-warn-light px-2.5 py-1.5 text-[11.5px] text-warn-text">
           后端未连通，转场时间是估算值 —— 跑 <code className="font-mono">python server/app.py</code> 后刷新
         </div>
       )}
@@ -133,11 +134,11 @@ export function NearEventsPanel({ events }: { events: Deadline[] }) {
               <span>{d.emoji}</span>
               <span className="font-medium text-ink">{d.title}</span>
               <span className="font-mono text-[11px] text-ink-faint">{d.date}</span>
-              <span className={left >= 0 && left <= 7 ? 'text-red-600' : 'text-ink-soft'}>
+              <span className={left >= 0 && left <= 7 ? 'text-danger-text' : 'text-ink-soft'}>
                 {left === 0 ? '就是今天' : left > 0 ? `还有 ${left} 天` : `已过 ${-left} 天`}
               </span>
               {d.prep && (
-                <span className="text-purple-700">→ 已排准备块</span>
+                <span className="text-chart-violet">→ 已排准备块</span>
               )}
             </li>
           );

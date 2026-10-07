@@ -76,7 +76,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                 placeholder="怎么称呼你"
                 className={inputCls(touched && errors.nickname)}
               />
-              {touched && errors.nickname && <span className="mt-1 block text-xs text-warn">{errors.nickname}</span>}
+              {touched && errors.nickname && <span className="mt-1 block text-xs text-warn-text">{errors.nickname}</span>}
             </label>
 
             <label className="block">
@@ -91,7 +91,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                   <option key={g} value={String(g)}>{GRADE_LABELS[g]}</option>
                 ))}
               </select>
-              {touched && errors.grade && <span className="mt-1 block text-xs text-warn">{errors.grade}</span>}
+              {touched && errors.grade && <span className="mt-1 block text-xs text-warn-text">{errors.grade}</span>}
             </label>
 
             <label className="block">
@@ -102,7 +102,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                 placeholder="如：光电学院"
                 className={inputCls(touched && errors.college)}
               />
-              {touched && errors.college && <span className="mt-1 block text-xs text-warn">{errors.college}</span>}
+              {touched && errors.college && <span className="mt-1 block text-xs text-warn-text">{errors.college}</span>}
             </label>
 
             <label className="block">
@@ -127,7 +127,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              {touched && errors.campus && <span className="mt-1 block text-xs text-warn">{errors.campus}</span>}
+              {touched && errors.campus && <span className="mt-1 block text-xs text-warn-text">{errors.campus}</span>}
             </label>
 
             <label className="block">
@@ -138,7 +138,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                 placeholder="如：五公寓，只填楼号"
                 className={inputCls(touched && errors.dorm)}
               />
-              {touched && errors.dorm && <span className="mt-1 block text-xs text-warn">{errors.dorm}</span>}
+              {touched && errors.dorm && <span className="mt-1 block text-xs text-warn-text">{errors.dorm}</span>}
             </label>
 
             <label className="block">
@@ -150,7 +150,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                 placeholder="如：1380（23:00）"
                 className={inputCls(touched && errors.sleepMin)}
               />
-              {touched && errors.sleepMin && <span className="mt-1 block text-xs text-warn">{errors.sleepMin}</span>}
+              {touched && errors.sleepMin && <span className="mt-1 block text-xs text-warn-text">{errors.sleepMin}</span>}
             </label>
 
             <label className="block">
@@ -162,12 +162,12 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
                 placeholder="如：3"
                 className={inputCls(touched && errors.exercisePerWeek)}
               />
-              {touched && errors.exercisePerWeek && <span className="mt-1 block text-xs text-warn">{errors.exercisePerWeek}</span>}
+              {touched && errors.exercisePerWeek && <span className="mt-1 block text-xs text-warn-text">{errors.exercisePerWeek}</span>}
             </label>
           </div>
 
           {touched && !canNext && errorList.length > 0 && (
-            <p role="alert" className="mt-5 rounded-xl border border-warn/30 bg-warn/5 px-4 py-3 text-sm text-warn">
+            <p role="alert" className="mt-5 rounded-xl border border-warn/30 bg-warn/5 px-4 py-3 text-sm text-warn-text">
               还差 {errorList.length} 项没填对，补上就能继续。
             </p>
           )}

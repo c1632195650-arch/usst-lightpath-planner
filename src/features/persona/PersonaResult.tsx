@@ -13,7 +13,7 @@ interface Props {
 }
 
 const CONF_LABEL = { high: '较稳定', mid: '待校准', low: '参考' } as const;
-const CONF_COLOR = { high: 'text-ok', mid: 'text-warn', low: 'text-ink-faint' } as const;
+const CONF_COLOR = { high: 'text-ok', mid: 'text-warn-text', low: 'text-ink-faint' } as const;
 
 /**
  * 基础信息卡（M1）：称呼/年级/学院/专业，字段级随时可改，不必重做 35 题。

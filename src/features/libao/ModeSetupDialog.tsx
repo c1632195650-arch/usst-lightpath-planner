@@ -68,7 +68,7 @@ export function ModeSetupDialog({ schedule, profile, weekNo, currentMode, onConf
 
         <div className="mt-5">
           {preview && 'error' in preview ? (
-            <p role="alert" className="rounded-xl border border-warn/30 bg-warn-light px-4 py-3 text-sm text-warn">
+            <p role="alert" className="rounded-xl border border-warn/30 bg-warn-light px-4 py-3 text-sm text-warn-text">
               这个模式排不出来（{preview.error}），换一个看看。
             </p>
           ) : preview && stats ? (
