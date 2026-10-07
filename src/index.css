@@ -221,7 +221,7 @@
     -webkit-mask-image: radial-gradient(ellipse 78% 70% at 50% 46%, #000, transparent 74%);
   }
 
-  .hc .ring {
+  .hc .hc-ring {
     position: absolute;
     left: 50%;
     top: 68px;

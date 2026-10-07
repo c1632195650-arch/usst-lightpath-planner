@@ -12,7 +12,7 @@ interface Props {
 function RingOrnament() {
   return (
     <svg
-      className="ring"
+      className="hc-ring"
       width="368"
       height="368"
       viewBox="0 0 280 280"
