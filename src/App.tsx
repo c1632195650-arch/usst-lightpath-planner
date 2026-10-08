@@ -15,7 +15,7 @@ import { ModeSetupDialog } from '@/features/libao/ModeSetupDialog';
 import { addTimetableFacts } from '@/lib/api';
 import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist';
 import { loadUserDeadlines } from '@/features/calendar/deadlineStore';
-import { getUserId } from '@/lib/identity';
+import { getUserId, loadBasicInfo } from '@/lib/identity';
 import { installWebSyncHook } from '@/features/mobile/lib/webSync';
 import { loadIdentity, type MobileIdentity } from '@/features/mobile/lib/auth';
 import CloudAccountCard from '@/features/cloudSync/CloudAccountCard';
@@ -187,6 +187,20 @@ export default function App() {
       saveState(n);
       return n;
     });
+  };
+
+  /**
+   * 「开始画像测评」各入口的统一动线（2026-10-08 修复 CY 报障）：
+   * 新账号/新设备在主界面（总览焦点卡、我的画像空态、梨宝「完成画像」）点画像入口时，
+   * 此前一律 `setView('persona')` **直达问卷** —— 引导里的「基本信息 → 导入课表」
+   * 两步被整个绕过（实测：注册新账号后完成画像，全程没见过课表导入）。
+   * 现统一为：**没有真实课表 → 先补引导里缺的那步**（无基本信息 → basicinfo；
+   * 有基本信息 → 直接 import）；已有真实课表的老用户维持直达问卷（重测场景）。
+   */
+  const startPersonaOrOnboarding = () => {
+    const hasRealSchedule = Boolean(state.schedule && state.schedule !== MOCK_SCHEDULE);
+    if (hasRealSchedule) { setView('persona'); return; }
+    setView(loadBasicInfo().nickname ? 'import' : 'basicinfo');
   };
 
   if (view === 'welcome') {
@@ -377,7 +391,7 @@ export default function App() {
             key={libaoSeed?.nonce ?? 'chat'}
             profile={state.persona}
             schedule={schedule}
-            onGoProfile={() => setView('persona')}
+            onGoProfile={startPersonaOrOnboarding}
             seedQuestion={libaoSeed?.text}
           />
         ) : mainTab === 'profile' ? (
@@ -417,7 +431,7 @@ export default function App() {
                 <p className="section-label">PROFILE</p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">让推荐更贴近你的节奏</h1>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-soft">完成画像后，梨宝会根据你的习惯提供更合适的学习、吃饭与休息建议。</p>
-                <button onClick={() => setView('persona')} className="button-primary mt-7 px-6">
+                <button onClick={startPersonaOrOnboarding} className="button-primary mt-7 px-6">
                   <span className="inline-flex items-center gap-1.5">
                     开始画像测评
                     <Icon name="arrow-right" size="sm" />
@@ -479,7 +493,7 @@ export default function App() {
             persona={state.persona}
             selectedDate={state.selectedDays[state.selectedDays.length - 1]}
             onOpenWeek={openWeek}
-            onStartPersona={() => setView('persona')}
+            onStartPersona={startPersonaOrOnboarding}
             /* §11.3 ④：总览数字卡的下钻出口（待办 / 连续记录 / 状态 → 各自一级页） */
             onGotoTodos={() => setMainTab('memo')}
             onGotoGoals={() => setMainTab('goals')}

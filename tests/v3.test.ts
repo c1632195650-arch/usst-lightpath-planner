@@ -77,3 +77,18 @@ test('V3: E2E 资产在位（≥15 断言的旅程脚本随仓保留）', () => 
   assert.match(e2e, /mode-card-faraway/);                                    // 20
   assert.match(e2e, /saturation-bar/);                                       // 21
 });
+
+test('V3: 画像入口统一动线（2026-10-08 修复：新账号不再绕过 基本信息/导入课表）', () => {
+  const app = src('/src/App.tsx');
+  // 三处入口（总览焦点卡 / 画像页空态 / 梨宝「完成画像」）必须走统一动线 —— 此前直达问卷
+  assert.match(app, /onStartPersona=\{startPersonaOrOnboarding\}/, '总览入口走统一动线');   // 22
+  assert.match(app, /onClick=\{startPersonaOrOnboarding\}/, '画像页空态入口走统一动线');     // 23
+  assert.match(app, /onGoProfile=\{startPersonaOrOnboarding\}/, '梨宝「完成画像」走统一动线'); // 24
+  // 判定：真实课表 → 直达问卷（重测）；无真实课表 → 补引导缺步（无基本信息 → basicinfo，否则 import）
+  assert.match(
+    app,
+    /loadBasicInfo\(\)\.nickname \? 'import' : 'basicinfo'/,
+    '无基本信息先补基本信息、有基本信息先补导入课表',
+  );                                                                          // 25
+  // ⚠️ 反向验证（2026-10-08 实测）：把助手体改回「恒 setView('persona')」→ 22/23/24 三条红。
+});
