@@ -31,7 +31,7 @@ export function WeekStrip({ schedule, weekNo, weekMonday, todayIso, onSelectDay 
   const total = counts.reduce((sum, n) => sum + n, 0);
 
   return (
-    <section className="panel p-4 sm:p-5">
+    <section className="panel p-3.5 sm:p-4">
       <div className="mb-2.5 flex items-baseline justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ink">
           <Icon name="trending" size="sm" className="shrink-0 text-brand" />

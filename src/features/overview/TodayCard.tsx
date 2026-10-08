@@ -78,7 +78,7 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
 
   return (
     <section className="hero-surface overflow-hidden rounded-2xl text-white shadow-card-dark">
-      <div className="px-5 py-5 sm:px-6 sm:py-5">
+      <div className="px-5 py-4 sm:px-6 sm:py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
           WEEK {String(Math.max(1, weekNo)).padStart(2, '0')} · {shortCN(todayIso)} {weekdayCN(todayIso)}
         </p>
@@ -189,11 +189,6 @@ export function TodayCard({ schedule, todayIso, weekNo, persona, onOpenWeek, onS
           )}
         </div>
 
-        {persona && (
-          <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-white/45">
-            当前建议参考「{persona.archetype.primary?.name ?? '你的画像'}」的节奏。
-          </p>
-        )}
       </div>
     </section>
   );
