@@ -73,6 +73,15 @@ test('UI 契约：EvalPanel 必须有「数据累积中」「本周最该改」�
   assert.ok(!/\.reduce\([^)]*\+\s*[a-z.]*value/.test(src), '不得把五维 value 求和（合成总分）');
 });
 
+test('UI 契约（2026-10-08 清晰化）：每维明细含「在量什么 / 怎么看 / 数据依据 / 可以怎么做」', () => {
+  const src = readComponent('EvalPanel.tsx');
+  assert.ok(src.includes('m-eval-dim-detail-'), '每维展开明细须有独立 testid（可独立定位）');
+  assert.ok(src.includes('怎么看'), '每维须有一句「怎么看」（这个数怎么读、偏低意味着什么）');
+  assert.ok(src.includes('数据依据'), '每维须如实回显 compute 层 basis（用户能看到数从哪来）');
+  assert.ok(src.includes('可以怎么做'), '每维须给一条可执行方法');
+  assert.ok(src.includes('tipForDim'), '每维方法必须取自 DIM_TIP_SLUGS 编译产物（引文零编造，不造引用）');
+});
+
 test('UI 契约：DailyQuizSheet 可跳过、弹窗带「看方法」入口', () => {
   const src = readComponent('DailyQuizSheet.tsx');
   assert.ok(src.includes('跳过'), '题目必须可跳过（不强制）');
