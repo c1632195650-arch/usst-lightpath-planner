@@ -107,7 +107,7 @@ export function useTodayData(identity: { token: string; username: string }, now:
         saveMemo(LS_WRITE, MEMO_CACHE_KEY, next);
         return next;
       });
-      const wn = weekNoFromTermStart(s.termStart, new Date()) ?? s.weekNo ?? null;
+      const wn = weekNoFromTermStart(s.termStart ?? s.schedule?.termStart ?? null, new Date()) ?? s.weekNo ?? null;
       setWeekNo(wn);
       if (!wn) {
         setPhase('error');
