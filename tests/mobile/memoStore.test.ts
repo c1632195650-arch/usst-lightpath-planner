@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addGoal, addGoalMilestone, addTodo, adoptCloudMemo, archiveTodo,
-  canAddGoal, isLongtermOverdue, loadMemo, memoNeedsAttention,
+  canAddGoal, isLongtermOverdue, loadMemo, memoCacheForeign, memoNeedsAttention,
   openTodoCount, sortTodosForView, toggleGoalMilestone, toggleTodoDone,
   type MemoData,
 } from '@/features/mobile/lib/memoStore.ts';
@@ -151,4 +151,17 @@ test('M1c · todoScheduleHint：有 id → 「已排进周X」；无 id/坏 id �
   assert.equal(todoScheduleHint({ scheduledBlockId: undefined }), null, '无 id → null');
   assert.equal(todoScheduleHint({ scheduledBlockId: 'study-policy-0' }), null, '坏 id（无星期段）→ null');
   assert.equal(todoScheduleHint({ scheduledBlockId: 'w5-d9-x' }), null, '星期越界 → null');
+});
+
+/* ---------------- M1d（2026-10-08 CY 报障）：缓存归属守卫 ----------------
+ * 反向验证：把 memoCacheForeign 改成恒 false → 本组四条「应丢弃」用例红；
+ * 改成恒 true → 「同账号/匿名保留」两条红。（已实操） */
+
+test('M1d · memoCacheForeign：新账号丢弃全部缓存；换账号丢弃；同账号/匿名保留', () => {
+  assert.equal(memoCacheForeign(null, 'acct-7', false), true, '新账号（云端无状态）→ 丢弃任何本地缓存');
+  assert.equal(memoCacheForeign('acct-7', 'acct-9', false), true, '新账号 + 别家章 → 丢弃');
+  assert.equal(memoCacheForeign('acct-7', 'acct-9', true), true, '换账号（另一账号的章）→ 丢弃，不跨账号预载');
+  assert.equal(memoCacheForeign('acct-7', 'acct-7', true), false, '同账号 → 保留（照常并集）');
+  assert.equal(memoCacheForeign(null, 'acct-7', true), false, '匿名/无章老缓存 + 既有账号 → 保留（匿名工作不丢）');
+  assert.equal(memoCacheForeign('u-dev123', 'acct-7', true), false, '设备匿名缓存 → 保留');
 });

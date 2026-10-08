@@ -120,14 +120,25 @@ test('getUserId：登出（账号键清除）后回到设备 ID，进程内不�
 /* ---------------- 登录补拉云端待办/目标（2026-10-08 录前补洞 · 源码锁） ----------------
  * 背景：todos/goals 不在 AppState 里（memoStore 独立键），此前网页端登录只采纳
  * 「账号侧七个字段」，待办/目标从不下云 —— 全新浏览器登录后「待办 / 目标」页是空的。
- * 反向验证：删掉 CloudAccountCard 里的 fetchCloudMemo/writeCachedMemo 调用 → 本用例红。 */
+ * 2026-10-08 追加归属守卫（CY 报障：新注册账号预载上一账号待办）——
+ * pullMemoForAccount 内按 `memoCacheForeign` 判缓存是否属于别的账号。
+ * 反向验证：删掉 CloudAccountCard 里的 pullMemoForAccount 调用 → 本用例红；
+ *           把守卫改恒 false → 手机构建路径下「新账号待办为空」的实测复现会回到预载态。 */
 
-test('源码锁：登录成功路径拉取云端待办/目标并写入本地缓存（防回归）', () => {
+test('源码锁：登录成功路径按账号拉取云端待办/目标（含缓存归属守卫）', () => {
   const card = readFileSync(
     fileURLToPath(new URL('../src/features/cloudSync/CloudAccountCard.tsx', import.meta.url)),
     'utf8',
   );
-  assert.match(card, /import \{[^}]*fetchCloudMemo[^}]*\} from '@\/features\/memo\/webMemo'/, '登录卡须引入 webMemo 的云端拉取');
-  assert.match(card, /await fetchCloudMemo\(res\.token\)/, '登录成功后须以该账号 token 拉取云端待办/目标');
-  assert.match(card, /writeCachedMemo\(memo\.data\)/, '拉到的待办/目标必须写入本地缓存（待办页与总览数字卡读的就是它）');
+  assert.match(card, /import \{[^}]*pullMemoForAccount[^}]*\} from '@\/features\/memo\/webMemo'/, '登录卡须引入 webMemo 的账号化拉取');
+  assert.match(card, /pullMemoForAccount\(res\.token, `acct-\$\{res\.userId\}`\)/, '按账号拉取（token + acct-<id> 归属章），换账号不预载上一账号缓存');
+});
+
+test('源码锁：手机端加载走缓存归属守卫（新账号/换账号不留上一账号待办）', () => {
+  const src = readFileSync(
+    fileURLToPath(new URL('../src/features/mobile/lib/useTodayData.ts', import.meta.url)),
+    'utf8',
+  );
+  assert.match(src, /memoCacheForeign\(localStorage\.getItem\(MEMO_OWNER_KEY\), owner, true\)/, '既有账号加载时按归属章判缓存是否属于别人');
+  assert.match(src, /saveMemo\(LS_WRITE, MEMO_CACHE_KEY, EMPTY_MEMO\)/, '云端无状态（新账号）须清空本地缓存（写空仓，不只在内存里清）');
 });

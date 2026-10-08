@@ -13,9 +13,10 @@ import type { SyncStatePayload } from './types.ts';
 import { MEMO_CACHE_KEY } from './memoTypes.ts';
 import type { MemoData } from './memoStore.ts';
 import {
-  addGoalMilestone, addTodo, adoptCloudMemo, archiveTodo, loadMemo,
-  saveMemo, toggleGoalMilestone, toggleTodoDone,
+  addGoalMilestone, addTodo, adoptCloudMemo, archiveTodo, EMPTY_MEMO,
+  loadMemo, MEMO_OWNER_KEY, memoCacheForeign, saveMemo, toggleGoalMilestone, toggleTodoDone,
 } from './memoStore.ts';
+import { getUserId } from '@/lib/identity';
 import {
   emptyUserPlan, loadUserPlan, saveUserPlan, upsertMove,
   type MoveRecord, type UserPlanLayer,
@@ -92,7 +93,13 @@ export function useTodayData(identity: { token: string; username: string }, now:
     setErrMsg('');
     try {
       const st = await apiGetSyncState(identity.token);
+      const owner = getUserId();
       if (!st.found || !st.state) {
+        /* 新账号（云端无状态）→ 本机缓存不属于它：连内存态一起清掉，绝不预载上一账号的
+           待办/目标（2026-10-08 CY 报障：手机端新注册账号待办页直接出现别家条目）。 */
+        saveMemo(LS_WRITE, MEMO_CACHE_KEY, EMPTY_MEMO);
+        try { localStorage.setItem(MEMO_OWNER_KEY, owner); } catch { /* 隐私模式：忽略 */ }
+        setMemo(EMPTY_MEMO);
         setPhase('empty-cloud');
         return;
       }
@@ -101,9 +108,14 @@ export function useTodayData(identity: { token: string; username: string }, now:
       const adopted: UserPlanLayer = s.userOverrides ?? emptyUserPlan();
       saveUserPlan(adopted);
       setLayer(adopted);
-      setMemo((prev) => {
+      /* 缓存归属守卫：缓存章是**另一个账号** → 丢弃后再并集；匿名/无章老缓存保留（匿名工作不丢）。 */
+      const base = memoCacheForeign(localStorage.getItem(MEMO_OWNER_KEY), owner, true)
+        ? EMPTY_MEMO
+        : loadMemo(LS_READ, MEMO_CACHE_KEY);
+      try { localStorage.setItem(MEMO_OWNER_KEY, owner); } catch { /* 隐私模式：忽略 */ }
+      setMemo(() => {
         // 待办/目标：按 id 逐项 LWW 并集（另一端并发编辑不丢）
-        const next = adoptCloudMemo(prev, s.todos ?? null, s.goals ?? null);
+        const next = adoptCloudMemo(base, s.todos ?? null, s.goals ?? null);
         saveMemo(LS_WRITE, MEMO_CACHE_KEY, next);
         return next;
       });

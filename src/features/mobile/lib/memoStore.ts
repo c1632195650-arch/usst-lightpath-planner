@@ -47,6 +47,21 @@ export function adoptCloudMemo(local: MemoData, cloudTodos: readonly Todo[] | nu
   };
 }
 
+/* ---------------- 缓存归属守卫（2026-10-08 CY 报障：新注册账号预载上一账号待办） ----------------
+ * 本地待办缓存（memoCache）此前**不记归属** —— 换账号/新注册时 adoptCloudMemo 的「并集」
+ * 会把上一账号的待办原样保留给新账号（手机端实测：新账号待办页直接出现别家的条目）。
+ * 规则（宁可清、不可跨账号预载；同时不破坏「匿名 → 首次登录保留本地工作」的既有语义）：
+ *   · 账号云端无状态（cloudFound=false）→ 本地任何缓存都不属于它 → 丢弃；
+ *   · 缓存归属章是**另一个账号**（acct-* 且与当前不同）→ 丢弃；
+ *   · 匿名 / 无章的老缓存 + 既有账号 → 保留（照常并集，匿名本地工作不丢）。 */
+export const MEMO_OWNER_KEY = 'usst.mobile.memoOwner';
+
+/** true = 这份缓存属于别的账号（调用方应丢弃后再并集），见上方规则 */
+export function memoCacheForeign(storedOwner: string | null, currentOwner: string, cloudFound: boolean): boolean {
+  if (!cloudFound) return true;
+  return !!storedOwner && storedOwner.startsWith('acct-') && storedOwner !== currentOwner;
+}
+
 let _seq = 0;
 /** 本地生成 id（无 uuid 依赖的稳定做法：时间戳 + 序列，跨端一致性由服务端并集保证） */
 export function newMemoId(prefix: string): string {

@@ -25,7 +25,7 @@ import { useState } from 'react';
 import { apiLogin, apiRegister } from '@/features/mobile/lib/api';
 import { errText } from '@/features/mobile/LoginPage';
 import { adoptCloudStateIfScaffolded } from '@/features/cloudSync/cloudAdopt';
-import { fetchCloudMemo, writeCachedMemo } from '@/features/memo/webMemo';
+import { pullMemoForAccount } from '@/features/memo/webMemo';
 import {
   applyLoginSuccess, logout, readCloudSyncOn, setCloudSync,
   type MobileIdentity,
@@ -56,12 +56,12 @@ export default function CloudAccountCard({ identity, onIdentityChange }: Props) 
         : await apiRegister(username.trim(), password);
       onIdentityChange(applyLoginSuccess(res, username.trim()));
       setSyncOn(true);
-      /* 2026-10-08（录前补洞）：待办/目标不在 AppState 里（memoStore 独立键），
+      /* 2026-10-08（录前补洞 + 归属守卫）：待办/目标不在 AppState 里（memoStore 独立键），
          登录若不拉取，全新浏览器上「待办 / 目标」页会是空的 —— 云端明明有数据。
-         这里按 id 并集拉一次并写本地缓存（先于下面的可能刷新）；失败静默不阻塞登录。 */
+         这里按 id 并集拉一次并写本地缓存（先于下面的可能刷新）；失败静默不阻塞登录。
+         归属守卫在 pullMemoForAccount 内：新账号/换账号丢弃上一账号缓存，匿名→登录保留并集。 */
       try {
-        const memo = await fetchCloudMemo(res.token);
-        writeCachedMemo(memo.data);
+        await pullMemoForAccount(res.token, `acct-${res.userId}`);
       } catch { /* 拉取失败：待办页按本地/离线态展示，不打断登录 */ }
       /* 2026-10-08：本地还是脚手架态（示例课表）→ 先采纳云端数据再刷新。
          否则登录即上推（开关已自动打开），会把账号云端的真实态覆盖成示例数据

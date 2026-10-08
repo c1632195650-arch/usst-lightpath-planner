@@ -15,7 +15,7 @@
 import type { DayOfWeek, WeekPlan } from '@/types';
 import { API_BASE } from '@/lib/api';
 import {
-  EMPTY_MEMO, adoptCloudMemo, loadMemo, saveMemo,
+  EMPTY_MEMO, adoptCloudMemo, loadMemo, MEMO_OWNER_KEY, memoCacheForeign, saveMemo,
   type MemoData,
 } from '@/features/mobile/lib/memoStore.ts';
 import { MEMO_CACHE_KEY, type Goal, type Todo } from '@/features/mobile/lib/memoTypes.ts';
@@ -24,6 +24,8 @@ import { blockIdForTodo, setScheduledBlock } from './memoLogic.ts';
 export interface CloudMemoSnapshot {
   /** 云端 state 原样（PUT 时回显，防清空非待办字段）；云端无记录 = {} */
   baseState: Record<string, unknown>;
+  /** 云端是否有该账号的记录（false = 新账号 / 从未同步过） */
+  found: boolean;
   updatedAt: string | null;
   data: MemoData;
 }
@@ -52,9 +54,26 @@ export async function fetchCloudState(token: string): Promise<CloudMemoSnapshot>
   const body = (await res.json()) as { found: boolean; state: Record<string, unknown> | null; updatedAt: string | null };
   return {
     baseState: body.found && body.state && typeof body.state === 'object' ? body.state : {},
+    found: body.found === true && !!body.state && typeof body.state === 'object',
     updatedAt: body.updatedAt ?? null,
     data: toMemoData(body.state),
   };
+}
+
+/**
+ * 登录/注册成功后调用（2026-10-08 录前补洞 + 缓存归属守卫，与手机端同一套规则）：
+ * 拉云端待办/目标并写本地缓存；**换账号绝不预载上一账号的缓存**：
+ *   · 云端无状态（新账号）或缓存章是别的账号 → 先丢弃本地缓存，再与云端并集；
+ *   · 匿名/无章老缓存 + 既有账号 → 维持并集（保留本地工作）。
+ */
+export async function pullMemoForAccount(token: string, owner: string): Promise<MemoData> {
+  const snap = await fetchCloudState(token);
+  const stamp = typeof localStorage !== 'undefined' ? localStorage.getItem(MEMO_OWNER_KEY) : null;
+  const base = memoCacheForeign(stamp, owner, snap.found) ? EMPTY_MEMO : readCachedMemo();
+  const data = adoptCloudMemo(base, snap.data.todos, snap.data.goals);
+  writeCachedMemo(data);
+  try { localStorage.setItem(MEMO_OWNER_KEY, owner); } catch { /* 隐私模式：忽略 */ }
+  return data;
 }
 
 /** GET + 与本地缓存并集合并（离线可看、跨端不丢） */
