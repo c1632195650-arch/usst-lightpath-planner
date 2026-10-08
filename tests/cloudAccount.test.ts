@@ -16,6 +16,8 @@
  */
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   applyLoginSuccess, logout, readCloudSyncOn, setCloudSync,
 } from '@/lib/cloudAccount';
@@ -113,4 +115,19 @@ test('getUserId：登出（账号键清除）后回到设备 ID，进程内不�
   assert.equal(getUserId(), 'acct-7');
   store.delete(ACCOUNT_USER_KEY);
   assert.ok(getUserId().startsWith('u-'), '账号键消失必须立即回退，不能缓存账号 ID');
+});
+
+/* ---------------- 登录补拉云端待办/目标（2026-10-08 录前补洞 · 源码锁） ----------------
+ * 背景：todos/goals 不在 AppState 里（memoStore 独立键），此前网页端登录只采纳
+ * 「账号侧七个字段」，待办/目标从不下云 —— 全新浏览器登录后「待办 / 目标」页是空的。
+ * 反向验证：删掉 CloudAccountCard 里的 fetchCloudMemo/writeCachedMemo 调用 → 本用例红。 */
+
+test('源码锁：登录成功路径拉取云端待办/目标并写入本地缓存（防回归）', () => {
+  const card = readFileSync(
+    fileURLToPath(new URL('../src/features/cloudSync/CloudAccountCard.tsx', import.meta.url)),
+    'utf8',
+  );
+  assert.match(card, /import \{[^}]*fetchCloudMemo[^}]*\} from '@\/features\/memo\/webMemo'/, '登录卡须引入 webMemo 的云端拉取');
+  assert.match(card, /await fetchCloudMemo\(res\.token\)/, '登录成功后须以该账号 token 拉取云端待办/目标');
+  assert.match(card, /writeCachedMemo\(memo\.data\)/, '拉到的待办/目标必须写入本地缓存（待办页与总览数字卡读的就是它）');
 });
