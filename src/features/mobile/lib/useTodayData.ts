@@ -24,7 +24,7 @@ import { recomputeWeek } from './planCompute.ts';
 import {
   applyLayerToBlocks, buildSyncPayload, todayDow, todaySignature, weekNoFromTermStart,
 } from './sync.ts';
-import { isNative, registerActionHandler, rescheduleToday } from './notifyBridge.ts';
+import { isNative, pickOngoingBlock, registerActionHandler, rescheduleToday, showOngoing } from './notifyBridge.ts';
 import { ensurePermissionOnce } from './notifyStatus.ts';
 import { loadBehavior, recordBlockToggle, type BehaviorEvent } from '../eval/behaviorLog.ts';
 import type { GoalTodoHandlers } from '../GoalTodoCard.tsx';
@@ -78,6 +78,8 @@ export function useTodayData(identity: { token: string; username: string }, now:
   const displayedRef = useRef<{ blocks: TimeBlock[]; doneIds: ReadonlySet<string> } | null>(null);
   const nowMinRef = useRef(0);
   nowMinRef.current = now.getHours() * 60 + now.getMinutes();
+  const phaseRef = useRef<TodayPhase>(phase);
+  phaseRef.current = phase;
 
   const todayKey = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, '0');
@@ -177,6 +179,8 @@ export function useTodayData(identity: { token: string; username: string }, now:
       await apiPutPlanCopy(identity.token, wn, plan);
       setSyncStatus('saved');
       void rescheduleToday(displayedNow?.blocks ?? [], nowMinRef.current);
+      // F15 常驻「正在进行」通知（2026-10-08 接线）：与软提醒同一条节奏更新
+      void showOngoing(pickOngoingBlock(displayedNow?.blocks ?? [], nowMinRef.current, displayedNow?.doneIds ?? null));
     } catch {
       setSyncStatus('error');
     }
@@ -244,6 +248,18 @@ export function useTodayData(identity: { token: string; username: string }, now:
       onAction(b, action === 'done' ? { type: 'toggleDone' } : { type: 'shift', deltaMin: 15 });
     });
   }, [onAction]);
+
+  /* ---------- F15 常驻「正在进行」通知：前台每分钟校对（块开始/结束自动切换，2026-10-08） ---------- */
+  useEffect(() => {
+    const tick = () => {
+      if (phaseRef.current !== 'ready') return; // 数据没就绪不动——避免把上次会话的常驻误撤
+      const d = displayedRef.current;
+      void showOngoing(d ? pickOngoingBlock(d.blocks, nowMinRef.current, d.doneIds) : null);
+    };
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(t);
+  }, []);
 
   /* ---------- F7 明日预告 ---------- */
   const tomorrowDow = (dow % 7) + 1;

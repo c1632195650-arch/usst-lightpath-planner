@@ -152,23 +152,54 @@ export async function rescheduleToday(blocks: readonly TimeBlock[], nowMin: numb
 }
 
 /**
- * F15 常驻「正在进行」通知：块开始时发布（id 固定），块结束撤销。
+ * F15 常驻「正在进行」通知（2026-10-08 接线）：
+ *   · 有进行中的块 → 以**固定槽位 id** 发布/替换：「正在进行：X · 至 HH:MM」常驻通知栏，
+ *     带同一套动作按钮（完成 / 顺延 15 分 —— 事件在手时一键回写）；
+ *   · 没有（或当前块已标完成）→ **撤销**：清待发 + 从通知栏移除已送达的那条
+ *     （Android 上已送达的常驻通知只有 removeDeliveredNotifications 摘得掉）。
+ * 触发：同步成功后 + 手动「重排提醒」走同一条（rescheduleToday 之后调用）；
+ *       App 在前台时由消费方（useTodayData）每分钟校对一次，块开始/结束自动切换。
  * v1 静态文本（无每分钟倒计时 —— 那要前台服务，stretch）。
  */
+export const ONGOING_NOTIF_ID = 99_000_001;
+
+/**
+ * 当前「正在进行」的块（开始 ≤ now < 结束）；已标完成的块不出常驻通知。
+ * 纯函数：时间一律以 nowMin 入参，Node 单测直跑。
+ */
+export function pickOngoingBlock(
+  blocks: readonly TimeBlock[],
+  nowMin: number,
+  doneIds?: ReadonlySet<string> | null,
+): TimeBlock | null {
+  for (const b of blocks) {
+    if (b.startMin <= nowMin && nowMin < b.endMin) {
+      if (doneIds?.has(b.id)) continue; // 已完成 → 跳过，继续找真正在进行的块
+      return b;
+    }
+  }
+  return null;
+}
+
 export async function showOngoing(block: TimeBlock | null): Promise<void> {
-  if (!(await isNative()) || !block) return;
+  if (!(await isNative())) return;
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications');
-    const now = new Date();
-    const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-    const id = notifId(`${block.id}#ongoing`, dateKey, 2);
+    if (!block) {
+      await LocalNotifications.cancel({ notifications: [{ id: ONGOING_NOTIF_ID }] });
+      const delivered = await LocalNotifications.getDeliveredNotifications();
+      const mine = delivered.notifications.filter((n) => n.id === ONGOING_NOTIF_ID);
+      if (mine.length > 0) await LocalNotifications.removeDeliveredNotifications({ notifications: mine });
+      return;
+    }
     await LocalNotifications.schedule({
       notifications: [{
-        id,
+        id: ONGOING_NOTIF_ID,
         title: `正在进行：${block.title} · 至 ${fmtMin(block.endMin)}`,
         body: block.place ? `地点：${block.place}` : '',
         schedule: { at: new Date(), allowWhileIdle: true },
         ongoing: true,
+        actionTypeId: 'block-actions',
         extra: { blockId: block.id, action: 'ongoing' },
       }],
     });
