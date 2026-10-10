@@ -29,7 +29,9 @@
 import os, re, json, sqlite3, datetime
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(_HERE, "..", "data", "libao_memory.db")
+# 维护批 P0-5（2026-10-11）：支持环境变量覆盖（对齐 account.py 的 LIBAO_ACCOUNT_DB 先例），
+# 让测试可以指到 tempfile，不再只能摸真实库。
+DB_PATH = os.environ.get("LIBAO_MEMORY_DB") or os.path.join(_HERE, "..", "data", "libao_memory.db")
 
 SUMMARIZE_EVERY = 4      # 每累积 4 轮压缩一次（不是每轮都压）
 RECENT_TURNS = 6         # 短期保留最近 6 条消息
@@ -52,7 +54,12 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
 
 # ---------- 建库 ----------
 def _conn():
-    c = sqlite3.connect(DB_PATH)
+    # 维护批 P0-5（2026-10-11）：与 account.py:63-65 同款 WAL + busy_timeout。
+    # 本库在主链路每轮对话都写（messages/sessions），并发下没有这两条会撞
+    # 「database is locked」；WAL 让读写不再互斥，busy_timeout 兜住写写竞争。
+    c = sqlite3.connect(DB_PATH, timeout=5)
+    c.execute("PRAGMA busy_timeout=5000")
+    c.execute("PRAGMA journal_mode=WAL")
     c.execute("""CREATE TABLE IF NOT EXISTS profiles(
         user_id TEXT PRIMARY KEY, profile TEXT, updated_at TEXT)""")
     c.execute("""CREATE TABLE IF NOT EXISTS sessions(
