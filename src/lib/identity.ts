@@ -16,6 +16,11 @@ import { USER_KEY as ACCOUNT_USER_KEY } from '@/features/mobile/lib/auth';
 
 const USER_KEY = 'usst.libao.user_id';
 const BASIC_KEY = 'usst.libao.basic_info';
+// 维护批 P0-1（2026-10-11）：与 user_id 绑定的「身份密钥」——
+// 服务端 LIBAO_REQUIRE_OWNER 开启时，凭 X-Identity-Key 头认领/校验身份绑定
+// （sha256 存 account 库 meta 表，首次携带即认领，存量用户无感迁移）。
+// 与 user_id 同级敏感度：都是设备级凭据，登出不清（清了等于换新身份）。
+const IDENTITY_KEY_STORAGE = 'usst.libao.identity_key';
 
 /** 年级（v2 方案 WP1）：收窄为 1-4 数字，供题库分层（WP2）与排程默认值消费 */
 export type Grade = 1 | 2 | 3 | 4;
@@ -98,6 +103,21 @@ export function getUserId(): string {
   } catch {
     // 隐私模式等场景 localStorage 不可写 → 退回后端默认，功能降级但不报错
     return 'anon';
+  }
+}
+
+/** 身份密钥（唯一来源，同 getUserId 的收敛纪律）：持久化复用。
+ *  拿不到持久存储（隐私模式）返回空串 —— 调用方就不带密钥头，
+ *  服务端身份闸开启时该用户会收到 401（与「清缓存换新身份」同一降级面）。 */
+export function getIdentityKey(): string {
+  try {
+    const saved = localStorage.getItem(IDENTITY_KEY_STORAGE);
+    if (saved) return saved;
+    const key = `ik-${newId()}${newId()}`;
+    localStorage.setItem(IDENTITY_KEY_STORAGE, key);
+    return key;
+  } catch {
+    return '';
   }
 }
 

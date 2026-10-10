@@ -31,7 +31,7 @@
 🔴 /api/poi 与 /api/nearby **一律不返回经纬度**（2026-09-15 决策 D4）：
    真实坐标只用于后端算路与排序，不出现在任何响应体里。
 """
-import asyncio, os, re, sys, io, json, time, uuid, hashlib
+import asyncio, os, re, sys, io, json, time, uuid, hashlib, secrets, sqlite3
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -68,6 +68,7 @@ import plan_review  # R批 Wave3 H2：后端日程复核 /api/plan/review（三�
 app.include_router(plan_review.router)  # R批 H2
 # 光溯移动端 M0（2026-10-03）：账号/令牌 + 云同步/ICS/版本 —— 各一个 APIRouter，其余零改动
 from account import router as _account_router  # noqa: E402
+from account import _conn as _account_conn  # noqa: E402  （P0-1 身份绑定复用 account 库 meta 表）
 from sync import router as _sync_router  # noqa: E402
 app.include_router(_account_router)
 app.include_router(_sync_router)
@@ -118,6 +119,74 @@ async def _body_size_guard(request: Request, call_next):
                 content={"error": "payload_too_large", "detail": f"请求体超过 {limit_mb:g}MB 上限"},
             )
     return await call_next(request)
+
+
+# ---------- 维护批 P0-1（2026-10-11）：身份属主校验（防 IDOR） ----------
+# 红旗 S1：/api/chat、/api/chat/history、/api/memory/* 的 user_id/session_id 全由
+# 客户端自报，公网上任何人可读任意会话历史、确认/删除任意用户的记忆事实、
+# 重置任意会话画像（OWASP API Top10 BOLA，维护计划 §4.1）。
+# 方案（L1，逃生门 `LIBAO_REQUIRE_OWNER=0` = 完全旧行为；默认关，部署时再开，见下）：
+#   · 客户端持有一个与 user_id 绑定的「身份密钥」（前端 identity.ts 生成并持久化，
+#     走 `X-Identity-Key` 头）；服务端把 sha256(key) 存进 account 库**现成的 meta 表**
+#     （键 identity:<user_id>）—— 零新表、零 schema 变更；
+#   · 首次见到 (user_id, key) 组合即认领（存量用户无感迁移：升级后第一次带 key 的
+#     请求就建立绑定）；之后密钥不符 → 404（与「不存在」同形，不泄露存在性）；
+#   · 哨兵身份（anon/default）不可认领共享密钥 → 401，倒逼客户端用真实身份；
+#     会话同理（防「大家共用 default 会话」串台）；
+#   · 事实操作（confirm/reject/undo/delete）另查 facts.user_id 属主，不匹配按
+#     「事实不存在」同形回 {"ok": false} —— 不报 404、不触发前端错误态。
+# 部署顺序（BLOCKERS 留痕）：① 发后端+网页端（默认关，行为零变化）→ ② 验证网页端
+# 请求已带 X-Identity-Key → ③ 服务器设 LIBAO_REQUIRE_OWNER=1。老 APK 的梨宝抽屉
+# 不带 key，在 ③ 之后会收 401（抽屉静默降级为「连不上」文案），需随下版 APK 更新。
+_IDENTITY_SENTINELS = ("anon", "default")
+
+
+def _require_owner_enabled() -> bool:
+    # 每次现读 env：部署时改环境变量即时生效，也便于测试翻转
+    return os.environ.get("LIBAO_REQUIRE_OWNER", "0").strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _identity_claim(uid: str, key_hash: str) -> bool:
+    """声明/校验 (user_id → sha256(key)) 绑定。False = 密钥与已绑定值不符。"""
+    meta_key = f"identity:{uid}"
+    c = _account_conn()
+    try:
+        row = c.execute("SELECT value FROM meta WHERE key=?", (meta_key,)).fetchone()
+        if row is None:
+            try:
+                c.execute("INSERT INTO meta(key, value) VALUES(?,?)", (meta_key, key_hash))
+                c.commit()
+                return True
+            except sqlite3.IntegrityError:
+                row = c.execute("SELECT value FROM meta WHERE key=?", (meta_key,)).fetchone()
+        return bool(row) and secrets.compare_digest(str(row[0]), key_hash)
+    finally:
+        c.close()
+
+
+def _owner_guard(request: Request | None, user_id: str | None, session_id: str | None = None):
+    """P0-1 身份闸。通过返回 None；否则返回调用方应直接 return 的 JSONResponse。"""
+    if not _require_owner_enabled():
+        return None
+    uid = (user_id or "").strip()
+    if not uid or uid in _IDENTITY_SENTINELS:
+        return JSONResponse(status_code=401, content={"error": "identity_required"})
+    if session_id is not None and (session_id or "").strip() in _IDENTITY_SENTINELS:
+        return JSONResponse(status_code=401, content={"error": "session_required"})
+    key = (request.headers.get("x-identity-key", "") if request is not None else "").strip()
+    if not key:
+        return JSONResponse(status_code=401, content={"error": "identity_key_required"})
+    if not _identity_claim(uid, hashlib.sha256(key.encode("utf-8")).hexdigest()):
+        return JSONResponse(status_code=404, content={"error": "not_found"})
+    return None
+
+
+def _fact_owner_mismatch(fact_id: int, user_id: str) -> bool:
+    """事实属主比对（仅 LIBAO_REQUIRE_OWNER 开启时生效）；事实不存在按不匹配处理。"""
+    if not _require_owner_enabled():
+        return False
+    f = memory._get_fact(fact_id)
+    return f is None or f.get("user_id") != (user_id or "").strip()
 
 # ---------- 环境变量 ----------
 def _load_env(path):
@@ -1151,9 +1220,13 @@ def _chat_core(body: ChatReq) -> dict:
 
 
 @app.post("/api/chat")
-def api_chat(body: ChatReq):
+def api_chat(body: ChatReq, request: Request):
     # 2026-10-06 新任务三 W3（A1 梨宝抽屉）：主体抽成 _chat_core（检索/路由/生成管线
     # 一行未动），本端点行为零变化；流式版 /api/chat/stream 复用同一个 _chat_core。
+    # P0-1：身份闸（LIBAO_REQUIRE_OWNER 关闭时行为零变化，下同）
+    guard = _owner_guard(request, body.user_id, body.session_id)
+    if guard is not None:
+        return guard
     return _chat_core(body)
 
 
@@ -1176,6 +1249,10 @@ async def api_chat_stream(body: ChatReq, request: Request):
     """
     from fastapi.concurrency import run_in_threadpool
 
+    # P0-1：身份闸（与 /api/chat 同一契约）
+    guard = _owner_guard(request, body.user_id, body.session_id)
+    if guard is not None:
+        return guard
     result = await run_in_threadpool(_chat_core, body)   # 阻塞管线放线程池，不卡事件循环
     answer = str(result.get("answer") or "")
     meta = {
@@ -1214,7 +1291,11 @@ class ResetReq(BaseModel):
     user_id: str = "anon"
 
 @app.post("/api/memory/reset")
-def reset_mem(body: ResetReq):
+def reset_mem(body: ResetReq, request: Request):
+    # P0-1：身份闸 + 会话哨兵拒绝（防「清掉别人的 default 会话」）
+    guard = _owner_guard(request, body.user_id, body.session_id)
+    if guard is not None:
+        return guard
     import sqlite3
     c = sqlite3.connect(memory.DB_PATH)
     c.execute("DELETE FROM messages WHERE session_id=?", (body.session_id,))
@@ -1226,7 +1307,7 @@ def reset_mem(body: ResetReq):
     return {"ok": True}
 
 @app.get("/api/chat/history")
-def api_chat_history(user_id: str = "anon", session_id: str = "default", limit: int = 50):
+def api_chat_history(request: Request, user_id: str = "anon", session_id: str = "default", limit: int = 50):
     """跨会话恢复聊天记录（E8，2026-09-21）。
 
     后端一直在存 messages（L0 短期原文），但没有读取端点 —— 前端聊天记录只在
@@ -1235,9 +1316,14 @@ def api_chat_history(user_id: str = "anon", session_id: str = "default", limit: 
 
     `user_id` 当前不参与过滤（messages 表按 session_id 归档），保留在契约里是给
     将来「按用户隔离历史」留位置 —— 与 /api/chat 的身份契约对齐。
+    P0-1（2026-10-11）：本端点此前是最大的 IDOR 面（任意 session_id 可读任意人
+    聊天记录），现挂身份闸 —— LIBAO_REQUIRE_OWNER 关闭时行为零变化。
     脱敏逻辑同 chat：库里存的是已脱敏文本，读出时**再过一遍** desensitize，
     防止历史脏数据（旧版本落库的未脱敏内容）回流到前端。
     """
+    guard = _owner_guard(request, user_id, session_id)
+    if guard is not None:
+        return guard
     limit = max(1, min(limit, 200))
     try:
         rows = memory.history_messages(session_id, limit)
@@ -1257,8 +1343,11 @@ def api_chat_history(user_id: str = "anon", session_id: str = "default", limit: 
 #   · 全部可删；user_id 为设备级（暂不跨设备，取值已在前端收敛为单一来源）。
 
 @app.get("/api/memory/facts")
-def api_list_facts(user_id: str = "anon", status: str = ""):
-    """status=pending / applied / 空表示两者都要。"""
+def api_list_facts(request: Request, user_id: str = "anon", status: str = ""):
+    """status=pending / applied / 空表示两者都要。P0-1：挂身份闸（关闭时行为零变化）。"""
+    guard = _owner_guard(request, user_id)
+    if guard is not None:
+        return guard
     if status not in ("", "pending", "applied", "rejected"):
         return {"facts": [], "error": "invalid status"}
     try:
@@ -1275,8 +1364,12 @@ class MemoryFactReq(BaseModel):
 
 
 @app.post("/api/memory/facts")
-def api_add_fact(body: MemoryFactReq):
-    """课表事实回写：只落 pending（add_pending_fact 状态机闸门），MemoryPanel 可拒。"""
+def api_add_fact(body: MemoryFactReq, request: Request):
+    """课表事实回写：只落 pending（add_pending_fact 状态机闸门），MemoryPanel 可拒。
+    P0-1：挂身份闸 —— 此前任何人可往任意 user_id 名下写事实（画像投毒通道）。"""
+    guard = _owner_guard(request, body.user_id)
+    if guard is not None:
+        return guard
     try:
         fact = memory.add_pending_fact(body.user_id, "objective.timetable_summary", body.content, source="timetable")
         return {"ok": fact is not None, "fact": fact}
@@ -1285,23 +1378,53 @@ def api_add_fact(body: MemoryFactReq):
         return {"ok": False, "fact": None}
 
 
+class FactUserReq(BaseModel):
+    """P0-1：事实操作的属主声明。前端 decideFact 一直就在 post {user_id}（api.ts:98），
+    此前后端只是没看 —— 现在开始校验，前端零改动。"""
+    model_config = ConfigDict(extra="forbid")
+    user_id: str = ""
+
+
 @app.post("/api/memory/facts/{fact_id}/confirm")
-def api_confirm_fact(fact_id: int):
+def api_confirm_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+    uid = body.user_id if body else ""
+    guard = _owner_guard(request, uid)
+    if guard is not None:
+        return guard
+    if _fact_owner_mismatch(fact_id, uid):
+        return {"ok": False, "fact": None}  # 与「事实不存在」同形，不泄露他人事实的存在性
     r = memory.confirm_fact(fact_id)
     return {"ok": r is not None, "fact": r}
 
 @app.post("/api/memory/facts/{fact_id}/reject")
-def api_reject_fact(fact_id: int):
+def api_reject_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+    uid = body.user_id if body else ""
+    guard = _owner_guard(request, uid)
+    if guard is not None:
+        return guard
+    if _fact_owner_mismatch(fact_id, uid):
+        return {"ok": False, "fact": None}
     r = memory.reject_fact(fact_id)
     return {"ok": r is not None, "fact": r}
 
 @app.post("/api/memory/facts/{fact_id}/undo")
-def api_undo_fact(fact_id: int):
+def api_undo_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+    uid = body.user_id if body else ""
+    guard = _owner_guard(request, uid)
+    if guard is not None:
+        return guard
+    if _fact_owner_mismatch(fact_id, uid):
+        return {"ok": False, "fact": None}
     r = memory.undo_fact(fact_id)
     return {"ok": r is not None, "fact": r}
 
 @app.delete("/api/memory/facts/{fact_id}")
-def api_delete_fact(fact_id: int):
+def api_delete_fact(fact_id: int, request: Request, user_id: str = ""):
+    guard = _owner_guard(request, user_id)
+    if guard is not None:
+        return guard
+    if _fact_owner_mismatch(fact_id, user_id):
+        return {"ok": False}
     return {"ok": memory.delete_fact(fact_id)}
 
 # ═══════════════════════════════════════════════════════════════

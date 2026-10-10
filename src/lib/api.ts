@@ -5,6 +5,7 @@
  * 公网部署请求同源 `/api`，不再写死 127.0.0.1:8000。
  */
 import { resolveApiBase } from '@/lib/apiBase';
+import { getIdentityKey } from '@/lib/identity';
 
 // 任务四起对外导出（memo 云通道同源复用；原语义不变）
 // W4b-B：兜底默认值已从写死 8000 改为同源 ''（resolveApiBase 的缺省）——
@@ -91,15 +92,15 @@ export interface MemoryFact {
 
 export function memoryFacts(userId: string, status: '' | FactStatus = ''): Promise<{ facts: MemoryFact[] }> {
   const s = status ? `&status=${status}` : '';
-  return get(`/api/memory/facts?user_id=${encodeURIComponent(userId)}${s}`);
+  return get(`/api/memory/facts?user_id=${encodeURIComponent(userId)}${s}`, identityHeaders(userId));
 }
 
 export function decideFact(userId: string, id: number, action: 'confirm' | 'reject' | 'undo'): Promise<{ ok: boolean; fact: MemoryFact | null }> {
-  return post(`/api/memory/facts/${id}/${action}`, { user_id: userId });
+  return post(`/api/memory/facts/${id}/${action}`, { user_id: userId }, identityHeaders(userId));
 }
 
 export function deleteFact(userId: string, id: number): Promise<{ ok: boolean }> {
-  return del(`/api/memory/facts/${id}?user_id=${encodeURIComponent(userId)}`);
+  return del(`/api/memory/facts/${id}?user_id=${encodeURIComponent(userId)}`, identityHeaders(userId));
 }
 
 /* ---------------- 跨会话恢复（E8） ----------------
@@ -118,7 +119,7 @@ export interface ChatHistoryRow {
 export function chatHistory(identity: ChatIdentity = {}, limit = 50): Promise<{ messages: ChatHistoryRow[] }> {
   const uid = identity.userId ? `&user_id=${encodeURIComponent(identity.userId)}` : '';
   const sid = identity.sessionId ? `&session_id=${encodeURIComponent(identity.sessionId)}` : '';
-  return get(`/api/chat/history?limit=${limit}${uid}${sid}`);
+  return get(`/api/chat/history?limit=${limit}${uid}${sid}`, identityHeaders(identity.userId));
 }
 
 /** 清空对话与记忆：删该会话的全部原文/摘要，并抹掉该设备的画像与事实。
@@ -127,7 +128,7 @@ export function resetMemory(identity: ChatIdentity = {}): Promise<{ ok: boolean 
   return post('/api/memory/reset', {
     session_id: identity.sessionId ?? 'default',
     user_id: identity.userId ?? 'anon',
-  });
+  }, identityHeaders(identity.userId));
 }
 
 export interface SearchResult {
@@ -146,24 +147,31 @@ export interface HealthResult {
   model: string | null;
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+/** 维护批 P0-1（2026-10-11）：身份密钥头。
+ *  有 user_id 的调用才携带；服务端身份闸（LIBAO_REQUIRE_OWNER）关闭时，
+ *  多余的 header 无害（CORS allow_headers=*），开启时它是防 IDOR 的凭据。 */
+function identityHeaders(userId?: string): Record<string, string> {
+  return userId ? { 'X-Identity-Key': getIdentityKey() } : {};
+}
+
+async function post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+async function get<T>(path: string, headers?: Record<string, string>): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { headers: headers ?? {} });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
+async function del<T>(path: string, headers?: Record<string, string>): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers: headers ?? {} });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -201,7 +209,7 @@ export function lbaoChat(
     session_id: identity.sessionId,
     profile_ctx: profileCtx || undefined,
     recent_plan_events: recentPlanEvents?.length ? recentPlanEvents : undefined,
-  });
+  }, identityHeaders(identity.userId));
 }
 
 /** WP12-C2：课表事实回写 —— 纯统计摘要，无任何坐标（数据红线）；失败由调用方静默。 */
@@ -225,7 +233,7 @@ export async function addTimetableFacts(
   return post<{ ok: boolean }>('/api/memory/facts', {
     user_id: userId || 'anon',
     content,
-  });
+  }, identityHeaders(userId));
 }
 
 /** 梨宝检索（无 LLM 合成，直接返回文章） */

@@ -17,6 +17,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // 空串会让 fetch('/api/chat/stream') 打到**包内资源**而不是服务器（梨宝全程连不上）。
 // 统一走 resolveApiBase()（包内模式自动回落公网地址，与 lib/api.ts 同一解析）。
 import { resolveApiBase } from '@/lib/apiBase';
+// 维护批 P0-1（2026-10-11）：身份密钥头 —— 服务端 LIBAO_REQUIRE_OWNER 开启时防 IDOR 的凭据
+import { getIdentityKey } from '@/lib/identity';
 
 interface ChatMsg {
   role: 'user' | 'assistant';
@@ -50,7 +52,9 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void fetch(`${API_BASE}/api/chat/history?user_id=${encodeURIComponent(userId)}&session_id=${encodeURIComponent(sessionId)}&limit=30`)
+    void fetch(`${API_BASE}/api/chat/history?user_id=${encodeURIComponent(userId)}&session_id=${encodeURIComponent(sessionId)}&limit=30`, {
+      headers: { 'X-Identity-Key': getIdentityKey() },
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (cancelled || !body || !Array.isArray(body.messages)) return;
@@ -98,7 +102,7 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
     try {
       const res = await fetch(`${API_BASE}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Identity-Key': getIdentityKey() },
         body: JSON.stringify({ q, session_id: sessionId, user_id: userId }),
       });
       const ctype = res.headers.get('content-type') ?? '';
@@ -110,7 +114,7 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
             ? await res.json()
             : await (await fetch(`${API_BASE}/api/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Identity-Key': getIdentityKey() },
                 body: JSON.stringify({ q, session_id: sessionId, user_id: userId }),
               })).json();
           text = String(body.answer ?? text);
