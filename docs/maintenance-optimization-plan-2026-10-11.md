@@ -266,6 +266,36 @@ GitHub Actions（跑现有 `gate_overnight.mjs` 即可，不自造新流程）+ 
 
 > 每项标注：变更分级（§1.3）｜零回归保障｜验收标准。估时按「专注半天=0.5d」。
 
+### 6.0 销项台账（2026-10-11 夜间批 · 目标模式「全面推进至完成」执行记录）
+
+**执行口径**：§1.3 变更分级铁律；每项独立提交 + `gate_overnight` 8 项门禁全过 + RV 反向验证（关实现必红）；Python 测试 8 份、node 测试 3 份新增，capability-map 已重新生成（`--check` 绿）。L2 项未动，逐条登记 BLOCKERS（2026-10-11 02:1x 条）。
+
+| 项 | 状态 | commit | 备注 |
+|---|---|---|---|
+| P0-1 属主校验防 IDOR | ✅ 落地（闸默认关） | `8da8f29` | 服务端 8 端点挂身份闸 + 前端三处携 X-Identity-Key；**开启需部署时设 `LIBAO_REQUIRE_OWNER=1`（BLOCKERS ②）** |
+| P0-2 TLS+域名 | ⏸ L2 | — | 部署级，BLOCKERS ①（推广关键路径） |
+| P0-3 登录/注册限速 | ✅ 落地（默认开） | `d69991b` | 查窗前置 PBKDF2 防 CPU 放大；`LIBAO_RATELIMIT=0` 逃生门 |
+| P0-4 请求体上限 | ✅ 落地（默认开） | `82e5f55` | 全局 2MB / PDF 12MB 分档；`LIBAO_MAX_*_MB=0` 逃生门 |
+| P0-5 memory 库 WAL | ✅ 落地 | `75ea4e9` | 对齐 account 库；附 `LIBAO_MEMORY_DB` 测试覆盖 |
+| P0-6 日志落盘+异常收敛 | ✅ 落地 | `71f3739` | launch_be 写 `_logs/`；weather/understand 回固定错误码 |
+| P0-7 ICS token 重置 | ✅ 端点落地 | `7199247` | UI 入口随下版 APK（BLOCKERS ⑤） |
+| P0-8 弱口令+服务器续费 | ⏸ L2 | — | **服务器 2026-10-25 到期**（BLOCKERS ③） |
+| P1-1 备份脚本 | ✅ 脚本落地 | `00141cf` | 备份/恢复/裁剪三演练过；**服务器 cron 与 Litestream 属运维（BLOCKERS ④）** |
+| P1-2 ErrorBoundary | ✅ 落地 | `95011d4` | 双入口包装 + 全局监听；纯逻辑可测（errorCopy.ts 拆分绕 JSX 限制） |
+| P1-3 api.ts 超时+重试 | ✅ 落地 | `3bd9775` | 15s 超时；GET 幂等单次重试（502/503/504/网络抖动）；POST 绝不重发 |
+| P1-4 轻量错误聚合 | 🔀 被并入 | — | globalErrors.ts 环形缓冲（P1-2）已覆盖前端面；后端 JSONL 聚合待 P1 收尾批 |
+| P1-5 后端授权/LWW 测试 | 🔀 部分完成 | 各 P0 commit | 越权矩阵/LWW/RV 已随 P0-1/3/4/7 落地（Python 8 份）；独立 sync LWW 单测待补 |
+| P1-6 CI + 工具链 | ✅ 落地 | `32e3653` | 阻断四件套+版本校验；gitleaks/pip-audit/bandit/npm audit 首日咨询项（BLOCKERS ⑨） |
+| P1-7 演示资产 | ⏸ 需 CY 输入 | — | 真实课表文件（BLOCKERS ⑥） |
+| P1-8 版本单源 | ✅ 校验器落地 | `04dba53` | 发版流程切换属 L2；已进 CI 阻断项 |
+| P1-9 allowBackup=false | ✅ 代码落地 | `e355af1` | 随下次 APK 发版生效 |
+| P1-10 envconfig 收敛 | ✅ 落地 | `23c9ee3` | 三处手抄合一；TrustedHost env 可选启用（上域名时配） |
+| P2-1～P2-8 | ⏸ L2 / 决赛前 | — | 见 BLOCKERS ⑦⑧（合并/清史/补爬/走查/决赛材料） |
+| P2-9 文档漂移清账 | ✅ 落地 | 本次 docs commit | ADR-008 去重（逐字重复已验证）、PARTIALS 复核注、门禁基线销案 |
+| P3-1～P3-6 | ⏸ 决赛后 | — | 不变 |
+
+**遗留小尾巴（下批收尾）**：① sync LWW 独立 Python 单测（P1-5 残项）；② 后端 `log_event` JSONL 统一出口（P1-4 残项）；③ 老客户端兼容观察：`LIBAO_REQUIRE_OWNER` 开启前需确认网页端已全量带 X-Identity-Key。
+
 ### 6.1 P0 —— 止血（本周内，推广前完成；除 P0-2 外全部 L0/L1）
 
 | ID | 动作 | 涉及 | 零回归保障 | 验收 | 估时 |

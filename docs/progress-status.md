@@ -76,6 +76,7 @@
 - 空间接线（E2/G 批全开）：自习点按步行分钟排序、估算留余量、超预算挪后不删。
 - 画像接线（E3/G 批全开）：HEA 作息 → 自习块时段亲和度。
 - 遗留未接线（`*_PARTIALS` 已登记，需契约双方确认）：睡眠保底窗口（`identity.sleepMin` 进 PlanRequest）、每周活动量下限、三餐消费步行预算、画像变更「受影响天」集合。
+  > **2026-10-11 复核**：上行为历史快照 —— 四处均已收官销案（`src/lib/planner/knowledge.ts:129` / `placesPolicy.ts:226` / `profilePrefs.ts:237` 的实现内注记为准），维护计划「维护优化」文档 §2.3 已登记此漂移。
 
 ### 4.4 梨宝对话链路（S/T/D/E 批产出）
 - **意图分流**：问答走 RAG；排程意图走真引擎（防腐层 `weekPlanForChat.ts` 是 `features/libao` 与 `lib/planner` 的唯一接缝）。
@@ -157,3 +158,8 @@ node scripts/e2e-sched-session.mjs [baseURL]   # 需隔离 vite + 离线（脚�
 > `docs/一键推进收尾方案-2026-10-06.md`（含执行记录）；canonical 复核 `docs/canonical-review-2026-10-06.md`。
 > 上表第 2 项「四处 PARTIALS」中活动量下限/三餐预算两处在本批 Wave 3 接线（见方案批次 5），睡眠保底窗口
 > 经 routineStore 写入端（R2）落地；余下按 §12 另立项登记。
+>
+> **2026-10-11 复核**：上表第 2 项「四处 PARTIALS」**全部销案**（四处接线注记见 §4.3 复核）；
+> 第 1 项的 unrelated histories 已解决（beta-v2 与远端已有共同祖先，preflight 每日验证）；
+> 综合维护与优化计划见 `docs/maintenance-optimization-plan-2026-10-11.md`（P0 止血批已落地，
+> 销项台账随该文档滚动更新）。
