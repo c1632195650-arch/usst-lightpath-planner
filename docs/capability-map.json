@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 150,
-    "engineFiles": 113,
-    "uiFiles": 37,
-    "guardedSources": 144,
-    "reverseVerified": 90,
+    "testFiles": 152,
+    "engineFiles": 114,
+    "uiFiles": 38,
+    "guardedSources": 150,
+    "reverseVerified": 92,
     "orphans": 0
   },
   "domains": {
@@ -126,8 +126,9 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 44,
+      "testCount": 45,
       "tests": [
+        "scripts/app_error_boundary.test.ts",
         "scripts/miniWeekPreview.test.ts",
         "tests/agenda-model.test.ts",
         "tests/assignment.test.ts",
@@ -174,6 +175,7 @@
         "tests/wp9.test.ts"
       ],
       "sources": [
+        "src/components/errorCopy",
         "src/components/icons/Icon",
         "src/components/icons/iconPaths",
         "src/components/ui/Avatar",
@@ -345,14 +347,16 @@
         "m.html",
         "mobile/"
       ],
-      "testCount": 14,
+      "testCount": 16,
       "tests": [
+        "scripts/app_error_boundary.test.ts",
         "scripts/memo-web-workspace.test.ts",
         "tests/cloudAccount.test.ts",
         "tests/cloudAdopt.test.ts",
         "tests/eval-compute.test.ts",
         "tests/eval-quiz.test.ts",
         "tests/eval-tips.test.ts",
+        "tests/mobile-notify-ongoing.test.ts",
         "tests/mobile/burnBar.test.ts",
         "tests/mobile/evalWiring.test.ts",
         "tests/mobile/memoStore.test.ts",
@@ -380,8 +384,10 @@
         "src/features/mobile/lib/nowTip",
         "src/features/mobile/lib/sync",
         "src/features/mobile/lib/types",
+        "src/features/mobile/lib/useTodayData",
         "src/features/mobile/lib/webSync",
-        "src/features/mobile/lib/weekBoard"
+        "src/features/mobile/lib/weekBoard",
+        "src/features/mobile/main"
       ]
     },
     "contracts": {
@@ -391,8 +397,9 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 18,
+      "testCount": 19,
       "tests": [
+        "scripts/app_error_boundary.test.ts",
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
         "scripts/libao-understand-retry.test.ts",
@@ -419,6 +426,7 @@
         "src/lib/api",
         "src/lib/cloudAccount",
         "src/lib/date",
+        "src/lib/globalErrors",
         "src/lib/identity",
         "src/lib/lbao",
         "src/lib/persona",
@@ -460,6 +468,16 @@
     }
   },
   "tests": {
+    "scripts/app_error_boundary.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "week-view",
+        "contracts",
+        "mobile"
+      ],
+      "guardCount": 4,
+      "reverseVerified": true
+    },
     "scripts/basicInfo.test.ts": {
       "suite": "ui",
       "guards": [
@@ -808,7 +826,7 @@
         "contracts",
         "mobile"
       ],
-      "guardCount": 5,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/cloudAdopt.test.ts": {
@@ -1145,6 +1163,14 @@
         "planner-engine"
       ],
       "guardCount": 1,
+      "reverseVerified": true
+    },
+    "tests/mobile-notify-ongoing.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "mobile"
+      ],
+      "guardCount": 2,
       "reverseVerified": true
     },
     "tests/mobile/burnBar.test.ts": {
@@ -1691,6 +1717,18 @@
     }
   },
   "reverseIndex": {
+    "src/components/errorCopy": [
+      "scripts/app_error_boundary.test.ts"
+    ],
+    "src/lib/globalErrors": [
+      "scripts/app_error_boundary.test.ts"
+    ],
+    "src/main": [
+      "scripts/app_error_boundary.test.ts"
+    ],
+    "src/features/mobile/main": [
+      "scripts/app_error_boundary.test.ts"
+    ],
     "src/features/welcome/basicInfo": [
       "scripts/basicInfo.test.ts"
     ],
@@ -1798,6 +1836,7 @@
       "tests/libao-regression-anchor.test.ts",
       "tests/longLock.test.ts",
       "tests/method-tip-timeblock.test.ts",
+      "tests/mobile-notify-ongoing.test.ts",
       "tests/mobile/evalWiring.test.ts",
       "tests/mobile/notify.test.ts",
       "tests/mobile/weekBoard.test.ts",
@@ -2049,6 +2088,12 @@
     "src/features/mobile/lib/types": [
       "tests/cloudAccount.test.ts"
     ],
+    "src/features/cloudSync/CloudAccountCard": [
+      "tests/cloudAccount.test.ts"
+    ],
+    "src/features/mobile/lib/useTodayData": [
+      "tests/cloudAccount.test.ts"
+    ],
     "src/features/cloudSync/cloudAdopt": [
       "tests/cloudAdopt.test.ts"
     ],
@@ -2242,6 +2287,10 @@
     "src/lib/planner/longLocks": [
       "tests/longLock.test.ts"
     ],
+    "src/features/mobile/lib/notifyBridge": [
+      "tests/mobile-notify-ongoing.test.ts",
+      "tests/mobile/notify.test.ts"
+    ],
     "src/features/mobile/lib/burnBar": [
       "tests/mobile/burnBar.test.ts"
     ],
@@ -2250,9 +2299,6 @@
     ],
     "../src/features/mobile/IcsGuide": [
       "tests/mobile/icsHint.test.ts"
-    ],
-    "src/features/mobile/lib/notifyBridge": [
-      "tests/mobile/notify.test.ts"
     ],
     "src/features/mobile/lib/notifyStatus": [
       "tests/mobile/notify.test.ts"
