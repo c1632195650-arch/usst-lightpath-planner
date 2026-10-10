@@ -22,6 +22,7 @@
 端点（签名表 mobile-impl-plan §6.4）：
   POST /api/auth/register  {username, password} → {userId, token, icsToken} | 400/409/429
   POST /api/auth/login     {username, password} → {userId, token, icsToken} | 401/429
+  POST /api/auth/ics/reset Bearer               → {icsToken} | 401/404  （维护批 P0-7）
 
 ⚠️ 错误一律直接回 `JSONResponse({"error": "<code>"})`，**不走 HTTPException**：
 app.py 的全局 handler 会把 400 重写成 422（schemathesis 契约修复那批，别动它），
@@ -40,6 +41,13 @@ ics_token 本就不敏感于密码（泄露可重置），随登录下发是同�
 不误伤改完密码的正常用户）；注册按「尝试次数」计窗（注册是全链路最贵的操作，
 只数失败防不住批量注册的 CPU 放大）。逃生门：`LIBAO_RATELIMIT=0` 整体关闭
 （回退到无限速的旧行为）；窗口/阈值可用 LIBAO_RATELIMIT_* 微调。
+
+📌 维护批 P0-7（2026-10-11）ICS 令牌重置：
+ics_token 即订阅凭据且明文在 URL（`/api/sync/plan.ics?token=`），会进各级访问
+日志（sync.py:17 自知「泄露可重置」）—— 但重置接口此前一直没做，token 实际
+永久有效。本批补上：`POST /api/auth/ics/reset`（Bearer 鉴权）→ 旧 token 立即
+作废、返回新 token（32B urlsafe，同注册熵）。仅发端点，不绑 UI —— 客户端
+「重置订阅链接」入口随下次发版接入（维护计划 P1 收尾）。
 """
 import datetime as _dt
 import hashlib
@@ -303,3 +311,27 @@ def api_auth_login(body: AuthReq, request: Request):
     finally:
         c2.close()
     return {"userId": int(row[0]), "token": issue_token(int(row[0])), "icsToken": got[0] if got else None}
+
+
+@router.post("/api/auth/ics/reset")
+def api_ics_reset(request: Request):
+    """维护批 P0-7（2026-10-11）：重置 ICS 订阅令牌。
+
+    场景：订阅链接（token 明文在 URL）被转发/进了日志/误发给他人时，用户需要
+    一个「作废旧链接」的开关 —— 此前注释里写着「重置接口留白天做」，一直没做。
+    行为：Bearer 鉴权 → 换发新 32B urlsafe token → 旧 token 立即失效
+    （/api/sync/plan.ics 用旧 token 将 404）。
+    """
+    user_id = user_id_from_request(request)
+    if user_id is None:
+        return _err(401, "unauthorized")
+    new_token = secrets.token_urlsafe(32)
+    c = _conn()
+    try:
+        cur = c.execute("UPDATE users SET ics_token=? WHERE id=?", (new_token, user_id))
+        c.commit()
+        if cur.rowcount == 0:
+            return _err(404, "not_found")
+    finally:
+        c.close()
+    return {"icsToken": new_token}
