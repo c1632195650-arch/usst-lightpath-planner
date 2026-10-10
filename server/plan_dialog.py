@@ -494,7 +494,10 @@ def plan_understand(req: UnderstandReq):
     except requests.Timeout:
         return {"ok": False, "reason": "timeout"}
     except Exception as e:  # 任何失败都不算错误 —— 前端走规则兜底
-        return {"ok": False, "reason": f"{type(e).__name__}: {e}"[:160]}
+        # 维护批 P0-6（2026-10-11）：内部异常串不再回传客户端（可能带模块路径/内部
+        # 状态，OWASP LLM07 面）；只回固定代码，细节进服务端日志（launch_be 已落盘）。
+        print(f"[plan_dialog] understand 异常: {type(e).__name__}: {e}")
+        return {"ok": False, "reason": "internal_error"}
 
 
 if __name__ == "__main__":

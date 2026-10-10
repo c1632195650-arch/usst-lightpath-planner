@@ -733,7 +733,9 @@ def api_weather(
         raw = r.json()
     except Exception as e:
         print("[WEATHER] 拉取失败：", e)
-        return {"ok": False, "error": str(e), "days": []}
+        # 维护批 P0-6（2026-10-11）：异常串不再回传客户端（可能带网络/代理细节）；
+        # 前端只消费 ok 字段决定「显示/不显示天气」，固定代码足够。
+        return {"ok": False, "error": "weather_source_unavailable", "days": []}
 
     # 小时级 → 三段聚合。每段取**最坏的降水概率**与温度极值：
     # 用户关心的是「这段时间会不会淋到」，平均值会把一场阵雨抹平。
