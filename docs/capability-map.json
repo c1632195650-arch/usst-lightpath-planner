@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 152,
+    "testFiles": 153,
     "engineFiles": 114,
-    "uiFiles": 38,
+    "uiFiles": 39,
     "guardedSources": 150,
-    "reverseVerified": 92,
+    "reverseVerified": 93,
     "orphans": 0
   },
   "domains": {
@@ -397,8 +397,9 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 19,
+      "testCount": 20,
       "tests": [
+        "scripts/api_retry.test.ts",
         "scripts/app_error_boundary.test.ts",
         "scripts/chatRestore.test.ts",
         "scripts/lbaoPlan.test.ts",
@@ -468,6 +469,14 @@
     }
   },
   "tests": {
+    "scripts/api_retry.test.ts": {
+      "suite": "ui",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 1,
+      "reverseVerified": true
+    },
     "scripts/app_error_boundary.test.ts": {
       "suite": "ui",
       "guards": [
@@ -1717,6 +1726,13 @@
     }
   },
   "reverseIndex": {
+    "src/lib/api": [
+      "scripts/api_retry.test.ts",
+      "scripts/chatRestore.test.ts",
+      "scripts/libao-understand-retry.test.ts",
+      "tests/h3h4-eval.test.ts",
+      "tests/wp12.test.ts"
+    ],
     "src/components/errorCopy": [
       "scripts/app_error_boundary.test.ts"
     ],
@@ -1747,12 +1763,6 @@
     ],
     "src/features/libao/chatRestore": [
       "scripts/chatRestore.test.ts"
-    ],
-    "src/lib/api": [
-      "scripts/chatRestore.test.ts",
-      "scripts/libao-understand-retry.test.ts",
-      "tests/h3h4-eval.test.ts",
-      "tests/wp12.test.ts"
     ],
     "src/features/libao/libaoIntent": [
       "scripts/day-replan-intent.test.ts",

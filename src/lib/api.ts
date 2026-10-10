@@ -154,24 +154,62 @@ function identityHeaders(userId?: string): Record<string, string> {
   return userId ? { 'X-Identity-Key': getIdentityKey() } : {};
 }
 
+/* ---------------- 维护批 P1-3（2026-10-11）：统一超时 + 幂等 GET 单次重试 ----------------
+ * 此前除 /api/plan/understand（自带 9s+重试）外，get/post/del 都没有超时 ——
+ * 弱网下请求可无限挂起，界面跟着挂死（维护计划 §2.4）。
+ * 纪律：
+ *   · 默认 15s 超时（服务端最慢链路 LLM 40s 的是 chat——但 chat 走独立流式/长请求，
+ *     走本封装的 JSON API 里最慢是 understand 9s / sync；15s 足够宽）；
+ *   · **只有幂等 GET 才重试**（网络异常或 502/503/504，单次，退避 200ms）；
+ *     POST/DELETE 非幂等，绝不自动重发（防重复下单式副作用）；
+ *   · 错误形态不变：仍 throw `HTTP <status>`，调用方零感知。 */
+const DEFAULT_TIMEOUT_MS = 15_000;
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const RETRY_DELAY_MS = 200;
+
+function timeoutSignal(): AbortSignal | undefined {
+  try {
+    return AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  } catch {
+    return undefined; // 极老环境无 AbortSignal.timeout → 不带 signal（与旧行为一致）
+  }
+}
+
 async function post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
     body: JSON.stringify(body),
+    signal: timeoutSignal(),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 async function get<T>(path: string, headers?: Record<string, string>): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { headers: headers ?? {} });
+  const doFetch = (): Promise<Response> =>
+    fetch(`${API_BASE}${path}`, { headers: headers ?? {}, signal: timeoutSignal() });
+  let res: Response;
+  try {
+    res = await doFetch();
+    if (RETRYABLE_STATUS.has(res.status)) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      res = await doFetch(); // 幂等 GET：网关瞬时 5xx 单次重试
+    }
+  } catch {
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    res = await doFetch(); // 幂等 GET：网络级瞬时抖动单次重试
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 async function del<T>(path: string, headers?: Record<string, string>): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers: headers ?? {} });
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: headers ?? {},
+    signal: timeoutSignal(),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
