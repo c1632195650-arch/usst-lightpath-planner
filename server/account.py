@@ -20,8 +20,8 @@
     —— 这是程序行为，不是手工编辑 data/ 二进制（约束文档 §2.1 白纸黑字的例外）。
 
 端点（签名表 mobile-impl-plan §6.4）：
-  POST /api/auth/register  {username, password} → {userId, token, icsToken} | 400/409
-  POST /api/auth/login     {username, password} → {userId, token, icsToken} | 401
+  POST /api/auth/register  {username, password} → {userId, token, icsToken} | 400/409/429
+  POST /api/auth/login     {username, password} → {userId, token, icsToken} | 401/429
 
 ⚠️ 错误一律直接回 `JSONResponse({"error": "<code>"})`，**不走 HTTPException**：
 app.py 的全局 handler 会把 400 重写成 422（schemathesis 契约修复那批，别动它），
@@ -31,6 +31,15 @@ app.py 的全局 handler 会把 400 重写成 422（schemathesis 契约修复那
 F6 页内「复制订阅链接」需要它 —— 客户端不拿到 ics_token 就拼不出
 /api/sync/plan.ics?token= 链接，而日历 App 又填不了 Bearer 头。
 ics_token 本就不敏感于密码（泄露可重置），随登录下发是同一信任面。
+
+📌 维护批 P0-3（2026-10-11）登录/注册失败限速：
+公网部署后登录端点可被无限撞库，且 PBKDF2 20 万轮会被当 CPU 放大器打
+（serve.py:99-103 早就给本地服务做了 10 分钟 5 次锁，公网路由反而裸奔）。
+实现：进程内滑动窗口（按 客户端IP+端点 键），**在跑 PBKDF2 之前**先查窗 ——
+撞库者第 N+1 次请求连哈希都摸不到，直接 429。登录按「失败次数」计窗（成功即清，
+不误伤改完密码的正常用户）；注册按「尝试次数」计窗（注册是全链路最贵的操作，
+只数失败防不住批量注册的 CPU 放大）。逃生门：`LIBAO_RATELIMIT=0` 整体关闭
+（回退到无限速的旧行为）；窗口/阈值可用 LIBAO_RATELIMIT_* 微调。
 """
 import datetime as _dt
 import hashlib
@@ -38,6 +47,8 @@ import os
 import re
 import secrets
 import sqlite3
+import time as _time
+from collections import deque
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -107,6 +118,65 @@ def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
+# ---------- 维护批 P0-3：登录/注册失败限速（进程内滑动窗口） ----------
+# 窗口状态只活在进程里 —— 单进程 uvicorn 部署形态下够用；若未来上多 worker，
+# 攻击者把请求摊到多个 worker 会稀释窗口（届时再考虑挪进库/Redis，见维护计划 P3）。
+_RL_WINDOW_SEC = float(os.environ.get("LIBAO_RATELIMIT_WINDOW_SEC", "600"))   # 10 分钟
+_RL_MAX_LOGIN = int(os.environ.get("LIBAO_RATELIMIT_MAX_LOGIN", "5"))         # 10min/5 次失败
+_RL_MAX_REGISTER = int(os.environ.get("LIBAO_RATELIMIT_MAX_REGISTER", "10"))  # 注册更贵（200k 轮×2）
+
+_rl_failures: dict = {}  # {"login|register:<ip>": deque[float 成败时间戳]} —— 仅记录「失败」
+
+
+def _rl_enabled() -> bool:
+    # 每次调用读 env（而非 import 时定死）：逃生门 LIBAO_RATELIMIT=0 可运行时生效，
+    # 测试也不用 reimport。缺省开启。
+    return os.environ.get("LIBAO_RATELIMIT", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _rl_key(kind: str, request) -> str:
+    host = request.client.host if (request and request.client) else "unknown"
+    return f"{kind}:{host}"
+
+
+def _rl_check(kind: str, request: Request, record: bool = False):
+    """查滑动窗口。超窗 → 返回 429 响应（调用方立即 return，不再碰 PBKDF2）；未超 → None。
+
+    · login：record=False，只统计**失败**（成功即清窗）——正常用户改完密码不受影响；
+    · register：record=True，统计**每一次尝试**（成功也占窗）——注册是全链路最贵的
+      操作（PBKDF2×2），防的是批量注册的 CPU 放大，只数失败等于没防。
+    挂在哈希**之前**是本设计的全部意义：撞库者换不来一次 20 万轮的计算。
+    """
+    if not _rl_enabled():
+        return None
+    key = _rl_key(kind, request)
+    dq = _rl_failures.setdefault(key, deque())
+    now = _time.monotonic()
+    while dq and now - dq[0] > _RL_WINDOW_SEC:
+        dq.popleft()
+    max_attempts = _RL_MAX_LOGIN if kind == "login" else _RL_MAX_REGISTER
+    if len(dq) >= max_attempts:
+        return _err(429, "too_many_attempts")
+    if record:
+        dq.append(now)
+    return None
+
+
+def _rl_record_failure(kind: str, request: Request) -> None:
+    if not _rl_enabled():
+        return
+    _rl_failures.setdefault(_rl_key(kind, request), deque()).append(_time.monotonic())
+
+
+def _rl_clear(kind: str, request: Request) -> None:
+    _rl_failures.pop(_rl_key(kind, request), None)
+
+
+def _rate_limit_state_reset() -> None:
+    """测试专用：清空限速窗口（正常代码不要调）。"""
+    _rl_failures.clear()
+
+
 def _parse_iso(ts: str) -> "_dt.datetime | None":
     """宽容解析 ISO-8601（兼容 `Z` 后缀与 `+00:00`）；解析不了返回 None，由调用方裁决。"""
     try:
@@ -173,7 +243,11 @@ def _err(status: int, code: str) -> JSONResponse:
 
 
 @router.post("/api/auth/register")
-def api_auth_register(body: AuthReq):
+def api_auth_register(body: AuthReq, request: Request):
+    # P0-3：注册按「尝试次数」计窗（含 409 冲突），且查窗挂在 PBKDF2 之前
+    limited = _rl_check("register", request, record=True)
+    if limited is not None:
+        return limited
     username = body.username.strip()
     if not _USERNAME_RE.fullmatch(username):
         return _err(400, "invalid_username")
@@ -194,6 +268,7 @@ def api_auth_register(body: AuthReq):
         user_id = int(cur.lastrowid)
     except sqlite3.IntegrityError:
         # username UNIQUE（NOCASE）冲突 —— 反向断言：重名必须 409，不能静默覆盖
+        # （窗已在入口计入本次尝试，无需重复记录）
         return _err(409, "username_taken")
     finally:
         c.close()
@@ -201,7 +276,11 @@ def api_auth_register(body: AuthReq):
 
 
 @router.post("/api/auth/login")
-def api_auth_login(body: AuthReq):
+def api_auth_login(body: AuthReq, request: Request):
+    # P0-3：查窗挂在 PBKDF2 之前 —— 超窗的请求一次哈希都换不到（防 CPU 放大）
+    limited = _rl_check("login", request)
+    if limited is not None:
+        return limited
     c = _conn()
     try:
         row = c.execute(
@@ -212,9 +291,12 @@ def api_auth_login(body: AuthReq):
         c.close()
     # 用户不存在与密码错误同形 —— 不给撞库者「这个用户名存在」的信号
     if not row:
+        _rl_record_failure("login", request)
         return _err(401, "bad_credentials")
     if not secrets.compare_digest(_hash_password(body.password, row[1]), row[2]):
+        _rl_record_failure("login", request)
         return _err(401, "bad_credentials")
+    _rl_clear("login", request)
     c2 = _conn()
     try:
         got = c2.execute("SELECT ics_token FROM users WHERE id=?", (int(row[0]),)).fetchone()
