@@ -36,21 +36,14 @@ DB_PATH = os.environ.get("LIBAO_MEMORY_DB") or os.path.join(_HERE, "..", "data",
 SUMMARIZE_EVERY = 4      # 每累积 4 轮压缩一次（不是每轮都压）
 RECENT_TURNS = 6         # 短期保留最近 6 条消息
 
-# ---------- 环境变量（与 app.py 同套） ----------
+# ---------- 环境变量（与 app.py 同套；维护批 P1-10 收敛为 envconfig 单一实现） ----------
 def _load_env():
-    p = os.path.join(_HERE, ".env")
-    if os.path.exists(p):
-        for line in open(p, encoding="utf-8"):
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
+    from envconfig import load_server_env
+    load_server_env()
 
 _load_env()
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
+from envconfig import llm_settings  # noqa: E402
+LLM_BASE_URL, LLM_API_KEY, LLM_MODEL = llm_settings()
 
 # ---------- 建库 ----------
 def _conn():

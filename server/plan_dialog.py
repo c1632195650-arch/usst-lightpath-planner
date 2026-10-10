@@ -39,21 +39,14 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# 独立跑（python -m server.plan_dialog / 评测脚本直连）时也 能拿到 Key
+# 独立跑（python -m server.plan_dialog / 评测脚本直连）时也能拿到 Key
+# （维护批 P1-10：加载实现收敛到 envconfig 单一来源，这里只保留「缺 Key 才加载」的守卫）
 if not os.environ.get("LLM_API_KEY"):
-    try:
-        with open(os.path.join(_HERE, ".env"), encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    os.environ.setdefault(k.strip(), v.strip())
-    except OSError:
-        pass
+    from envconfig import load_server_env
+    load_server_env()
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
+from envconfig import llm_settings  # noqa: E402
+LLM_BASE_URL, LLM_API_KEY, LLM_MODEL = llm_settings()
 
 UNDERSTAND_TIMEOUT = float(os.environ.get("PLAN_UNDERSTAND_TIMEOUT", "8"))
 UNDERSTAND_MAX_TOKENS = 300

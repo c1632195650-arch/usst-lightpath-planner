@@ -121,6 +121,16 @@ async def _body_size_guard(request: Request, call_next):
     return await call_next(request)
 
 
+# ---------- 维护批 P1-10（2026-10-11）：TrustedHost 中间件（默认不启用） ----------
+# Host 头伪造是反向代理/缓存投毒的常见跳板（OWASP）（维护计划红旗 S12 的加固项）。
+# 默认**不启用**（行为零变化）：服务器设 `LIBAO_TRUSTED_HOSTS="域名,IP"` 后，
+# Host 不在名单内的请求将被 400 拒绝 —— 上域名/上 TLS（P0-2）时一并配置。
+_LIBAO_TRUSTED_HOSTS = [h.strip() for h in os.environ.get("LIBAO_TRUSTED_HOSTS", "").split(",") if h.strip()]
+if _LIBAO_TRUSTED_HOSTS:
+    from fastapi.middleware.trustedhost import TrustedHostMiddleware
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_LIBAO_TRUSTED_HOSTS)
+
+
 # ---------- 维护批 P0-1（2026-10-11）：身份属主校验（防 IDOR） ----------
 # 红旗 S1：/api/chat、/api/chat/history、/api/memory/* 的 user_id/session_id 全由
 # 客户端自报，公网上任何人可读任意会话历史、确认/删除任意用户的记忆事实、
@@ -188,21 +198,11 @@ def _fact_owner_mismatch(fact_id: int, user_id: str) -> bool:
     f = memory._get_fact(fact_id)
     return f is None or f.get("user_id") != (user_id or "").strip()
 
-# ---------- 环境变量 ----------
-def _load_env(path):
-    if not os.path.exists(path):
-        return
-    for line in open(path, encoding="utf-8"):
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
+# ---------- 环境变量（维护批 P1-10：_load_env 收敛为 envconfig 单一实现） ----------
+from envconfig import load_env, llm_settings  # noqa: E402
 
-_load_env(os.path.join(_HERE, ".env"))
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
+load_env(os.path.join(_HERE, ".env"))
+LLM_BASE_URL, LLM_API_KEY, LLM_MODEL = llm_settings()
 
 # 调试开关（默认关，关时行为与本开关不存在时**完全一致**）：
 #   LIBAO_DEBUG=1 python server/app.py
