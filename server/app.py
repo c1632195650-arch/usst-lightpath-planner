@@ -89,6 +89,36 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
+# ---------- 维护批 P0-4（2026-10-11）：请求体大小上限 ----------
+# 此前 /api/import_pdf 是 `await request.body()` 无界读、sync PUT 无大小约束 ——
+# 一次大 POST 就能把进程内存/SQLite 撑爆（维护计划红旗 S5/S6）。
+# 实现：BaseHTTPMiddleware 在 body 解析前查 Content-Length，超限直接 413，
+# 正常流量零感知。逃生门：`LIBAO_MAX_BODY_MB=0` 整体关闭（回到无上限旧行为）；
+# PDF 通道单独给更宽的额度（课表 PDF 几 MB 属正常）。
+# 已知边界：按 header 判断 —— 分块传输（chunked，无 Content-Length）绕过本闸；
+# 浏览器/axios 对定长 body 都会带该头，残余风险记入维护计划 P3（流式计数）。
+_PDF_IMPORT_PATHS = ("/api/import_pdf", "/timetable/api/import_pdf")
+
+
+def _body_limit_mb(path: str) -> float:
+    """该路径允许的最大 body（MB）。0 = 不限。每次请求现读 env，便于运行时调与测试。"""
+    if path in _PDF_IMPORT_PATHS:
+        return float(os.environ.get("LIBAO_MAX_PDF_MB", "12"))
+    return float(os.environ.get("LIBAO_MAX_BODY_MB", "2"))
+
+
+@app.middleware("http")
+async def _body_size_guard(request: Request, call_next):
+    limit_mb = _body_limit_mb(request.url.path)
+    if limit_mb > 0:
+        cl = request.headers.get("content-length")
+        if cl and cl.isdigit() and int(cl) > limit_mb * 1024 * 1024:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large", "detail": f"请求体超过 {limit_mb:g}MB 上限"},
+            )
+    return await call_next(request)
+
 # ---------- 环境变量 ----------
 def _load_env(path):
     if not os.path.exists(path):
