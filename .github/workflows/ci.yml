@@ -1,0 +1,80 @@
+# 光溯 CI（维护批 P1-6，2026-10-11）
+# ============================================================
+# 定位：把本地自研门禁搬到云端兜底 —— 本仓此前无任何 CI（.github 不存在），
+# 质量完全依赖本地四闸门，「换机器、忘跑、绕跑」都无拦截（维护计划 §3.5）。
+#
+# 原则（与 AGENTS.md 门禁纪律一致，不自造新流程）：
+#   · 阻断项 = 本地 gate_overnight 的同款四件套（typecheck / test:engine /
+#     test:ui / capability_map --check）+ P1-8 版本单源校验；
+#   · 咨询项（continue-on-error）= 密钥扫描 gitleaks、依赖审计 pip-audit/npm audit、
+#     Bandit SAST —— 首日不阻断（历史里可能有存量告警，见 P2-6 历史清理），
+#     告警清零后应改回阻断（BLOCKERS 留痕跟踪）。
+# 跑在 windows-latest：与主力开发环境（win32 + Node 24）同构，避免平台差噪音。
+
+name: ci
+
+on:
+  push:
+    branches: [beta-v2, dev, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查（阻断）
+        run: npm run typecheck
+
+      - name: 引擎测试（阻断，基线只增不减）
+        run: npm run test:engine
+
+      - name: UI/脚本测试（阻断）
+        run: npm run test:ui
+
+      - name: 能力清单一致性（阻断：新增/删除测试必须重新生成 capability-map）
+        run: node scripts/capability_map.mjs --check
+
+      - name: 版本号单源校验（阻断：四处漂移即红）
+        run: node scripts/release_version.mjs
+
+      # ---------- 以下为咨询项：首日不阻断，告警清零后改回阻断 ----------
+      - name: 密钥扫描 gitleaks（咨询）
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python 依赖审计 pip-audit（咨询）
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r server/requirements.txt
+
+      - name: Python SAST Bandit（咨询）
+        continue-on-error: true
+        run: |
+          pip install bandit
+          bandit -r server -ll -q
+
+      - name: npm 依赖审计（咨询）
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=critical
