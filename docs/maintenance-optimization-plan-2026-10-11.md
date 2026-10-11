@@ -86,7 +86,7 @@
 | C2 | 数据缺口：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 | progress-status §8 | L1 问答命中率 | P2-2 |
 | C3 | 57 篇公众号文章缺全文（搜狗 token 过期） | progress-status §8 | 检索召回 | P2-3 |
 | C4 | 决赛材料（申报书/PPT/视频）未启动，10 月底截止 | progress-status §8 | 比赛 | P2-4 |
-| C5 | FOCUS DAYS「选择想安排的日期」是死开关（`selectedDays` 无引擎消费方），需在三选一方案里拍板 | BLOCKERS 2026-10-07 | 交互诚实性 | P2-5 |
+| C5 | ~~FOCUS DAYS 死开关~~ **已销案（2026-10-11 复核）**：W6-A（2026-10-08）已按「A 硬约束」落地 —— 引擎消费 `construct.ts:369`、契约 `model.ts:455`、守护测试 `tests/focus-days.test.ts`（双变异 RV） | ~~BLOCKERS 2026-10-07 条~~ 该条过期已销案 | 无 | ~~P2-5~~ |
 | C6 | `public/my_schedule.json` 公网 404（演示课表回落） | BLOCKERS | 演示效果 | P1-7 |
 | C7 | 组件库 19 个组件仅 5 处引用、13 处手写表单 | BLOCKERS | 维护成本 | P3 决策项 |
 | C8 | 公网侧无用户注销/数据导出（serve.py 有，FastAPI 公网侧没有）；无隐私政策/用户协议 | 推广评估 §5 | 合规 | P3-1 |
@@ -318,7 +318,7 @@ GitHub Actions（跑现有 `gate_overnight.mjs` 即可，不自造新流程）+ 
 | P1-3 | `src/lib/api.ts` 统一超时（默认 15s）与幂等 GET 单次重试；对齐 understand 端点既有模式（api.ts:363-391） | L1 | 现有 ui 测试全绿；超时/重试的假计时器测试 | 弱网模拟下 UI 不挂死 | 0.5d |
 | P1-4 | 轻量错误聚合：`except Exception` 统一走 `log_event(level, scope, msg)` 写 JSONL；不做外部上报（守住隐私主张） | L0/L1 | 新增脚本测试 | 日志可按 scope 检索 | 1d |
 | P1-5 | 后端授权/LWW 测试补齐：越权矩阵测试（P0-1 的 RV）、sync LWW Python 单测（含未来时间戳、并集合并）、account 单测；`capability_map.mjs --write` 纳入守护 | L0 | 纯新增；先证明「关实现必红」 | capability-map orphans=0 保持 | 1.5d |
-| P1-6 | CI（GitHub Actions）+ 工具链：workflow 跑 typecheck + test:engine + test:ui + `capability_map.mjs --check`；新增 gitleaks、pip-audit、npm audit、Bandit 步骤（gate_overnight 基线已是动态推导，BLOCKERS 对应条可销案） | L0 | CI 只读仓，不改产物 | PR 红绿可见；密钥扫描零告警 | 1d |
+| P1-6 | CI（GitHub Actions）+ 工具链：workflow 跑 typecheck + test:engine + test:ui + `capability_map.mjs --check`；新增 gitleaks、pip-audit、npm audit、Bandit 步骤（gate_overnight 基线已是动态推导，BLOCKERS 对应条可销案） | L0 | CI 只读仓，不改产物 | PR 红绿可见；密钥扫描零告警 | 1d。**侦察（2026-10-11）**：`npm audit --omit=dev` 官方源实测 **0 漏洞** → 该步可先行转阻断；gitleaks/pip-audit/bandit 待首次 CI 结果逐项转。注意 npmmirror 不支持 audit 端点，CI 需走官方 registry |
 | P1-7 | 演示资产修复：`public/my_schedule.json` 补真实课表或明确回落文案；`e2e-journey.mjs` 旧锚点同步 | L0 | E2E 77 断言绿 | 演示链路无 404 | 0.5d |
 | P1-8 | 版本号单源：`scripts/release_version.mjs` 从单一来源（package.json）生成/校验 version.json、build.gradle、APK 命名；发布 checklist 落 docs | L0（校验器）→ L2（下次发版切换） | 校验器不匹配即 exit 1，进 CI | 四处漂移即红 | 0.5d |
 | P1-9 | 移动端存储加固：`allowBackup=false`；评估 token 迁移 Capacitor Preferences（加密存储插件评估另议） | L1（下次发版生效） | mobile 既有 7 个测试域回归 | MASVS-STORAGE 对应项 | 0.5d |
@@ -328,12 +328,12 @@ GitHub Actions（跑现有 `gate_overnight.mjs` 即可，不自造新流程）+ 
 
 | ID | 动作 | 分级 | 备注 |
 |---|---|---|---|
-| P2-1 | beta-v2 → dev → main 人工评审合并（合并后重跑 `capability_map.mjs --write`） | L2 | BLOCKERS G 批既定 |
+| P2-1 | beta-v2 → dev → main 人工评审合并（合并后重跑 `capability_map.mjs --write`） | L2 | **侦察（2026-10-11）**：与 origin/dev 仍零共同祖先（+340/−150），dev 顶端停在 2026-09-20。实为二选一：allow-unrelated-histories 真合并，或 dev 直接换代为 beta-v2（需 CY 确认 dev 独有内容是否已全部移植） |
 | P2-2 | 数据补爬：生活服务/数字校园（找后勤保障处、信息化办官网） | L0 | 复用 scripts/ 五步流水线，勿重爬存量 |
 | P2-3 | 57 篇缺全文文章跑 `scripts/fulltext.py` 补抓 | L0 | 需要 token 有效期注意 |
 | P2-4 | 决赛材料（申报书/PPT/视频）：素材直接取自本文 §1.2 优势清单 + capability-map 数据 | — | 10 月底截止，建议与 P1 并行 |
-| P2-5 | FOCUS DAYS 死开关拍板（A 硬约束/B 软偏好/C 诚实文案） | L2 | CY 拍板后按铁律 2/3 走 |
-| P2-6 | git 历史清理：`git filter-repo` 移除历史中的 `data/lightpath.db`；**推远端/公开化之前必做** | L2 | 不可逆操作，白天人工，先全量备份 |
+| P2-5 | ~~FOCUS DAYS 死开关~~ **销案**：W6-A 已按「A 硬约束」完整落地（引擎消费/契约申报/RV 测试/golden 零漂移），BLOCKERS 2026-10-07 条过期 | — | 2026-10-11 复核销案，零改动 |
+| P2-6 | git 历史清理：`git filter-repo` 移除历史中的 `data/lightpath.db`；**推远端/公开化之前必做** | L2 | **侦察（2026-10-11）**：blob 45KB×3 提交（`dc6d4a6`/`672d69f`/`5d7992d`），且**已随 10-08 推送在 origin/beta-v2 上**；清理后需全分支 force push + 协作者重新 clone，先 bundle 备份 |
 | P2-7 | 方法库尾巴：QUESTION_BANK ≥60 道、contraindications、注释过期修正 | L0 | 对应守护测试同步 |
 | P2-8 | 真机走查（Mate 40E）：按 MASVS-NETWORK/STORAGE 清单 + markdown 渲染确认（LLM05）+ 推广评估遗留项逐条过 | L0 | 走查结果回写 mobile-line 文档 |
 | P2-9 | 文档漂移清账：ADR-008 去重、progress-status PARTIALS 销案、门禁基线数字、推广评估中已被 10-08 修复推翻的条目 | L0 | 顺手项，合并前清完 |
