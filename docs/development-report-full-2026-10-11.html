@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>光溯开发报告（完整版） · 历程叙事 × 综合分析——三十个昼夜，一百一十二路诸侯</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/style.css">
+<style>
+  :root{
+    --paper:#f4edda; --paper2:#ece1c4; --paper3:#e4d6b2;
+    --ink:#2e2820; --ink2:#6a5f4b; --ink3:#93866c;
+    --cinnabar:#9c3423; --seal:#b03a2a; --gold:#8f6f33; --line:#c6b48a;
+    --night:#3d4d6b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{background:#d8cdae;}
+  body{
+    font-family:'LXGW WenKai Screen','Kaiti SC','STKaiti','KaiTi','楷体',serif;
+    color:var(--ink); line-height:2; font-size:17px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.012) 0 1px, transparent 1px 28px),
+      radial-gradient(ellipse at 50% 0%, #f7f1e0 0%, var(--paper) 46%, #e9dcb9 100%);
+    overflow-x:hidden;
+  }
+  .scroll{max-width:920px; margin:0 auto; padding:34px 46px 80px; position:relative;}
+  .frame{border:1px solid var(--line); outline:3px double var(--line); outline-offset:5px;
+    padding:44px 52px 64px; background:rgba(255,252,242,.28);}
+
+  /* ============ 卷首 ============ */
+  .cover{text-align:center; padding:8px 0 30px; position:relative;}
+  .cover .band{
+    font-size:12.5px; letter-spacing:.35em; color:var(--ink2);
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    padding:7px 0; margin:0 30px 38px;
+  }
+  .cover h1{
+    font-size:72px; letter-spacing:.18em; font-weight:700; color:var(--ink);
+    margin:10px 0 6px; text-shadow:0 1px 0 rgba(255,255,255,.5);
+  }
+  .cover h1 .zhu{color:var(--cinnabar);}
+  .cover .sub{font-size:19.5px; letter-spacing:.14em; color:var(--ink2); margin-bottom:22px;}
+  .cover .sub b{color:var(--cinnabar); font-weight:700;}
+  .seal{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:112px; height:112px; border:3px solid var(--seal); border-radius:10px;
+    color:var(--seal); font-size:30px; font-weight:700; letter-spacing:.1em;
+    line-height:1.35; text-align:center; transform:rotate(-7deg);
+    box-shadow:inset 0 0 0 2px rgba(176,58,42,.25), 0 0 0 1px rgba(176,58,42,.15);
+    background:rgba(176,58,42,.045); padding:8px;
+  }
+  .cover .seal{position:absolute; right:26px; top:70px;}
+  .epi{margin:22px auto 4px; max-width:600px; font-size:16.5px; color:var(--ink2);}
+  .epi .verse{font-size:19px; color:var(--ink); letter-spacing:.1em;}
+  .epi .who{font-size:13.5px; color:var(--ink3); margin-top:6px;}
+  .fanli{
+    margin:20px auto 0; max-width:640px; font-size:12.5px; color:var(--ink3);
+    line-height:1.95; text-align:justify; border:1px dashed var(--line); padding:10px 16px;
+    background:rgba(236,225,196,.4);
+  }
+  .fanli b{color:var(--gold); font-weight:400; letter-spacing:.2em;}
+  .cover .meta{margin-top:20px; font-size:13.5px; color:var(--ink3); letter-spacing:.05em;}
+
+  /* ============ 总账卡 ============ */
+  .ledger{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:34px 0 8px;}
+  .card{
+    border:1px solid var(--line); background:rgba(255,252,242,.5);
+    padding:16px 14px 12px; text-align:center; position:relative;
+  }
+  .card::after{content:''; position:absolute; inset:3px; border:1px solid rgba(198,180,138,.45); pointer-events:none;}
+  .card .num{font-size:31px; font-weight:700; color:var(--cinnabar); line-height:1.3;}
+  .card .num small{font-size:17px;}
+  .card .lab{font-size:14.5px; color:var(--ink); margin-top:2px; letter-spacing:.05em;}
+  .card .fn{font-size:11.5px; color:var(--ink3); line-height:1.65; margin-top:6px;}
+
+  /* ============ 章节 ============ */
+  .zhang{margin-top:54px; padding-top:26px; border-top:3px double var(--line); position:relative;}
+  .ch-no{
+    position:absolute; top:-21px; left:50%; transform:translateX(-50%);
+    background:var(--paper); padding:0 16px; color:var(--gold);
+    font-size:14px; letter-spacing:.4em; text-indent:.4em; white-space:nowrap;
+  }
+  .ch-head{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; margin-bottom:4px;}
+  .ch-date{font-size:34px; color:var(--cinnabar); font-weight:700; letter-spacing:.08em;}
+  .ch-title{font-size:22px; font-weight:700; letter-spacing:.04em;}
+  .ch-wk{font-size:13px; color:var(--ink3);}
+  .ch-time{font-size:13.5px; color:var(--ink3); margin-bottom:16px; letter-spacing:.04em;}
+  .prose p{text-indent:2em; margin:10px 0; text-align:justify;}
+  .prose p.noind{text-indent:0;}
+  .prose .em{color:var(--cinnabar);}
+  .prose .lt{color:var(--ink2);}
+  .prose .btt{font-weight:700;}
+  .stamp{
+    position:absolute; right:6px; top:34px; width:86px; height:86px;
+    border:2.5px solid var(--seal); border-radius:8px; transform:rotate(6deg);
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    color:var(--seal); font-size:21px; font-weight:700; line-height:1.4; letter-spacing:.06em;
+    background:rgba(176,58,42,.04); box-shadow:inset 0 0 0 1.5px rgba(176,58,42,.22);
+    padding:6px; opacity:.92;
+  }
+  .zhang:has(.stamp) .ch-head,.zhang:has(.stamp) .ch-time{padding-right:116px;}
+
+  /* ============ 分部与数据表 ============ */
+  .part{margin-top:64px; border-top:3px double var(--line); text-align:center; padding-top:16px;}
+  .part .pname{font-size:24px; font-weight:700; color:var(--cinnabar); letter-spacing:.4em;}
+  .part .pdesc{font-size:13px; color:var(--ink3); margin-top:4px; letter-spacing:.08em;}
+  .rpt{width:100%; border-collapse:collapse; margin:12px 0 6px; font-size:13.5px; line-height:1.85;}
+  .rpt th{border:1px solid var(--line); background:rgba(236,225,196,.75); padding:7px 10px; text-align:left; font-weight:700; color:var(--ink); white-space:nowrap;}
+  .rpt td{border:1px solid rgba(198,180,138,.55); padding:7px 10px; color:var(--ink2); vertical-align:top; text-align:left;}
+  .rpt td b,.rpt td .k{color:var(--cinnabar); font-weight:700;}
+  .quote{
+    margin:14px 0 14px 2em; padding:10px 16px; border-left:3px solid var(--cinnabar);
+    background:rgba(236,225,196,.55); font-size:15.5px; color:#463d2e;
+  }
+  .quote .src{display:block; font-size:12px; color:var(--ink3); margin-top:4px; letter-spacing:.03em;}
+  .stats{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px;}
+  .chip{
+    border:1px solid var(--line); background:rgba(255,252,242,.55);
+    font-size:13px; color:var(--ink2); padding:3px 12px; border-radius:2px;
+  }
+  .chip b{color:var(--cinnabar); font-weight:700;}
+  .shiliao{
+    margin-top:16px; padding-top:9px; border-top:1px dashed var(--line);
+    font-size:12.5px; color:var(--ink3); line-height:1.9; text-align:justify;
+  }
+  .shiliao b{color:var(--gold); font-weight:400; letter-spacing:.2em;}
+
+  /* ============ 插叙 · 同一片夜空 ============ */
+  .cutaway{
+    margin:20px 0 18px; padding:14px 18px 12px; position:relative;
+    border:1px dashed #97a0b5; background:rgba(61,77,107,.055); border-radius:3px;
+  }
+  .cutaway .ctag{
+    font-size:12.5px; letter-spacing:.3em; color:var(--night); font-weight:700;
+    display:block; margin-bottom:6px;
+  }
+  .cutaway p{font-size:15px; line-height:1.95; color:#414a5e; text-indent:2em; text-align:justify; margin:6px 0;}
+  .cutaway p.noind{text-indent:0;}
+  .cutaway .ctnote{font-size:11.5px; color:#8a93a8; display:block; margin-top:8px; text-indent:0;}
+
+  /* ============ 战况板 ============ */
+  .mapgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px;}
+  .panel{border:1px solid var(--line); background:rgba(255,252,242,.5); padding:14px 16px;}
+  .panel h5{font-size:16px; color:var(--cinnabar); letter-spacing:.12em; margin-bottom:8px;}
+  .panel ul{list-style:none;}
+  .panel li{
+    font-size:13.5px; color:var(--ink2); line-height:1.85; padding:4px 0;
+    border-bottom:1px dashed rgba(198,180,138,.5); text-align:justify;
+  }
+  .panel li:last-child{border-bottom:none;}
+  .panel li b{color:var(--ink); font-weight:700;}
+  .panel li .st{color:var(--gold); font-size:12px; white-space:nowrap;}
+
+  /* ============ 群雄谱 ============ */
+  .roster{margin-top:14px; border:1px solid var(--line); background:rgba(255,252,242,.5);}
+  .rrow{display:flex; gap:12px; padding:7px 14px; border-bottom:1px solid rgba(198,180,138,.45); align-items:baseline;}
+  .rrow:last-child{border-bottom:none;}
+  .rrow .rn{width:112px; flex:none; font-size:14.5px; font-weight:700; color:var(--night); letter-spacing:.04em;}
+  .rrow .rt{flex:1; font-size:13.5px; color:var(--ink2); line-height:1.7; text-align:justify;}
+  .rrow .rk{flex:none; width:86px; text-align:right; font-size:11.5px; color:var(--ink3);}
+  .rrow.mine{background:rgba(156,52,35,.07);}
+  .rrow.mine .rn{color:var(--cinnabar);}
+  .rrow.mine .rk{color:var(--cinnabar); font-weight:700;}
+  .rhint{font-size:12px; color:var(--ink3); margin-top:8px; line-height:1.9;}
+
+  /* ============ 图表 ============ */
+  .chartbox{margin:18px 0 8px; border:1px solid var(--line); background:rgba(255,252,242,.5); padding:16px 16px 10px;}
+  .chartbox h4{font-size:16px; color:var(--ink); letter-spacing:.08em; margin-bottom:2px;}
+  .chartbox .cap{font-size:12px; color:var(--ink3); margin-bottom:10px;}
+  .legend{font-size:12.5px; color:var(--ink2); margin-top:6px;}
+  .legend .sw{display:inline-block; width:11px; height:11px; vertical-align:-1px; margin:0 4px 0 10px;}
+  svg text{font-family:'LXGW WenKai Screen','Kaiti SC','STKaiti','KaiTi',serif;}
+
+  /* ============ 功臣谱 ============ */
+  .heroes{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;}
+  .hero{border:1px solid var(--line); background:rgba(255,252,242,.5); padding:16px 18px; position:relative;}
+  .hero .hname{font-size:20px; font-weight:700; color:var(--cinnabar); letter-spacing:.1em;}
+  .hero .hrole{font-size:13px; color:var(--ink3); margin:2px 0 8px; letter-spacing:.06em;}
+  .hero p{font-size:14px; line-height:1.95; color:var(--ink2); text-align:justify;}
+  .hero p b{color:var(--ink); font-weight:400;}
+  .hero .hq{font-size:13px; color:var(--cinnabar); margin-top:8px;}
+
+  /* ============ 尾声 ============ */
+  .coda{margin-top:56px; border-top:3px double var(--line); padding-top:34px; text-align:center;}
+  .coda h3{font-size:26px; letter-spacing:.3em; color:var(--ink); margin-bottom:16px;}
+  .coda .prose{text-align:left;}
+  .sign{margin-top:30px; font-size:16px; color:var(--ink2); letter-spacing:.2em;}
+  .sign .date{display:block; font-size:13.5px; color:var(--ink3); margin-top:4px;}
+  .fine{margin-top:36px; font-size:11.5px; color:var(--ink3); line-height:1.9; text-align:justify; border-top:1px dashed var(--line); padding-top:12px;}
+
+  @media (max-width:760px){
+    .scroll{padding:16px 14px 40px;} .frame{padding:22px 16px 30px;}
+    .cover h1{font-size:44px;} .ledger{grid-template-columns:1fr 1fr;}
+    .heroes{grid-template-columns:1fr;} .stamp{display:none;}
+    .ch-date{font-size:26px;} .cover .seal{position:static; margin-top:12px;}
+    .mapgrid{grid-template-columns:1fr;} .rrow .rk{display:none;}
+  }
+  @media print{
+    html,body{background:#fdf9ee;} .frame{outline:none;}
+    .zhang{break-inside:avoid-page;}
+  }
+</style>
+</head>
+<body>
+<div class="scroll"><div class="frame">
+
+  <!-- ================= 卷首 ================= -->
+  <header class="cover">
+    <div class="band">第十八届「光电杯」创新设计大赛 · 上海理工大学光电信息与计算机工程学院 · 主题「智逐光影，溯梦未来」</div>
+    <div class="seal">晋级<br>决赛</div>
+    <h1>光溯<span class="zhu">开发报告</span></h1>
+    <div class="sub">第一部 <b>历程叙事</b>（纪实小说《烽火录》） × 第二部 <b>综合分析</b> —— 三十个昼夜 · 一百一十二路诸侯</div>
+    <div class="epi">
+      <div class="verse">「战争的伟力之最深厚的根源，存在于民众之中。」</div>
+      <div class="who">——《论持久战》。谨以此卷，记两个学生、一只名叫梨宝的向导、三支夜行军的纵队，与同一片夜空下的另外一百一十一扇窗。</div>
+    </div>
+    <div class="fanli"><b>体例</b>｜本报告为完整合并版，分两部：<b>第一部 · 历程叙事</b>（纪实小说《烽火录》），<b>第二部 · 综合分析</b>（全部数据可复核）。凡日期、人物、数字、引语，皆有所本，见于各章「史料」与附录 A；凡灯火、神色与心事，系据当日指令、战报与拍板记录所作的揣测；凡对手窗前诸段（插叙），系放榜后依据名册名目与技术路数补写的推演——当夜互不相识，唯灯火同明。「112 组」及放榜结果为队内留存名册。</div>
+    <div class="meta">首枚 commit 2026-09-07 16:24 · 末枚 commit 2026-10-08 09:14 · 两条历史线合计 472 枚 · 有提交的日子 21 天，全休 11 天</div>
+  </header>
+
+  <div class="ledger">
+    <div class="card"><div class="num">30<small>日</small>17<small>时</small></div><div class="lab">首尾两枚 commit 之间</div><div class="fn">2026-09-07 16:24 → 2026-10-08 09:14</div></div>
+    <div class="card"><div class="num">472<small> 枚</small></div><div class="lab">commit</div><div class="fn">dev 线 150 ＋ beta-v2 线 322</div></div>
+    <div class="card"><div class="num">12.9<small> 万行</small></div><div class="lab">代码与文字</div><div class="fn">795 个文件：前端 5.05 万 / 流水线 2.67 万 / 测试 1.79 万 / 文档 2.28 万 / 后端 0.61 万</div></div>
+    <div class="card"><div class="num">1,300<small>+</small></div><div class="lab">测试用例</div><div class="fn">151 个测试文件；引擎基线 312 → 860，只增不减</div></div>
+    <div class="card"><div class="num">520<small> 篇</small></div><div class="lab">知识粮仓</div><div class="fn">515 篇全文检索 · 1873 向量块 · 17MB 数据库 · 147 地点 · 1600+ 路网节点</div></div>
+    <div class="card"><div class="num">14<small> 个</small></div><div class="lab">安装包版本</div><div class="fn">v0.1.0 → v0.4.9，其中十三个生于最后五十七小时</div></div>
+    <div class="card"><div class="num">55<small>%</small></div><div class="lab">深夜提交占比</div><div class="fn">主线 322 枚中 177 枚落在 22:00–06:00；凌晨 0–5 时 159 枚</div></div>
+    <div class="card"><div class="num" style="font-size:25px">112 : 112</div><div class="lab">诸侯 × 踩坑</div><div class="fn">同台对手 112 组；BLOCKERS 里 112 条阻塞记录——两组数字，都闯过来了</div></div>
+  </div>
+
+  <!-- ================= 第一部分界 ================= -->
+  <div class="part" id="part1"><div class="pname">第一部 · 历程叙事</div><div class="pdesc">纪实小说《烽火录》——楔子与十四章，逐场附史料引注</div></div>
+
+  <!-- ================= 楔子 ================= -->
+  <section class="zhang" id="z0">
+    <div class="ch-no">楔子</div>
+    <div class="ch-head"><span class="ch-date">九月初</span><span class="ch-title">同一片夜空</span></div>
+    <div class="ch-time">宣战书是自家大本营贴出来的</div>
+    <div class="prose">
+      <p>九月的上海理工大学，蝉声还没有退干净。光电信息与计算机工程学院的公众号推了一篇新帖，八个字的标题底下列着几行速查：报名截止九月二十八日二十四时，初赛评审十月中上旬，十月下旬现场答辩；官方群里每天有人问东问西。第十八届「光电杯」创新设计大赛，<span class="btt">学术部主办</span>——对后来在其中一栋楼里敲代码的两个人来说，这场战争的宣战书，是自家大本营贴出来的。</p>
+      <p>谁也没有把这件事说得很郑重。它起初只是两个本科生的一次心动：第一个真正意义上的项目，第一场正儿八经的比赛。起初的设想带着少年气——做一个排程工具，树一面「留白率」的旗，跟内卷对着干。旗是他自己缝的。他不会想到，一个月后的某个傍晚，他会亲手把这面旗从帅位上请下来；更不会想到，从按下第一枚 commit 到决赛放榜，这场仗要打穿三十个昼夜，卷进一百一十二路人马。</p>
+      <p>而在故事开始的地方，只有一间亮着灯的屋子、两台电脑，和几行还没人读过的军规。</p>
+    </div>
+  </section>
+
+  <!-- ================= 第一章 ================= -->
+  <section class="zhang" id="z1">
+    <div class="ch-no">第一章</div>
+    <div class="ch-head"><span class="ch-date">九月七日</span><span class="ch-title">军法——比功能先到岗的，是纪律</span><span class="ch-wk">星期一 · 开学日</span></div>
+    <div class="ch-time">16:24 — 19:32 · 当日六枚 commit · dev 线起点</div>
+    <div class="prose">
+      <p>下午四时二十四分，第一枚 commit 落地：「初始脚手架（Vite+React+TS+Tailwind，契约层/UI 组件/常量层就绪）」。没有豪言。一个干干净净的空壳，像大战前刚插进地里的一面空旗。</p>
+      <p>照常理，下一枚该是功能。他没有。两小时后落下的两枚 commit，一份叫《协作注意事项》，一份叫《队友加入指南》——全是军法：改动必提交，提交必过测试，禁区文件一行不许碰。军队里管这个叫《三大纪律八项注意》：一切行动听指挥，是门禁；不拿群众一针一线，是禁区；一切缴获要归公，是一切改动入档。第三枚的 message 里写着七个字，后来被反复证明是全项目最贵的一笔投资——</p>
+      <div class="quote">「docs: 写入协作红线(AGENTS.md)与队友加入指南，防止 agent 乱改」<span class="src">—— dev 线 commit · 2026-09-07 18:41</span></div>
+      <p>他比谁都清楚自己将要驱使的是什么：一群不领饷、不睡觉、也从不害羞的兵。兵不睡觉，没关系；兵<span class="em">报喜不报忧</span>，才是要命的。所以军法立的不是规矩，是诚信——这在后来每一次通宵里都被验证：夜里打仗的部队，最怕的不是打输，是打输了还说赢了。</p>
+      <p>当晚十九点，产品路线图与 PRD 入库。距报名截止二十一天，距决赛一个半月。开学第一天，别人在领教材，他在给自己还没点名的部队发军服。</p>
+    </div>
+    <div class="shiliao"><b>史料</b>｜dev 分支 2026-09-07 六枚 commit（16:24 脚手架 → 19:32 PRD）；AGENTS.md 第一版。</div>
+  </section>
+
+  <!-- ================= 第二章 ================= -->
+  <section class="zhang" id="z2">
+    <div class="ch-no">第二章</div>
+    <div class="ch-head"><span class="ch-date">九月初八至十四</span><span class="ch-title">南泥湾——自己动手，丰衣足食</span><span class="ch-wk">dev 线</span></div>
+    <div class="ch-time">兵马未动，粮草先行 · 255 篇起家</div>
+    <div class="prose">
+      <p>九月八日的进度快照写着：「梨宝 RAG 后端 ＋ 255 篇数据 ＋ 前端重构」。兵还没成建制，粮仓先开了张。同日，三场开荒连发，史称 data-batch2/3/4。</p>
+      <p>第一仗收公众号：CY 把六十多条链接一条条粘给采集兵，外加两张校历高清原图——他此刻的角色不像统帅，像蹲在田埂上数秧苗的生产队长。抓回六十一篇，五十三篇入库，家底 255 → 308。第二仗补三缺口：体育馆、宿舍、图书馆。第三仗最漂亮：从「上理校园圈」一篇推文里刨出二十多个官网站点，十六路全通，二十三分钟收进二百四十六条，去重后净增二百零二——家底一举扩到五百一十五篇。</p>
+      <p>开荒也有歉年。校历条目原文只有二百四十七字，切块恰好切到第十六至二十七周——有人问开学时间，梨宝答「8 月底开学」。重写一千三百六十八字结构化文本之后，它精确答出了「9 月 7 日」。<span class="lt">恰好，正是这座仓库第一枚 commit 的日子。兵荒那年饿出来的教训，后来养成了习惯：每一条数据都要问一句，它长在第几周。</span></p>
+      <p>还有一场「大功率冤案」：问「宿舍能用大功率电器吗」，宿管条例明明在库（四百瓦），却因检索里空格是「与」语义、文档须同时命中「大功率」和「400W」两词而全军覆没，梨宝只好老实交代「没查到官方明文」——话是诚实的，底下压着一个事实错误。整风方案：原词「与」、扩展词「或」打六折，再配十六条口语→术语映射。第三仗顺手修好了路由：问「光电杯什么时候开始」，排名第一的检索结果得分 0.493，是一篇毫不相干的仪器设备申报；正确答案躲在第二位，0.700。自那以后，路由学会看前三名。<span class="em">这一修，修通的是通向他们自己比赛的路——此为后话。</span></p>
+      <p>山河亦在此期奠定。地图选了 OpenStreetMap 而非高德，理由白纸黑字：高德条款禁止存储其返回数据，OSM 的 ODbL 允许。三个校区、一千六百多个节点的路网铺开；一百四十七个地点定位成功一百四十三处，剩下四处都在基础学院——路网未收录，就如实保持未定位，绝不吸附到本部坐标充数。此前出过一次「三教 → 1100 教育超市 4.5 分钟」的假情报，被当作典型钉进了军史。</p>
+      <div class="quote">「主条目总数 | 255 → 308（+21%）」「采集耗时 23 分钟，新增 246 条；经 DB 层同文去重（58 组/92 篇）后净增 202 条主条目」<span class="src">—— docs/data-batch2-report.md · data-batch4-report.md（2026-09-08）</span></div>
+    </div>
+    <div class="stats">
+      <span class="chip">255 → <b>515</b> 主条目</span><span class="chip">向量块 910 → <b>1873</b></span><span class="chip">路测 33/33 → 39/39 → <b>44/44</b></span><span class="chip">147 地点 · <b>143</b> 处定位成功</span>
+    </div>
+    <div class="cutaway">
+      <span class="ctag">插叙 · 同一片夜空</span>
+      <p>粮草这件事，那几夜的校园里不止一家在愁。后来放榜才知道，有人焊的是传感器——「基于IGZO-TFT阵列的β₂-MG检测传感器」，示波器的绿光大概彻夜没熄；「智慧大棚」在给 OneNET 云台送它大棚里的温湿度；还有「气体放电全过程仿真系统」，把一整个实验室装进了程序。数据这东西，各家有各家的地：他们开自己的荒，我们开学校的荒。都开到了后半夜。</p>
+      <span class="ctnote">——本段系放榜后据名册名目补写的推演。当夜互不相识，唯灯火同明。</span>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/data-batch2/3/4-report.md；docs/data-coverage-plan.md；docs/project-core.md §8（数据冻结与「4 处不吸附」）；AGENTS.md「重采全文：57 篇公众号文章因搜狗 token 过期缺全文」。</div>
+  </section>
+
+  <!-- ================= 第三章 ================= -->
+  <section class="zhang" id="z3">
+    <div class="ch-no">第三章</div>
+    <div class="ch-head"><span class="ch-date">九月十五日</span><span class="ch-title">论持久战——一日五十四枚，亲手降旗</span><span class="ch-wk">星期一 · dev 线最重的一天</span></div>
+    <div class="ch-time">16:45 — 21:16 · 五十四枚 commit · 十三路 PR 一夜归海</div>
+    <div class="prose">
+      <p>如果说前八天是行军，九月十五日就是中军帐里的一夜定策。这一天 dev 线落下五十四枚 commit：排程引擎 v2 规格书从 v1.3 一路改到 v1.7；「两遍法」唯一编排点、七步构造抽取、五算子纯爬山在同日成军；晚七时零七分，golden 快照首次拍摄，三十条验收落地。十八时零七分至二十一时十六分，十三路 PR 陆续归海。</p>
+      <p>但真正载入战史的，是十八时零七分那枚文档 commit。按下回车之前，他对着屏幕坐了一会儿。message 很短：</p>
+      <div class="quote">「docs(core): 定位唯一权威 ＋ 记忆点定为『懂分寸』，留白率移出核心」<span class="src">—— dev 线 commit · 2026-09-15 18:07</span></div>
+      <p>留白率——那是他自己发明的词，第一面军旗上的字。亲手降自己的旗，手不抖是假的。但降旗令的措辞硬得像军法：「它已撤出核心位置。这不是『暂时不做』，是定位层面的否决。」理由三条：它是设计者的价值观，不是用户的需求；它不可验证；它可被替代。三易其帜至此完成——从速胜幻想里的排程工具，到东一榔头西一棒子的助手拼盘，最后落成一句能打十年的总方针：<span class="btt">懂上理，懂你，懂分寸。</span>速胜论破产了，取而代之的是一场持久战的全部家当：以空间换时间（数据），以时间换智能（引擎），以分寸换人心（边界）。</p>
+      <p>同日，ADR-001 至 006 决策档案立柜；军政分野也定了：梨宝方面军归 CY，周排程方面军归 RAY，两军接壤处只留一道冻结的隘口。隆中对罢，三分已定。</p>
+    </div>
+    <div class="shiliao"><b>史料</b>｜dev 分支 2026-09-15 五十四枚 commit；docs/project-core.md §1/§2/§3/§9（v3 · 2026-09-15）；docs/decisions.md ADR-001~006；AGENTS.md「2026-09-15 起的分工」。</div>
+  </section>
+
+  <!-- ================= 第四章 ================= -->
+  <section class="zhang" id="z4">
+    <div class="ch-no">第四章</div>
+    <div class="ch-head"><span class="ch-date">九月十八至二十</span><span class="ch-title">登基——真引擎受禅，旧模板交印</span><span class="ch-wk">dev 线四十枚 commit · 封笔</span></div>
+    <div class="ch-time">01:49 — 21:26（跨三日）</div>
+    <div class="prose">
+      <p>十八日凌晨一点四十九分起，十四枚 commit 连发到三点四十四分：评测系统 P0/P1 成军——数据集生成、策展、双端门禁台架、裁判适配器与校准；两点半，跨周滚动与行为反馈并网，message 写得像句檄文——<span class="lt">「让『引擎记得你上周怎么过的』成为真功能」</span>；三点零三分增量重排接上 previousPlan；三点三十九分，「B 一推送就验收」压缩成一条命令；三点四十四分，堵死「旧进程占 8000 → 门禁假红」——夜战的部队最恨假旗，这一枚是给哨兵配的真灯笼。</p>
+      <p>十九日，受禅之日。十四时零四分「清理梨宝双轨」——旧规则模板 lbaoRecommend 交出兵权，排程真引擎从此独尊；engine-beta 之 tag 落于同时。十四时二十四分出一桩小事故：「补回上一提交误删的 22 个文件（我用了过期的基树 SHA）」——如实记档，不遮不掩。随后评分升级四连，其中一句堪为点睛：转场感知邻域，「让 improve 第一次『看得见路』」。晚间，「防自欺六件套」与变异测试、无障碍闸、契约模糊测试、显著性工具全部落地——这条护城河没有旗帜，是全军最沉默的一支部队。</p>
+      <p>二十日，RAY 的第四轮 UX 全量送达（07:18），午后并入 dev——「4 处冲突全部取 Ray 侧（CY 裁决）」。四个冲突全取来将，这不是客气，是掂量过后的放心。契约模糊测试 schemathesis 首轮抓出的漏洞清零（9/9 操作 368 例全过）；晚八时十一分，梨宝学会「说一句话就排进日程」。二十一时二十六分，PR #32 合并——<span class="em">dev 线第一百五十枚、也是最后一枚 commit</span>。</p>
+      <p>这条线就此封笔。没有人知道，四个多小时后，仓库将裂成两条没有共同祖先的历史——两个彼此听不见号角的根据地。</p>
+      <div class="quote">「merge: Ray ux-round4 并入 dev —— 4 处冲突全部取 Ray 侧（CY 裁决）」<span class="src">—— dev 线 commit · 2026-09-20 14:00（第一次合兵）</span></div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜dev 分支 2026-09-18/19/20 四十枚 commit；tag engine-beta（09-19 14:06）；AGENTS.md「lbaoRecommend 已于 2026-09-19 整体删除」。</div>
+  </section>
+
+  <!-- ================= 第五章 ================= -->
+  <section class="zhang" id="z5">
+    <div class="ch-no">第五章</div>
+    <div class="stamp">三军<br>会师</div>
+    <div class="ch-head"><span class="ch-date">九月二十一日</span><span class="ch-title">三块根据地连成一片</span><span class="ch-wk">星期一</span></div>
+    <div class="ch-time">02:12 — 18:54 · 当日九枚 commit · beta-v2 线起点</div>
+    <div class="prose">
+      <p>凌晨两点十二分，一枚日后被无数 agent 引为路标的 commit 落地：「通宵开工前全量快照（三树分叉现状）」。彼时兵分三处——<span class="lt">_work_dev（304 文件）、_full（330 文件）、usst-planner（1559 文件）</span>，三块根据地各自为战，军报不通。这一夜四批任务全部完成：梨宝语言规范、画像文案库、聊天跨会话记忆，门禁 engine 312 / ui 235 全绿。</p>
+      <p>夜里有条冷知识入了档：shell 里连 python 都没有——PATH 里那个 python 是 Windows 商店的占位符，「python --version 实际失败（退出码 9009）」。哨兵点名点到假人，从此门禁第五判据专门写了自举，任何营里都能起跑。</p>
+      <p>白天十八时四十四分，三军会师：以 _work_dev 为基座，合 _full 与 usst-planner 入一仓。最难啃的是同一份 app.py——它在三棵树上各自长到四万字节上下，记忆段看一棵树、空间段看另一棵、健康注入参考第三棵，「合流必须人工按段落拼」，六处嫁接逐一落锤。会审完了对暗号：健康探针实测一句「跑完步胸痛喘不过气」，命中紧急硬送达——<span class="lt">这支部队真的会救人，这很重要。</span></p>
+      <p>会师路上还有一道暗关：两树行尾形制不一，LF 对 CRLF——清点兵员时，同一队人被点成了两队，<span class="em">账面上凭空多出五万二千人，把真账淹得几乎看不见</span>。当晚十八时五十二分，全军换装：行尾一律 LF，.gitattributes 钉死「* -text」，机器从此不许自作聪明。史官在此添一笔：这条军令的批语写的是——</p>
+      <div class="quote">「这条不是洁癖，是吃过亏的……6 个数据文件仅因 CRLF/LF 差异就被 git 判为整文件重写，虚增约 5.2 万行改动，把真实改动淹掉了，审查时几乎看不出改了什么。」<span class="src">—— AGENTS.md §九</span></div>
+      <p>至于为什么坚持夜里不许自动合流，报告里也写得明白：「一次错误的自动合并会<span class="em">静默丢工作</span>，而夜里没人能拦。」——能说出这句话的人，是吃过静默丢兵的亏的。</p>
+    </div>
+    <div class="shiliao"><b>史料</b>｜beta-v2 线 2026-09-21 九枚 commit（5546be9 快照 → 7e2c649 合流 → 77ffd57 行尾）；docs/merge-report-2026-09-21.md；docs/merge-inventory-2026-09-21.md；docs/overnight-report-2026-09-21.md。</div>
+  </section>
+
+  <!-- ================= 第六章 ================= -->
+  <section class="zhang" id="z6">
+    <div class="ch-no">第六章</div>
+    <div class="ch-head"><span class="ch-date">九月二十七日</span><span class="ch-title">台儿庄（上）——「我在睡觉」</span><span class="ch-wk">星期日</span></div>
+    <div class="ch-time">00:15 — 23:41 · 当日四十七枚 commit · 二十九小时战役的前半</div>
+    <div class="prose">
+      <p>大战之前，有一份存档至今的《通宵开工包》。它的第一句是：「睡前照 §1 做一遍，把 §2 整段粘给 ZCode，然后去睡。」总方针只有一句——<span class="lt">「宁可少做一批做干净，不许多做半步埋隐患。」</span></p>
+      <p>从一份作战命令里，最能看清一个统帅的恐惧。他怕的不是敌军，是自己的兵在深夜里谎报军情。所以命令里除了任务，还埋了三样东西：一枚<span class="em">虎符</span>——门禁脚本的 md5 指纹 eb43ce60，天亮一对便知夜里谁动过军法处，「不一致说明它动过门禁，全部成果存疑」；一道<span class="em">反谍令</span>——diff 里查 .skip / xit / it.only，新断言一律先红后绿；一条<span class="em">本机密令</span>——带斜杠的分支名会被安全软件静默拦截，所以这条主线叫 beta-v2，「建完用 rev-parse 验证，别信 exit code」。然后他把那段后来最有名的话留在了纸上：</p>
+      <div class="quote">「我在睡觉，夜里没有人能拦住一次错误操作，所以下面每一条硬性禁止都是真的硬性禁止，不是修辞。」<span class="src">—— ZCode-通宵开工包-2026-09-27.md</span></div>
+      <p>零时十五分，WP0 台账落地。至凌晨两点，批 0-6 连克数城：基础信息前置、题库年级分层（三十五题上理场景化改写）、四个引擎暗堡逐一拔除——每拔一个都先诱敌出手（测试先红）再合围（实现转绿）、重要日体系、周预览卡、梨宝改排程执行器、拖拽合规两道闸。八时二十七分，CY 醒来。晨起第一件事不是洗脸，是拍板：三项口径，「均维持夜班实现，零代码改动」。他信任军法打出来的战报，胜过亲自查岗——这份信任后来被证明没有下错注。</p>
+      <p>白天继续：引擎语义三连修复（三餐自动就近食堂在列）、编辑模式、六模式干跑预览（「确认前零写入」）、导入恒开双向回写。十二时二十一分，验收兵抓出「RAG 全线 500」的内应——请求体丢了一个 k 字段，一个字段，全军的粮道被掐了半日。午后 V0-V3 全量交互复刻，端到端旅程锁落闸。</p>
+      <p>这一天尚未过完。真正的决战在夜里——见下一章。</p>
+    </div>
+    <div class="stats">
+      <span class="chip">engine <b>326 → 421</b></span><span class="chip">ui <b>237 → 319</b></span><span class="chip">当日 <b>47</b> 枚 commit</span><span class="chip">金标 <b>60</b> 条起草</span>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/overnight-report-2026-09-27.md；ZCode-通宵开工包-2026-09-27.md；docs/day-batch-report-2026-09-27.md；docs/v-batch-report-2026-09-27.md。</div>
+  </section>
+
+  <!-- ================= 第七章 ================= -->
+  <section class="zhang" id="z7">
+    <div class="ch-no">第七章</div>
+    <div class="stamp">转向</div>
+    <div class="ch-head"><span class="ch-date">九月二十七日夜</span><span class="ch-title">台儿庄（下）——「不可能找完所有关键词」</span><span class="ch-wk">18:17 — 23:41 · S/T/D 三连</span></div>
+    <div class="ch-time">理解层换向：本项目真正的转折点</div>
+    <div class="prose">
+      <p>夜战下半场，十八时十七分起 S 批四连：分号批量应答的「位置对应协议」、排程会话状态机、理解端点通电、端到端十剧本四十二断言全绿。十九时零二分，金标在线评测报出开门红——<span class="em">action F1 = 1.0</span>，真阳三十、假阳零、假阴零；逐槽 EM 0.923。十九时五十一分，CY 逐条复核金标，八处修正——其中一条把「驾照」改成了「科目一」。军情复核，错一处就冤一个哨兵。「金标只增不改」自此立为铁律。</p>
+      <p>真正的转折在二十时三十八分。此前真机翻车：被问投入时，用户答「周二晚上；正好是操场跑步的时间」——规则引擎对不上位，追问会话当场作废，下一句掉进了校园问答。他把那张截图看了很久。关键词穷举这条路，是拿士兵的命去填敌军的火力点：今天填「跑步」，明天就要填「早八」，后天是「导师组会」——填不完的。二十时五十分，拍板记录落在台账上：</p>
+      <div class="quote">「不可能找完所有关键词，排程问题让 LLM 先看。」<span class="src">—— CY 拍板 · docs/wp-ledger-v2.md §T（2026-09-27 20:50）</span></div>
+      <p>T 批换向随即落地：所有消息（包括被关键词闸拦下的句子）一律先过理解端点，规则退居结构化校验与离线兜底。用兵书上的话说：放弃一线式防御，收缩据点，让炮兵先打。这不是败退，是转向。此后再未回头。</p>
+      <p>二十二时五十一分至二十三时四十一分，D 批五连：双模式分流、对话管理器状态层、动作白名单防编造、执行器接管排程模式、问答相关性门。金标由六十条增至一百条。深夜的探针见证了步炮协同的第一次成功——「明天晚上出去玩一小时」，引擎给出真实落点：二十一时零五分至二十二时三十五分，与操场跑步同日共存。</p>
+      <div class="quote">「探针『明天晚上出去玩一小时』21:05-22:35 真排上、与操场跑步同日共存、窗内结束。」<span class="src">—— docs/wp-ledger-v2.md §D（D4 引擎级验证）</span></div>
+    </div>
+    <div class="cutaway">
+      <span class="ctag">插叙 · 同一片夜空</span>
+      <p>那个周日的深夜，这所校园里亮着的灯不止一扇。后来名册揭晓，有一支部队叫「光小智——实验室安全智能体」，那一阵大概正给它的安全规则库校阈值——实验室安全的活儿，错一条规则就是真事故，军法想必比我们还严；「词镜」的词表也在某张表格里悄悄长着一列；「Nexora Learning」的名字要到决赛才与我们同榜，但它的灯一定也亮过。谁也不知道谁。同一个凌晨两点，一百多扇窗，各自照着自己的战场。</p>
+      <span class="ctnote">——本段系放榜后据名册名目补写的推演。当夜互不相识，唯灯火同明。</span>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/wp-ledger-v2.md §S/§T/§D；docs/eval-libao-understand-2026-09-27.md（F1 1.0 / EM 0.923 全文）；beta-v2 线 09-27 18:17—23:41 十四枚 commit。</div>
+  </section>
+
+  <!-- ================= 第八章 ================= -->
+  <section class="zhang" id="z8">
+    <div class="ch-no">第八章</div>
+    <div class="ch-head"><span class="ch-date">九月二十八日</span><span class="ch-title">会审——七堂全过，三贤入帐</span><span class="ch-wk">00:25 — 17:53 · 当日二十二枚</span></div>
+    <div class="ch-time">MOSS 七条独立复核全过 · 三库一画像接入引擎</div>
+    <div class="prose">
+      <p>凌晨零时二十五分，D6 端到端剧本收口；零时四十二分在线评测——对话组宏 F1 0.955、拦截率 1.0；零时五十五分，D7「再协商」落地：排不进时呈上引擎干跑过的编号方案，「只提议不落盘」。凌晨一时终验自查；五时二十五分，军法处七堂会审全过——金标六十到一百纯追加零删改、十三枚 commit 哈希逐一验证存在、真机重放七比零，以及那条著名的全链验证：「出去玩 1 小时」从草稿卡到落盘回执再到 <span class="lt">Ctrl+Z 撤销后任务准时消失</span>，六比零。</p>
+      <p>白天，E 批「三贤入帐」：方法库与健康库参数第一次真正进入排程决策（13:41），空间库按步行分钟选自习点（13:47），画像块级偏好落位（13:51）——而画像解释面板的口径是「这是我猜的，可在周计划里改」，懂分寸的军规一寸未越。随后周视图视觉重心改版（E4）、原生弹层详情抽屉——零新依赖（E5）、端到端七十七断言收口（E6）。<span class="em">十二名死士（变异体）逐一试毒，毒发必报，零断言漂移</span>，engine 收在四百五十八。</p>
+      <p>值得一提，E 批开工前先立五条阻塞，头一条是：<span class="lt">「E1–E5 待 CY 逐项授权（RAY 属地不擅动）」</span>——不打友军的旗号，不进友军的城。军法面前，AI 也讲纪律。</p>
+      <div class="quote">「§D·白天终验独立复核（2026-09-28 白天，模拟 MOSS §10 七条逐项独立执行）——七条全过」<span class="src">—— docs/wp-ledger-v2.md（含 golden 100 行 JSONL 全合法、dialog 宏 F1 0.972 等实据）</span></div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜beta-v2 线 2026-09-28 二十二枚 commit；docs/wp-ledger-v2.md §D/§E/§ACCEPT；BLOCKERS.md「E 批 E0 五条」。</div>
+  </section>
+
+  <!-- ================= 第九章 ================= -->
+  <section class="zhang" id="z9">
+    <div class="ch-no">第九章</div>
+    <div class="ch-head"><span class="ch-date">十月初一至二日</span><span class="ch-title">营中谣言与三军转正</span><span class="ch-wk">星期四、五 · 四十枚 commit</span></div>
+    <div class="ch-time">G 批重构至完成 · H 批七条真机剧本 19/0</div>
+    <div class="prose">
+      <p>十月一日夜里十点四十五分，G 批三枚收尾：删尽派生类型层、<span class="em">三道灰度开关缺省全开（CY 拍板全开）</span>——golden 实测零漂移，快照免拍。此前一周谨慎观察的三个新番号（方法库、健康库、空间库），自此转正服役，不再戴罪立功。</p>
+      <p>但营中也不太平。二日凌晨两时四十八分，拿获一名造谣者：有兵把「养成晨跑习惯」幻觉成了「每天一次」——perWeek 的谣言顺着对话往外传，若非评测实录里六十七次请求二十五次端点超时把人惊动，谣言就要进正史了。造谣者当场收押（幻觉防护上线，无频率词不采纳）。同夜发布的六批任务书里，金标纪律写得斩钉截铁：「期望值<span class="em">手算自规约</span>……<span class="em">禁止跑一遍实现抄输出（防循环论证）</span>」；止损条款同样冷硬：「三十分钟内归因不出 → 本任务回退，记 BLOCKER」。凌晨两三点，十九枚 commit 连发——夜行军的部队，越冷越走。</p>
+      <p>H 批交互升级三批次：钟点时刻通道（那条 commit message 足有五百九十三字节，写满正则、金标编号与逃生门）、按钮卡、类目推荐。终验是七条真机剧本、活大模型实战——<span class="em">十九比零</span>，包括「周四晚上出去玩一小时」与「真冲突：周一上午九至十一点开会撞课」这样的刁钻题。engine 收在四百八十。同日十五时二十三分，tag beta-v2-frozen-20261002 落下；RAY 名下目录并入 CY 名下——两帅并一帐。但 Ray 的代码，还将在六天后两度归来。</p>
+      <div class="quote">「七条真机剧本（live LLM ＋ live vite 5173，隔离后端 8003）→ 19 过 / 0 挂」<span class="src">—— docs/wp-ledger-v2.md §H（2026-10-02）</span></div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/overnight-plan-2026-10-02.md（六批任务书与总纪律九条）；docs/wp-ledger-v2.md §G/§H；beta-v2 线 10-01 三枚、10-02 三十七枚 commit。</div>
+  </section>
+
+  <!-- ================= 第十章 ================= -->
+  <section class="zhang" id="z10">
+    <div class="ch-no">第十章</div>
+    <div class="ch-head"><span class="ch-date">十月三日</span><span class="ch-title">千里跃进大别山——一夜与一百五十九秒</span><span class="ch-wk">星期六 · 当日十三枚</span></div>
+    <div class="ch-time">00:54 调研 — 04:19 APK 0.1.0 上岸 — 08:07 验收收工</div>
+    <div class="prose">
+      <p>移动端是无后方作战：此前全军没有一行安卓代码，没有一台装好 SDK 的机器。千里跃进，靠的从来不是勇气，是准备。零时五十四分四方案对比调研，一时三十五分功能分期与「不做清单」，两时五十三分实施计划连同《通宵铁律》发布。铁律开篇即是全项目第二有名的军令：</p>
+      <div class="quote">「默认假设：没有人在看着你。你偷的每一个懒、绕的每一个验证，都会在白天验收时变成返工。」<span class="src">—— docs/overnight-guardrails-mobile-2026-10-03.md</span></div>
+      <p>另一句同样有名：「你没有权限对『完成』下宽松的定义。」以及那条终极取舍——「宁可夜末停在 M2 加一份诚实的完工报告，不可交一份全绿的假报告。」</p>
+      <p>于是从三时十二分起，三十三分钟内四批连下：服务端账号令牌与云同步（先写后写全按时间戳裁决）、移动今日页、网页端同步钩子、可做子集。反向验证还顺手抓了个逃兵：日期解析器对「2026-13-40」这类假日期悄悄回卷蒙混过关——补范围预检，单独成枚。四时十九分，<span class="em">签名 APK 0.1.0 抛上公网 /apk/</span>——先头部队渡过河去。</p>
+      <p>白天验证批的原则是「不信完工报告，全量实跑复核」。于是有了这一串实录：root 密码认证失败两次后，试出 SSH 用户其实是 ubuntu——哨兵叫不开城门，换了番号才对上；八十端口被一台名叫 caddy 的旧服务占着——「只停不删」，不是自家的东西不拆；data 目录必须全量同步（缺一个 campus_vocab.json 全军起不来，实测踩坑）；谷歌源 TLS 被墙、四家镜像全灭，最终 googledownloads.cn 官方中国直供直下全部 SDK 包——<span class="em">BUILD SUCCESSFUL in 1m 59s</span>（111 任务），APK 3.2M，签名者 CN=USST Lightpath。一百五十九秒，造出一条渡船。</p>
+      <p>上岸站住了脚。从此「网页端负责『想清楚』，手机端负责『做出来』」——两块根据地，隔海相望，各自成阵。</p>
+      <div class="stats">
+        <span class="chip">00:54 调研 → <b>04:19</b> APK 上岸</span><span class="chip">构建 <b>1m59s</b> / 111 任务</span><span class="chip">engine → <b>496</b></span><span class="chip">反自欺 grep <b>CLEAN</b></span>
+      </div>
+      <div class="cutaway">
+        <span class="ctag">插叙 · 同一片夜空</span>
+        <p>「提醒」这座山头，那一阵不止一家在仰攻。「药石司」——名册上的正名是「基于51单片机的智能定时服药提醒药盒」——大概正在示波器上校准它的第一声蜂鸣：一粒药和一格时间，是他们的千里跃进。「传令营」——名册正名「护联星：无线智能呼叫与闭环应答系统」——在调它的无线链路。我们在给 Android 写通知调度。三家都没有后方可退，三家都不知道彼此。后来这三家的名字都上了榜——提醒山头，终究三家各占一面，谁也没能独吞。</p>
+        <span class="ctnote">——本段系放榜后据名册名目补写的推演。当夜互不相识，唯灯火同明。</span>
+      </div>
+      <div class="shiliao"><b>史料</b>｜docs/overnight-log-2026-10-03.md（逐时记录 append-only）；docs/overnight-guardrails-mobile-2026-10-03.md；docs/mobile-line-alignment-2026-10-03.md §6（「想清楚/做出来」定位）。</div>
+    </div>
+  </section>
+
+  <!-- ================= 第十一章 ================= -->
+  <section class="zhang" id="z11">
+    <div class="ch-no">第十一章</div>
+    <div class="ch-head"><span class="ch-date">十月六日（上）</span><span class="ch-title">反“扫荡”——三路纵队同过一条山路</span><span class="ch-wk">星期二 · 00:28 — 08:51</span></div>
+    <div class="ch-time">当日六十七枚 commit 的前半 · 最惨烈的一天开始了</div>
+    <div class="prose">
+      <p>零时二十八分，通知插件补打包出 0.2.0——此前 0.1.0 是一门哑炮：本地通知实际不可用，是拆开安装包、逐字节数出 dex 里 LocalNotification 符号从 0 到 25，才算验明正身。两时十五分，版本卫生两道硬闸上线；两时二十二分，开工闸门学会区分「没推送」与「已推送未合并」——为的是后面那场大案。</p>
+      <p>三时十六分，第二夜开工即遇奇观：闸门报 BEHIND origin/dev 150，工作区另有二十四项改动——经 mtime 取证（03:11–03:16），确认来自<span class="em">另外两个并行会话</span>。三路纵队，同一条山路，同时行军。六分钟内完成车道划分：文件所有权零交集、每 commit 显式路径 add。三时三十三分，发现友邻已抢先进入今日页阵地，本部当即弃改——「本批放弃 TodayPage 拆分（不覆盖他人工作）」。战报原话：</p>
+      <div class="quote">「开工 6 分钟内即发现甲/乙两会话已在执行同一任务书并高速落地，经 BLOCKERS 协议划分车道，避免了一场必然的互踩。」<span class="src">—— docs/overnight-log-2026-10-06.md（三方同树协调批）</span></div>
+      <p>三时档单小时十五枚 commit：待办 schemaVer=2 契约、习惯库五类扩域、流式端点、端到端由二条增至九条。四时十八分，移动端执行层六件一体批落地。八时三十六分，点卯点出一个<span class="em">空营</span>：自验收抓出七个缺陷，其中一个是「功能实际全死」的真事故——营盘旗号齐全，枪里没有子弹。这是军心不稳的第一案：报表会骗人，点卯不会。两分钟后，MOSS 全面验收报告发出（任务一/二/三主体通过）。</p>
+      <div class="stats">
+        <span class="chip">03 时单小时 <b>15</b> 枚</span><span class="chip">e2e 2 → <b>9</b> 条</span><span class="chip">自验收 <b>7</b> 缺陷 · 1 真事故</span>
+      </div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/overnight-log-2026-10-06.md；BLOCKERS.md 2026-10-06 凌晨各条（03:20 并行会话 / I 批留痕）；commit 08:36/08:38。</div>
+  </section>
+
+  <!-- ================= 第十二章 ================= -->
+  <section class="zhang" id="z12">
+    <div class="ch-no">第十二章</div>
+    <div class="stamp">定鼎</div>
+    <div class="ch-head"><span class="ch-date">十月六日（下）</span><span class="ch-title">粮台之火，与进驻西柏坡</span><span class="ch-wk">星期二 · 10:41 — 23:44</span></div>
+    <div class="ch-time">自伤、救火、定都、终审、换装——一天干完五件大事</div>
+    <div class="prose">
+      <p>十时四十一分，全军差点自伤：一条管道命令把线上 dist 置空，抢修时 <span class="em">rm -rf dist.old 又误烧了自家粮台</span>——安装包下载 404，火光烧了约四分钟。救火靠的是地窖里三缸屯粮：三份 sha256 完全一致的本地备份，逐一比对、原样复原。船没沉。当日十三时零六分，snapshot.sh 守粮台制度即行建立：每日 04:17 自动快照、保留七份——从此夜夜有人看粮。</p>
+      <p>十三时二十分，悬了五天的大案销案。dev 线一百五十枚与 beta-v2 线三百二十二枚，两个没有共同祖先的世界——军报不通、拉取只见旧世界——以一纸拍板终结：</p>
+      <div class="quote">「GitHub 默认分支已切 beta-v2，dev 已 lock_branch 只读归档（force-push/删除均禁）……UNRELATED_HISTORIES 风险就此消除，不再需要人工合并。」<span class="src">—— BLOCKERS.md · 2026-10-06 13:20 §13 人工清单（弃选项 B：force-push 覆盖）</span></div>
+      <p>史书上管这种事叫定都：统帅部进驻西柏坡，旧都改为只读的留守处。被否决的选项 B（force-push 覆盖）连同旧世界一起沉了底——破釜沉舟，沉的是自己犹豫的那部分。十四时零二分，习惯与方法库一百六十条价值观终审——「CY 裁决：全部通过（『都挺权威的』）」，有争议的九条如实标注「有争议」，一条不删、一字不改。打仗可以急，立言不能糊。</p>
+      <p>十四时十五分与四十九分，0.3.0 / 0.3.1 连环出关：前者的真凶是安装包里 server 地址少了个 /m.html 路径——用户清缓存、插 USB 全都无效，因为它一直在「正确地」加载网页端；后者是安卓九号起禁明文 HTTP 的当头一棒。出包一轮八到十六分钟，两版之间只有三十四分钟。深夜二十三时，全军换新军装：扁平 2.0、Bento 布局、上理红彩蛋层（校色令牌、校庆圆点、页脚校训）。</p>
+      <p>是日合计：六十七枚 commit、四十三条阻塞——最惨烈的一天，也是转折的一天。</p>
+      <div class="stats">
+        <span class="chip">commit <b>67</b> 枚</span><span class="chip">BLOCKERS <b>43</b> 条</span><span class="chip">404 <b>4</b> 分钟 · 三缸屯粮全复原</span>
+      </div>
+      <div class="cutaway">
+        <span class="ctag">插叙 · 同一片夜空</span>
+        <p>那天最惨烈的时辰里，别家的仗也在打。「掌膳都尉」——名册正名「智膳校园——基于多模态感知与大模型决策的餐饮协同平台」——是全场唯一和我们用同一路兵法的大模型部队，它大概也在教自己的模型认餐盘、认窗口、认人流；「观星台」（AstraAtmos 行星大气实验室）在算它的大气层；「太赫兹炮旅」的 6G 全光芯片，调的是我们看不懂的频段。硬件系的窗外堆着电路板，我们窗外堆着的是截图与日志。各有各的火烧眉毛。</p>
+        <span class="ctnote">——本段系放榜后据名册名目补写的推演。当夜互不相识，唯灯火同明。</span>
+      </div>
+      <div class="shiliao"><b>史料</b>｜BLOCKERS.md 2026-10-06 各条（10:41 部署事故 / 13:06 快照 / 13:20 拍板 / 14:05 终审）；commit 14:15/14:49/23:03–23:44；AGENTS.md 硬闸一（UNRELATED_HISTORIES 根因记述）。</div>
+    </div>
+  </section>
+
+  <!-- ================= 第十三章 ================= -->
+  <section class="zhang" id="z13">
+    <div class="ch-no">第十三章</div>
+    <div class="ch-head"><span class="ch-date">十月七日</span><span class="ch-title">百团大战——四小时，三十枚，九十枚图标</span><span class="ch-wk">星期三 · 当日五十六枚</span></div>
+    <div class="ch-time">00:46 — 23:07 · UI v2 大破袭</div>
+    <div class="prose">
+      <p>凌晨六连发：自然计划陈述三连（让梨宝听懂「我下周想每周三晚上跑步」这种不像军令的民话）、账号入口唯一化、待办到日程的可见闭环、去命令化话术。上午两道拍板：FOCUS DAYS 从「只上色」变「真约束」（拍板 A）、接口基址全数收敛同源（拍板 B）。</p>
+      <p>十三时四十五分，总攻发起。正太铁路上曾有一百零五个团同时出击；这里没有铁路，有一面设计系统的城墙。批零先给梨宝话术上了冻结门禁；批 A 请霞鹜文楷上桌——「去雅黑」；批 B 重绘棱镜断线符号与欢迎页四层；十四时零八分起 C1 至 C13 十三个组件批次连发——按钮八态、四十四像素命中区、开关、标签、进度、头像、吐司、弹层……十五分钟十三批；随后 D1 至 D7 七个页面批次：当日流水、周网格五维分层、总览「Now·进行中」焦点卡、待办四分组、设置面板、梨宝常驻呼出键；十六时四十九分起，九十枚图标 sprite 与双环焦点、对比度、aria-live 收尾。<span class="em">十三时四十五分至十七时四十二分，不到四小时，约三十枚 commit。</span></p>
+      <p>十七时四十一分终验还捉了个精灵虫：欢迎页刻度环的类名 .ring 撞了样式框架的工具类，改名 .hc-ring——一字符定乾坤。二十时三十六分，v0.3.2 全站升级发版。二十三时零七分，决赛演示备战第一批入库。</p>
+      <p>但账上有一笔未销的旧账，此刻要如实记下：新编的十九个组件（C 批）在营房里操练得很好，<span class="em">却几乎没上过阵地</span>——组件库在 features 里只被引用五次，表单还有十三处手写。整军经武而不用，军心是要浮的。这支新军何时接防，见下一章。</p>
+      <div class="quote">「UI v2 终验验收记录——放行标准全绿＋§14.1 40 项逐项映射」<span class="src">—— beta-v2 线 commit · 2026-10-07 17:42</span></div>
+      <div class="shiliao"><b>史料</b>｜beta-v2 线 2026-10-07 五十六枚 commit（13:45–17:42 约三十枚）；docs(ui) 设计总成 v2 系列文档；commit 9d1359a 正文「19 个组件在 features 里只被引用 5 次（Button 2 / Modal 1 / FormControls 1 / EmptyState 1），表单控件 13 处手写」。</div>
+    </div>
+  </section>
+
+  <!-- ================= 第十四章 ================= -->
+  <section class="zhang" id="z14">
+    <div class="ch-no">第十四章</div>
+    <div class="stamp">打过<br>长江</div>
+    <div class="ch-head"><span class="ch-date">十月八日</span><span class="ch-title">渡江——九小时，六十七枚，最后一日</span><span class="ch-wk">星期四 · 00:13 — 09:14</span></div>
+    <div class="ch-time">友军来会 · 新军接防 · 九十五枚 commit 过江</div>
+    <div class="prose">
+      <p>最后一日，从零时十三分的三连发开始。零时三十五分，Ray 的周页交互批次接入——commit 正文足有三千字，末尾郑重写着：<span class="lt">「用户拍板口径：底层与实现逻辑以 Ray 的提交为准」</span>。两块根据地之间隔了一个月的敌占区，军报来回走了四天；拍板的时候他没有犹豫——阵地是人家打下来的，城头就按人家的旗号插。门禁 tsc 零错、engine 八百三十五、ui 四百四十八、影响面七百二十八全绿；顺手还正了一处军容：Ray 文件里的乱码「原□是」，还其「原来是」的本来面目。</p>
+      <p>零时三十九分，Merge branch 'feat/ux-round4-intake'——零冲突。Ray 的五批兵马（周页、目标、相对日、梨宝脑、测试）与主力在总览页会师。上一次会师是三块根据地归一仓，这一次是两个人归一队。四分钟后公网部署留痕；一时零五分，v0.4.0 发版——Ray 周页改版与课表解析整链接通，<span class="em">课表城，克了</span>。</p>
+      <p>一时三十五分一场虚惊：一次大意的 git add -A 把本地运行库 lightpath.db（含账号与键值）卷进了提交——git rm --cached 当场夺回，改列 ignore，并立「定向 add」纪律。此前它已两度险些入关，<span class="em">完璧归赵者三</span>。八分钟后，图穷匕见：拆开安装包才见真凶——drawable-v24 目录里躺着脚手架模板的安卓机器人矢量，二十四版以上的安卓永远优先取它，品牌图标被盖了整整四个版本。潜伏最深的暗堡，伪装成自家碉楼。</p>
+      <p>也是这一夜，那桩军心案销了账：字体、动效、图标「三章」真正接线，C 批组件开始接防阵地——新军上战场，老兵退二线。用户第二轮反馈的五条（emoji 没换、字体没上、手机端不同步、动效没加、组件没用）被逐条核实、逐条收复，史官如实记下那句自查结论：「逐项核实全部成立」。</p>
+      <p>两时四十六分，gigity 入城——演示账号预先布好：画像「提前一点的人」，课表四门含周四跨校区二十五分钟转场，三条待办、两个目标（其中一条：<span class="lt">光电杯作品，due 10-18</span>），记忆库三条已生效偏好外加一条故意留白的「年级：大三」，「出处全部为自然原话，无『演示/预置』字样，不穿帮」。实测剧本 A：「我明天想去锻炼」——命中记忆，答曰「晚上跟室友约球去啊，<span class="em">羽毛球现在可是你的主场</span>」。</p>
+      <p>凌晨三点前后，v0.4.5 / 0.4.6 / 0.4.7 三连发；八时四十一分 v0.4.8（常驻通知、登录拉云端待办）随包发布了那次著名的渡江——<span class="em">git push，九十五枚 commit 一次性过江</span>，「GitHub 与线上首次对齐到同一版本，录前『老师查 GitHub』口径打通」。九时零七分与九时十二分，CY 报障两连修（新账号绕过引导、新账号预载旧待办）；九时十四分，v0.4.9——</p>
+      <p class="noind" style="text-indent:2em">全项目的最后一枚 commit，恰好落在开工后第三十天的清晨。西柏坡的老话用在这里正合适：今天是进京赶考的日子。</p>
+      <div class="quote">「④ git push origin beta-v2（95 commits）……GitHub 与线上首次对齐到同一版本，录前『老师查 GitHub』口径打通。」<span class="src">—— BLOCKERS.md · 2026-10-08 08:4x（v0.4.8 条）</span></div>
+      <div class="stats">
+        <span class="chip">9 小时 <b>67</b> 枚</span><span class="chip">版本 <b>0.4.0 → 0.4.9</b></span><span class="chip">渡江 <b>95</b> 枚 commit</span><span class="chip">00 时 <b>20</b> 枚 · 02 时 <b>17</b> 枚</span>
+      </div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜beta-v2 线 2026-10-08 六十七枚 commit（含 e600510 会师 merge、c386363 三千字节 Ray 批次、da4b7f1/9d1359a 字体组件接线）；BLOCKERS.md 2026-10-08 各条（gigity 播种 / 完璧归赵 / 图标真凶 / 95 push）。</div>
+  </section>
+
+  <!-- ================= 终章 ================= -->
+  <section class="zhang" id="z15">
+    <div class="ch-no">终章</div>
+    <div class="stamp">十强</div>
+    <div class="ch-head"><span class="ch-date">十月</span><span class="ch-title">放榜——一百一十一扇窗，各归各的深夜</span><span class="ch-wk">初赛专家初评 · 拟奖名册</span></div>
+    <div class="ch-time">智逐光影，溯梦未来</div>
+    <div class="prose">
+      <p>十月，专家初评。此刻请允许史官把镜头摇开，摇向这三十个昼夜里我们一直欠着的一句话——这座校园里，挑灯的从来不只我们这一扇窗。一百一十二路诸侯同场，名号里带单片机字样的就有十四路（决赛两席、二等五席、三等七席），另有 FPGA、太赫兹芯片、传感器、机器视觉各路硬件诸侯；而拿着大模型当主力的，也不止我们一家。我们打我们的数据与军法，他们焊他们的电路与光路，同一片夜空下，谁也不知道对方把哪座山头当成了生死之地。</p>
+      <p>放榜那日，名册贴出来：一百一十二路出征，七十路受三等衔，二十五路受二等衔，十路进抵决赛城下，余者不授。<span class="em">光溯——懂上理、懂你的校园生活智能伙伴，在十强名录的第七行。</span></p>
+      <p>名单应当在这里被点名。受二等衔的劲旅里，有「光小智」——那个和我们一样把 AI 做成伙伴的「铁面先生」；有「光语」——胸前挂着一盏真灯给人引路的「提灯人」，梨宝在“向导”这一行的同行；有「智膳校园」——全场唯一与我们同用大模型决策兵法的「掌膳都尉」；还有「词镜」「墨染单词」「护联星」「智慧大棚」「彩纹云裳」……他们没有输，只是这一程，我们走得快了半步。</p>
+      <p>与我们同渡的另外九路，写在下面这一节里。他们同样赢过自己的深夜。</p>
+      <p>决赛在十月下旬，现场答辩。出征图上还剩两座山：服务器租约十月二十五日午时到期，卡在决赛之前——粮道上悬着一把剑，只有 CY 能摘；gigity 的目标清单里，那条「光电杯作品 dueAt 10-18」还在倒计时。渡江已毕，大考未开。长征有陕北？不——他们有的是十月的最后一座城。</p>
+      <div class="quote">「★ 赛事：上海理工大学光电信息与计算机工程学院「光电杯」创新设计大赛（学院品牌赛事，学术部主办）★ 决赛：10 月（现场答辩……）」<span class="src">—— 这条官方通知本身，就存在梨宝的知识库 data/usst_articles.json 里（第 4493 行起）</span></div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜data/usst_articles.json「GD活动 | 第十八届『光电杯』创新设计大赛正式启动」（报名截止 9-28 24:00 · 初赛评审 10 月中上旬 · 决赛 10 月下旬现场答辩）；放榜名册四纸（决赛入围拟奖 10 组 / 二等奖拟奖 25 组 / 三等奖 70 组 / 余 7 组不授奖，队内留存）。「112 组」总数与「第七行」名次均出名册。</div>
+  </section>
+
+  <!-- ================= 群雄谱 ================= -->
+  <section class="zhang" id="roster">
+    <div class="ch-no">群雄谱</div>
+    <div class="ch-head"><span class="ch-date">对手考</span><span class="ch-title">九支同渡的劲旅，与二十一位留名者</span></div>
+    <div class="ch-time">名号与路数按放榜名册实录；诨号系史官所起，出于敬意——凡配得上诨号的对手，都赢过自己的深夜。</div>
+    <div class="roster">
+      <div class="rrow mine"><span class="rn">★ 光溯（我军）</span><span class="rt">懂上理、懂你的校园生活智能伙伴——数据 ＋ RAG ＋ 排程真引擎 ＋ 三军法。本卷主角。</span><span class="rk">十强 · 第七行</span></div>
+      <div class="rrow"><span class="rn">雁阵营</span><span class="rt">面向超表面训练与仿真任务的多智能体协同系统——一群会互相配合的兵，操着光学里最锋利的题目。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">药石司</span><span class="rt">基于51单片机的智能定时服药提醒药盒——一粒药和一格时间，提醒山头的占领者之一。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">城防军</span><span class="rt">平安上理——基于51单片机的门禁警戒与感应照明系统——名副其实，他真的在守城门。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">暖炉军</span><span class="rt">小暖——面向老年群体的智能陪伴型机器人——把陪伴做给最需要耐心的人。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">百步穿杨营</span><span class="rt">基于视觉闭环的双反射镜激光自动对准装置——精度狂徒，以微米论英雄。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">新学馆</span><span class="rt">Nexora Learning——学习赛道上的决赛劲旅。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">掌上游侠</span><span class="rt">面向3DS模拟器的触鼠复合输入游戏手柄——把输入做成一门手艺。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">观星台</span><span class="rt">AstraAtmos 行星大气实验室——把一颗行星的大气装进程序。</span><span class="rk">十强</span></div>
+      <div class="rrow"><span class="rn">话事人</span><span class="rt">dsh 移交对话插件——对话赛道的对手。</span><span class="rk">十强</span></div>
+    </div>
+    <div class="roster" style="margin-top:14px">
+      <div class="rrow"><span class="rn">铁面先生</span><span class="rt">光小智——实验室安全智能体——错一条规则就是真事故的部队。二等衔。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">提灯人</span><span class="rt">光语——基于可见光通信的室内智能导览胸牌系统——胸前有一盏真灯，与梨宝同行。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">掌膳都尉</span><span class="rt">智膳校园——基于多模态感知与大模型决策的餐饮协同平台——全场唯一同门兵法。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">太赫兹炮旅</span><span class="rt">面向6G安全通信的动态可编程太赫兹全光芯片——硬件贵族。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">镜中词臣</span><span class="rt">词镜：面向中国英语学习者的课程校准自适应词汇测评应用。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">墨染营</span><span class="rt">墨染单词——背单词这条古道上的同路人。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">传令营</span><span class="rt">护联星——无线智能呼叫与闭环应答系统——提醒山头的另一位仰攻者。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">屯田军</span><span class="rt">基于STM32与OneNET云平台的智慧大棚环境监测与远程调控系统。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">绣衣使</span><span class="rt">彩纹云裳——非遗苗服数字3D交互体验平台。</span><span class="rk">二等奖</span></div>
+      <div class="rrow"><span class="rn">群像</span><span class="rt">秤砣军（智能体重秤）、地鼠营（多模式打地鼠）、驿车营（K230 循迹送货小车）、饼干军（ESP32 cookie 桌面陪伴）、罗盘司（Career Compass 职业规划——与「生涯规划」旧名对位的旧敌）、观察使（学情洞察）、枕戈记（Murmur 睡眠语音记录）……三等名册七十路，各有各的战史。</span><span class="rk">三等奖</span></div>
+    </div>
+    <div class="rhint">注：名号（诨号）为本卷所起；正名、奖项与名次均出自放榜名册。一百一十二路出征：决赛入围十席、二等二十五路、三等七十路、余七路不授奖。</div>
+  </section>
+
+  <!-- ================= 第二部分界 ================= -->
+  <div class="part" id="part2"><div class="pname">第二部 · 综合分析</div><div class="pdesc">时间投入 · 代码规模 · 质量体系 · 数据工程 · 交付与结果——全部数据可复核，口径见附录 A</div></div>
+
+  <!-- ================= 战况板 ================= -->
+  <section class="zhang" id="map">
+    <div class="ch-no">战况板</div>
+    <div class="ch-head"><span class="ch-date">收官清点</span><span class="ch-title">城池 · 失地 · 逆贼</span></div>
+    <div class="ch-time">至 2026-10-11 止的战区态势（全部有案可查）</div>
+    <div class="mapgrid">
+      <div class="panel">
+        <h5>已克之城</h5>
+        <ul>
+          <li><b>军法城</b>（9-07）AGENTS.md 立宪，agent 不敢乱改<span class="st">——已固守</span></li>
+          <li><b>粮草城</b>（9-08 起）520 篇 · 147 地点 · 1873 向量块<span class="st">——已囤粮</span></li>
+          <li><b>引擎城</b>（9-19）真引擎登基，规则模板交印<span class="st">——已定鼎</span></li>
+          <li><b>对话城</b>（9-27 夜）追问状态机＋对话管理器，F1=1.0<span class="st">——已攻克</span></li>
+          <li><b>三贤帐</b>（9-28）方法库/健康库/空间库/画像入帐<span class="st">——已上殿</span></li>
+          <li><b>移动城</b>（10-03）APK 上岸，无后方站住了脚<span class="st">——已渡河</span></li>
+          <li><b>课表城</b>（10-08）解析整链接通，POST 19 条<span class="st">——已克</span></li>
+          <li><b>总览城</b>（10-08）Ray 五批会师，十二列 Bento<span class="st">——已会师</span></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h5>未复之地</h5>
+        <ul>
+          <li><b>五十七篇缺全文</b>——搜狗 token 过期，仅标题可检索<span class="st">——在册待补</span></li>
+          <li><b>基础学院四处</b>——路网未收录，如实不吸附<span class="st">——持旗待援</span></li>
+          <li><b>营口路校区 · 军工路580号</b>——OSM 未收录<span class="st">——化外之地</span></li>
+          <li><b>生活服务条目</b>——食堂/宿舍细节仍薄<span class="st">——薄田待垦</span></li>
+          <li><b>决赛材料</b>——申报书/PPT/视频<span class="st">——deadline 十月底</span></li>
+          <li><b>服务器租约</b>——10-25 12:17 到期，卡在决赛前<span class="st">——粮道悬剑</span></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h5>伏法之逆</h5>
+        <ul>
+          <li><b>perWeek 造谣者</b>——把「养成晨跑习惯」幻觉成每天一次<span class="st">——10-02 已擒</span></li>
+          <li><b>parseDate 逃兵</b>——「2026-13-40」回卷蒙混<span class="st">——10-03 已斩</span></li>
+          <li><b>k 字段内应</b>——RAG 全线 500 半日<span class="st">——09-27 已肃清</span></li>
+          <li><b>v24 暗堡</b>——Capacitor 模板机器人潜伏四版<span class="st">——10-08 已拔</span></li>
+          <li><b>.ring 精灵虫</b>——撞名样式工具类<span class="st">——10-07 改名伏法</span></li>
+          <li><b>lightpath.db 三进宫</b>——误入 commit 三次<span class="st">——三夺完璧，列 ignore</span></li>
+          <li><b>0.1.0 哑炮</b>——通知插件未打包，dex 数 0<span class="st">——0.2.0 补至 25</span></li>
+          <li><b>假联通六断点</b>——双端各怀鬼胎<span class="st">——10-06 已收复</span></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h5>整军之案（军心档）</h5>
+        <ul>
+          <li><b>空营案</b>——执行力评估五维恒 0，evalInput 漏 demo<span class="st">——v0.4.6 归队</span></li>
+          <li><b>新军未战案</b>——C 批 19 组件仅被引用 5 次<span class="st">——10-08 接防归队</span></li>
+          <li><b>假旗案</b>——字体/动效两轮反馈未落地<span class="st">——10-08 三章接线</span></li>
+          <li><b>演示阵地污染案</b>——云同步单向上推改写 gigity 云端<span class="st">——02:59 补洞收复</span></li>
+          <li><b>三方会战互踩未遂案</b>——同树三会话抢道<span class="st">——车道制立，零损失</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="shiliao"><b>史料</b>｜BLOCKERS.md（112 条全档）；docs/wp-ledger-v2.md；docs/data-batch 系列；docs/mobile-line-alignment-2026-10-03.md；AGENTS.md 遗留清单。</div>
+  </section>
+
+  <!-- ================= 分析 · 贰 时间投入 ================= -->
+  <section class="zhang" id="a2">
+    <div class="ch-no">分析 · 贰</div>
+    <div class="ch-head"><span class="ch-date">时间投入</span><span class="ch-title">三十日十七小时，是怎么花掉的</span></div>
+    <div class="ch-time">两线合并 472 枚 commit · 21 个有提交日 / 11 个全休日</div>
+    <div class="prose">
+      <p class="noind lt">总体节奏：项目实际跨度 30 日 17 小时；末三日（10-06/07/08）共 190 枚 commit，占全程 40.3%。提交时段呈显著「夜战」特征——22:00–05:59 共 200 枚（42.4%），凌晨 0–5 时 173 枚（36.7%）；主力线 beta-v2 单独口径下深夜占比达 55%（177/322）。单小时峰值：10-08 00 时 20 枚，10-06 03 时与 10-07 14 时各 15 枚。</p>
+    </div>
+    <div class="chartbox">
+      <h4>图 1 · 三十日战线（每日 commit 数）</h4>
+      <div class="cap">靛色＝dev 线（09-07 至 09-20，150 枚），朱色＝beta-v2 线（09-21 起，322 枚）；空白＝全休日（11 天）。</div>
+      <div id="daily"></div>
+    </div>
+    <div class="chartbox">
+      <h4>图 2 · 24 小时提交分布</h4>
+      <div class="cap">32 个日历日 × 24 小时热力全景——三处峰：9-15 黄昏（定策）、10-06 与 10-08 的凌晨。</div>
+      <div id="heat"></div>
+      <div class="legend">深夜 22:00–06:00 提交：beta-v2 线 <b>177/322（55%）</b>；两线合计 200/472（42.4%）。<span class="sw" style="background:#e7dcc0"></span>0 枚<span class="sw" style="background:#cbb98e"></span>1–2<span class="sw" style="background:#b5826a"></span>3–5<span class="sw" style="background:#9c3423"></span>6＋</div>
+    </div>
+    <table class="rpt">
+      <tr><th>阶段</th><th>日期</th><th>commits</th><th>关键交付</th><th>质量基线变化</th></tr>
+      <tr><td><b>一 · 基建与数据</b></td><td>09-07～09-14</td><td>48（dev）</td><td>脚手架、AGENTS.md 协作军法、RAG 后端、数据 255→313 篇、空间图谱 v2</td><td>golden 工具与验收框架搭设</td></tr>
+      <tr><td><b>二 · 定策与引擎</b></td><td>09-15～09-20</td><td>102（dev）</td><td>定位三易其帜定稿、ADR-001~006、引擎 v2（两遍法/五算子）、防自欺六件套、变异/契约/无障碍测试设施、Ray 第四轮 UX 并入</td><td>golden 首拍；P0/P1 验收 30 条</td></tr>
+      <tr><td><b>三 · 会师与整备</b></td><td>09-21～09-26</td><td>10（beta-v2）</td><td>三树合流（304/330/1559 文件）、全仓 LF 军规、夜行军四批、语言规范</td><td>engine 312→326</td></tr>
+      <tr><td><b>四 · 主战役</b></td><td>09-27～09-28</td><td>69</td><td>批 0-6＋V/S/T/D 批：追问状态机、理解端点、对话管理器、金标 60→100、三库一画像接线、E2E 42→77 断言</td><td>engine 326→458，ui 237→319</td></tr>
+      <tr><td><b>五 · 深化与移动端</b></td><td>10-01～10-05</td><td>53</td><td>G 批三开关全开、H 批真机剧本 19/0、移动端一夜上线（APK 0.1.0 上公网）、习惯库扩域</td><td>engine 458→496，ui 319→413</td></tr>
+      <tr><td><b>六 · 收官</b></td><td>10-06～10-08</td><td>190</td><td>三方会话协同、方法库 160 条入库、定鼎 beta-v2、UI v2 全站改版、Ray 五批会师、课表解析、云同步双向、95 枚 push、v0.4.9</td><td>engine 496→860，ui 413→448</td></tr>
+    </table>
+    <table class="rpt">
+      <tr><th>深夜提交口径</th><th>数值</th></tr>
+      <tr><td>两线合并 22:00–05:59</td><td>200 / 472（42.4%）</td></tr>
+      <tr><td>两线合并 00:00–05:59</td><td>173 / 472（36.7%）</td></tr>
+      <tr><td>beta-v2 线 22:00–05:59</td><td>177 / 322（55.0%）</td></tr>
+      <tr><td>单小时峰值</td><td>10-08 00 时 20 枚；10-06 03 时、10-07 14 时各 15 枚</td></tr>
+    </table>
+    <div class="shiliao"><b>口径</b>｜git log --date 逐枚统计（时区 +0800）；阶段划分为本报告归纳，各阶段交付见 wp-ledger-v2.md 台账。</div>
+  </section>
+
+  <!-- ================= 分析 · 叁 代码规模 ================= -->
+  <section class="zhang" id="a3">
+    <div class="ch-no">分析 · 叁</div>
+    <div class="ch-head"><span class="ch-date">代码规模</span><span class="ch-title">795 个文件，约十二万九千行</span></div>
+    <div class="ch-time">语言构成：TS 302 · TSX 117 · MD 112 · PY 90 · MJS 15 等</div>
+    <div class="chartbox">
+      <h4>图 3 · 按目录规模</h4>
+      <div class="cap">git 跟踪文本文件（2026-10-10 统计），不含 node_modules/dist 与二进制数据。</div>
+      <div id="loc"></div>
+    </div>
+    <table class="rpt">
+      <tr><th>目录</th><th>行数</th><th>文件数</th><th>内容</th></tr>
+      <tr><td><b>src</b></td><td>50,546</td><td>255</td><td>前端：features 167 文件（17 个子模块）、lib/planner 引擎 35 文件 11,463 行、components 26 文件</td></tr>
+      <tr><td><b>scripts</b></td><td>26,744</td><td>111</td><td>数据流水线（61 个 Python 脚本 17,244 行）、门禁与验收工具（12 个 mjs 2,957 行）、37 个测试</td></tr>
+      <tr><td><b>docs</b></td><td>22,827</td><td>92</td><td>台账、战报、规格、验收报告等 87 篇 Markdown</td></tr>
+      <tr><td><b>tests</b></td><td>17,931</td><td>128</td><td>引擎/UI/梨宝/移动端等测试</td></tr>
+      <tr><td><b>server</b></td><td>6,071</td><td>19</td><td>FastAPI 后端（问答/检索/账号/同步/ICS/对话管理）</td></tr>
+      <tr><td><b>evals</b></td><td>3,794</td><td>26</td><td>金标数据集与评测资产（214 条金标）</td></tr>
+      <tr><td><b>e2e</b></td><td>904</td><td>3</td><td>Playwright 端到端</td></tr>
+      <tr><td>mobile</td><td>—</td><td>59</td><td>Capacitor Android 壳工程（gradle/清单/签名）</td></tr>
+    </table>
+    <div class="prose">
+      <p class="noind lt">仅排程引擎（src/lib/planner）即 35 文件 11,463 行，含两遍法编排、增量滚动、锁定/涟漪、转场缓冲、知识库接线等模块。<span class="em">版本演进</span>：v0.1.0（10-03 首个 APK，3.2MB）→ v0.4.9（10-08，11.2MB）共 14 个版本；v0.4.0 起单版体积跳升至 9MB+（并入 Ray 周页整体架构）；13 个版本生于最后约 57 小时。</p>
+    </div>
+    <div class="chartbox">
+      <h4>图 4 · 安装包版本时间线</h4>
+      <div class="cap">v0.1.0 → v0.4.9；条长＝APK 体积；0.3.0 与 0.3.1 相隔 34 分钟，0.4.2 与 0.4.3 相隔 9 分钟。</div>
+      <div id="vers"></div>
+    </div>
+    <div class="shiliao"><b>口径</b>｜git ls-files 按文本扩展名过滤后 wc -l 汇总；版本清单出自发版 commit 与 BLOCKERS.md 留痕。</div>
+  </section>
+
+  <!-- ================= 分析 · 肆 质量保障 ================= -->
+  <section class="zhang" id="a4">
+    <div class="ch-no">分析 · 肆</div>
+    <div class="ch-head"><span class="ch-date">质量保障</span><span class="ch-title">基线只增不减，断言先红后绿</span></div>
+    <div class="ch-time">151 个测试文件 · ≈1,322 用例 · 214 条金标 · 112 条阻塞全留痕</div>
+    <div class="chartbox">
+      <h4>图 5 · 引擎测试基线爬坡</h4>
+      <div class="cap">312 → 860（＋175%），全程「只增不减」；ui 线 235 → 448。</div>
+      <div id="tests"></div>
+    </div>
+    <table class="rpt">
+      <tr><th>测试纪律（机器强制）</th><th>内容</th></tr>
+      <tr><td><b>基线只增不减</b></td><td>pass 数低于基线即红灯，视为删除/跳过测试，不是「基线记错」</td></tr>
+      <tr><td><b>反向验证</b></td><td>新断言必须先红后绿（关掉实现要变红），禁止改断言凑绿</td></tr>
+      <tr><td><b>金标只增不改</b></td><td>期望值手算自规约，「禁止跑一遍实现抄输出（防循环论证）」</td></tr>
+      <tr><td><b>虎符机制</b></td><td>门禁脚本 md5 指纹登记，防夜间篡改门禁假绿</td></tr>
+      <tr><td><b>开工/收尾双闸</b></td><td>preflight（工作树/共同祖先/落后/脏区四查）＋ impact（改动反查守护测试）＋ gate_overnight 全量门禁；自研门禁/审计脚本约 7,000 行（25 个）</td></tr>
+    </table>
+    <table class="rpt">
+      <tr><th>评测（活 LLM 实测）</th><th>结果</th><th>出处</th></tr>
+      <tr><td>理解端点在线评测（60 条）</td><td><b>action F1 = 1.0</b>（TP30/FP0/FN0），逐槽 EM 0.923</td><td>docs/eval-libao-understand-2026-09-27.md</td></tr>
+      <tr><td>dialog 场景复评（40 条）</td><td>宏 F1 0.972 / acc 0.975 / 拦截率 1.0</td><td>台账 §D 白天终验</td></tr>
+      <tr><td>七条真机剧本（live LLM）</td><td><b>19 过 / 0 挂</b></td><td>台账 §H（2026-10-02）</td></tr>
+      <tr><td>「出去玩 1 小时」全链</td><td>6/0（含 Ctrl+Z 撤销验证）</td><td>台账 §D 终验</td></tr>
+      <tr><td>方法库检索（金标 126 条）</td><td>recall 1.0 / MRR 0.777 / 拒答 1.0 / 伪科学拦截 1.0</td><td>method-kb-acceptance-report-2026-10-06.md</td></tr>
+      <tr><td>变异测试抽样</td><td>SOFT_BUFFER_MIN 5→6 被精确捕获（startMin 776→775）</td><td>scheduler-v2-spec §13.10</td></tr>
+      <tr><td>真实对话回归</td><td>test:libao 45 轮双判据；eval:libao 9 维度 25 项</td><td>AGENTS.md</td></tr>
+    </table>
+    <div class="chartbox">
+      <h4>图 6 · BLOCKERS 阻塞记录按日分布（n=112）</h4>
+      <div class="cap">无法当场决定的事项一律停手登记交人拍板，不「猜一个合理值继续推」。</div>
+      <div id="blk"></div>
+    </div>
+    <table class="rpt">
+      <tr><th>代表性事故</th><th>日期</th><th>根因</th><th>处置</th></tr>
+      <tr><td><b>CRLF 行尾虚增 diff</b></td><td>09-21</td><td>两树行尾形制不一，6 个数据文件被判整文件重写（虚增 ≈5.2 万行）</td><td>全仓 LF＋.gitattributes 钉死</td></tr>
+      <tr><td><b>UNRELATED_HISTORIES</b></td><td>09-21～10-06</td><td>beta-v2 与 origin/dev 零共同祖先，agent 拉取只见旧历史</td><td>preflight 机器闸拦截；10-06 13:20 拍板切默认分支销案</td></tr>
+      <tr><td><b>三方会话同树冲突</b></td><td>10-06</td><td>三个无人值守会话同一工作树并行</td><td>mtime 取证＋车道划分（所有权零交集、显式路径 add），零覆盖</td></tr>
+      <tr><td><b>部署误删 dist</b></td><td>10-06 10:41</td><td>管道命令置空线上 dist，抢修时 rm -rf 误删备份</td><td>三份 sha256 备份恢复（404 约 4 分钟）；次日上线每日 04:17 快照</td></tr>
+      <tr><td><b>图标 v24 暗堡</b></td><td>10-08</td><td>Capacitor 模板 drawable-v24 变体在 API≥24 恒优先</td><td>aapt2 拆包定位后修复（此前两轮修复均未触及）</td></tr>
+    </table>
+    <div class="shiliao"><b>口径</b>｜基线各点出自 wp-ledger-v2.md 各批 gate_overnight 实测值；用例数为 grep it/test( 近似；BLOCKERS 计数为文件条目（8 个登记日 109 条＋3 条夜间未注日期）。</div>
+  </section>
+
+  <!-- ================= 分析 · 伍 数据工程 ================= -->
+  <section class="zhang" id="a5">
+    <div class="ch-no">分析 · 伍</div>
+    <div class="ch-head"><span class="ch-date">数据工程</span><span class="ch-title">255 篇到 520 篇，是怎么攒出来的</span></div>
+    <div class="ch-time">四批采集 · 五步流水线（采集/抓全文/清洗/去重/建索引）可独立重跑</div>
+    <table class="rpt">
+      <tr><th>资产</th><th>数值</th><th>备注</th></tr>
+      <tr><td><b>校园资讯主条目</b></td><td>520 篇（515 篇入全文检索）</td><td>公众号＋官网权威源；搜狗 token 过期致 57 篇缺全文（遗留）</td></tr>
+      <tr><td><b>向量块</b></td><td>1,873</td><td>bge-small-zh-v1.5，CPU 端 fastembed</td></tr>
+      <tr><td><b>校园地点</b></td><td>147（26 POI ＋ 121 landmark）</td><td>定位成功 143/147；基础学院 4 处路网未收录，如实不吸附</td></tr>
+      <tr><td><b>路网</b></td><td>3 校区 OSM，1,600+ 节点</td><td>军工路主校区 107 具名建筑、1,269 节点/1,433 路段</td></tr>
+      <tr><td><b>方法库/习惯库</b></td><td>160 条</td><td>金标 126 条评测；价值观终审全过（争议 9 条如实标注）</td></tr>
+      <tr><td><b>数据库</b></td><td>usst_articles.db 17MB</td><td>FTS5 全文＋向量索引</td></tr>
+    </table>
+    <div class="prose">
+      <p class="noind lt">采集路径（09-08 三连发＋后续补采）：255 → 308（公众号 53 篇）→ 313（体育馆/宿舍/图书馆三缺口）→ 515（官网权威源 20+ 站点，23 分钟 246 条，去重后净增 202）→ 520（收口）。已知数据缺陷的修复均留痕：校历 OCR 条目曾致「8 月底开学」错答，重写 1,368 字结构化文本后精确答出「9 月 7 日」；「大功率」冤案（宿管 400W 条例在库而检索不中）以查询改写＋16 条口语→术语映射修复；「光电杯」路由 top1 误判（0.493）以「看前三名」修复——正确答案 0.700 居 top2。</p>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/data-batch2/3/4-report.md；docs/project-core.md §8；AGENTS.md 遗留清单。</div>
+  </section>
+
+  <!-- ================= 分析 · 陆 功能交付 ================= -->
+  <section class="zhang" id="a6">
+    <div class="ch-no">分析 · 陆</div>
+    <div class="ch-head"><span class="ch-date">功能交付</span><span class="ch-title">三端上线，35+ 批次逐项带验证</span></div>
+    <div class="ch-time">Web · 安卓 APK · 云同步（ICS 订阅）</div>
+    <table class="rpt">
+      <tr><th>功能</th><th>说明</th><th>验证</th></tr>
+      <tr><td><b>排程真引擎</b></td><td>两遍法编排、增量滚动、锁定/涟漪、转场缓冲、六模式</td><td>engine 860 用例＋5 份周级 golden 快照</td></tr>
+      <tr><td><b>梨宝对话</b></td><td>追问状态机＋对话管理器＋8 执行器；LLM 先行、规则兜底</td><td>金标 111 条双通道；45 轮回归</td></tr>
+      <tr><td><b>校园问答</b></td><td>520 篇 RAG＋分层记忆＋相关性门</td><td>路由测试 44/44；隐私/事实错误修复留痕</td></tr>
+      <tr><td><b>画像</b></td><td>30 题分层问卷→规则映射→块级偏好入引擎</td><td>L1–L4 边界；画像解释「这是我猜的，可改」</td></tr>
+      <tr><td><b>移动端</b></td><td>今日页/周板/梨宝全屏/常驻通知/执行力评估五维</td><td>mobile 测试 7 文件＋E2E 冒烟 18 用例</td></tr>
+      <tr><td><b>云同步</b></td><td>账号/待办/目标/计划，LWW＋契约 schemaVer=2</td><td>syncContract 契约测试；双向补洞（v0.4.5）</td></tr>
+      <tr><td><b>课表解析</b></td><td>PDF/图片→19 条日程整链</td><td>公网实测 [] → POST 19 条</td></tr>
+      <tr><td><b>台账与守护</b></td><td>capability map 机器生成「功能↔测试」映射</td><td>--check 进门禁，删测试即红</td></tr>
+    </table>
+    <div class="prose">
+      <p class="noind lt">开发批次：台账（wp-ledger-v2.md）登记 <span class="em">35+ 个批次</span>（夜班 0-6、白天 A/B/C、V0-V3、S/T/D/E/G/H、M1-M5、收官 Wave/P 系、Ray 接入五批等），每批登记 commit、门禁实测值与偏差申报；「完成」四要件（实现落地、测试先红后绿、门禁实跑、证据入账）缺一不算。</p>
+    </div>
+    <div class="shiliao"><b>史料</b>｜docs/wp-ledger-v2.md；docs/mobile-line-alignment-2026-10-03.md；BLOCKERS.md。</div>
+  </section>
+
+  <!-- ================= 分析 · 柒 协作过程 ================= -->
+  <section class="zhang" id="a7">
+    <div class="ch-no">分析 · 柒</div>
+    <div class="ch-head"><span class="ch-date">协作过程</span><span class="ch-title">双人分工 ＋ 三层人机结构</span></div>
+    <div class="ch-time">所有歧义由人拍板，执行由 AI 军团完成，验收独立</div>
+    <div class="prose">
+      <p class="noind"><b>双人协作。</b>所有权表分工：CY 负责画像/梨宝/后端/数据/文档，RAY 负责周排程/引擎/组件；接壤处仅留一个冻结接口（features/libao ↔ lib/planner）。RAY 两度以独立分支交付（09-20 第四轮 UX、10-08 五批），合并口径为「底层与实现逻辑以 Ray 的提交为准」。10-02 起项目转单人主导（RAY 名下并入 CY）。</p>
+      <p class="noind"><b>人机协作（本项目显著特征）。</b>开发由「人类拍板 ＋ AI 军团执行 ＋ 独立验收（MOSS）」三层结构完成：人类负责所有需求歧义与契约拍板（BLOCKERS 中「需要人决定」事项逐条留痕）；AI 承担无人值守通宵批次（6+ 份夜战报告/日志存档）；验收角色独立于执行。为此建立机器纪律：三道门禁、虎符指纹、先红后绿、金标只增不改、append-only 日志、「没有人在看着你」自欺防线。10-06 凌晨实现三方会话同树并行零互踩（车道划分协议）。</p>
+      <p class="noind"><b>AI 贡献占比说明。</b>commit 作者署名统一为「光溯开发组」，无法按作者精确拆分；从台账与 commit 内容判断，代码主要由 AI 会话在人类逐批授权与验收下产出（Ray 的周页/目标批为其本人提交后接入）。</p>
+    </div>
+  </section>
+
+  <!-- ================= 分析 · 捌 比赛结果 ================= -->
+  <section class="zhang" id="a8">
+    <div class="ch-no">分析 · 捌</div>
+    <div class="ch-head"><span class="ch-date">比赛结果</span><span class="ch-title">一百一十二组中晋级决赛</span></div>
+    <div class="ch-time">初赛专家初评 · 2026-10 中上旬</div>
+    <table class="rpt">
+      <tr><th>项</th><th>结果</th></tr>
+      <tr><td><b>初赛</b></td><td>2026-10 中上旬专家初评，112 组参赛</td></tr>
+      <tr><td><b>名次</b></td><td><b>决赛入围（拟奖 10 组），光溯列第 7 席</b></td></tr>
+      <tr><td>全场分布</td><td>三等奖 70 组 · 二等奖 25 组 · 决赛入围 10 组 · 余 7 组不授奖</td></tr>
+      <tr><td><b>决赛</b></td><td>2026-10 下旬现场答辩（PPT＋演示），待进行</td></tr>
+      <tr><td>备战状态</td><td>演示账号（gigity）全要素播种并实测剧本命中；v0.4.9 为演示版本；95 枚 commit 已推 GitHub 实现「远端与线上一致」</td></tr>
+      <tr><td>风险</td><td>服务器租约 10-25 12:17 到期，早于决赛</td></tr>
+    </table>
+    <div class="shiliao"><b>口径</b>｜112 组总数、十强名次、奖项分布出自队内留存放榜名册四纸（仓库内无记录）；赛事时间线出自知识库收录的官方通知（data/usst_articles.json）。</div>
+  </section>
+
+  <!-- ================= 分析 · 玖 遗留事项 ================= -->
+  <section class="zhang" id="a9">
+    <div class="ch-no">分析 · 玖</div>
+    <div class="ch-head"><span class="ch-date">遗留事项</span><span class="ch-title">截至 10-11 的六件未竟之事</span></div>
+    <table class="rpt">
+      <tr><th>#</th><th>事项</th><th>影响</th><th>状态</th></tr>
+      <tr><td>1</td><td><b>服务器 10-25 到期</b></td><td>决赛前服务中断风险</td><td>仅 CY 可续，未办</td></tr>
+      <tr><td>2</td><td><b>决赛材料（申报书/PPT/视频）</b></td><td>决赛必需</td><td>未启动</td></tr>
+      <tr><td>3</td><td>57 篇公众号缺全文</td><td>检索覆盖</td><td>待跑 fulltext.py 补抓</td></tr>
+      <tr><td>4</td><td>生活服务类数据偏薄</td><td>问答覆盖</td><td>待补采</td></tr>
+      <tr><td>5</td><td>基础学院 4 处定位未收录</td><td>空间问答</td><td>OSM 无数据，如实标注</td></tr>
+      <tr><td>6</td><td>lightpath.db 历史副本含敏感数据</td><td>推远端前需 filter-repo</td><td>已登记，决赛 push 前处理</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= 附录 A ================= -->
+  <section class="zhang" id="appendix">
+    <div class="ch-no">附录 A</div>
+    <div class="ch-head"><span class="ch-date">数据口径</span><span class="ch-title">本报告每个数字是怎么来的</span></div>
+    <div class="prose">
+      <p class="noind lt">1. commit 计数：git rev-list --count 分别计 origin/dev（150）与本地 beta-v2（322）；Ray 五批经 merge 已含于 322。<br>
+      2. 行数/文件数：git ls-files 按文本扩展名过滤后 wc -l 汇总（2026-10-10），不含 node_modules/dist/二进制；data/ 下 17MB SQLite 库为二进制不计行数。<br>
+      3. 时段/每日分布：git log --date=format 逐枚统计（时区 +0800）。<br>
+      4. 测试基线各点：docs/wp-ledger-v2.md 各批次登记的 gate_overnight 实测值；「≈1,322 用例」为 grep it/test( 近似。<br>
+      5. BLOCKERS 计数：BLOCKERS.md 文件条目（8 个登记日 109 条＋3 条未注日期夜间条目）。<br>
+      6. 比赛结果：112 组总数、十强名次、奖项分布出自队内留存放榜名册四纸（仓库内无记录）；赛事时间线出自 data/usst_articles.json 收录的官方通知。<br>
+      7. 评测数字均出自 docs/ 下对应评测/验收报告原文，未重新实测。<br>
+      8. 互证文件：docs/lightpath-chronicle-2026-10-11.html（叙事海报版）、docs/development-report-2026-10-11.md（客观数据版）、docs/wp-ledger-v2.md（批次台账）、BLOCKERS.md（112 条）。</p>
+    </div>
+  </section>
+
+  <!-- ================= 功臣谱 ================= -->
+  <section class="zhang" id="heroes">
+    <div class="ch-no">附 · 人物志</div>
+    <div class="ch-head"><span class="ch-date">五路兵马</span><span class="ch-title">人物志</span></div>
+    <div class="heroes">
+      <div class="hero">
+        <div class="hname">CY</div><div class="hrole">统帅 · 产品与数据总指挥 · 梨宝方面军</div>
+        <p>亲手降过自己缝的旗（留白率），也亲手把方向盘留在了用户手里（懂分寸）。历次关键拍板的落锤人：「不可能找完所有关键词」的转向、定鼎 beta-v2 的破釜沉舟、一百六十条终审的那句「都挺权威的」。开荒季节蹲在田埂上数秧苗的后勤部长。</p>
+        <div class="hq">「不可能找完所有关键词，排程问题让 LLM 先看。」</div>
+      </div>
+      <div class="hero">
+        <div class="hname">RAY</div><div class="hrole">周排程方面军 · 两度渡河来会</div>
+        <p>dev 时代送来第四轮 UX（「4 处冲突全部取 Ray 侧」）；收官之日五批兵马零冲突并入，与总览会师。接线纪律同样郑重：「底层与实现逻辑以 Ray 的提交为准」——两个根据地之间，军报走了四天，信任一步没停。</p>
+        <div class="hq">「接入 Ray 周页交互批次——七列时间轴架构整体移植＋本树契约全保。」</div>
+      </div>
+      <div class="hero">
+        <div class="hname">梨宝</div><div class="hrole">全军向导 · 懂上理、懂你、懂分寸</div>
+        <p>从 255 篇家底长成 520 篇记忆体的向导。会答光电杯报名、会认三教、会把「出去玩一小时」真排进周计划，也会在不确定时说「这是推算值」——递地图、陪走一段、指方向，但绝不替你拍板。她的对手「提灯人」胸前有一盏真灯；她的灯在数据里。</p>
+        <div class="hq">「晚上跟室友约球去啊，羽毛球现在可是你的主场。」</div>
+      </div>
+      <div class="hero">
+        <div class="hname">MOSS</div><div class="hrole">独立监军 · 只验收，不执行</div>
+        <p>逐条重放十八比十八、七堂会审全过、三任务全面验收报告——名字借自《流浪地球》，但这位 MOSS 站在人类这边，且只认证据：每一条结论后面都贴着命令与输出。监军的存在，让「打赢了」三个字有了分量。</p>
+        <div class="hq">「MOSS 全面验收报告（任务一/二/三 → 主体通过）。」</div>
+      </div>
+      <div class="hero" style="grid-column:1/-1">
+        <div class="hname">三路夜会话</div><div class="hrole">10-06 凌晨 · 同一条山路上的三支纵队</div>
+        <p>mtime 取证、车道划分、显式路径 add——六分钟内避免了一场必然的互踩。饱和式行军：一份任务书，三支队伍，零覆盖，零丢失。当日产出六十七枚 commit。战报里那句「不覆盖他人工作」，是全卷最温柔的一句军令。</p>
+        <div class="hq">「经 BLOCKERS 协议划分车道，避免了一场必然的互踩。」</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 尾声 ================= -->
+  <section class="coda" id="coda">
+    <h3>尾声 · 进京赶考</h3>
+    <div class="prose">
+      <p>这是两个学生的第一个项目，也是他们的第一场学术赛事。三十个昼夜、一百一十二路诸侯、四百七十二枚 commit 之后，值得留下的不是名次，而是这一路上学会的三件事：</p>
+      <p>其一，<b>怎么让机器在夜里替你干活而不撒谎</b>——虎符（门禁指纹）、反谍令（先红后绿）、金标只增不改。他们立军法的那天，比写出第一行业务代码只晚了两个小时；此后每一个通宵，都靠这份军法把「打赢了」三个字焊死在证据上。</p>
+      <p>其二，<b>怎么在两个没有共同祖先的世界之间，一条 commit 都不丢</b>——从三块根据地会师，到定都西柏坡，从全军换装（LF）到定向 add。会师可以晚，不能散。</p>
+      <p>其三，<b>什么时候该自己拍板</b>——「不可能找完所有关键词」「都挺权威的」「选项 A 执行」。机器递地图、陪走一段、指方向，方向盘始终在人手里。这恰是他们为梨宝写下的分寸，也是他们自己走过的路。</p>
+      <p>而那一百一十一扇窗——他们此刻应当已经知道彼此的名字了。放榜不是战争的结束：决赛城下，十路人马重新列阵，谁都赢过自己的深夜。灯还亮着的人，不怕夜长。</p>
+    </div>
+    <div class="sign">光溯开发组 · CY &amp; RAY 谨识<span class="date">丙午年秋 · 2026 年 10 月 11 日 · 决赛前</span></div>
+    <div class="fine">
+      卷末小记：本报告为完整合并版——第一部《烽火录》为纪实小说体历程叙事，第二部为综合分析（与 docs/development-report-2026-10-11.md 同口径）。大事、日期、人物、数字与引语皆出自仓库原文——472 枚 commit 的 message 与正文、docs/ 台账与战报（wp-ledger-v2、overnight-report/log、merge-report、data-batch 报告、mobile-line-alignment、campus-promotion-assessment）、BLOCKERS.md 一百一十二条、评测报告与 AGENTS.md；行数与文件数按 git 跟踪文本文件统计（2026-10-10），小时矩阵与日线由 git log 逐枚统计，统计口径详见附录 A。对手诸传的正名、奖项与名次出自放榜名册四纸（决赛入围 10 / 二等 25 / 三等 70 / 不授奖 7，队内留存）；诨号、窗前灯火与心理神态系本卷所作的揣测与推演，已在体例中自明。文中抗战与解放战争之典（南泥湾、论持久战、台儿庄、大别山、反扫荡、西柏坡、百团大战、渡江、进京赶考）皆为叙事致敬。
+    </div>
+  </section>
+
+</div></div>
+
+<script>
+(function(){
+  // ---------- 数据 ----------
+  var days = ['09-07','09-08','09-09','09-10','09-11','09-12','09-13','09-14','09-15','09-16','09-17','09-18','09-19','09-20','09-21','09-22','09-23','09-24','09-25','09-26','09-27','09-28','09-29','09-30','10-01','10-02','10-03','10-04','10-05','10-06','10-07','10-08'];
+  var wk = {0:'日',1:'一',2:'二',3:'三',4:'四',5:'五',6:'六'};
+  var dow = function(i){ var d = new Date(2026,8,7+i); return wk[d.getDay()]; };
+  var heat = {
+    '09-07':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,2,0,0,0,0',
+    '09-08':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,2,0,1,1,3,0',
+    '09-09':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,4,0,0,0,0,0,0',
+    '09-10':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,0,0,0',
+    '09-11':'0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,6,2,1,2,4,0,0,0,0',
+    '09-12':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-13':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-14':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0',
+    '09-15':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,5,23,21,0,2,0,0',
+    '09-16':'0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,4',
+    '09-17':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-18':'0,0,0,0,0,0,0,0,0,0,0,1,7,6,0,0,0,0,0,0,0,0,0,0',
+    '09-19':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,3,0,0,1,0,1,3,2,0',
+    '09-20':'0,0,0,0,0,0,0,1,0,0,0,0,1,0,2,0,0,2,0,0,2,1,0,0',
+    '09-21':'0,0,0,3,0,0,3,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0',
+    '09-22':'0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0',
+    '09-23':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-24':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-25':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-26':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-27':'3,4,3,0,0,0,0,0,3,4,5,0,2,4,1,0,0,0,4,4,4,0,1,5',
+    '09-28':'6,4,0,0,0,2,0,0,0,1,1,0,1,4,0,0,0,3,0,0,0,0,0,0',
+    '09-29':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '09-30':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '10-01':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1',
+    '10-02':'2,7,11,8,0,0,0,0,0,2,4,3,0,0,0,0,0,0,0,0,0,0,0,0',
+    '10-03':'1,1,1,6,3,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '10-04':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '10-05':'0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0',
+    '10-06':'2,0,3,15,1,0,0,0,9,12,8,0,0,3,4,0,0,1,1,0,0,0,0,8',
+    '10-07':'6,11,0,1,0,0,0,0,0,0,0,2,1,2,15,3,5,5,0,0,4,0,0,1',
+    '10-08':'20,10,17,8,0,0,0,0,7,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0'
+  };
+  var daily = [
+    ['09-07',6,'d'],['09-08',10,'d'],['09-09',5,'d'],['09-10',4,'d'],['09-11',21,'d'],['09-12',0,''],['09-13',0,''],
+    ['09-14',2,'d'],['09-15',54,'d'],['09-16',8,'d'],['09-17',0,''],['09-18',14,'d'],['09-19',17,'d'],['09-20',9,'d'],
+    ['09-21',9,'v'],['09-22',1,'v'],['09-23',0,''],['09-24',0,''],['09-25',0,''],['09-26',0,''],['09-27',47,'v'],['09-28',22,'v'],
+    ['09-29',0,''],['09-30',0,''],['10-01',3,'v'],['10-02',37,'v'],['10-03',13,'v'],['10-04',0,''],['10-05',0,''],
+    ['10-06',67,'v'],['10-07',56,'v'],['10-08',67,'v']
+  ];
+  var tests = [
+    ['09-21',312],['09-27',326],['09-27',350],['09-27',368],['09-27',406],
+    ['09-28',421],['09-28',422],['09-28',458],['10-02',480],['10-03',496],
+    ['10-06',608],['10-06',703],['10-07',842],['10-08',860]
+  ];
+  var vers = [
+    ['v0.1.0','10-03 04:19',3.2],['v0.2.0','10-06 00:28',3.2],['v0.3.0','10-06 14:15',0],['v0.3.1','10-06 14:49',0],
+    ['v0.3.2','10-07 20:36',0],['v0.4.0','10-08 01:05',9.1],['v0.4.2','10-08 01:34',9.7],['v0.4.3','10-08 01:43',9.9],
+    ['v0.4.4','10-08 02:45',0],['v0.4.5','10-08 02:59',0],['v0.4.6','10-08 03:06',0],['v0.4.7','10-08 03:12',0],
+    ['v0.4.8','10-08 08:41',10.6],['v0.4.9','10-08 09:14',0]
+  ];
+
+  // ---------- 夜战图 ----------
+  (function(){
+    var W=830, LH=17, cw=25, ch=13, L=64, T=16;
+    var H = days.length*LH + T + 30;
+    var s = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    for(var h=0;h<24;h++){ s+='<text x="'+(L+h*cw+cw/2)+'" y="11" font-size="9" fill="#93866c" text-anchor="middle">'+h+'</text>'; }
+    days.forEach(function(d,i){
+      var y = T+i*LH;
+      var isRest = (i===5||i===6||i===10||i===16||i===17||i===18||i===19||i===22||i===23||i===27||i===28);
+      s+='<text x="'+(L-6)+'" y="'+(y+ch)+'" font-size="9.5" fill="'+(isRest?'#b3a683':'#6a5f4b')+'" text-anchor="end">'+d+' 周'+dow(i)+'</text>';
+      var arr = heat[d].split(',');
+      for(var h=0;h<24;h++){
+        var v=+arr[h], col='#e7dcc0';
+        if(v>=6) col='#9c3423'; else if(v>=3) col='#b5826a'; else if(v>=1) col='#cbb98e';
+        s+='<rect x="'+(L+h*cw)+'" y="'+y+'" width="'+(cw-2)+'" height="'+(ch)+'" rx="2" fill="'+col+'"'+(v?' stroke="rgba(46,40,32,.18)" stroke-width="0.5"':'')+'></rect>';
+        if(v>=6){ s+='<text x="'+(L+h*cw+(cw-2)/2)+'" y="'+(y+ch-3)+'" font-size="8.5" fill="#f7f1e0" text-anchor="middle" font-weight="bold">'+v+'</text>'; }
+      }
+    });
+    var y2=T+days.length*LH+18;
+    s+='<text x="'+L+'" y="'+(y2+12)+'" font-size="10.5" fill="#6a5f4b">深色孤岛＝凌晨孤军；9-15 黄昏 23 枚/时 ＝ 论持久战之夜；10-06 凌晨 15 枚/时 ＝ 反扫荡；10-08 00 时 20 枚 ＝ 渡江前夜。</text>';
+    s+='</svg>';
+    document.getElementById('heat').innerHTML=s;
+  })();
+
+  // ---------- 三十日战线 ----------
+  (function(){
+    var W=848,H=250,L=48,T=18,B=44;
+    var max=70, iw=(W-L-14)/daily.length, bh=H-T-B;
+    var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    for(var g=0;g<=max;g+=10){ var y=T+bh-bh*g/max;
+      s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-8)+'" y2="'+y+'" stroke="#c6b48a" stroke-width="'+(g===0?1:0.5)+'" stroke-dasharray="'+(g===0?'none':'3 3')+'"/>';
+      s+='<text x="'+(L-6)+'" y="'+(y+4)+'" font-size="9.5" fill="#93866c" text-anchor="end">'+g+'</text>';
+    }
+    daily.forEach(function(it,i){
+      var d=it[0],v=it[1],t=it[2];
+      var x=L+i*iw+3, bw=iw-6, y=T+bh-bh*v/max;
+      var col = t==='d'?'#3d4d6b':(t==='v'?'#9c3423':'#e7dcc0');
+      s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+Math.max(bh*v/max,0)+'" fill="'+col+'" rx="1.5"></rect>';
+      if(v>=20){ s+='<text x="'+(x+bw/2)+'" y="'+(y-4)+'" font-size="9.5" fill="#2e2820" text-anchor="middle" font-weight="bold">'+v+'</text>'; }
+      var show = (i%3===0)||v>0;
+      if(show){ s+='<text x="'+(x+bw/2)+'" y="'+(T+bh+12)+'" font-size="8.5" fill="'+(t?'#6a5f4b':'#b3a683')+'" text-anchor="middle" transform="rotate(-52 '+(x+bw/2)+' '+(T+bh+12)+')">'+d+'</text>'; }
+    });
+    s+='<text x="'+(L)+'" y="'+(H-6)+'" font-size="10.5" fill="#6a5f4b">三峰：9-15 定策（54）· 10-06 反扫荡（67）· 10-08 渡江（67）；末三日 190 枚，占全程四成。</text>';
+    s+='</svg>';
+    document.getElementById('daily').innerHTML=s;
+  })();
+
+  // ---------- 测试爬坡 ----------
+  (function(){
+    var W=830,H=250,L=52,T=18,B=44;
+    var ymin=300,ymax=880, bh=H-T-B, n=tests.length, iw=(W-L-30)/(n-1);
+    var X=function(i){return L+i*iw;}, Y=function(v){return T+bh-bh*(v-ymin)/(ymax-ymin);};
+    var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    for(var g=300;g<=880;g+=100){ var y=Y(g);
+      s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-10)+'" y2="'+y+'" stroke="#c6b48a" stroke-width="0.5" stroke-dasharray="3 3"/>';
+      s+='<text x="'+(L-6)+'" y="'+(y+4)+'" font-size="9.5" fill="#93866c" text-anchor="end">'+g+'</text>';
+    }
+    var pts=tests.map(function(t,i){return X(i)+','+Y(t[1]);}).join(' ');
+    s+='<polyline points="'+pts+'" fill="none" stroke="#9c3423" stroke-width="2.2"/>';
+    tests.forEach(function(t,i){
+      s+='<circle cx="'+X(i)+'" cy="'+Y(t[1])+'" r="3.2" fill="#f4edda" stroke="#9c3423" stroke-width="1.6"/>';
+      s+='<text x="'+X(i)+'" y="'+(Y(t[1])-8)+'" font-size="9.5" fill="#2e2820" text-anchor="middle" font-weight="bold">'+t[1]+'</text>';
+      if(i===0||t[0]!==tests[i-1][0]||i===n-1){ s+='<text x="'+X(i)+'" y="'+(T+bh+14)+'" font-size="9" fill="#6a5f4b" text-anchor="middle">'+t[0]+'</text>'; }
+    });
+    s+='<text x="'+L+'" y="'+(H-6)+'" font-size="10.5" fill="#6a5f4b">09-21 开工 312 → 10-08 收官 860——十一天，近三倍。</text>';
+    s+='</svg>';
+    document.getElementById('tests').innerHTML=s;
+  })();
+
+  // ---------- 版本阶梯（横条：版本 × 时刻 × APK 体积） ----------
+  (function(){
+    var W=830, RH=21, L=210, T=8;
+    var H=T+vers.length*RH+34, BW=W-L-90;
+    var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    vers.forEach(function(v,i){
+      var y=T+i*RH;
+      s+='<text x="'+(L-10)+'" y="'+(y+13.5)+'" font-size="11" fill="#2e2820" text-anchor="end" font-weight="bold">'+v[0]+'</text>';
+      s+='<text x="96" y="'+(y+13.5)+'" font-size="9.5" fill="#93866c">'+v[1]+'</text>';
+      if(v[2]){
+        var w=BW*v[2]/11.2;
+        s+='<rect x="'+L+'" y="'+(y+3.5)+'" width="'+w+'" height="12" rx="2" fill="'+(i===vers.length-1?'#7a2418':'#9c3423')+'" opacity="'+(i===vers.length-1?1:.82)+'"></rect>';
+        s+='<text x="'+(L+w+6)+'" y="'+(y+13.5)+'" font-size="9.5" fill="#9c3423">'+v[2]+' MB</text>';
+      }else{
+        s+='<rect x="'+L+'" y="'+(y+8.5)+'" width="8" height="2" fill="#c6b48a"></rect>';
+        s+='<text x="'+(L+14)+'" y="'+(y+13.5)+'" font-size="9" fill="#b3a683">体积未留档</text>';
+      }
+    });
+    var y2=T+vers.length*RH+16;
+    s+='<text x="96" y="'+(y2+10)+'" font-size="10.5" fill="#6a5f4b">条长＝安装包体积（3.2M → 11.2M）。v0.3.0 与 0.3.1 之间只隔 34 分钟；0.4.2 → 0.4.3 之间只隔 9 分钟。</text>';
+    s+='</svg>';
+    document.getElementById('vers').innerHTML=s;
+  })();
+
+  // ---------- 代码规模（分析 · 叁） ----------
+  (function(){
+    var loc=[['src（前端）',50546,255],['scripts（流水线/门禁）',26744,111],['docs（文档）',22827,92],['tests（测试）',17931,128],['server（后端）',6071,19],['evals（评测资产）',3794,26],['e2e（端到端）',904,3]];
+    var W=920, RH=30, L=240, T=8;
+    var H=T+loc.length*RH+40, BW=W-L-170;
+    var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    loc.forEach(function(it,i){
+      var y=T+i*RH;
+      s+='<text x="'+(L-10)+'" y="'+(y+14)+'" font-size="11" fill="#2e2820" text-anchor="end">'+it[0]+'</text>';
+      s+='<rect x="'+L+'" y="'+(y+4)+'" width="'+(BW*it[1]/50546)+'" height="15" fill="#b5826a"></rect>';
+      s+='<text x="'+(L+BW*it[1]/50546+6)+'" y="'+(y+15)+'" font-size="10.5" fill="#2e2820">'+it[1].toLocaleString()+' 行 / '+it[2]+' 文件</text>';
+    });
+    s+='<text x="'+L+'" y="'+(T+loc.length*RH+26)+'" font-size="10.5" fill="#6a5f4b">另有 mobile/（Capacitor 壳工程 59 文件）未计入；git 跟踪文本文件合计 795 个 ≈ 12.9 万行（2026-10-10 统计）。</text>';
+    s+='</svg>';
+    document.getElementById('loc').innerHTML=s;
+  })();
+
+  // ---------- 阻塞分布（分析 · 肆） ----------
+  (function(){
+    var blk=[['09-27',7],['09-28',18],['10-01',5],['10-02',5],['10-03',3],['10-06',43],['10-07',7],['10-08',21]];
+    var W=920,H=240,L=52,T=14,B=44,max=50,bh=H-T-B,iw=(W-L-20)/blk.length;
+    var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    for(var g=0;g<=max;g+=10){var y=T+bh-bh*g/max;
+      s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-14)+'" y2="'+y+'" stroke="#c6b48a" stroke-width="0.5" stroke-dasharray="3 3"/>';
+      s+='<text x="'+(L-6)+'" y="'+(y+4)+'" font-size="9.5" fill="#93866c" text-anchor="end">'+g+'</text>';}
+    blk.forEach(function(it,i){
+      var x=L+i*iw+8,bw=iw-16,y=T+bh-bh*it[1]/max;
+      s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+(bh*it[1]/max)+'" fill="'+(it[0]==='10-06'?'#9c3423':'#b5826a')+'"></rect>';
+      s+='<text x="'+(x+bw/2)+'" y="'+(y-4)+'" font-size="9.5" fill="#2e2820" text-anchor="middle">'+it[1]+'</text>';
+      s+='<text x="'+(x+bw/2)+'" y="'+(T+bh+13)+'" font-size="9.5" fill="#6a5f4b" text-anchor="middle">'+it[0]+'</text>';
+    });
+    s+='<line x1="'+L+'" y1="'+(T+bh)+'" x2="'+(W-14)+'" y2="'+(T+bh)+'" stroke="#6a5f4b" stroke-width="1"/>';
+    s+='<text x="'+L+'" y="'+(H-6)+'" font-size="10.5" fill="#6a5f4b">8 个登记日合计 109 条，另有 3 条未注日期夜间条目，合计 112 条；峰值 10-06（43 条）。</text>';
+    s+='</svg>';
+    document.getElementById('blk').innerHTML=s;
+  })();
+})();
+</script>
+</body>
+</html>
