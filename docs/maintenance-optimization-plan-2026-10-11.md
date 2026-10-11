@@ -328,12 +328,12 @@ GitHub Actions（跑现有 `gate_overnight.mjs` 即可，不自造新流程）+ 
 
 | ID | 动作 | 分级 | 备注 |
 |---|---|---|---|
-| P2-1 | beta-v2 → dev → main 人工评审合并（合并后重跑 `capability_map.mjs --write`） | L2 | **侦察（2026-10-11）**：与 origin/dev 仍零共同祖先（+340/−150），dev 顶端停在 2026-09-20。实为二选一：allow-unrelated-histories 真合并，或 dev 直接换代为 beta-v2（需 CY 确认 dev 独有内容是否已全部移植） |
+| P2-1 | ~~beta-v2 → dev → main 人工评审合并~~ **收敛为「dev/main 直接换代」**（2026-10-11 扫描定论）：dev 独有 150 提交全在 2026-09-07~09-20 PR 时代，文件树差集仅 1 个被有意删除的旧组件（`WeekView.tsx`，功能已吸收）；origin/main 同态。⟹ `git push --force origin beta-v2:dev` + 同法换 main，无需合并 | L2→一键 | 旧历史 bundle 已备份；换代后重跑 `capability_map.mjs --write` |
 | P2-2 | 数据补爬：生活服务/数字校园（找后勤保障处、信息化办官网） | L0 | 复用 scripts/ 五步流水线，勿重爬存量 |
 | P2-3 | 57 篇缺全文文章跑 `scripts/fulltext.py` 补抓 | L0 | 需要 token 有效期注意 |
 | P2-4 | 决赛材料（申报书/PPT/视频）：素材直接取自本文 §1.2 优势清单 + capability-map 数据 | — | 10 月底截止，建议与 P1 并行 |
 | P2-5 | ~~FOCUS DAYS 死开关~~ **销案**：W6-A 已按「A 硬约束」完整落地（引擎消费/契约申报/RV 测试/golden 零漂移），BLOCKERS 2026-10-07 条过期 | — | 2026-10-11 复核销案，零改动 |
-| P2-6 | git 历史清理：`git filter-repo` 移除历史中的 `data/lightpath.db`；**推远端/公开化之前必做** | L2 | **侦察（2026-10-11）**：blob 45KB×3 提交（`dc6d4a6`/`672d69f`/`5d7992d`），且**已随 10-08 推送在 origin/beta-v2 上**；清理后需全分支 force push + 协作者重新 clone，先 bundle 备份 |
+| P2-6 | git 历史清理：`git filter-repo` 移除历史中的 `data/lightpath.db`；**推远端/公开化之前必做** | L2→一键 | **实弹演练已过（2026-10-11）**：全量 bundle 备份已建（`_backups/repo-full-20261011.bundle` 53.9MB）；TEMP 克隆内 `git filter-branch` 真跑通过——改写后文件清单逐字节一致、提交数 341 不变、污染清零。剩余 = CY 在真仓执行同一命令序列 + `push --force --all`（BLOCKERS 有完整序列） |
 | P2-7 | 方法库尾巴：QUESTION_BANK ≥60 道、contraindications、注释过期修正 | L0 | 对应守护测试同步 |
 | P2-8 | 真机走查（Mate 40E）：按 MASVS-NETWORK/STORAGE 清单 + markdown 渲染确认（LLM05）+ 推广评估遗留项逐条过 | L0 | 走查结果回写 mobile-line 文档 |
 | P2-9 | 文档漂移清账：ADR-008 去重、progress-status PARTIALS 销案、门禁基线数字、推广评估中已被 10-08 修复推翻的条目 | L0 | 顺手项，合并前清完 |

@@ -75,6 +75,5 @@ jobs:
           pip install bandit
           bandit -r server -ll -q
 
-      - name: npm 依赖审计（咨询）
-        continue-on-error: true
+      - name: npm 依赖审计（阻断 —— 2026-10-11 本地官方源实测 0 漏洞后转阻断；出现新告警即红）
         run: npm audit --omit=dev --audit-level=critical
