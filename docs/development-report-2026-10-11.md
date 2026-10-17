@@ -2,7 +2,7 @@
 
 > 统计区间：2026-09-07 16:24（首枚 commit）至 2026-10-08 09:14（末枚 commit）
 > 编写日期：2026-10-11 · 数据全部来自仓库可复核记录，统计口径见附录 A
-> 本报告为客观数据版；**完整合并版（历程叙事 × 综合分析）见 `docs/development-report-full-2026-10-11.html`**，叙事海报版见 `docs/lightpath-chronicle-2026-10-11.html`，三者数据口径一致。
+> 本报告为 Markdown 数据速查版；**网页版（Apple 风格单页）见 `docs/development-report-data-2026-10-11.html`**，**完整合并版（历程叙事 × 综合分析）见 `docs/development-report-full-2026-10-11.html`**，叙事海报版见 `docs/lightpath-chronicle-2026-10-11.html`，四者数据口径一致。
 
 ---
 

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>光溯 · 开发历程报告（数据版）</title>
+<style>
+  :root{
+    --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#86868b;
+    --line:#d2d2d7; --hair:#e8e8ed; --bg:#ffffff; --soft:#f5f5f7;
+    --blue:#0071e3; --blue-d:#0058b0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+    font-feature-settings:"tnum";
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+  a{color:var(--blue);text-decoration:none;}
+  b,strong{font-weight:600;}
+
+  /* ---------- 导航 ---------- */
+  nav{
+    position:sticky;top:0;z-index:20;
+    background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(20px);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    border-bottom:1px solid rgba(0,0,0,.08);
+  }
+  nav .inner{max-width:1080px;margin:0 auto;padding:0 24px;height:48px;display:flex;align-items:center;gap:28px;overflow-x:auto;}
+  nav .brand{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;}
+  nav a{font-size:12.5px;color:var(--ink2);white-space:nowrap;}
+  nav a:hover{color:var(--ink);}
+
+  /* ---------- 首屏 ---------- */
+  header{padding:88px 0 64px;background:linear-gradient(180deg,#fbfbfd 0%,#ffffff 100%);}
+  .eyebrow{font-size:12.5px;letter-spacing:.14em;color:var(--blue);font-weight:600;}
+  h1{font-size:clamp(38px,5.2vw,60px);line-height:1.08;letter-spacing:-.025em;font-weight:700;margin:14px 0 6px;}
+  .hero-sub{font-size:clamp(20px,2.4vw,28px);line-height:1.35;letter-spacing:-.01em;font-weight:600;color:var(--ink2);margin-bottom:18px;max-width:880px;word-break:keep-all;}
+  .sub{font-size:clamp(17px,2vw,21px);color:var(--ink2);max-width:720px;line-height:1.5;}
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px;}
+  .pill{font-size:12.5px;padding:4px 12px;border-radius:999px;background:var(--soft);color:var(--ink2);}
+  .pill.blue{background:rgba(0,113,227,.1);color:var(--blue);font-weight:600;}
+  .meta{margin-top:18px;font-size:12.5px;color:var(--ink3);}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px;}
+  .kpi{background:var(--soft);border-radius:18px;padding:22px 22px 20px;}
+  .kpi b{display:block;font-size:clamp(26px,2.6vw,36px);line-height:1.15;letter-spacing:-.02em;font-weight:700;}
+  .kpi b em{font-style:normal;font-size:.55em;font-weight:600;color:var(--ink2);margin-left:2px;}
+  .kpi span{display:block;font-size:13px;color:var(--ink2);margin-top:6px;}
+
+  /* ---------- 章节 ---------- */
+  section{padding:72px 0;border-top:1px solid var(--hair);}
+  section.soft{background:var(--soft);border-top:none;}
+  .sec-no{font-size:12.5px;letter-spacing:.12em;color:var(--ink3);font-weight:600;}
+  h2{font-size:clamp(28px,3.4vw,40px);line-height:1.15;letter-spacing:-.02em;font-weight:700;margin:8px 0 12px;}
+  .lead{font-size:17px;color:var(--ink2);max-width:820px;margin-bottom:28px;}
+  h3{font-size:19px;letter-spacing:-.01em;font-weight:600;margin:36px 0 12px;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+
+  .card{background:#fff;border:1px solid var(--hair);border-radius:18px;padding:26px;}
+  section.soft .card{border-color:#fff;}
+  .card h4{font-size:16px;font-weight:600;margin-bottom:6px;}
+  .card p{font-size:14px;color:var(--ink2);}
+  .card .big{font-size:30px;font-weight:700;letter-spacing:-.02em;}
+
+  .callout{background:rgba(0,113,227,.06);border-radius:16px;padding:18px 22px;font-size:14.5px;color:#333;line-height:1.65;}
+  .callout b{color:var(--ink);}
+
+  /* ---------- 图表 ---------- */
+  figure{background:#fff;border:1px solid var(--hair);border-radius:18px;padding:22px 22px 14px;margin:18px 0;}
+  figure img{display:block;width:100%;height:auto;}
+  figcaption{font-size:12.5px;color:var(--ink3);margin-top:10px;line-height:1.55;}
+
+  /* ---------- 表格 ---------- */
+  .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:18px;border:1px solid var(--hair);background:#fff;}
+  section.soft .tw{border-color:#fff;}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px;}
+  th{
+    font-size:12px;letter-spacing:.04em;color:var(--ink2);font-weight:600;text-align:left;
+    padding:13px 18px;border-bottom:1px solid var(--line);background:#fafafc;white-space:nowrap;
+  }
+  td{padding:13px 18px;border-bottom:1px solid var(--hair);color:#3a3a3c;vertical-align:top;line-height:1.55;}
+  tr:last-child td{border-bottom:none;}
+  td:first-child{color:var(--ink);font-weight:600;}
+  td .hl{color:var(--blue);font-weight:700;}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+  /* ---------- 阶段条 ---------- */
+  .phase{display:grid;grid-template-columns:120px 1fr 90px;gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid var(--hair);}
+  .phase:last-child{border-bottom:none;}
+  .phase .pname{font-weight:600;font-size:14px;}
+  .phase .pdate{font-size:12.5px;color:var(--ink3);margin-top:2px;}
+  .phase .pdesc{font-size:13.5px;color:var(--ink2);line-height:1.6;}
+  .phase .pnum{text-align:right;font-size:13.5px;color:var(--ink);font-weight:600;white-space:nowrap;}
+
+  footer{padding:56px 0 72px;border-top:1px solid var(--hair);background:var(--soft);}
+  footer p{font-size:12.5px;color:var(--ink3);line-height:1.75;max-width:900px;margin-top:8px;}
+
+  @media (max-width:860px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .grid2,.grid3{grid-template-columns:1fr;}
+    header{padding:56px 0 44px;}
+    section{padding:52px 0;}
+    .phase{grid-template-columns:1fr;gap:2px;}
+    .phase .pnum{text-align:left;}
+    nav .inner{gap:18px;}
+  }
+  @media print{
+    nav{display:none;} section{break-inside:avoid-page;} body{font-size:12px;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <span class="brand">光溯 · 开发报告</span>
+    <a href="#overview">概况</a>
+    <a href="#time">时间</a>
+    <a href="#scale">规模</a>
+    <a href="#quality">质量</a>
+    <a href="#data">数据</a>
+    <a href="#delivery">交付</a>
+    <a href="#process">协作</a>
+    <a href="#result">结果</a>
+    <a href="#backlog">遗留</a>
+    <a href="#appendix">口径</a>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">开发历程报告 · 数据版</div>
+    <h1>光溯 · 上理生活助手</h1>
+    <p class="hero-sub">三十个昼夜，从第一行代码到一百一十二组突围</p>
+    <p class="sub">一份纯数据的开发记录：时间怎么花的、代码写了多少、质量怎么守的、比赛赢到了哪一步。所有数字均可由仓库记录复核。</p>
+    <div class="pills">
+      <span class="pill blue">决赛入围 · 十强第 7 席</span>
+      <span class="pill">第 18 届光电杯</span>
+      <span class="pill">v0.4.9</span>
+      <span class="pill">2026-09-07 → 2026-10-08</span>
+    </div>
+    <div class="meta">统计区间 2026-09-07 16:24 — 2026-10-08 09:14 · 编写 2026-10-11 · 口径见附录 A</div>
+
+    <div class="kpis">
+      <div class="kpi"><b>30<em>日17时</em></b><span>项目实际跨度</span></div>
+      <div class="kpi"><b>472<em>枚</em></b><span>commit（两条历史线）</span></div>
+      <div class="kpi"><b>12.9<em>万行</em></b><span>代码与文档 · 795 文件</span></div>
+      <div class="kpi"><b>1,322<em>用例</em></b><span>151 个测试文件</span></div>
+      <div class="kpi"><b>520<em>篇</em></b><span>校园资讯 · 1,873 向量块</span></div>
+      <div class="kpi"><b>14<em>版本</em></b><span>v0.1.0 → v0.4.9</span></div>
+      <div class="kpi"><b>42.4<em>%</em></b><span>深夜提交占比（22:00–05:59）</span></div>
+      <div class="kpi"><b>112<em>条</em></b><span>阻塞记录 · 全部留痕</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- 1 概况 -->
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-no">01 · 项目概况</div>
+    <h2>一个懂上理的智能决策伙伴</h2>
+    <p class="lead">校园知识问答（RAG）＋ 画像 ＋ 排程引擎 ＋ 移动端。技术上是一条「数据 → 检索 → 对话 → 排程 → 执行」的完整链路。</p>
+    <div class="tw">
+      <table>
+        <tr><th style="width:22%">项</th><th>内容</th></tr>
+        <tr><td>项目名称</td><td>光溯 · 上理生活助手（usst-lightpath-planner，v0.4.9）</td></tr>
+        <tr><td>参赛赛事</td><td>第 18 届光电杯创新设计大赛（光电学院学术部主办）· 主题「智逐光影，溯梦未来」</td></tr>
+        <tr><td>团队</td><td>2 人（CY：产品/数据/梨宝线；RAY：周排程算法/周视图）＋ AI 协作开发</td></tr>
+        <tr><td>技术栈</td><td>TypeScript / React / Vite / Tailwind · Python FastAPI · SQLite（FTS5＋向量）· Capacitor / Android</td></tr>
+        <tr><td>部署形态</td><td>公网 Web（nginx＋systemd）· 签名 APK 直装 · ICS 订阅 · 云同步</td></tr>
+      </table>
+    </div>
+
+    <h3>定位的三次演变（2026-09-15 定稿）</h3>
+    <div class="tw">
+      <table>
+        <tr><th style="width:14%">版本</th><th style="width:34%">定位</th><th>转向原因</th></tr>
+        <tr><td>v1</td><td>反内卷排程工具（纯前端）</td><td>把排程当主干，「留白率」为核心主张</td></tr>
+        <tr><td>v2</td><td>梨宝校园 AI 助手（＋后端＋RAG）</td><td>「贴心」本质是伙伴而非工具；规则引擎撑不起开放问答</td></tr>
+        <tr><td>v3（终）</td><td>懂上理的智能决策伙伴</td><td>排程只是一种输出形式；确立「懂上理 / 懂你 / 懂分寸」三钩子与 L1–L4 边界（L4 决策层绝不做）</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 2 时间 -->
+<section id="time" class="soft">
+  <div class="wrap">
+    <div class="sec-no">02 · 时间投入</div>
+    <h2>三十日十七小时，末三日占四成</h2>
+    <p class="lead">21 个有提交日、11 个全休日。末三日（10-06/07/08）共 190 枚 commit，占全程 40.3%。</p>
+
+    <figure>
+      <img src="charts/apple/daily.png" alt="每日提交数">
+      <figcaption>每日 commit 数。灰＝dev 线（09-07–09-20，150 枚），蓝＝beta-v2 线（09-21–10-08，322 枚）；空白为全休日。</figcaption>
+    </figure>
+
+    <figure>
+      <img src="charts/apple/hourly.png" alt="24 小时提交分布">
+      <figcaption>24 小时提交分布（两线合并）。22:00–05:59 共 200 枚（42.4%）；凌晨 0–5 时 173 枚（36.7%）；主线单独口径深夜占比 55%（177/322）。</figcaption>
+    </figure>
+
+    <h3>六个开发阶段</h3>
+    <div class="card">
+      <div class="phase"><div><div class="pname">基建与数据</div><div class="pdate">09-07 → 09-14</div></div><div class="pdesc">脚手架、AGENTS.md 协作军法、RAG 后端、数据 255→313 篇、空间图谱 v2；golden 工具与验收框架搭设。</div><div class="pnum">48 枚</div></div>
+      <div class="phase"><div><div class="pname">定策与引擎</div><div class="pdate">09-15 → 09-20</div></div><div class="pdesc">定位定稿、ADR-001~006、引擎 v2（两遍法 / 五算子）、防自欺六件套、变异 / 契约 / 无障碍测试设施、Ray 第四轮 UX 并入；golden 首拍。</div><div class="pnum">102 枚</div></div>
+      <div class="phase"><div><div class="pname">会师与整备</div><div class="pdate">09-21 → 09-26</div></div><div class="pdesc">三树合流（304 / 330 / 1559 文件）、全仓 LF 军规、夜行军四批、语言规范；engine 312→326。</div><div class="pnum">10 枚</div></div>
+      <div class="phase"><div><div class="pname">主战役</div><div class="pdate">09-27 → 09-28</div></div><div class="pdesc">批 0-6＋V/S/T/D 批：追问状态机、理解端点、对话管理器、金标 60→100、三库一画像接线、E2E 42→77 断言；engine 326→458。</div><div class="pnum">69 枚</div></div>
+      <div class="phase"><div><div class="pname">深化与移动端</div><div class="pdate">10-01 → 10-05</div></div><div class="pdesc">G 批三开关全开、H 批真机剧本 19/0、移动端一夜上线（APK 0.1.0 上公网）、习惯库扩域；engine 458→496。</div><div class="pnum">53 枚</div></div>
+      <div class="phase"><div><div class="pname">收官</div><div class="pdate">10-06 → 10-08</div></div><div class="pdesc">三方会话协同、方法库 160 条入库、定鼎 beta-v2、UI v2 全站改版、Ray 五批会师、课表解析、云同步双向、95 枚 push、v0.4.9；engine 496→860。</div><div class="pnum">190 枚</div></div>
+    </div>
+
+    <h3>深夜提交口径</h3>
+    <div class="tw">
+      <table>
+        <tr><th>口径</th><th>数值</th></tr>
+        <tr><td>两线合并 22:00–05:59</td><td class="num"><span class="hl">200 / 472（42.4%）</span></td></tr>
+        <tr><td>两线合并 00:00–05:59</td><td class="num">173 / 472（36.7%）</td></tr>
+        <tr><td>beta-v2 线 22:00–05:59</td><td class="num">177 / 322（55.0%）</td></tr>
+        <tr><td>单小时峰值</td><td>10-08 00 时 20 枚；10-06 03 时、10-07 14 时各 15 枚</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 3 规模 -->
+<section id="scale">
+  <div class="wrap">
+    <div class="sec-no">03 · 代码规模</div>
+    <h2>795 个文件，约 12.9 万行</h2>
+    <p class="lead">语言构成：TS 302 · TSX 117 · MD 112 · PY 90 · MJS 15 等。仅排程引擎即 35 文件 11,463 行。</p>
+
+    <figure>
+      <img src="charts/apple/loc.png" alt="按目录规模">
+      <figcaption>按目录的文件行数（git 跟踪文本文件，2026-10-10）· 不含 node_modules / dist 与二进制数据。</figcaption>
+    </figure>
+
+    <div class="tw">
+      <table>
+        <tr><th style="width:12%">目录</th><th style="width:14%">行数</th><th style="width:10%">文件</th><th>内容</th></tr>
+        <tr><td>src</td><td class="num">50,546</td><td class="num">255</td><td>前端：features 167 文件（17 个子模块）· lib/planner 引擎 35 文件 11,463 行 · components 26 文件</td></tr>
+        <tr><td>scripts</td><td class="num">26,744</td><td class="num">111</td><td>数据流水线（61 个 Python 脚本 17,244 行）· 门禁与验收工具（12 个 mjs 2,957 行）· 37 个测试</td></tr>
+        <tr><td>docs</td><td class="num">22,827</td><td class="num">92</td><td>台账、战报、规格、验收报告等 87 篇 Markdown</td></tr>
+        <tr><td>tests</td><td class="num">17,931</td><td class="num">128</td><td>引擎 / UI / 梨宝 / 移动端等测试</td></tr>
+        <tr><td>server</td><td class="num">6,071</td><td class="num">19</td><td>FastAPI 后端（问答 / 检索 / 账号 / 同步 / ICS / 对话管理）</td></tr>
+        <tr><td>evals</td><td class="num">3,794</td><td class="num">26</td><td>金标数据集与评测资产（214 条金标）</td></tr>
+        <tr><td>e2e</td><td class="num">904</td><td class="num">3</td><td>Playwright 端到端</td></tr>
+        <tr><td>mobile</td><td class="num">—</td><td class="num">59</td><td>Capacitor Android 壳工程（gradle / 清单 / 签名）</td></tr>
+      </table>
+    </div>
+
+    <h3>十四个版本，十三个生于最后 57 小时</h3>
+    <figure>
+      <img src="charts/apple/versions.png" alt="版本时间线">
+      <figcaption>条长＝APK 体积（3.2 MB → 11.2 MB）。v0.4.0 起体积跳升至 9 MB＋（并入 Ray 周页整体架构）；0.3.0 与 0.3.1 相隔 34 分钟，0.4.2 与 0.4.3 相隔 9 分钟。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 4 质量 -->
+<section id="quality" class="soft">
+  <div class="wrap">
+    <div class="sec-no">04 · 质量保障</div>
+    <h2>基线只增不减，断言先红后绿</h2>
+    <p class="lead">151 个测试文件、约 1,322 个用例、214 条金标、112 条阻塞全部留痕。引擎基线 11 天从 312 爬到 860。</p>
+
+    <figure>
+      <img src="charts/apple/tests.png" alt="测试基线爬坡">
+      <figcaption>引擎测试基线（test:engine pass 数）。各点出自 docs/wp-ledger-v2.md 各批 gate_overnight 实测值；UI 线同期 235 → 448。</figcaption>
+    </figure>
+
+    <h3>五条机器强制的测试纪律</h3>
+    <div class="tw">
+      <table>
+        <tr><th style="width:20%">纪律</th><th>内容</th></tr>
+        <tr><td>基线只增不减</td><td>pass 数低于基线即红灯，视为删除 / 跳过测试，不是「基线记错」</td></tr>
+        <tr><td>反向验证</td><td>新断言必须先红后绿（关掉实现要变红），禁止改断言凑绿</td></tr>
+        <tr><td>金标只增不改</td><td>期望值手算自规约，「禁止跑一遍实现抄输出（防循环论证）」</td></tr>
+        <tr><td>虎符机制</td><td>门禁脚本 md5 指纹登记，防夜间篡改门禁假绿</td></tr>
+        <tr><td>开工 / 收尾双闸</td><td>preflight（工作树 / 共同祖先 / 落后 / 脏区四查）＋ impact（改动反查守护测试）＋ gate_overnight 全量门禁；自研门禁 / 审计脚本约 7,000 行（25 个）</td></tr>
+      </table>
+    </div>
+
+    <h3>评测结果（活 LLM 实测）</h3>
+    <div class="tw">
+      <table>
+        <tr><th style="width:26%">评测</th><th style="width:44%">结果</th><th>出处</th></tr>
+        <tr><td>理解端点在线评测</td><td><span class="hl">action F1 = 1.0</span>（TP30 / FP0 / FN0），逐槽 EM 0.923</td><td>docs/eval-libao-understand-2026-09-27.md</td></tr>
+        <tr><td>dialog 场景复评（40 条）</td><td>宏 F1 0.972 / acc 0.975 / 拦截率 1.0</td><td>台账 §D 白天终验</td></tr>
+        <tr><td>七条真机剧本</td><td><span class="hl">19 过 / 0 挂</span>（live LLM）</td><td>台账 §H（2026-10-02）</td></tr>
+        <tr><td>「出去玩 1 小时」全链</td><td>6 / 0（含 Ctrl+Z 撤销验证）</td><td>台账 §D 终验</td></tr>
+        <tr><td>方法库检索（金标 126 条）</td><td>recall 1.0 / MRR 0.777 / 拒答 1.0 / 伪科学拦截 1.0</td><td>method-kb-acceptance-report</td></tr>
+        <tr><td>变异测试抽样</td><td>SOFT_BUFFER_MIN 5→6 被精确捕获（startMin 776→775）</td><td>scheduler-v2-spec §13.10</td></tr>
+        <tr><td>真实对话回归</td><td>test:libao 45 轮双判据；eval:libao 9 维度 25 项</td><td>AGENTS.md</td></tr>
+      </table>
+    </div>
+
+    <h3>阻塞记录与五大事故</h3>
+    <figure>
+      <img src="charts/apple/blockers.png" alt="阻塞按日分布">
+      <figcaption>BLOCKERS.md 共 112 条（8 个登记日 109 条＋3 条未注日期夜间条目）；峰值 10-06 单日 43 条。无法当场决定的事项一律停手登记，不「猜一个合理值继续推」。</figcaption>
+    </figure>
+    <div class="tw">
+      <table>
+        <tr><th style="width:20%">事故</th><th style="width:13%">日期</th><th style="width:35%">根因</th><th>处置</th></tr>
+        <tr><td>CRLF 虚增 diff</td><td class="num">09-21</td><td>两树行尾形制不一，6 个数据文件被判整文件重写（虚增约 5.2 万行）</td><td>全仓 LF ＋ .gitattributes 钉死</td></tr>
+        <tr><td>双历史无共同祖先</td><td class="num">09-21→10-06</td><td>beta-v2 与 origin/dev 零共同祖先，agent 拉取只见旧历史</td><td>preflight 机器闸拦截；10-06 13:20 拍板切默认分支销案</td></tr>
+        <tr><td>三方会话同树冲突</td><td class="num">10-06</td><td>三个无人值守会话同一工作树并行</td><td>mtime 取证＋车道划分（所有权零交集、显式路径 add），零覆盖</td></tr>
+        <tr><td>部署误删 dist</td><td class="num">10-06</td><td>管道命令置空线上 dist，抢修时 rm -rf 误删备份</td><td>三份 sha256 备份恢复（404 约 4 分钟）；次日上线每日 04:17 快照</td></tr>
+        <tr><td>图标 v24 暗堡</td><td class="num">10-08</td><td>Capacitor 模板 drawable-v24 变体在 API≥24 恒优先</td><td>aapt2 拆包定位后修复（此前两轮修复均未触及）</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5 数据 -->
+<section id="data">
+  <div class="wrap">
+    <div class="sec-no">05 · 数据工程</div>
+    <h2>255 篇到 520 篇，四批攒齐</h2>
+    <p class="lead">采集 / 抓全文 / 清洗 / 去重 / 建索引五步流水线，可独立重跑。</p>
+    <div class="tw">
+      <table>
+        <tr><th style="width:22%">资产</th><th style="width:26%">数值</th><th>备注</th></tr>
+        <tr><td>校园资讯主条目</td><td><span class="hl">520 篇</span>（515 入全文检索）</td><td>公众号＋官网权威源；搜狗 token 过期致 57 篇缺全文（遗留）</td></tr>
+        <tr><td>向量块</td><td>1,873</td><td>bge-small-zh-v1.5，CPU 端 fastembed</td></tr>
+        <tr><td>校园地点</td><td>147（26 POI＋121 landmark）</td><td>定位成功 143/147；基础学院 4 处路网未收录，如实不吸附</td></tr>
+        <tr><td>路网</td><td>3 校区 OSM · 1,600+ 节点</td><td>军工路主校区 107 具名建筑、1,269 节点 / 1,433 路段</td></tr>
+        <tr><td>方法库 / 习惯库</td><td>160 条</td><td>金标 126 条评测；价值观终审全过（争议 9 条如实标注）</td></tr>
+        <tr><td>数据库</td><td>usst_articles.db · 17 MB</td><td>FTS5 全文＋向量索引</td></tr>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:18px">
+      <b>采集路径</b>：255 → 308（公众号 53 篇）→ 313（体育馆 / 宿舍 / 图书馆三缺口）→ 515（官网权威源 20+ 站点，23 分钟 246 条，去重后净增 202）→ 520。
+      已知缺陷的修复均留痕：校历 OCR 致「8 月底开学」错答，重写 1,368 字后精确答出「9 月 7 日」；「大功率」冤案以查询改写＋16 条口语→术语映射修复；「光电杯」路由误判以「看前三名」修复（正确答案 0.700 居 top2）。
+    </div>
+  </div>
+</section>
+
+<!-- 6 交付 -->
+<section id="delivery" class="soft">
+  <div class="wrap">
+    <div class="sec-no">06 · 功能交付</div>
+    <h2>三端上线，35+ 批次逐项带验证</h2>
+    <p class="lead">Web · 安卓 APK · 云同步（ICS 订阅）。每项功能都有对应的机器守护。</p>
+    <div class="tw">
+      <table>
+        <tr><th style="width:16%">功能</th><th style="width:46%">说明</th><th>验证</th></tr>
+        <tr><td>排程真引擎</td><td>两遍法编排、增量滚动、锁定 / 涟漪、转场缓冲、六模式</td><td>engine 860 用例＋5 份周级 golden 快照</td></tr>
+        <tr><td>梨宝对话</td><td>追问状态机＋对话管理器＋8 执行器；LLM 先行、规则兜底</td><td>金标 111 条双通道；45 轮回归</td></tr>
+        <tr><td>校园问答</td><td>520 篇 RAG＋分层记忆＋相关性门</td><td>路由测试 44/44；隐私 / 事实错误修复留痕</td></tr>
+        <tr><td>画像</td><td>30 题分层问卷 → 规则映射 → 块级偏好入引擎</td><td>L1–L4 边界；画像解释「这是我猜的，可改」</td></tr>
+        <tr><td>移动端</td><td>今日页 / 周板 / 梨宝全屏 / 常驻通知 / 执行力评估五维</td><td>mobile 测试 7 文件＋E2E 冒烟 18 用例</td></tr>
+        <tr><td>云同步</td><td>账号 / 待办 / 目标 / 计划，LWW＋契约 schemaVer=2</td><td>syncContract 契约测试；双向补洞（v0.4.5）</td></tr>
+        <tr><td>课表解析</td><td>PDF / 图片 → 19 条日程整链</td><td>公网实测 [] → POST 19 条</td></tr>
+        <tr><td>台账与守护</td><td>capability map 机器生成「功能 ↔ 测试」映射</td><td>--check 进门禁，删测试即红</td></tr>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:18px">
+      台账（wp-ledger-v2.md）登记 <b>35+ 个批次</b>（夜班 0-6、白天 A/B/C、V0-V3、S/T/D/E/G/H、M1-M5、收官 Wave/P 系、Ray 接入五批等），每批登记 commit、门禁实测值与偏差申报；「完成」四要件（实现落地、测试先红后绿、门禁实跑、证据入账）缺一不算。
+    </div>
+  </div>
+</section>
+
+<!-- 7 协作 -->
+<section id="process">
+  <div class="wrap">
+    <div class="sec-no">07 · 协作与工程过程</div>
+    <h2>双人分工，三层人机结构</h2>
+    <div class="grid2">
+      <div class="card">
+        <h4>双人协作</h4>
+        <p>所有权表分工：CY 负责画像 / 梨宝 / 后端 / 数据 / 文档，RAY 负责周排程 / 引擎 / 组件；接壤处仅留一个冻结接口。RAY 两度以独立分支交付（09-20 第四轮 UX、10-08 五批），合并口径为「底层与实现逻辑以 Ray 的提交为准」。10-02 起转单人主导。</p>
+      </div>
+      <div class="card">
+        <h4>三层人机结构</h4>
+        <p>人类拍板 ＋ AI 军团执行 ＋ 独立验收（MOSS）。人类负责所有需求歧义与契约拍板（BLOCKERS 中「需要人决定」逐条留痕）；AI 承担无人值守通宵批次（6+ 份夜战报告存档）；验收角色独立于执行。</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <b>AI 贡献占比说明</b>：commit 作者署名统一为「光溯开发组」，无法按作者精确拆分；从台账与 commit 内容判断，代码主要由 AI 会话在人类逐批授权与验收下产出（Ray 的周页 / 目标批为其本人提交后接入）。
+    </div>
+    <h3>为此建立的机器纪律</h3>
+    <div class="grid3" style="margin-top:4px">
+      <div class="card"><div class="big">3</div><p>道门禁：preflight / impact / gate_overnight，开工与收尾双向卡关。</p></div>
+      <div class="card"><div class="big">112</div><p>条阻塞全部登记，宁可停手也不猜一个值继续推。</p></div>
+      <div class="card"><div class="big">0</div><p>次三方会话数据丢失——10-06 凌晨三会话同树并行，车道划分零互踩。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 结果 -->
+<section id="result" class="soft">
+  <div class="wrap">
+    <div class="sec-no">08 · 比赛结果</div>
+    <h2>112 组中晋级决赛 · 十强第 7 席</h2>
+    <div class="tw">
+      <table>
+        <tr><th style="width:20%">项</th><th>结果</th></tr>
+        <tr><td>初赛</td><td>2026-10 中上旬专家初评，112 组参赛</td></tr>
+        <tr><td>名次</td><td><span class="hl">决赛入围（拟奖 10 组），光溯列第 7 席</span></td></tr>
+        <tr><td>全场分布</td><td>三等奖 70 组 · 二等奖 25 组 · 决赛入围 10 组 · 余 7 组不授奖</td></tr>
+        <tr><td>决赛</td><td>2026-10 下旬现场答辩（PPT＋演示），待进行</td></tr>
+        <tr><td>备战状态</td><td>演示账号全要素播种并实测剧本命中；v0.4.9 为演示版本；95 枚 commit 已推 GitHub 实现「远端与线上一致」</td></tr>
+        <tr><td>风险</td><td>服务器租约 10-25 12:17 到期，早于决赛</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 9 遗留 -->
+<section id="backlog">
+  <div class="wrap">
+    <div class="sec-no">09 · 遗留事项</div>
+    <h2>截至 10-11 的六件未竟之事</h2>
+    <div class="tw">
+      <table>
+        <tr><th style="width:6%">#</th><th style="width:30%">事项</th><th style="width:30%">影响</th><th>状态</th></tr>
+        <tr><td>1</td><td>服务器 10-25 到期</td><td>决赛前服务中断风险</td><td>仅 CY 可续，未办</td></tr>
+        <tr><td>2</td><td>决赛材料（申报书 / PPT / 视频）</td><td>决赛必需</td><td>未启动</td></tr>
+        <tr><td>3</td><td>57 篇公众号缺全文</td><td>检索覆盖</td><td>待跑 fulltext.py 补抓</td></tr>
+        <tr><td>4</td><td>生活服务类数据偏薄</td><td>问答覆盖</td><td>待补采</td></tr>
+        <tr><td>5</td><td>基础学院 4 处定位未收录</td><td>空间问答</td><td>OSM 无数据，如实标注</td></tr>
+        <tr><td>6</td><td>lightpath.db 历史副本含敏感数据</td><td>推远端前需 filter-repo</td><td>已登记，决赛 push 前处理</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 附录 -->
+<section id="appendix" class="soft">
+  <div class="wrap">
+    <div class="sec-no">附录 A</div>
+    <h2>数据口径</h2>
+    <p class="lead">本报告每个数字的来源与测量方法。</p>
+    <div class="card" style="line-height:1.9;font-size:14px;color:#3a3a3c">
+      <p><b>1 · commit 计数</b>　git rev-list --count 分别计 origin/dev（150）与本地 beta-v2（322）；Ray 五批经 merge 已含于 322。</p>
+      <p style="margin-top:10px"><b>2 · 行数 / 文件数</b>　git ls-files 按文本扩展名过滤后 wc -l 汇总（2026-10-10），不含 node_modules / dist / 二进制；data/ 下 17 MB SQLite 库不计行数。</p>
+      <p style="margin-top:10px"><b>3 · 时段 / 每日分布</b>　git log --date=format 逐枚统计（时区 +0800）。</p>
+      <p style="margin-top:10px"><b>4 · 测试基线</b>　docs/wp-ledger-v2.md 各批次登记的 gate_overnight 实测值；「约 1,322 用例」为 grep it/test( 近似。</p>
+      <p style="margin-top:10px"><b>5 · BLOCKERS</b>　BLOCKERS.md 文件条目（8 个登记日 109 条＋3 条未注日期夜间条目）。</p>
+      <p style="margin-top:10px"><b>6 · 比赛结果</b>　112 组总数、十强名次、奖项分布出自队内留存放榜名册四纸（仓库内无记录）；赛事时间线出自 data/usst_articles.json 收录的官方通知。</p>
+      <p style="margin-top:10px"><b>7 · 评测数字</b>　均出自 docs/ 下对应评测 / 验收报告原文，未重新实测。</p>
+      <p style="margin-top:10px"><b>8 · 互证文件</b>　docs/development-report-full-2026-10-11.html（完整合并版）、docs/lightpath-chronicle-2026-10-11.html（叙事海报版）、docs/wp-ledger-v2.md（批次台账）、BLOCKERS.md（112 条）。</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--ink3)">光溯 · 上理生活助手</div>
+    <p>第 18 届光电杯创新设计大赛参赛作品 · 开发历程报告（数据版）· 2026-10-11 编写</p>
+    <p>数据来自仓库可复核记录：472 枚 commit、wp-ledger-v2 台账、BLOCKERS.md、docs/ 各期战报与评测报告。本页为纯数据版；叙事版见 docs/lightpath-chronicle-2026-10-11.html，完整合并版见 docs/development-report-full-2026-10-11.html。</p>
+  </div>
+</footer>
+
+</body>
+</html>
