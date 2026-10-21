@@ -414,13 +414,18 @@ def main():
              not _COORD_KEYS.search(json.dumps(near, ensure_ascii=False)))
 
     r1100 = campus.nearby_by_walk("申一教", limit=3)
-    _check_j("1100 起点如实返回不可定位（不编造）", r1100["walkable"] is False,
-             str(r1100.get("reason"))[:34])
+    ok1100 = (r1100["walkable"] is True
+              and bool(r1100.get("results"))
+              and all(x.get("campus") == "1100" for x in r1100["results"]))
+    _check_j("1100 起点就近推荐可用且全为 1100 地点（2026-09-16 起已定位）", ok1100,
+             str([(x["name"], x.get("campus")) for x in r1100.get("results", [])]))
 
     _check_j("跨分组 route 返回 None（三教 → 1100教育超市）",
              campus.route("第三教学楼", "1100教育超市") is None)
-    _check_j("跨分组 route 返回 None（申一教 → 申二教）",
-             campus.route("申一教", "申二教") is None)
+    r12 = campus.route("申一教", "申二教")
+    _check_j("1100 内部 route 可用（申一教 → 申二教，短距离）",
+             bool(r12) and 0.3 <= r12["meters"] <= 400,
+             f"{r12['meters'] if r12 else None} 米")
 
     r7 = campus.nearby_by_walk("七公寓", limit=6)
     _check_j("results 中不出现 null 分钟（不谎报 0.0）",
@@ -471,7 +476,6 @@ def main():
              not _COORD_KEYS.search(json.dumps(campus.search_pois("tushuguan", limit=3), ensure_ascii=False)))
 
     print()
-    print("=" * 72)
     print("M 组 · 品牌反向索引与存在性注入（2026-09-16 麦当劳修复）")
     print("=" * 72)
 
@@ -515,6 +519,63 @@ def main():
              campus.search_pois("吃饭", limit=3)[0]["type"] == "食堂")
     _check_j("品牌检索投影无坐标字段",
              not _COORD_KEYS.search(json.dumps(sr, ensure_ascii=False)))
+
+    print("=" * 72)
+    print("N 组 · 1100 基础学院空间逻辑（2026-09-16 jichuxueyuan.osm 接入）")
+    print("=" * 72)
+
+    net_m = campus.network()
+    # 1) 四个 1100 地点全部定位，且定位来源符合预期
+    #    （申二教 = approx 近似锚点，未经实地核对 —— 要换成实地坐标请改
+    #      data/osm/key_points.json 并把本断言一并更新）
+    LOC_1100 = [("申一教", "osm"), ("1100图书馆", "osm"),
+                ("1100教育超市", "osm"), ("申二教", "approx")]
+    for name, exp_src in LOC_1100:
+        src = net_m.poi.get(name, (None, ""))[1] if net_m else None
+        _check_j(f"{name} 已定位（来源 {exp_src}）", src == exp_src, f"实际 {src}")
+
+    # 2) 1100 内部路线合理（食堂楼与两教学楼都在校园核心区，步行几分钟内）
+    for a, b, lo, hi in [("申一教", "1100图书馆", 50, 400),
+                         ("1100教育超市", "1100图书馆", 20, 300),
+                         ("申一教", "1100教育超市", 50, 400)]:
+        r = campus.route(a, b)
+        _check_j(f"1100 内部 route {a} → {b} ∈ {lo}~{hi} 米",
+                 bool(r) and lo <= r["meters"] <= hi,
+                 f"{r['meters'] if r else None} 米")
+
+    # 3) 排程口径不变：本部 ↔ 1100 的 route() 仍为 None（不插转场分钟）
+    _check_j("route 跨组仍为 None（第一教学楼 → 申一教）",
+             campus.route("第一教学楼", "申一教") is None)
+
+    # 4) 但路网确实连通：跨组步行参考 ≈ 沿军工路 1.2~2.6 km
+    for a, b in [("第一教学楼", "申一教"), ("516号校门", "1100图书馆")]:
+        r = campus.network().route_cross_group(a, b)
+        _check_j(f"route_cross_group {a} → {b} ∈ 1200~2600 米",
+                 bool(r) and 1200 <= r["meters"] <= 2600,
+                 f"{r['meters'] if r else None} 米 / "
+                 + (f"{r['minutes']:.0f} 分钟" if r else ""))
+
+    # 5) cross_campus：is_cross=True / minutes=None（不进排程），note 带步行参考
+    rc = campus.cross_campus("申一教", "第一教学楼")
+    _check_j("cross_campus(申一教,一教)：跨区且不给排程分钟",
+             rc["is_cross"] is True and rc["minutes"] is None,
+             str(rc["note"])[:40])
+    _check_j("cross_campus note 附带军工路步行参考",
+             "军工路" in (rc.get("note") or ""),
+             str(rc.get("note"))[:60])
+
+    # 6) 防塌缩回归：五食堂贴着 1100 纬度分界线（31.2984 vs 分界 31.2986），
+    #    分界取值一旦偏低就会被 1100 片区规则打回 → 塌缩到三教（曾实测 53 米假路线）
+    src_wf = net_m.poi.get("第五食堂", (None, ""))[1] if net_m else None
+    r35 = campus.route("第三教学楼", "第五食堂")
+    _check_j("第五食堂定位来源仍为 osm（纬度分界未误伤）", src_wf == "osm", f"实际 {src_wf}")
+    _check_j("三教 → 五食堂仍为正常路线（200~600 米）",
+             bool(r35) and 200 <= r35["meters"] <= 600,
+             f"{r35['meters'] if r35 else None} 米")
+
+    # 7) 对外投影依然无坐标
+    _check_j("1100 路线结果不含经纬度字段",
+             not _COORD_KEYS.search(json.dumps(campus.route("申一教", "1100图书馆"), ensure_ascii=False)))
 
     total = ok + fail
     print("=" * 72)

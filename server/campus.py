@@ -187,11 +187,20 @@ def cross_campus(a, b):
                 "note": "有一方的校区未收录，按同区处理更稳妥"}
     if ca == cb:
         return {"is_cross": False, "from": ca, "to": cb, "minutes": 0, "note": "同校区"}
-    # 只有「北校↔南校」是日常跨区场景（走海安路天桥），才用路网实算；
-    # 1100/580/复兴路 与本部相距数公里，不步行可达，直接返回 None
+    # 只有「北校↔南校」是日常跨区场景（走海安路天桥），才用路网实算进排程；
+    # 1100/复兴路 不参与本部日常排程（口径不变）——但 1100 的路网自 2026-09-16
+    # 起已接入（jichuxueyuan.osm），沿军工路实际步行可达（约 1.5 km），
+    # 故 note 附上诚实的步行参考，让梨宝答「本部到基础学院怎么走」不空手。
     if (ca, cb) not in _CROSS_MIN:
+        note = f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"
+        if "1100" in (ca, cb):
+            net = network()
+            r = net.route_cross_group(a, b) if net else None
+            if r and r.get("reliable"):
+                note += (f"（沿军工路步行约 {r['meters']:.0f} 米 / "
+                         f"{max(1, round(r['minutes']))} 分钟）")
         return {"is_cross": True, "from": ca, "to": cb, "minutes": None,
-                "note": f"{campus_cn(ca)} 与 {campus_cn(cb)} 分属不同教学区，不参与本部日常排程"}
+                "note": note}
 
     # 优先用 OSM 真实路网实算（经海安路人行天桥）
     r = route(a, b)
