@@ -17,7 +17,7 @@
  */
 
 /** 包内模式兜底的后端地址（与 capacitor.config.ts 的 server.url 一致） */
-const INLINE_API_FALLBACK = 'http://101.35.253.143';
+const INLINE_API_FALLBACK = 'http://43.142.141.186';
 
 /** 是否跑在 Capacitor 包内（origin = https://localhost） */
 export function isInlinePackage(): boolean {
