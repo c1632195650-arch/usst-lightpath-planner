@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>光溯 · 服务器迁移交接报告（供 RAY 复核）</title>
+<style>
+  :root{
+    --ink:#172033; --muted:#5b667a; --line:#e3e8f0; --bg:#f6f8fb;
+    --accent:#1F3A78; --accent2:#2f5bb7; --ok:#0f7b4f; --warn:#a4550a; --bad:#a32020;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  .page{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+  header.hero{background:linear-gradient(135deg,#1F3A78,#2f5bb7);color:#fff;border-radius:18px;
+    padding:36px 40px;box-shadow:0 18px 40px rgba(31,58,120,.18);}
+  header.hero h1{margin:0 0 8px;font-size:30px;letter-spacing:.5px}
+  header.hero p{margin:0;opacity:.9;font-size:15px}
+  .chips{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+  .chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);
+    padding:5px 12px;border-radius:999px;font-size:13px}
+  .chip.ok{background:rgba(50,200,130,.22);border-color:rgba(120,240,180,.5)}
+  h2{font-size:21px;margin:44px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h2 .no{color:var(--accent2);margin-right:8px}
+  h3{font-size:17px;margin:26px 0 10px}
+  p{margin:10px 0}
+  .lead{font-size:16px;color:#243049}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 18px 14px;
+    box-shadow:0 2px 8px rgba(20,40,80,.04)}
+  .card .k{font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+  .card .v{font-size:16px;font-weight:700;margin-top:6px;color:var(--accent)}
+  .card .d{font-size:13.5px;color:var(--muted);margin-top:6px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);
+    border-radius:12px;overflow:hidden;margin:14px 0;font-size:14px}
+  th{background:#eef3fb;text-align:left;font-weight:700;color:#22345c}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:#fbfcfe}
+  code{font-family:"Cascadia Code",Consolas,"SF Mono",monospace;font-size:13px;
+    background:#eef1f6;padding:1px 6px;border-radius:6px}
+  pre{background:#111827;color:#e5e7eb;border-radius:12px;padding:16px 18px;overflow:auto;
+    font-size:13px;line-height:1.65}
+  pre code{background:none;padding:0;color:inherit}
+  ul{margin:10px 0 10px 22px;padding:0}
+  li{margin:6px 0}
+  .note{border-left:4px solid var(--accent2);background:#eef3fb;padding:12px 16px;border-radius:0 10px 10px 0;margin:16px 0}
+  .warn{border-left:4px solid var(--warn);background:#fdf5e9}
+  .ok{color:var(--ok);font-weight:700}
+  .bad{color:var(--bad);font-weight:700}
+  .small{font-size:13px;color:var(--muted)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.ok{background:#e3f6ec;color:var(--ok)}
+  .pill.warn{background:#fdf0dd;color:var(--warn)}
+  .pill.bad{background:#fae5e5;color:var(--bad)}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  @media (max-width:820px){.grid3{grid-template-columns:1fr}header.hero{padding:26px 22px}.page{padding:20px 14px 60px}}
+  @media print{body{background:#fff}.page{max-width:none;padding:0}header.hero{box-shadow:none;border-radius:0}
+    h2{page-break-after:avoid}table{page-break-inside:auto}tr{page-break-inside:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <h1>光溯 · 服务器迁移交接报告</h1>
+  <p>供 RAY 复核 · 数据、代码、运维配置与安卓客户端</p>
+  <div class="chips">
+    <span class="chip">报告日期 2026-10-22</span>
+    <span class="chip ok">迁移已完成并验收</span>
+    <span class="chip">新地址 http://43.142.141.186</span>
+    <span class="chip">客户端 0.4.10（versionCode 16）</span>
+    <span class="chip">commit cee3631（未 push）</span>
+  </div>
+</header>
+
+<h2><span class="no">01</span>三句话结论</h2>
+<div class="grid3">
+  <div class="card">
+    <div class="k">新入口</div>
+    <div class="v">http://43.142.141.186</div>
+    <div class="d">网页、/m.html、/api、课表解析、APK 下载均已在新机跑通。</div>
+  </div>
+  <div class="card">
+    <div class="k">数据</div>
+    <div class="v">整库迁移，校验通过</div>
+    <div class="d">20 账号 / 12 份同步状态 / 6 份周计划；23 会话 / 98 消息 / 11 事实；11 条课表。integrity_check 全 ok。</div>
+  </div>
+  <div class="card">
+    <div class="k">客户端</div>
+    <div class="v">必须换 0.4.10</div>
+    <div class="d">旧 APK 的 API 地址写死在包里。旧机现在做转发，10-25 前旧包仍可用、也能应用内升级。</div>
+  </div>
+</div>
+
+<h2><span class="no">02</span>拓扑变化</h2>
+<table>
+  <thead><tr><th style="width:18%">项</th><th style="width:41%">迁移前</th><th>迁移后</th></tr></thead>
+  <tbody>
+    <tr><td>公网入口</td><td><code>http://101.35.253.143</code></td><td><strong><code>http://43.142.141.186</code></strong></td></tr>
+    <tr><td>SSH</td><td><code>ubuntu@101.35.253.143</code></td><td><code>ubuntu@43.142.141.186</code>（私钥；<strong>root 不接受该私钥</strong>）</td></tr>
+    <tr><td>机器</td><td>腾讯云 2C2G / Ubuntu 24.04.4 / 50G</td><td>同规格，swap 1.9G</td></tr>
+    <tr><td>Web</td><td>nginx :80 → <code>/opt/usst/app/dist</code></td><td>同路径</td></tr>
+    <tr><td>API</td><td colspan="2">uvicorn <code>127.0.0.1:8000</code>，systemd <code>usst-api</code>（两边一致）</td></tr>
+    <tr><td>反代</td><td colspan="2"><code>/api/</code>、<code>/timetable/</code> → 本机 8000（两边一致）</td></tr>
+    <tr><td>旧机</td><td>正常服务</td><td><strong>降级为纯转发</strong>：<code>/api/</code>、<code>/timetable/</code>、<code>/apk/</code> → 新机；其余 <code>301</code></td></tr>
+  </tbody>
+</table>
+<div class="note">
+  旧机转发配置备份在 <code>/opt/usst/backup/nginx-pre-migration-20261022.conf</code>。回滚 = 还原该文件 + <code>nginx -t &amp;&amp; systemctl reload nginx</code>（旧机服务与旧库都还在）。
+</div>
+
+<h2><span class="no">03</span>迁移清单与核对</h2>
+<table>
+  <thead><tr><th style="width:16%">资产</th><th style="width:34%">旧机路径</th><th style="width:22%">新机路径</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td>账号/同步库</td><td><code>app/data/libao_account.db</code></td><td>同</td><td>users 20 / tokens 109 / sync_state 12 / week_plans 6</td></tr>
+    <tr><td>梨宝记忆库</td><td><code>app/data/libao_memory.db</code></td><td>同</td><td>sessions 23 / messages 98 / facts 11 / profiles 2</td></tr>
+    <tr><td>导入课表</td><td><code>app/data/course_records.json</code></td><td>同</td><td>11 条课程（全局文件，不按用户隔离）</td></tr>
+    <tr><td>后端密钥</td><td><code>app/server/.env</code></td><td>同（<code>chmod 600</code>）</td><td>3 个键：LLM_BASE_URL / LLM_API_KEY / LLM_MODEL</td></tr>
+    <tr><td>代码</td><td><code>app/server</code>、<code>app/scripts</code></td><td>同</td><td>349 MB / 380 文件，与旧机逐一 md5 对齐</td></tr>
+    <tr><td>前端产物</td><td><code>app/dist</code></td><td>同</td><td>139 MB（含 14 个历史 APK）</td></tr>
+    <tr><td>模型缓存</td><td><code>/home/ubuntu/.workbuddy/cache/fastembed</code></td><td>同</td><td>182 MB / 13 文件</td></tr>
+    <tr><td>venv</td><td><code>/opt/usst/venv</code></td><td>同（<strong>重建</strong>）</td><td>Python 3.12.3，<code>pip install -r server/requirements.txt pdfplumber</code></td></tr>
+    <tr><td>每日快照</td><td><code>/opt/usst/backup/2026*-0417</code></td><td>同</td><td>7 天的 <code>app-server-data.tgz</code> 已搬齐；新机 21:36 另建一份</td></tr>
+    <tr><td>运维配置</td><td>nginx / systemd / crontab / snapshot.sh</td><td>同</td><td>按新 IP 重写；cron 每日 04:17</td></tr>
+  </tbody>
+</table>
+<p class="small">有意未搬：旧机 <code>backup/dist_pre_*</code> 15 份（约 1.8 GB 历史前端上线备份，可由仓库重建）。</p>
+
+<h2><span class="no">04</span>验收证据（实测）</h2>
+<table>
+  <thead><tr><th style="width:42%">检查</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/health</code></td><td><code>{"ok":true,"llm":true,"model":"deepseek-chat"}</code></td></tr>
+    <tr><td>公网 <code>/</code>、<code>/m.html</code></td><td>200 / 200</td></tr>
+    <tr><td><code>gigity</code> 登录</td><td>200，userId=7，icsToken 正常</td></tr>
+    <tr><td><code>GET /api/sync/state</code></td><td><code>found=true</code>，<code>updatedAt=2026-10-08T03:44:33Z</code>（原数据）</td></tr>
+    <tr><td><code>GET /api/sync/plan?weekNo=8</code></td><td>200</td></tr>
+    <tr><td><code>GET /courses</code></td><td>11 条</td></tr>
+    <tr><td><code>GET /api/sync/plan.ics</code></td><td><code>BEGIN:VCALENDAR</code>，38 个 VEVENT</td></tr>
+    <tr><td><code>GET /api/search</code></td><td>200，返回文章</td></tr>
+    <tr><td><code>POST /api/chat</code></td><td>LLM 合成，命中食堂营业时间</td></tr>
+    <tr><td>CORS（Origin=新 IP）</td><td><code>access-control-allow-origin: http://43.142.141.186</code></td></tr>
+    <tr><td>APK 下载</td><td>200，9,110,276 B</td></tr>
+    <tr><td>旧 IP 打 health / 登录 / ICS</td><td>全部经旧机转发到新机，正常</td></tr>
+    <tr><td><code>npm run typecheck</code></td><td>0 错</td></tr>
+    <tr><td><code>npm run test:ui</code></td><td>459 pass / 0 fail</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="no">05</span>代码改动（commit cee3631）</h2>
+<p>只动 4 个源文件 + 3 个文档，<strong>没有碰引擎、types.ts、features/week</strong>。</p>
+<table>
+  <thead><tr><th style="width:34%">文件</th><th>改动</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/apiBase.ts:20</code></td><td><code>INLINE_API_FALLBACK</code> 旧 IP → <code>http://43.142.141.186</code></td></tr>
+    <tr><td><code>server/version.json</code></td><td>0.4.9 → <strong>0.4.10</strong>，versionCode 16，apkUrl 指新机</td></tr>
+    <tr><td><code>package.json</code></td><td><code>version</code> 0.4.10（版本号单一来源）</td></tr>
+    <tr><td><code>mobile/android/app/build.gradle</code></td><td>versionCode 16 / versionName 0.4.10</td></tr>
+    <tr><td><code>docs/server-asset-inventory-2026-10-22.md</code></td><td>新增：完整盘点 + 执行记录 + 回滚</td></tr>
+    <tr><td><code>AGENTS.md</code> / <code>BLOCKERS.md</code></td><td>新地址提示 + 两条迁移留痕</td></tr>
+  </tbody>
+</table>
+<p><code>node scripts/release_version.mjs</code> 四处一致校验通过。<span class="pill warn">未 push</span></p>
+
+<h2><span class="no">06</span>客户端 0.4.10</h2>
+<ul>
+  <li><strong>为什么必须重出</strong>：APK 是包内资源模式，页面离线可用，但 API 地址编译在 JS 里。旧包只认 <code>101.35.253.143</code>。</li>
+  <li><strong>怎么重出</strong>：以线上 0.4.9 的 <code>dist-mobile</code> 为基线，<strong>只替换共享 chunk 里的 IP 常量</strong>，并清理 38 个无引用的旧哈希产物；业务代码与 0.4.9 完全一致（刻意不把 10-11 未部署改动带进客户端）。</li>
+  <li><strong>产物</strong>：<code>dist/apk/lightpath-0.4.10.apk</code>，9.1 MB，versionCode 16。</li>
+  <li><strong>签名</strong>：SHA-256 <code>7b742acd6c54664812a83b9f1c62df7fa2ce1d91ee481bfa3b5c15942e656568</code>，与 0.4.9 <strong>同一证书</strong> → 可覆盖安装，App 数据保留。</li>
+  <li><strong>分发</strong>：<code>http://43.142.141.186/apk/lightpath-0.4.10.apk</code>。10-25 前旧包可通过应用内「检查更新」拿到它。</li>
+</ul>
+
+<h2><span class="no">07</span>新机运维口径</h2>
+<pre><code># 登录（私钥向 CY 索取；root 不接受该私钥）
+ssh -i SLGS.pem ubuntu@43.142.141.186
+
+# 服务
+sudo systemctl status usst-api      # 目录 /opt/usst/app，User=ubuntu
+sudo systemctl restart usst-api
+sudo systemctl reload nginx         # 站点 /etc/nginx/sites-available/usst
+crontab -l                          # 17 4 * * * /opt/usst/backup/snapshot.sh
+
+# 日常排查
+sudo journalctl -u usst-api -n 80 --no-pager
+curl -s http://127.0.0.1:8000/api/health</code></pre>
+
+<h3>五个踩过的坑</h3>
+<ol>
+  <li><strong>模型缓存在 <code>~/.workbuddy/cache/fastembed</code></strong>，不是 <code>/opt/usst/app/model_cache</code>。丢了它又开着 <code>HF_HUB_OFFLINE=1</code>，<code>/api/search</code> 直接 500。</li>
+  <li><strong><code>server/requirements.txt</code> 不含 <code>pdfplumber</code></strong>，但课表解析依赖它；重建 venv 必须显式装。</li>
+  <li><strong><code>data/</code> 要整目录同步</strong>；只传 <code>usst_articles.db</code> 会报 <code>campus_vocab.json</code> 缺失。</li>
+  <li><strong>systemd 的 <code>LIBAO_CORS_ORIGINS</code> 必须含新 IP</strong>，否则网页能开、接口全被 CORS 拦。</li>
+  <li><strong>caddy 原本占 80</strong>（Hermes 入口），已 <code>disable --now</code>，别启回来。</li>
+</ol>
+
+<h2><span class="no">08</span>风险与未完成项</h2>
+<table>
+  <thead><tr><th style="width:4%">#</th><th style="width:34%">事项</th><th style="width:30%">影响</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>线上代码仍是 10-08 版</strong>，10-11 维护批（WAL、限速、413、身份闸）未部署</td><td>线上没有这些加固</td><td>下一批单独做，先预发验证；本次为降低迁移风险刻意没带</td></tr>
+    <tr><td>2</td><td>旧 APK 只认旧 IP</td><td>10-25 后登录/同步全挂</td><td>尽快分发 0.4.10；转发只兜底到到期</td></tr>
+    <tr><td>3</td><td><code>gigity/123456</code> 弱口令、7 个探针账号仍在</td><td>安全债</td><td>演示前改口令；探针账号可清</td></tr>
+    <tr><td>4</td><td><code>data_pins.json</code> 仍是 524/519/1889（实际 520/515/1873），<code>health_kb.db</code> 35 条（本地 36）</td><td>跑 <code>gate:data</code> 会报漂移；检索少 1 条</td><td>按整库迁移原样保留；要对齐仓库时单独换这两个文件</td></tr>
+    <tr><td>5</td><td>备份只有本机（7 天快照）</td><td>机器挂则备份同归于尽</td><td>P1-1 加异地副本 / Litestream</td></tr>
+    <tr><td>6</td><td><code>dist_pre_*</code> 1.8 GB 未搬</td><td>旧机到期即丢</td><td>可由仓库重建，无需搬</td></tr>
+    <tr><td>7</td><td>新机 <code>dist/</code> 有未被引用的旧哈希 chunk（含旧 IP 字符串）</td><td>不影响运行</td><td>下次 build 后整体替换 <code>dist/</code></td></tr>
+    <tr><td>8</td><td>commit 只在本地 <code>beta-v2</code>，未 push</td><td>远端没有这笔提交</td><td>按纪律由 CY 决定 push 时机</td></tr>
+    <tr><td>9</td><td>无域名/TLS，仍裸 HTTP</td><td>无法 HTTPS、无法免备案</td><td>维护计划 P0-2，决赛后做</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="no">09</span>给 RAY 的复核建议</h2>
+<p class="lead">只看三处就够：</p>
+<ol>
+  <li><strong>数据</strong>：用 <code>gigity</code> 登录（口令问 CY），看 <code>/api/sync/state</code> 是否 <code>found=true</code>、<code>updatedAt</code> 是否为 10-08，确认不是空库。</li>
+  <li><strong>客户端</strong>：<code>curl -sI http://43.142.141.186/apk/lightpath-0.4.10.apk</code>；装机后走登录、今日页、梨宝、课表导入四条链路。</li>
+  <li><strong>代码</strong>：<code>git show cee3631 --stat</code>，确认只动了 IP/版本/文档，没碰引擎和 <code>types.ts</code>。</li>
+</ol>
+<div class="note">
+  开发硬约束：不要在别处再写死服务器地址，唯一解析点是 <code>src/lib/apiBase.ts</code>；出 APK 的顺序是
+  <code>npm run build</code> → <code>python scripts/prep_mobile_dist.py</code> → <code>npx cap sync android</code> → <code>gradlew assembleRelease</code>，
+  版本号四处同步后用 <code>node scripts/release_version.mjs</code> 校验。
+</div>
+
+<h2><span class="no">10</span>相关文档</h2>
+<table>
+  <thead><tr><th style="width:40%">文件</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>docs/server-asset-inventory-2026-10-22.md</code></td><td>完整盘点、逐项资产、迁移执行记录、验收、回滚（本报告上游）</td></tr>
+    <tr><td><code>BLOCKERS.md</code> 2026-10-22 两条</td><td>迁移留痕与待决事项</td></tr>
+    <tr><td><code>AGENTS.md</code> 顶部</td><td>新地址提示</td></tr>
+    <tr><td><code>docs/mobile-line-alignment-2026-10-03.md</code></td><td>移动端线历史口径（旧 IP 属历史记录）</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  光溯 · 服务器迁移交接报告 · 2026-10-22 · 迁移状态：<span class="ok">已完成并验收</span><br/>
+  本页为离线单文件，可直接双击打开或打印；原始命令输出可在新机/旧机现场复取。
+</footer>
+
+</div>
+</body>
+</html>
