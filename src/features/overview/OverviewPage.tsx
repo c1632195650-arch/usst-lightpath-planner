@@ -9,6 +9,7 @@ import { TodayCard } from '@/features/overview/TodayCard';
 import { WeekStrip } from '@/features/overview/WeekStrip';
 import { OverviewStats, PersonaStatusCard } from '@/features/overview/OverviewStats';
 import { PrefLearnCard } from '@/features/overview/PrefLearnCard';
+import { ScenarioModeCard } from '@/features/overview/ScenarioModeCard';
 
 interface Props {
   schedule: Schedule;
@@ -147,6 +148,11 @@ export function OverviewPage({
       {/* F3 偏好学习建议卡（A1 v1）：栅格末尾整行（span 12）；关/无内容时不占视觉位 */}
       <div className="lg:col-span-12">
         <PrefLearnCard todayIso={todayIso} />
+      </div>
+
+      {/* F6 场景模式卡（A4）：日常/考试周/比赛周——安全档内补丁，切换持久化、重排生效 */}
+      <div className="lg:col-span-12">
+        <ScenarioModeCard />
       </div>
     </div>
   );

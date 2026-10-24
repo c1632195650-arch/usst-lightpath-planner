@@ -37,6 +37,8 @@ import type { DayOfWeek, PersonaProfile, PlanPersistState, Schedule, WeekPlan } 
 import type { Diagnostics, PlanVariant } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { toPlanRequest } from '@/lib/planner/schedule';
+import { DEFAULT_WEIGHTS } from '@/lib/planner/model';
+import { loadScenarioMode, patchPolicy, patchWeights, modeNoteOf } from '@/lib/scenarioModes';
 import { planWeek } from '@/lib/planner/planWeek';
 import { fetchRouteBatch } from '@/lib/planner/transfer';
 import { expandDeadlines } from '@/lib/planner/events';
@@ -342,9 +344,12 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
             ...(m.room !== undefined ? { room: m.room } : {}),
           };
         }
+        // F6（A4 场景模式）：policy 在安全档内打补丁 + 权重走 F4 通道；
+        // off = 原引用原样传入（零漂移），weights 键缺席 = 引擎缺省。
+        const scenario = loadScenarioMode();
         const req = {
           ...toPlanRequest({
-            schedule: effectiveSchedule, weekNo, policy: phase.policy,
+            schedule: effectiveSchedule, weekNo, policy: patchPolicy(phase.policy, scenario),
             scenarios: persona?.scenarios ?? null,
             // 批 4.3（1A-③，本树）：完整画像进引擎 —— socialCap 与画像块级偏好的入口
             persona,
@@ -394,6 +399,8 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
           fromNowDay: nowMin != null ? (todayDow as never) : null,
           excludedBlockIds: curLayer.excluded,
           corrections: [...rulesRef.current],
+          // F6：模式权重补丁（off = 空对象不展开，与缺省逐字段一致）
+          ...(scenario !== 'off' ? { weights: patchWeights(DEFAULT_WEIGHTS, scenario) } : {}),
         };
         // 引擎：本树 `@/lib/planner` 是唯一权威实现（Ray 的 ours/cy A/B 开关不随批接入）
         const result = await planWeek(req, {
@@ -418,9 +425,10 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
           // F4：变体列表随每次求解刷新（选择态独立持有，切换不重排）
           setVariants(result.variants ?? []);
           setNotes(
-            days && days.length > 0
+            (days && days.length > 0
               ? [...result.notes, `本次只重排了${days.map((d) => DAY_LABELS[d - 1]).join('、')}（其它天保持上一版）`]
-              : result.notes,
+              : result.notes
+            ).concat(modeNoteOf(scenario) ? [modeNoteOf(scenario) as string] : []),
           );
           setDiag(result.diagnostics);
           setTransferInfo({
