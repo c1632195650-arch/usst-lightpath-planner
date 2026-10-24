@@ -343,3 +343,71 @@ export function goalDoneStats(
   }
   return { totalDoneMin, totalActualMin, weekDoneMin, debtWeeks: [...debtSet].sort((a, b) => a - b) };
 }
+
+/* ============================================================
+ * F7-1（A3 习惯块）：习惯打卡的欠账统计（只增不改）
+ * ========================================================== */
+
+/**
+ * 习惯任务的块 id（任务 id 命名 `habit-{habitId}[-s{n}]`，与 habitStore 共用本口径）：
+ *   · fixed      → `habit-{id}`（同块同天覆盖）；
+ *   · accumulate → `habit-{id}-s{n}`（每周第 n 次，n 从 1 起）。
+ * 构造器与下面的 habitDebt 匹配器**同址**：前缀口径只有一处，谁改都得一起过测试。
+ */
+export function habitBlockId(habitId: string): string {
+  return `habit-${habitId}`;
+}
+
+export function habitSessionBlockId(habitId: string, session: number): string {
+  return `habit-${habitId}-s${session}`;
+}
+
+/** habitDebt 入参的最小结构（与 habitStore.HabitDef 结构兼容；behaviorLog 不反向 import habitStore） */
+export interface HabitLike {
+  id: string;
+  title: string;
+  kind: 'fixed' | 'accumulate';
+  perWeekCount?: number;
+  archived?: boolean;
+}
+
+/** 一条习惯在本周的欠账（GoalTodoCard 习惯行 / 后续接线用） */
+export interface HabitDebtEntry {
+  habitId: string;
+  title: string;
+  /** 本周应做次数：fixed = 1；accumulate = perWeekCount（缺省/非法 = 0，不制造欠账） */
+  expected: number;
+  /** 本周已 done 次数（done 记录的 blockId = habit-{id} 或 habit-{id}-s{n}） */
+  done: number;
+  /** 欠账 = max(0, expected - done) */
+  missing: number;
+}
+
+/**
+ * 某周**习惯**的欠账清单 —— 与 goalDebtByGoal 同族（前缀归组），但口径有两点不同：
+ *   · 习惯按**次数**计（应做 N 次 vs 已做 M 次），不像目标块逐块记 skipped；
+ *   · skipped 不单独计欠 —— 欠账就是「应做 − 已做」，没标记 ≠ 做了（与 summarizeWeek 同一诚实口径）。
+ * done 匹配：`habit-{id}` 全等或 `habit-{id}-` 前缀 —— **带连字符守卫**，
+ * 免得 `habit-run` 误吞 `habit-runner` 的记录。归档习惯直接跳过（不展开不计欠）。
+ */
+export function habitDebt(
+  records: readonly BehaviorRecord[],
+  habits: readonly HabitLike[],
+  weekNo: number,
+): HabitDebtEntry[] {
+  const out: HabitDebtEntry[] = [];
+  for (const h of habits) {
+    if (h.archived) continue;
+    if (h.kind !== 'fixed' && h.kind !== 'accumulate') continue;
+    if (typeof h.id !== 'string' || h.id === '') continue;
+    const prefix = habitBlockId(h.id);
+    let done = 0;
+    for (const r of records) {
+      if (r.weekNo !== weekNo || r.status !== 'done') continue;
+      if (r.blockId === prefix || r.blockId.startsWith(`${prefix}-`)) done += 1;
+    }
+    const expected = h.kind === 'accumulate' ? Math.max(0, h.perWeekCount ?? 0) : 1;
+    out.push({ habitId: h.id, title: h.title, expected, done, missing: Math.max(0, expected - done) });
+  }
+  return out;
+}

@@ -9,14 +9,18 @@
  * 左滑露出「完成 / 归档」；**最近待办打勾即完成，中长期必须填粗粒度完成期**
  *（上/中/下旬 + 年月，不精确到日）—— 两条完成流程行为不同，tests/mobile/memoStore.test.ts 锁住。
  * 即时正反馈（CY：「办完一桩心事」）：打勾动画 + 文案 1.8s 自动消失，不遮挡主界面。
+ * F7-1（A3 习惯块 · 最小实现）：末尾增「每周习惯」行 —— 标题 + 本周进度 + 打勾；
+ * 数据与打勾逻辑全在 lib/habitStore（打勾 = 记一条 done 行为记录，走既有 markBlock 通路），
+ * 本组件不自持习惯数据、不加新 props（habitStore 自读存储，周次自算）。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { plannedDoneLabel, todoScheduleHint, type Todo } from './lib/memoTypes.ts';
 import { Icon } from '@/components/icons/Icon';
 import {
   canAddGoal, openTodoCount, sortTodosForView,
   type MemoData,
 } from './lib/memoStore.ts';
+import { habitRowViews, habitWeekNoNow, markHabitDone, type HabitDef } from '@/lib/habitStore';
 
 const PARTS = ['上旬', '中旬', '下旬'] as const;
 
@@ -160,6 +164,22 @@ export default function GoalTodoCard({ data, attention, syncError, h }: {
     window.setTimeout(() => inputRef.current?.focus(), 30);
   };
 
+  // F7-1（A3 习惯块 · 最小实现）：每周习惯打卡。
+  // 记录不进 React 状态（与 BlockCard 同款「直读存储」体例）——habitTick 只负责
+  // 打卡后重读一次；habitWeekNo 挂载时算一次（habitWeekNoNow，缺失回落 1）。
+  const [habitTick, setHabitTick] = useState(0);
+  const habitWeekNo = useMemo(() => habitWeekNoNow(), []);
+  const habitRows = useMemo(
+    () => habitRowViews(habitWeekNo),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- habitTick 是「重读信号」，不进回调
+    [habitWeekNo, habitTick],
+  );
+  const habitAllDone = habitRows.length > 0 && habitRows.every((r) => r.complete);
+  const checkHabit = (def: HabitDef) => {
+    markHabitDone(def, habitWeekNo);
+    setHabitTick((t) => t + 1);
+  };
+
   const goals = data.goals.filter((g) => !g.archived);
   const recent = sortTodosForView(data.todos.filter((t) => t.kind === 'recent'));
   const longterm = sortTodosForView(data.todos.filter((t) => t.kind === 'longterm'));
@@ -239,6 +259,39 @@ export default function GoalTodoCard({ data, attention, syncError, h }: {
             ))}
             {longterm.length === 0 && (
               <p className="text-[11px] text-ink-faint">还没有中长期待办 —— 点「+ 记一条」后选「记长期」。</p>
+            )}
+          </div>
+
+          {/* F7-1（A3 习惯块）：每周习惯 —— 打勾 = 记一条 done 行为记录（markBlock 通路）。
+              归档习惯不展开不显示（habitStore/habitDebt 层已滤）；三态：空 / 全完成 / 行列表。 */}
+          <p className="mt-3 text-[11px] font-semibold tracking-wide text-ink-soft">每周习惯</p>
+          <div className="mt-1 space-y-1" data-testid="m-habit-list">
+            {habitRows.length === 0 ? (
+              <p data-testid="m-habit-empty" className="text-[11px] text-ink-faint">
+                还没有习惯 —— 每周想坚持的小事，以后会显示在这里。
+              </p>
+            ) : habitAllDone ? (
+              <p data-testid="m-habit-alldone" className="text-[11px] font-semibold text-ok">
+                本周习惯全部完成 ✓
+              </p>
+            ) : (
+              habitRows.map((r) => (
+                <div key={r.def.id} data-testid="m-habit-row"
+                  className="flex items-center gap-2 rounded-xl bg-paper-sunken px-3 py-2">
+                  <Icon name="repeat" size="xs" className="shrink-0 text-ink-faint" />
+                  <span className={`min-w-0 flex-1 truncate text-xs ${r.complete ? 'text-ink-faint line-through' : 'text-ink'}`}>
+                    {r.def.title}
+                  </span>
+                  <span data-testid="m-habit-progress" className="shrink-0 text-[11px] text-ink-faint">
+                    {r.done}/{r.expected}
+                  </span>
+                  <button type="button" data-testid="m-habit-check" disabled={r.complete}
+                    onClick={() => checkHabit(r.def)} aria-label={`打卡：${r.def.title}`}
+                    className={`h-8 w-8 shrink-0 rounded-full text-xs font-bold ${r.complete ? 'border border-ink/15 bg-white text-ink-faint' : 'bg-brand text-white'}`}>
+                    ✓
+                  </button>
+                </div>
+              ))
             )}
           </div>
         </>
