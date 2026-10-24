@@ -8,6 +8,7 @@ import { DeadlineBoard } from '@/features/calendar/DeadlineBoard';
 import { TodayCard } from '@/features/overview/TodayCard';
 import { WeekStrip } from '@/features/overview/WeekStrip';
 import { OverviewStats, PersonaStatusCard } from '@/features/overview/OverviewStats';
+import { PrefLearnCard } from '@/features/overview/PrefLearnCard';
 
 interface Props {
   schedule: Schedule;
@@ -142,6 +143,11 @@ export function OverviewPage({
       </div>
 
       <PersonaStatusCard persona={persona} onGotoProfile={onGotoProfile} />
+
+      {/* F3 偏好学习建议卡（A1 v1）：栅格末尾整行（span 12）；关/无内容时不占视觉位 */}
+      <div className="lg:col-span-12">
+        <PrefLearnCard todayIso={todayIso} />
+      </div>
     </div>
   );
 }

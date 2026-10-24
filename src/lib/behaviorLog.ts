@@ -46,6 +46,13 @@ export interface BehaviorRecord {
    * 2.2 回流估时只消费有 `actualMin` 的记录。
    */
   actualMin?: number;
+  /**
+   * 块计划开始时刻（自午夜起的分钟，可选）—— F3 偏好学习（A1 v1）按时段分桶用。
+   * 旧记录与既有调用方没传 → 字段缺席，学习端自动跳过该条（零迁移，只增不改）。
+   */
+  startMin?: number;
+  /** 块地点（可选）—— A1 v1 只透传存储，暂无消费方（留给后续批接线）。 */
+  place?: string;
   /** 记录时刻（ISO） */
   at: string;
 }
@@ -193,6 +200,8 @@ function isRecord(v: unknown): v is BehaviorRecord {
     && typeof o.at === 'string'
     && (o.status === 'done' || o.status === 'skipped')
     && (o.actualMin === undefined || typeof o.actualMin === 'number')
+    && (o.startMin === undefined || typeof o.startMin === 'number')
+    && (o.place === undefined || typeof o.place === 'string')
   );
 }
 
@@ -245,6 +254,10 @@ export function markBlock(args: {
   status: BehaviorStatus;
   /** 实际用时（可选）；给了就随记录一起存 */
   actualMin?: number;
+  /** 块计划开始时刻（分钟，可选）—— 透传进记录，供偏好学习分桶（F3 A1） */
+  startMin?: number;
+  /** 块地点（可选）；空串视为没传 */
+  place?: string;
 }): void {
   const rec: BehaviorRecord = {
     id: makeId(args.blockId, args.date),
@@ -256,6 +269,8 @@ export function markBlock(args: {
     plannedMin: args.plannedMin,
     status: args.status,
     ...(args.actualMin != null ? { actualMin: args.actualMin } : {}),
+    ...(args.startMin != null ? { startMin: args.startMin } : {}),
+    ...(args.place != null && args.place.trim() !== '' ? { place: args.place } : {}),
     at: new Date().toISOString(),
   };
   saveRecords(upsert(loadRecords(), rec));
