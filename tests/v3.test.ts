@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { VIEW_FLOW, startPersonaOrOnboardingView, firstMainTab, canEnter } from '@/appFlow';
 
 const src = (rel: string): string =>
   readFileSync(fileURLToPath(new URL('..' + rel, import.meta.url)), 'utf8');
@@ -91,4 +92,32 @@ test('V3: 画像入口统一动线（2026-10-08 修复：新账号不再绕过 �
     '无基本信息先补基本信息、有基本信息先补导入课表',
   );                                                                          // 25
   // ⚠️ 反向验证（2026-10-08 实测）：把助手体改回「恒 setView('persona')」→ 22/23/24 三条红。
+});
+
+test('V3: r6 动线表（2026-10-24 D3）—— 链边表化 + appFlow 语义锁（表是唯一声明处）', () => {
+  const app = src('/src/App.tsx');
+  // 链边已查表：App 只做分发，动线语义改动只动 src/appFlow.ts
+  assert.match(app, /setView\(VIEW_FLOW\.welcome\.next\)/, '欢迎页正向查表');        // r6-1
+  assert.match(app, /setView\(VIEW_FLOW\.import\.back\)/, '导入步回退查表');        // r6-2
+  assert.match(app, /setView\(VIEW_FLOW\.result\.back\)/, '结果页重测查表');        // r6-3
+  // 表语义（行为级）：引导链十条边与 2026-10-24 旧 if 链逐条对照
+  const e: Array<[keyof typeof VIEW_FLOW, 'next' | 'back', string]> = [
+    ['welcome', 'next', 'basicinfo'], ['welcome', 'back', 'main'],
+    ['basicinfo', 'next', 'import'], ['basicinfo', 'back', 'welcome'],
+    ['import', 'next', 'persona'], ['import', 'back', 'basicinfo'],
+    ['persona', 'next', 'result'], ['persona', 'back', 'welcome'],
+    ['result', 'next', 'main'], ['result', 'back', 'persona'],
+  ];
+  for (const [view, dir, want] of e) assert.equal(VIEW_FLOW[view][dir], want, `${view}.${dir} 应为 ${want}`); // r6-4
+  // 统一入口裁决（与 App 内被既有锁 25 钉住的三元字面同义；RV：表改错必红）
+  const no = { hasRealSchedule: false, hasBasicInfo: false, hasPersona: false };
+  assert.equal(startPersonaOrOnboardingView({ ...no, hasRealSchedule: true }), 'persona', '老用户直达问卷'); // r6-5
+  assert.equal(startPersonaOrOnboardingView({ ...no, hasBasicInfo: true }), 'import', '有基本信息先补导入'); // r6-6
+  assert.equal(startPersonaOrOnboardingView(no), 'basicinfo', '纯新账号先补基本信息'); // r6-7
+  // 首落点（V0-2 口径：MOCK 不算已有课表）与 result 进入条件
+  assert.equal(firstMainTab({ hasRealSchedule: true, hasBasicInfo: true, hasPersona: true }), 'calendar'); // r6-8
+  assert.equal(firstMainTab(no), 'import');                                                             // r6-9
+  assert.equal(canEnter('result', no), false, '无画像不进结果页');                                      // r6-10
+  assert.equal(canEnter('result', { ...no, hasPersona: true }), true);
+  // ⚠️ 反向验证（2026-10-24 实测）：appFlow 的 welcome.next 改 'persona' → r6-4 恰红。
 });

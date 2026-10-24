@@ -33,6 +33,7 @@ import { ImportTester } from '@/features/import/ImportTester';
 import { GoalsPage } from '@/features/activity/GoalsPage';
 import MemoPanel from '@/features/memo/MemoPanel';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
+import { VIEW_FLOW } from '@/appFlow';
 
 type View = 'welcome' | 'basicinfo' | 'import' | 'persona' | 'result' | 'main';
 type MainTab = 'calendar' | 'libao' | 'memo' | 'goals' | 'profile' | 'import';
@@ -152,7 +153,7 @@ export default function App() {
       saveState(next);
       return next;
     });
-    setView('result');
+    setView(VIEW_FLOW.persona.next);
   };
 
   const openWeek = (iso: string) => {
@@ -206,8 +207,8 @@ export default function App() {
   if (view === 'welcome') {
     return (
       <Welcome
-        onStart={() => setView('basicinfo')}
-        onSkip={() => { setView('main'); setMainTab('calendar'); }}
+        onStart={() => setView(VIEW_FLOW.welcome.next)}
+        onSkip={() => { setView(VIEW_FLOW.welcome.back); setMainTab('calendar'); }}
         // 必修 2：onboarding 阶段就给登录入口（不登录也完全不影响本地使用）
         footer={<CloudAccountCard identity={identity} onIdentityChange={setIdentity} />}
       />
@@ -216,7 +217,7 @@ export default function App() {
 
   if (view === 'basicinfo') {
     // 全新用户 → 先给一次导入课表的机会（可跳过），再进问卷（2026-10-07 RAY 新增引导步）。
-    return <BasicInfoStep onBack={() => setView('welcome')} onComplete={() => setView('import')} />;
+    return <BasicInfoStep onBack={() => setView(VIEW_FLOW.basicinfo.back)} onComplete={() => setView(VIEW_FLOW.basicinfo.next)} />;
   }
 
   /**
@@ -237,8 +238,8 @@ export default function App() {
           // WP12-C2：课表事实回写（与「课表」页导入同一条通道）；失败静默 —— 不挡引导流
           addTimetableFacts(s, getUserId()).catch(() => { /* 回写是锦上添花 */ });
         }}
-        onNext={() => setView('persona')}
-        onBack={() => setView('basicinfo')}
+        onNext={() => setView(VIEW_FLOW.import.next)}
+        onBack={() => setView(VIEW_FLOW.import.back)}
       />
     );
   }
@@ -249,7 +250,7 @@ export default function App() {
         answers={state.answers ?? {}}
         onAnswer={setAnswer}
         onComplete={handleComplete}
-        onExit={() => setView('welcome')}
+        onExit={() => setView(VIEW_FLOW.persona.back)}
         // 「暂时跳过测评」= **跳过整份问卷**，直接进入 App（2026-10-07 RAY 拍板）。
         // 必须**落 `onboarded`**：冷启动闸门 `initialView` 在 !onboarded 时永远回欢迎页，
         // 只切视图的话刷新一次就被弹回去（用户会以为"跳过根本没生效"）。
@@ -276,7 +277,7 @@ export default function App() {
           // 只比真值会让「首落点=导入」与 checklist 的导入项永远误判为已完成。
           setMainTab(state.schedule && state.schedule !== MOCK_SCHEDULE ? 'calendar' : 'import');
         }}
-        onRetake={() => setView('persona')}
+        onRetake={() => setView(VIEW_FLOW.result.back)}
       />
     );
   }
