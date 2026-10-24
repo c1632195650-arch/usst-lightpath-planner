@@ -12,6 +12,18 @@
 数据：data/lightpath.db（SQLite 单文件；备份 = 复制该文件）。
 """
 
+# ============================================================
+# 🔎 定位声明（2026-10-24，重构偿债 r4 / D6）
+# ------------------------------------------------------------
+# 本文件是**本地一体化开发模式**的便捷入口（静态托管 + 本地账号/DB +
+# 梨宝脑转发，一个进程全包）。**生产行为以 server/（FastAPI）为准**：
+# 线上由 nginx + systemd 跑 server/app.py。两边的后端地址一致性
+# （CY_API_TARGET ↔ apiBase 的 INLINE_API_FALLBACK ↔ version.json apkUrl）
+# 由 scripts/check_backend_consistency.mjs 互查守护
+# （测试：scripts/backend_consistency.test.ts）。
+# 合并两后端 = L2 变更，决赛后随框架线评估，不要在本文件顺手做。
+# ============================================================
+
 import hashlib
 import json
 import mimetypes
@@ -53,12 +65,13 @@ PBKDF2_ROUNDS = 200_000
 #    Handler 里两处 `if _is_cy_brain(path)` 调用 = 完全回退。
 #
 # 背景：CY 的梨宝「大脑」（LLM 对话 / 记忆 / 检索 / 路线，DeepSeek）
-# 部署在 http://101.35.253.143（FastAPI）。本地 serve.py 没有 /api/chat
+# 部署在公网服务器（现 43.142.141.186，2026-10-22 迁移；FastAPI）。
+# 本地 serve.py 没有 /api/chat
 # 等端点（老前端问梨宝 404 =「回答不上来」的直接原因）。
 # 命中下列前缀的请求原样转发给 CY 服务器，其余路由（账号/课表/静态）
 # 完全不受影响。dev 模式下 vite 代理已做同样分流（vite.config.ts）。
 # ============================================================
-CY_API_TARGET = "http://101.35.253.143"
+CY_API_TARGET = "http://43.142.141.186"  # 2026-10-24 r4 对齐迁机新机（旧机 101.35.253.143 已降级纯转发、10-25 到期）
 CY_BRAIN_PREFIXES = (
     "/api/chat",    # 梨宝对话（LLM 大脑；本地无此端点）
     "/api/memory",  # 记忆系统 facts
