@@ -8,6 +8,10 @@ import { DEFAULT_APP_STATE, type AppState } from '@/types';
 
 const STORAGE_KEY = 'usst-life-assistant-v2';
 
+// 分片键的统一登记与迁移入口在 lib/storageGateway.ts（D7，2026-10-24）：
+// 本键仍走下方 loadState/saveState（存量路径零改动）；**新代码新增分片键
+// 一律先去 storageGateway 的 REGISTRY 登记**，再走 gwLoad/gwSave。
+
 /** 当前数据版本。`AppState` 形状一改，这里必须跟着动（它取自 DEFAULT_APP_STATE，单一来源）。 */
 const CURRENT_VERSION = DEFAULT_APP_STATE.version;
 
