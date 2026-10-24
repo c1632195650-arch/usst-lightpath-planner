@@ -164,7 +164,9 @@ test('mergeLlmPrimary · patch.clock 补空 + 推导；规则层已有 clock 不
 
 test('源码锁 · mapUnderstandPatch 透传 startMin/endMin 为 clock', () => {
   const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(join(here, '..', 'src', 'features', 'libao', 'LbaoChat.tsx'), 'utf8');
+  // r8（2026-10-25 D1-批2）改锚：mapUnderstandPatch 已从 LbaoChat.tsx 搬至 chatHelpers.ts
+  // （行为不变搬运，源码锁随函数走——断言漂移申报见 BLOCKERS r8 收尾条）
+  const src = readFileSync(join(here, '..', 'src', 'features', 'libao', 'chatHelpers.ts'), 'utf8');
   assert.ok(src.includes('p.startMin'), 'mapUnderstandPatch 应读取 p.startMin');
   assert.ok(src.includes('p.endMin'), 'mapUnderstandPatch 应读取 p.endMin');
   assert.ok(/patch\.clock\s*=/.test(src), '应拼装 patch.clock');

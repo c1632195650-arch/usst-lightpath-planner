@@ -35,8 +35,11 @@ test('D0 源码: 问答模式排程意图不静默改道（出切换提示，原
 });
 
 test('D0 快照: mode 随快照存取（恢复时接续，不退回问答）', () => {
+  // r8（2026-10-25 D1-批2）改锚：ChatSnapshot 类型已搬至 chatHelpers.ts（行为不变搬运），
+  // 「带 mode」断言随类型走；loadChatSnapshot（modeFromV2/boot 接续逻辑）仍在 LbaoChat.tsx。
+  const helpers = src('/src/features/libao/chatHelpers.ts');
+  assert.match(helpers, /mode: 'chat' \| 'sched';/, '快照类型带 mode');
   const chat = src('/src/features/libao/LbaoChat.tsx');
-  assert.match(chat, /mode: 'chat' \| 'sched';/, '快照类型带 mode');
   assert.match(chat, /modeFromV2\(s\.mode, s\.schedMode\)/, 'v2 迁移按推导补 mode');
   // ⚠️ 2026-10-08 微调（Ray 周页批次接入）：seedMode 只影响「无快照」时的初始模式，
   //    快照里存的 mode 仍最优先 —— 意图（v3 快照 mode 原样恢复）不变。

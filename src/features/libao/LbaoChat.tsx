@@ -83,6 +83,16 @@ import { addSlot, addTask, clearConflictingSlots, diffPlanEvents, getRecentPlanE
 import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
+// ── r8（D1-批2，2026-10-25）：纯辅助域已拆出 chatHelpers.ts ──
+// Msg/PendingGoal/ChatSnapshot 类型 + weeksLabel/numberedQuestions/mapUnderstandPatch/cancelLocatorOf/currentSessionId
+// + 快照 key 常量 → chatHelpers（行为不变搬运）。本文件保留编排/渲染/loadChatSnapshot（依赖组件内函数）。
+import {
+  type Msg, type PendingGoal, type ChatSnapshot,
+  weeksLabel, numberedQuestions, mapUnderstandPatch, cancelLocatorOf, currentSessionId,
+  CHAT_SNAPSHOT_KEY, CHAT_SNAPSHOT_V2_KEY, CHAT_SNAPSHOT_V1_KEY, CHAT_CLEARED_KEY,
+} from './chatHelpers';
+export { type Msg, type PendingGoal, type ChatSnapshot } from './chatHelpers';
+
 import { historyToMsgs, mergeHistory, RESTORE_CHAT } from '@/features/libao/chatRestore';
 // F2（2026-10-24）：来源卡 + 置信徽章 —— 共享组件（章程 §3.1.2：新组件放 src/components/ 共享层）
 import { SourceChips } from '@/components/SourceChips';
@@ -92,144 +102,10 @@ import { ConfidenceBadge } from '@/components/ConfidenceBadge';
  *  `import.meta.env.DEV` 在生产构建里是字面量 false → 整段被摇掉，线上零变化。 */
 const SHOW_DEBUG = import.meta.env.DEV;
 
-interface Msg {
-  role: 'user' | 'lbao';
-  text: string;
-  sources?: RagSource[];
-  /** F2/B2 不确定分级（server 一处计算）→ ConfidenceBadge 呈现；历史恢复的旧消息无此字段 → 不渲染 */
-  confidence?: ChatResult['confidence'];
-  mode?: string;
-  /** 排程要点。来自**真引擎**（与「周计划」页同源），不是模板 —— 见 weekPlanForChat.ts */
-  planPoints?: string[];
-  /** 提示去哪儿看完整时间轴 */
-  goWeek?: boolean;
-  /** R批触发点①（P0-1b）：confirmGoal 落盘成功的回执 → 出「让梨宝评估这一版」按钮。
-   *  点击展开**复用**的 PlanEvalPanel（纯读评估），采纳只进重排草稿流（L4 不变）。 */
-  evalAsk?: boolean;
-  needProfile?: boolean;
-  /** 后端这一轮的完整元数据（route / intent / top_raw_vec / used_* / 耗时）。
-   *  只用于 DEV 调试抽屉 —— 见本目录 ChatDebug.tsx 的说明。 */
-  debug?: ChatResult;
-  /** 目标草稿卡的确认键 —— 有值且 `pending` 里还有对应草稿时，渲染「就这么排」按钮。
-   *  确认前**什么都不写入**：草稿只是草稿，执行权在用户手里（core §4 L4）。 */
-  goalAsk?: number;
-  /** WP11 重要日建议卡确认键 —— 有值且 `pendingDeadlines` 里还有对应提案时渲染「好，记下来」。确认前不写入（L4）。 */
-  deadlineAsk?: number;
-  /** D0 双模式：问答模式下听到排程意图 → 出切换提示卡（原句存这，点击切模式后原句重发）。
-   *  不静默改道 —— 「揣测用意直接排」正是 D 批要消灭的议题断层来源之一。 */
-  modeHint?: string;
-  /** 记忆建议卡（M2）：客观事实待确认 —— 用户点头才进画像与基础信息 */
-  proposals?: MemoryFact[];
-  /** 已自动生效的偏好（M2）：出可撤销提示 */
-  applied?: MemoryFact[];
-  /** 后端 messages 自增 id —— 只在从 history 恢复的行上存在（跨会话恢复 E8 的去重依据） */
-  mid?: number;
-  /** 批次 2（交互升级方案 5.1）：快捷选项按钮卡 —— 能按钮不打字，自由输入框永远在下方。
-   *  点击 = send(value)：value 是规则层解析得动的原话（编号兜底 parseOptionChoice 双保险）。 */
-  options?: Array<{ label: string; value: string; hint?: string }>;
-}
-
-/** 一份等用户确认的目标草稿（确认后才落 `userPlanStore`）。
- *  WP9：kind 区分执行器（确认时走不同落层通道），缺省 create 兼容旧草稿。 */
-interface PendingGoal {
-  kind?: 'create' | 'reschedule' | 'cancel' | 'replace' | 'query' | 'hold' | 'day_replan';
-  title: string;
-  tasks: UserTask[];
-  /** 候选块真正落在的教学周（可能是一段区间，如 5–8 周） */
-  weeks: number[];
-  /** cancel / replace：要取消的目标（applyCancel 落层） */
-  cancelTarget?: CancelTarget;
-  /** reschedule：确认后 upsertMove 的记录与涟漪预览 */
-  movePreview?: ReschedulePreview;
-  /** V2-2 hold：确认后 addSlot 的不可时段（一次性，只作用于当前周） */
-  holdSlot?: UnavailableSlot;
-  /** 批 3 day_replan：确认后逐块 upsertMove 的保位钉（其余天保持原样的落盘形态） */
-  dayReplan?: { pins: MoveRecord[]; days: number[] };
-}
-
-/** 周列表 → 人话（[4] → 「第 4 周」；[5,6,7,8] → 「第 5–8 周」） */
-function weeksLabel(weeks: number[]): string {
-  if (weeks.length === 0) return '本期';
-  if (weeks.length === 1) return `第 ${weeks[0]} 周`;
-  return `第 ${weeks[0]}–${weeks[weeks.length - 1]} 周`;
-}
-
 /** 常见问法，避免第一次进入对话没有入口。
  *  W5a（CY 反馈②）：话术去命令化 —— 真实用户说「我明天打算去吃大餐」，
  *  不说「帮我安排这周」；示例必须是自然口语句式（识别口径见 S2a）。 */
 const QUICK = ['我明天打算去吃大餐', '这周六想去看电影', '四六级什么时候报名', '下周要交实验报告'];
-
-/**
- * 追问话术渲染：带编号 + 尾注「可以用分号一起答」（S 批 §3.2）。
- * 编号与 `asked` 清单一一对应 —— 用户照编号用分号答时，
- * `applyClarifyAnswers` 按位置收槽。
- */
-function numberedQuestions(pairs: Array<{ question: string }>): string[] {
-  const pts = pairs.map((p, i) => `${i + 1}. ${p.question}`);
-  if (pts.length > 0) pts.push('可以用分号一起答，如：周五下午；每天两小时');
-  return pts;
-}
-
-/** understand 端点的 patch → 意图层 Partial<IntentSlots>。
- *  时间结构化留在规则层：这里只把端点的结构化数字拼成 WhenHint 形状，
- *  日期换算（resolveWhen）由 `mergeLlmPrimary` 做 —— 防 LLM 直接编 ISO 日期。
- *  window_text 不在此映射：时段窗的分钟换算留在规则层（extractWindow），LLM 只定位。 */
-function mapUnderstandPatch(p: import('@/lib/api').PlanUnderstandResult['patch']): Partial<IntentSlots> {
-  const patch: Partial<IntentSlots> = {};
-  if (!p) return patch;
-  if (p.title) patch.title = p.title;
-  if (p.when_text || p.month != null || p.day != null || p.relativeDays != null
-    || p.relativeWeeks != null || p.weekday != null || p.weekNo != null) {
-    patch.when = {
-      text: p.when_text ?? '',
-      kind: (p.month != null || p.day != null || (p.weekNo != null && p.weekday != null)) ? 'exact'
-        : (p.relativeDays != null || p.relativeWeeks != null || p.weekday != null) ? 'relative'
-        : 'window',
-    };
-    if (p.month != null) patch.when.month = p.month;
-    if (p.day != null) patch.when.day = p.day;
-    if (p.relativeDays != null) patch.when.relativeDays = p.relativeDays;
-    if (p.relativeWeeks != null) patch.when.relativeWeeks = p.relativeWeeks;
-    if (p.relativeMonths != null) patch.when.relativeMonths = p.relativeMonths;
-    if (p.weekday != null) patch.when.weekday = p.weekday;
-    if (p.weekNo != null) patch.when.weekNo = p.weekNo;
-  }
-  if (p.perWeekCount != null) patch.perWeekCount = p.perWeekCount;
-  if (p.durationMin != null) patch.durationMin = p.durationMin;
-  if (p.totalHours != null) patch.totalHours = p.totalHours;
-  if (p.place) patch.place = p.place;
-  // 批次 1（交互升级方案 4.1）：端点抽到的钟点起止 → IntentSlots.clock。
-  // 时长推导不在端点做 —— clock → durationMin 由 mergeLlmPrimary 的 reconcileClock 统一算。
-  if (p.startMin != null || p.endMin != null) {
-    patch.clock = {
-      ...(p.startMin != null ? { startMin: p.startMin } : {}),
-      ...(p.endMin != null ? { endMin: p.endMin } : {}),
-      text: p.window_text ?? p.when_text ?? '钟点',
-    };
-  }
-  if (p.targetHint) patch.targetHint = p.targetHint;
-  // 按时间定位（2026-10-07）：端点的 targetWeekday/targetStartMin/targetEndMin
-  // → target*（要动的那块的旧时间；与 when/clock 的新时间分开）
-  if (p.targetWeekday != null) patch.targetDay = p.targetWeekday;
-  if (p.targetStartMin != null || p.targetEndMin != null) {
-    patch.targetClock = {
-      ...(p.targetStartMin != null ? { startMin: p.targetStartMin } : {}),
-      ...(p.targetEndMin != null ? { endMin: p.targetEndMin } : {}),
-      text: '要动的那个时间',
-    };
-  }
-  return patch;
-}
-
-/** 槽位的 target*（要动的旧时间）→ 执行器 locator（2026-10-07，按确切时间定位）。 */
-function cancelLocatorOf(s: IntentSlots): TargetLocator | undefined {
-  if (s.targetDay == null && !s.targetClock) return undefined;
-  return {
-    ...(s.targetDay != null ? { dayOfWeek: s.targetDay } : {}),
-    ...(s.targetClock?.startMin != null ? { startMin: s.targetClock.startMin } : {}),
-    ...(s.targetClock?.endMin != null ? { endMin: s.targetClock.endMin } : {}),
-  };
-}
 
 /** 对话初始说明，明确问答与排程两个能力（W5a：自然陈述版话术）。 */
 const GREETING =
@@ -250,34 +126,6 @@ const CONFIRM_RE = /^(好|好呀|好啊|行|可以|对|确认|就这么排|就�
  * 补上身份，是让那套已经写好的记忆层真正生效的唯一前置条件。
  */
 
-function newId(): string {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-  } catch {
-    /* 老浏览器 / 非安全上下文没有 randomUUID，走下面的兜底 */
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** 会话级标识：存 sessionStorage，关掉标签页即失效 —— 对应后端「最近原话」的窗口。
- *  与 user_id **刻意分开**：合成一个会让「跨会话的画像」和「本次会话的上下文」互相污染。
- *  （user_id 的取值已收敛到 `@/lib/identity` 的 `getUserId()` —— 单一来源，
- *   将来换登录/同步方案只改那一处。） */
-function currentSessionId(): string {
-  const KEY = 'usst.libao.session_id';
-  try {
-    const saved = sessionStorage.getItem(KEY);
-    if (saved) return saved;
-    const id = `s-${newId()}`;
-    sessionStorage.setItem(KEY, id);
-    return id;
-  } catch {
-    return 'default';
-  }
-}
-
 /* ---------------- 聊天快照与跨会话恢复（E8） ----------------
  * 切 tab（总览/画像/课表）会把本组件**卸载**，组件内 state 全部蒸发 ——
  * 用户回来说「聊天记录没了」（2026-09-20 真实反馈）。对策两层：
@@ -292,30 +140,6 @@ function currentSessionId(): string {
 /** 排程会话态（S 批 §3.2）：`asked` = 提问时记下的槽位清单（第 i 问 ↔ 第 i 段答）。
  *  D1 起不再是独立 React state —— collect/picking 会话态统一落在 topic 单容器里，
  *  派生形状类型直接复用 dialogManager 的 V2ClarifyShape / V2PickingShape（同构）。 */
-
-/** 快照 v3：对话管理器状态（mode/topic）取代 v2 的 clarify/schedMode。
- *  v2/v1 的字段保留为**只读迁移**输入，写永远写 v3。 */
-interface ChatSnapshot {
-  v?: 3;
-  messages: Msg[];
-  pending: Record<number, PendingGoal>;
-  pendingSeq: number;
-  mode: 'chat' | 'sched';
-  topic: DialogTopic | null;
-  missStreak: number;
-  /* ---- v2 只读迁移 ---- */
-  clarify?: V2ClarifyShape | null;
-  clarifyPicking?: V2PickingShape | null;
-  schedMode?: 'idle' | 'collect';
-}
-
-const CHAT_SNAPSHOT_KEY = SNAPSHOT_V3_KEY;
-/** v2 快照键：只读不写 —— clarify/clarifyPicking 合成为 topic，mode 推导。 */
-const CHAT_SNAPSHOT_V2_KEY = SNAPSHOT_V2_KEY;
-/** v1 快照键：只读不写 —— 旧快照的 clarifySlots 没有 asked 清单，按 missing 推导。 */
-const CHAT_SNAPSHOT_V1_KEY = 'usst.libao.chat.v1';
-/** 清空标记：本标签页内清空过后不再自动恢复（后端已删则历史本就为空，双保险） */
-const CHAT_CLEARED_KEY = 'usst.libao.chat.cleared';
 
 function loadChatSnapshot(): ChatSnapshot | null {
   try {

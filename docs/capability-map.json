@@ -10,7 +10,7 @@
     "testFiles": 166,
     "engineFiles": 120,
     "uiFiles": 46,
-    "guardedSources": 170,
+    "guardedSources": 171,
     "reverseVerified": 106,
     "orphans": 0
   },
@@ -272,6 +272,7 @@
       ],
       "sources": [
         "src/features/libao/LbaoChat",
+        "src/features/libao/chatHelpers",
         "src/features/libao/chatRestore",
         "src/features/libao/chatVerdict",
         "src/features/libao/dialogManager",
@@ -1916,7 +1917,6 @@
     "src/features/libao/LbaoChat": [
       "scripts/chatSources.test.ts",
       "scripts/libao-copy-guard.test.ts",
-      "scripts/libao-intent-clock.test.ts",
       "scripts/libao-interact.test.ts",
       "tests/d-batch.test.ts",
       "tests/libao-eval-entry.test.ts",
@@ -2088,6 +2088,9 @@
     ],
     "src/features/libao/lbaoPlanFromEngine": [
       "scripts/lbaoPlan.test.ts"
+    ],
+    "src/features/libao/chatHelpers": [
+      "scripts/libao-intent-clock.test.ts"
     ],
     "src/features/libao/taxonomy": [
       "scripts/libao-taxonomy.test.ts"
