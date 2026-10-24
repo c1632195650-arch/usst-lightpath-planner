@@ -5,7 +5,7 @@
 - **`tests/**/*.test.ts` = engine 套件**（`npm run test:engine`）；**`scripts/**/*.test.ts` = ui 套件**（`npm run test:ui`）——历史形成的目录分居（部分 UI 动线测试也在 tests/），不是语义边界；`docs/capability-map.json` 在弥合两者。
 - 渐进归位口径（重构偿债 D5）：存量 glob 不动（避免 150 文件大搬家），**新测试落语义对应目录**——引擎/排程相关进 `tests/`，UI/脚本/数据工程进 `scripts/`。
 - 新增测试后必须 `node scripts/capability_map.mjs --write`，否则 impact 会漏跑新守护（AGENTS.md §〇之前）。
-- ⚠️ 跑法以 `package.json` 为准：当前两条 npm 脚本均 `--import ./scripts/register-alias.mjs`（`tests/register.mjs` 在库但 npm 入口未指向；下文「跑法」段落为历史口径，读时注意）。
+- ✅ **唯一别名钩子 = `scripts/register-alias.mjs`（P6 收口，2026-10-24）**：npm 两条脚本与一切直跑命令统一 `--import ./scripts/register-alias.mjs`。golden 直跑示例：`node --import ./scripts/register-alias.mjs tests/golden-compare.ts`（5/5 PASS，2026-10-24 实测）。`tests/register.mjs` 仍在库但不再是入口（spec §7.3 合并待办，勿再指向）。
 
 本目录归 **B**（见规格书 §7.3 / §7.2；2026-10-02 起单人负责，历史归属见 AGENTS.md §二）。
 
@@ -13,23 +13,23 @@
 
 ```bash
 # 引擎测试（本目录）
-node --import ./tests/register.mjs --test "tests/**/*.test.ts"
+node --import ./scripts/register-alias.mjs --test "tests/**/*.test.ts"
 
 # CY 侧既有的数据工程测试（目录仍在 scripts/，只是换钩子运行）
-node --import ./tests/register.mjs --test "scripts/**/*.test.*"
+node --import ./scripts/register-alias.mjs --test "scripts/**/*.test.*"
 ```
 
 `package.json` 对应两条脚本（由 CY 改指向）：
 
 ```json
-"test:ui":     "node --import ./tests/register.mjs --test \"scripts/**/*.test.*\"",
-"test:engine": "node --import ./tests/register.mjs --test \"tests/**/*.test.ts\""
+"test:ui":     "node --import ./scripts/register-alias.mjs --test \"scripts/**/*.test.*\"",
+"test:engine": "node --import ./scripts/register-alias.mjs --test \"tests/**/*.test.ts\""
 ```
 
 ## P0 验收脚本
 
 ```bash
-node --import ./tests/register.mjs tests/p0-check.ts     # 全部通过 → 退出码 0；有失败 → 1
+node --import ./scripts/register-alias.mjs tests/p0-check.ts     # 全部通过 → 退出码 0；有失败 → 1
 ```
 
 `p0-check.ts` 是 P0 的**断言式验收脚本**（26 条，对应规格书 §9 的 T0.1~T0.4），
@@ -67,12 +67,12 @@ node --import ./tests/register.mjs tests/p0-check.ts     # 全部通过 → 退�
 
 ```bash
 # ① 拍摄（合入 dev 后、于唯一基准上「只拍一次」）
-node --import ./tests/register.mjs tests/golden-snapshot.ts
-node --import ./tests/register.mjs tests/golden-snapshot.ts --only=week-04-typical   # 单条
-node --import ./tests/register.mjs tests/golden-snapshot.ts --force                  # 重拍（慎用）
+node --import ./scripts/register-alias.mjs tests/golden-snapshot.ts
+node --import ./scripts/register-alias.mjs tests/golden-snapshot.ts --only=week-04-typical   # 单条
+node --import ./scripts/register-alias.mjs tests/golden-snapshot.ts --force                  # 重拍（慎用）
 
 # ② 对照（新引擎 vs 快照）
-node --import ./tests/register.mjs tests/golden-compare.ts
+node --import ./scripts/register-alias.mjs tests/golden-compare.ts
 ```
 
 对照器逐条核验：
@@ -94,8 +94,8 @@ node --import ./tests/register.mjs tests/golden-compare.ts
 ## P1 验收（求解器重构）
 
 ```bash
-node --import ./tests/register.mjs --test "tests/**/*.test.ts"   # 含 T1.1/T1.3/T1.4/T1.5 的 30 条
-node --import ./tests/register.mjs tests/golden-compare.ts        # AC-1 / AC-2 / AC-3
+node --import ./scripts/register-alias.mjs --test "tests/**/*.test.ts"   # 含 T1.1/T1.3/T1.4/T1.5 的 30 条
+node --import ./scripts/register-alias.mjs tests/golden-compare.ts        # AC-1 / AC-2 / AC-3
 ```
 
 | 项 | 验收对象 | 口径 |
