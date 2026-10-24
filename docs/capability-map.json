@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 166,
-    "engineFiles": 120,
+    "testFiles": 167,
+    "engineFiles": 121,
     "uiFiles": 46,
-    "guardedSources": 171,
-    "reverseVerified": 106,
+    "guardedSources": 173,
+    "reverseVerified": 107,
     "orphans": 0
   },
   "domains": {
@@ -972,7 +972,7 @@
         "libao-chat",
         "week-view"
       ],
-      "guardCount": 6,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/demo-banner-ui.test.ts": {
@@ -1300,6 +1300,12 @@
         "mobile"
       ],
       "guardCount": 5,
+      "reverseVerified": true
+    },
+    "tests/mobile/f5-wiring.test.ts": {
+      "suite": "engine",
+      "guards": [],
+      "guardCount": 2,
       "reverseVerified": true
     },
     "tests/mobile/icsHint.test.ts": {
@@ -2090,7 +2096,8 @@
       "scripts/lbaoPlan.test.ts"
     ],
     "src/features/libao/chatHelpers": [
-      "scripts/libao-intent-clock.test.ts"
+      "scripts/libao-intent-clock.test.ts",
+      "tests/d-batch.test.ts"
     ],
     "src/features/libao/taxonomy": [
       "scripts/libao-taxonomy.test.ts"
@@ -2536,6 +2543,12 @@
     ],
     "src/features/mobile/eval/units": [
       "tests/mobile/evalWiring.test.ts"
+    ],
+    "../src/features/mobile/MorningCard": [
+      "tests/mobile/f5-wiring.test.ts"
+    ],
+    "../src/features/mobile/lib/useTodayData": [
+      "tests/mobile/f5-wiring.test.ts"
     ],
     "../src/features/mobile/IcsGuide": [
       "tests/mobile/icsHint.test.ts"

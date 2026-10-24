@@ -25,7 +25,21 @@ import { recomputeWeek } from './planCompute.ts';
 import {
   applyLayerToBlocks, buildSyncPayload, todayDow, todaySignature, weekNoFromTermStart,
 } from './sync.ts';
-import { isNative, pickOngoingBlock, registerActionHandler, rescheduleToday, showOngoing } from './notifyBridge.ts';
+import { isNative, pickOngoingBlock, registerActionHandler, rescheduleToday, showOngoing, planBriefNotifications, scheduleBriefs } from './notifyBridge.ts';
+import { morningBrief, type BriefDeadline } from './morningBrief.ts';
+import { loadUserDeadlines, mergeDeadlines, upcomingDeadlines } from '@/features/calendar/deadlineStore';
+import { DEADLINES } from '@/data/usst';
+
+/** F5 接线①②共用：deadlineStore（用户 ∪ 静态校历）→ 晨报提醒信号（72h 窗） */
+function briefDeadlinesOf(todayIso: string): BriefDeadline[] {
+  try {
+    return upcomingDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), todayIso, 8)
+      .filter(({ daysLeft }) => daysLeft >= -3 && daysLeft <= 3)
+      .map(({ deadline }) => ({ id: deadline.id ?? deadline.title, title: deadline.title, dueISO: deadline.date }));
+  } catch {
+    return [];
+  }
+}
 import { ensurePermissionOnce } from './notifyStatus.ts';
 import { loadBehavior, recordBlockToggle, type BehaviorEvent } from '../eval/behaviorLog.ts';
 import type { GoalTodoHandlers } from '../GoalTodoCard.tsx';
@@ -193,6 +207,18 @@ export function useTodayData(identity: { token: string; username: string }, now:
       void rescheduleToday(displayedNow?.blocks ?? [], nowMinRef.current);
       // F15 常驻「正在进行」通知（2026-10-08 接线）：与软提醒同一条节奏更新
       void showOngoing(pickOngoingBlock(displayedNow?.blocks ?? [], nowMinRef.current, displayedNow?.doneIds ?? null));
+      // F5 接线②（2026-10-25）：同步成功 → 排晨报+截止提醒（确定性 id，重复排幂等覆盖）。
+      // 与块通知同一节奏，但独立 id 空间（追加式，scheduleBriefs 不动块通知）。
+      try {
+        const now = new Date();
+        const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+        const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const brief = morningBrief({
+          blocksToday: displayedNow?.blocks ?? [], todos: [], goals: [],
+          nowMin: nowMinRef.current, dateKey: todayIso, deadlines: briefDeadlinesOf(todayIso),
+        });
+        void scheduleBriefs(planBriefNotifications(brief, briefDeadlinesOf(todayIso), todayIso));
+      } catch { /* 晨报排程失败不影响主流程（与块通知同兜底口径） */ }
     } catch {
       setSyncStatus('error');
     }
