@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 162,
-    "engineFiles": 116,
+    "testFiles": 163,
+    "engineFiles": 117,
     "uiFiles": 46,
-    "guardedSources": 163,
-    "reverseVerified": 102,
+    "guardedSources": 164,
+    "reverseVerified": 103,
     "orphans": 0
   },
   "domains": {
@@ -127,7 +127,7 @@
         "src/features/week/",
         "src/components/"
       ],
-      "testCount": 47,
+      "testCount": 48,
       "tests": [
         "scripts/app_error_boundary.test.ts",
         "scripts/chatSources.test.ts",
@@ -168,6 +168,7 @@
         "tests/v1.test.ts",
         "tests/v2.test.ts",
         "tests/v3.test.ts",
+        "tests/variants.test.ts",
         "tests/week-diag-copy.test.ts",
         "tests/week-view-model.test.ts",
         "tests/weekViewUtils.test.ts",
@@ -407,7 +408,7 @@
         "src/constants",
         "src/lib/"
       ],
-      "testCount": 24,
+      "testCount": 25,
       "tests": [
         "scripts/api_retry.test.ts",
         "scripts/app_error_boundary.test.ts",
@@ -426,6 +427,7 @@
         "tests/campus-vocab.test.ts",
         "tests/cloudAccount.test.ts",
         "tests/h3h4-eval.test.ts",
+        "tests/habit-store.test.ts",
         "tests/identity.test.ts",
         "tests/improve-live.test.ts",
         "tests/libao-copy-freeze.test.ts",
@@ -443,6 +445,7 @@
         "src/lib/cloudAccount",
         "src/lib/date",
         "src/lib/globalErrors",
+        "src/lib/habitStore",
         "src/lib/identity",
         "src/lib/lbao",
         "src/lib/persona",
@@ -1115,6 +1118,14 @@
       "guardCount": 6,
       "reverseVerified": true
     },
+    "tests/habit-store.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "contracts"
+      ],
+      "guardCount": 3,
+      "reverseVerified": true
+    },
     "tests/health_params.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1697,9 +1708,10 @@
     "tests/variants.test.ts": {
       "suite": "engine",
       "guards": [
-        "planner-engine"
+        "planner-engine",
+        "week-view"
       ],
-      "guardCount": 5,
+      "guardCount": 7,
       "reverseVerified": true
     },
     "tests/week-diag-copy.test.ts": {
@@ -2132,6 +2144,7 @@
     ],
     "src/lib/date": [
       "scripts/rollingState.test.ts",
+      "tests/habit-store.test.ts",
       "tests/p2-incremental-rolling.test.ts",
       "tests/weekViewUtils.test.ts"
     ],
@@ -2192,6 +2205,7 @@
       "tests/v1.test.ts",
       "tests/v2.test.ts",
       "tests/v3.test.ts",
+      "tests/variants.test.ts",
       "tests/wp7.test.ts"
     ],
     "src/lib/planner/unavailableSlots": [
@@ -2417,6 +2431,13 @@
     "src/data/healthParams.generated": [
       "tests/h1-plan-eval.test.ts"
     ],
+    "src/lib/habitStore": [
+      "tests/habit-store.test.ts"
+    ],
+    "src/lib/behaviorLog": [
+      "tests/habit-store.test.ts",
+      "tests/pref-learn.test.ts"
+    ],
     "src/lib/planner/health": [
       "tests/health_params.test.ts",
       "tests/knowledge-wiring.test.ts"
@@ -2502,9 +2523,6 @@
       "tests/planweek.test.ts",
       "tests/variants.test.ts"
     ],
-    "src/lib/behaviorLog": [
-      "tests/pref-learn.test.ts"
-    ],
     "src/lib/prefLearn": [
       "tests/pref-learn.test.ts"
     ],
@@ -2525,7 +2543,8 @@
       "tests/routineStore.test.ts"
     ],
     "src/features/week/useWeekPlan": [
-      "tests/routineStore.test.ts"
+      "tests/routineStore.test.ts",
+      "tests/variants.test.ts"
     ],
     "src/features/week/HardBoundaryCard": [
       "tests/routineStore.test.ts"

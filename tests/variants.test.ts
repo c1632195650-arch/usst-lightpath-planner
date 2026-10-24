@@ -14,6 +14,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import type { PlanRequest } from '@/lib/planner/model.ts';
 import { DEFAULT_WEIGHTS, VARIANT_PRESETS } from '@/lib/planner/model.ts';
 import { evaluate, STUDY_TIER_CAP_MIN } from '@/lib/planner/objective.ts';
@@ -122,4 +125,22 @@ test('F4-⑤ 逃生门：PLAN_VARIANTS=0 → 不产变体，基准结果原样�
   // 未请求变体 → 基准行为（零开销）
   const plain = await planWeek(makeReq());
   assert.equal(plain.variants, undefined);
+});
+
+/* ---------- F4 收尾批（④UI）接线锁：读源码断言（RV：摘条件/改键名→恰红，实测留痕） ---------- */
+const here = dirname(fileURLToPath(import.meta.url));
+const srcOf = (rel: string) => readFileSync(join(here, rel), 'utf8');
+
+test('F4-④ UI 接线：hook 请求变体并按周持久化选择（usst.variant-{weekNo}）；出口替换仅非基准变体', () => {
+  const hook = srcOf('../src/features/week/useWeekPlan.ts');
+  assert.match(hook, /variants: true,/, 'hook 必须向引擎请求变体（PLAN_VARIANTS=0 时引擎自行降级）');
+  assert.match(hook, /`usst\.variant-\$\{weekNo\}`/, '选择按周持久化（键名口径与工作单一致）');
+  assert.match(hook, /v\.id === variantId && v\.id !== 'balanced'/, '出口替换只对非基准变体生效（balanced≡基准零漂移）');
+});
+
+test('F4-④ UI 接线：切换器只在三档齐备时渲染（变体缺席=零漂移逃生，不占视觉位）', () => {
+  const wv = srcOf('../src/features/week/WeekPlanView.tsx');
+  assert.match(wv, /variants\.length === 3 &&/, '渲染守卫：变体缺席时整段不渲染');
+  assert.match(wv, /testId="variant-switch"/, '切换器带 testid（E2E/走查锚点）');
+  assert.match(wv, /value=\{variantId\}/, '受控组件接 hook 的选择态');
 });

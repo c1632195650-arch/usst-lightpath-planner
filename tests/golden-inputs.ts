@@ -158,6 +158,23 @@ export const GOLDEN_INPUTS: GoldenInput[] = [
     ],
     transfer: 'none',
   },
+  {
+    // F4（2026-10-24 收尾批⑤）：变体基线语料——高自习目标 + 允许晚间 + 跨校区课，
+    // 是 compact（studyShortfall×1.3 / blockLengthOverrun）与 relaxed（blankDeficit×1.6
+    // / transferRisk×2.4）产生分岔的输入面。快照冻结**基准版**（construct 与 metrics）；
+    // 三变体的差异由 tests/variants.test.ts 守（变体差异只在 improve 层，construct 级
+    // 快照对权重不敏感——F4 引擎核收尾条已申报该口径）。窗口违约语料需 GoldenInput
+    // 增 commits 通道，留 F4⑥/后续批扩形（只增不改既有条目）。
+    name: 'week-14-f4-variants',
+    note: 'F4 变体基线：中高密度自习+跨校区——compact/relaxed 分岔的输入面（冻结基准版；'
+      + '不放开晚间/周末：AC-9 窗口不变量的语料族边界，见 routineStore.test）',
+    schedule: SCHEDULE,
+    weekNo: 14,
+    policy: policy({ dailyStudyMin: 180, maxBlockMin: 90 }),
+    scenarios: scen(),
+    tasks: [],
+    transfer: 'campus',
+  },
 ];
 
 export function goldenInputByName(name: string): GoldenInput | undefined {

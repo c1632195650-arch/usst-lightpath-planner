@@ -32,9 +32,9 @@
  *     （问卷就寝兜底；未采集 = 一个字段都不加，引擎缺省，golden 零漂移）。
  *   · 排程落地后的**待办回填**（blockId → 云端 `Todo.scheduledBlockId`）保留。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DayOfWeek, PersonaProfile, PlanPersistState, Schedule, WeekPlan } from '@/types';
-import type { Diagnostics } from '@/lib/planner/model';
+import type { Diagnostics, PlanVariant } from '@/lib/planner/model';
 import { buildPhasesFromCalendar, phaseOfWeek } from '@/lib/planner/buildPhases';
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
@@ -122,6 +122,13 @@ export interface UseWeekPlanResult {
    * 过去 6 天 + 未来 7 天窗口 —— 两个消费者（周程/总览）原来各拉一份，现在只拉一次。
    */
   weather: WeatherReport | null;
+  /* —— F4（A2 一键多方案）—— */
+  /** 本次求解的三档变体（引擎关闭/降级时为空数组 → 切换器不渲染，零漂移逃生） */
+  variants: PlanVariant[];
+  /** 当前选中的变体 id（按周持久化；切换不触发重排） */
+  variantId: string;
+  /** 切换变体（持久化 + 出口 plan 替换，均在 hook 内完成） */
+  onVariantChange: (id: string) => void;
 }
 
 export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
@@ -145,6 +152,18 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
    * 换周时由消费方按 weekNo 过滤，不重拉。
    */
   const [weather, setWeather] = useState<WeatherReport | null>(null);
+
+  /* ---------- F4（A2 一键多方案）：变体通道 ----------
+   * 引擎侧带 variants:true 求解（PLAN_VARIANTS=0 时引擎返回无变体，切换器随之消失）；
+   * 变体选择按周持久化（usst.variant-{weekNo}），切换**不触发重排**——
+   * 三变体同基底同块 id，用户覆盖层/锁/撤销按 id 生效，天然跨变体。 */
+  const [variants, setVariants] = useState<PlanVariant[]>([]);
+  const [variantId, setVariantId] = useState<string>(() => loadVariantChoice(weekNo));
+  useEffect(() => { setVariantId(loadVariantChoice(weekNo)); }, [weekNo]);
+  const onVariantChange = useCallback((id: string) => {
+    setVariantId(id);
+    saveVariantChoice(weekNo, id);
+  }, [weekNo]);
   useEffect(() => {
     let cancelled = false;
     // past_days=6：无论今天周几，本周七天都有天气（否则周末打开，周一到周五全是空白 —— 实测教训）
@@ -334,6 +353,8 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
             pendingTodos,
             // W6-A（本树）：FOCUS DAYS 硬约束（toPlanRequest 对空数组/undefined 原样吞掉 = 不生效）
             activeDays,
+            // F4（A2）：请求三档变体（引擎侧受 PLAN_VARIANTS=0 与预算闸约束；缺省关闭时零额外求解）
+            variants: true,
           }),
           // Q1a：作息边界（`usst-routine-v1`）→ `dayStart`/`dayEnd`；未采集时不传，
           // 引擎走 `'07:00'/'23:00'` 缺省（问卷规格书 §6.2 的「组装层翻译」落点）
@@ -394,6 +415,8 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
           : result.plan;
         if (!cancelled) {
           setPlan(fused);
+          // F4：变体列表随每次求解刷新（选择态独立持有，切换不重排）
+          setVariants(result.variants ?? []);
           setNotes(
             days && days.length > 0
               ? [...result.notes, `本次只重排了${days.map((d) => DAY_LABELS[d - 1]).join('、')}（其它天保持上一版）`]
@@ -435,5 +458,32 @@ export function useWeekPlan(input: UseWeekPlanInput): UseWeekPlanResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSchedule, weekNo, phase, persona, weather, planState, fromNowOn, replanToken]);
 
-  return { plan, notes, loading, backendOk, diag, transferInfo, goalWarnings, weather };
+  // F4：出口替换——选中非基准变体时，对外 plan 即该变体的整周计划（消费方零改动：
+  // evalDigest/shownPlan/拖拽/撤销全走同一出口；块 id 跨变体一致，覆盖层天然兼容）。
+  // v1 申报口径：变体计划不参与「本地化定点融合」（days≠null 的增量场景切变体=看整周变体版）。
+  const selectedVariant = variants.find((v) => v.id === variantId && v.id !== 'balanced');
+
+  return {
+    plan: selectedVariant ? selectedVariant.plan : plan,
+    variants, variantId, onVariantChange,
+    notes, loading, backendOk, diag, transferInfo, goalWarnings, weather,
+  };
+}
+
+/* ---------- F4：变体选择的按周持久化（裸 localStorage，与 behaviorLog 同体例；
+   storageGateway REGISTRY 登记不在本批允许清单，留后续批） ---------- */
+export function variantKeyOf(weekNo: number): string {
+  return `usst.variant-${weekNo}`;
+}
+export function loadVariantChoice(weekNo: number): string {
+  try {
+    return localStorage.getItem(variantKeyOf(weekNo)) ?? 'balanced';
+  } catch {
+    return 'balanced';
+  }
+}
+export function saveVariantChoice(weekNo: number, id: string): void {
+  try {
+    localStorage.setItem(variantKeyOf(weekNo), id);
+  } catch { /* 私有模式写失败不致命 */ }
 }

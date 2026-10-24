@@ -46,6 +46,8 @@ const LEGACY_ANCHOR: Record<string, number> = {
   'week-12-crosscampus': 96.25,
   'week-19-exam': 72.25,
   'week-04-usertasks': 62.75,
+  // F4 收尾批（2026-10-24）：新语料 week-14-f4-variants 首拍锚点（清单完备，非改既有断言）
+  'week-14-f4-variants': 82.5,
 };
 
 for (const g of GOLDEN_INPUTS) {

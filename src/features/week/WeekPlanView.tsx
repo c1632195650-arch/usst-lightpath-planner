@@ -55,6 +55,8 @@ import {
 import { Toasts, type ToastItem, type ToastKind } from './toast';
 // ── D2（r5, 2026-10-24）：撤销/重做/键盘编排下沉独立模块 ──
 import { useWeekEditActions } from './weekEditActions';
+// ── F4（A2 一键多方案）：三档变体切换（组件库分段控件，只做「同一计划的三种节奏」）──
+import { Segmented } from '@/components/ui/Segmented';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
@@ -382,6 +384,7 @@ export function WeekPlanView({
    * ========================================================== */
   const {
     plan, notes, loading, backendOk, diag, transferInfo, goalWarnings, weather,
+    variants, variantId, onVariantChange,
   } = useWeekPlan({
     schedule, weekNo, persona, planState, onPlanStateChange,
     layer, goals, rules, fromNowOn, replanToken,
@@ -1083,6 +1086,23 @@ export function WeekPlanView({
         backendOk={backendOk} onGoProfile={onGoProfile}
       />
       <NearEventsPanel events={nearEvents} />
+
+      {/* F4·A2 一键多方案：三档切换。变体缺席（PLAN_VARIANTS=0 / 预算闸降级 / 引擎未产）
+          时整段不渲染——缺省路径与 F4 之前逐字节一致（零漂移逃生）。 */}
+      {variants.length === 3 && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Segmented
+            label="计划节奏"
+            testId="variant-switch"
+            value={variantId}
+            onChange={onVariantChange}
+            options={variants.map((v) => ({ value: v.id, label: v.label ?? v.id }))}
+          />
+          <span className="text-[11px] text-ink-faint">
+            同一批课程与锁定 · 三种节奏切换即换视角（选择按周记忆）
+          </span>
+        </div>
+      )}
 
       {/* 工具面板栈（F2d/A5：操作条 + 用户干预面板拆为 WeekToolsPanel） */}
       <WeekToolsPanel
