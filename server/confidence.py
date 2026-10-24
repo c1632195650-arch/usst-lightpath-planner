@@ -32,9 +32,17 @@ def compute_confidence(route, mode, relevance, n_sources,
     """
     if route == "empty":
         return {"level": "none", "reason": "没有可判定的问题内容"}
-    # 结构化直出：L0 模板（图谱拼答案，sources 已置空）、空间上下文、
-    # 方法库/健康库的确定性口径 —— 这些不经过 LLM 发挥，属于校内结构化数据。
-    if mode == "template" or used_space:
+    # 结构化直出第一优先：L0 模板（图谱拼答案，sources 已置空）——它不依赖资讯检索，
+    # D5 门判掉的资讯证据不影响图谱数据的确定性。
+    if mode == "template":
+        return {"level": "structured", "reason": "来自校内空间与图谱数据"}
+    # D5 门判「检索证据与问题不是同一件事」→ 空间/知识库/来源旗标再亮也不能标
+    # structured（2026-10-24 部署验收实测抓到：宇宙尽头类问题模糊命中空间图谱、
+    # 门降级后 used_space 仍为 true）。诚实口径 = 含推断。
+    if relevance == "irrelevant_downgraded":
+        return {"level": "inferred", "reason": "证据相关性存疑，仅供参考，建议以官方信息为准"}
+    # 结构化直出：空间上下文、方法库/健康库的确定性口径
+    if used_space:
         return {"level": "structured", "reason": "来自校内空间与图谱数据"}
     if used_study or used_health or study_pseudo:
         return {"level": "structured", "reason": "来自校内方法/健康知识库"}

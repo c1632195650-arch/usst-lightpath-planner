@@ -48,6 +48,18 @@ def test_downgraded_is_never_cited():
     assert compute_confidence("llm", "extractive", "irrelevant_downgraded", 2)["level"] == "inferred"
 
 
+def test_downgraded_overrides_space_and_kb_flags():
+    # 2026-10-24 部署验收实测：宇宙尽头类问题模糊命中空间图谱 → 门降级但 used_space 仍 true
+    # → 不得标 structured（诚实口径 = 含推断）；健康库旗标同理受门裁决约束。
+    assert compute_confidence("llm", "llm", "irrelevant_downgraded", 4, used_space=True)["level"] == "inferred"
+    assert compute_confidence("llm", "llm", "irrelevant_downgraded", 0, used_health=True)["level"] == "inferred"
+
+
+def test_template_survives_downgrade():
+    # L0 模板答不依赖被门否掉的资讯证据 → 仍是 structured（图谱数据确定性）
+    assert compute_confidence("llm", "template", "irrelevant_downgraded", 0)["level"] == "structured"
+
+
 def test_extractive_without_downgrade_is_cited():
     assert compute_confidence("grounded", "extractive", None, 3)["level"] == "cited"
 

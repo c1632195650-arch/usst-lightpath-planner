@@ -63,6 +63,9 @@ import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand�
 from confidence import compute_confidence, compute_kb
 # 课表解析包（2026-10-08：独立包已归拢进主仓库 server/timetable_parser/；serve.py 同源实现）
 from timetable_parser import parse_pdf
+# F7-2/D1（2026-10-24）：课表多格式导入 —— WakeUp 课程表 JSON / 日历 ICS（两个纯标准库解析器）
+from timetable_parser.ics import parse_ics
+from timetable_parser.wakeup import parse_wakeup
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 app.include_router(plan_dialog.router)
@@ -1492,6 +1495,57 @@ async def import_pdf_route(request: Request):
         return {"ok": False, "error": (
             "未解析到任何课程。请确认上传的是『每周课表』格式的 PDF"
             "(表格含 星期一~星期日)。原课表数据已保留。")}
+    try:
+        os.makedirs(os.path.dirname(_COURSE_RECORDS_PATH), exist_ok=True)
+        with open(_COURSE_RECORDS_PATH, "w", encoding="utf-8") as fh:
+            json.dump(records, fh, ensure_ascii=False)
+    except Exception as e:
+        return {"ok": False, "error": f"课表已解析但写入失败：{e}"}
+    return {"ok": True, "count": len(records), "records": records}
+
+
+# ─── F7-2/D1（2026-10-24）：课表多格式导入 POST /api/import_file?format=wakeup|ics ───
+# 请求体与响应形状复用 /api/import_pdf：body=文件原始字节；
+# 返回 {ok:true,count,records} | {ok:false,error}（业务失败不当 HTTP 错，原课表不动）。
+# format 选解析器：wakeup=WakeUp 课程表导出 JSON；ics=日历 .ics（VEVENT+RRULE 简化展开）。
+# 解析成功同样落盘 data/course_records.json（与 PDF 导入同一份课表数据）。
+# JSON/ICS 都是几 KB 的小文件，走通用 2MB body 闸（LIBAO_MAX_BODY_MB）即可，不进 PDF 专项额度。
+_IMPORT_FORMAT_HINT = {
+    "wakeup": "WakeUp 课程表 App 导出的 JSON 文件",
+    "ics": "含课程 VEVENT 的日历 .ics 文件",
+}
+
+
+def _decode_import_text(raw: bytes) -> str:
+    """上传的 JSON/ICS 是文本：优先 UTF-8（容忍 BOM），退回 GBK（部分国产 App 导出）。"""
+    for enc in ("utf-8-sig", "gbk"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("无法按 UTF-8/GBK 解码文件内容，请确认导出的是文本格式")
+
+
+@app.post("/api/import_file")
+@app.post("/timetable/api/import_file")
+async def import_file_route(request: Request, format: str = ""):
+    format = (format or "").strip().lower()
+    if format not in _IMPORT_FORMAT_HINT:
+        return {"ok": False, "error": (
+            f"不支持的 format 参数：「{format or '缺省'}」。"
+            "仅支持 wakeup（WakeUp 课程表 JSON）/ ics（日历文件）")}
+    raw = await request.body()
+    if not raw:
+        return {"ok": False, "error": "没有收到文件内容"}
+    try:
+        text = _decode_import_text(raw)
+        records = parse_wakeup(text) if format == "wakeup" else parse_ics(text)
+        records = records or []
+    except Exception as e:  # 解析器异常 → 业务失败（原课表不动）
+        return {"ok": False, "error": f"解析失败：{e}"}
+    if not records:
+        return {"ok": False, "error": (
+            f"未解析到任何课程。请确认上传的是{_IMPORT_FORMAT_HINT[format]}。原课表数据已保留。")}
     try:
         os.makedirs(os.path.dirname(_COURSE_RECORDS_PATH), exist_ok=True)
         with open(_COURSE_RECORDS_PATH, "w", encoding="utf-8") as fh:
