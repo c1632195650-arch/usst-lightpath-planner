@@ -13,6 +13,7 @@ import NotifyStatus from './NotifyStatus.tsx';
 import IcsGuide from './IcsGuide.tsx';
 import WhitelistGuide from './WhitelistGuide.tsx';
 import EvalSection from './EvalSection.tsx';
+import { WeeklyReviewCard } from './WeeklyReviewCard.tsx';
 import { Icon } from '@/components/icons/Icon';
 
 export default function MeTab({ d, displayed, nowMin, identity, onLogout }: {
@@ -64,6 +65,9 @@ export default function MeTab({ d, displayed, nowMin, identity, onLogout }: {
         <IcsGuide icsToken={identity.icsToken} />
         <WhitelistGuide />
       </section>
+
+      {/* F5·C2 本周复盘卡（规则模板句 + behaviorLog 纯函数层，零 LLM；可收起） */}
+      <WeeklyReviewCard />
 
       {/* 任务二 · 执行力评估（折叠面板 + 每日采集弹窗，副作用在组件内） */}
       <EvalSection

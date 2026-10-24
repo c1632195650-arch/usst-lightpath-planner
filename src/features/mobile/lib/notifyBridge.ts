@@ -231,3 +231,88 @@ export function registerActionHandler(
     }
   })();
 }
+
+/* ============================================================
+ * F5（C1 晨报，2026-10-24）：晨报 + 截止提醒的通知清单
+ * ------------------------------------------------------------
+ * 与 planTodayNotifications 同一纪律：
+ *   · 纯函数出清单 + **确定性 id**（stableHash 语义键 % 1e8，重排幂等替换）；
+ *   · 晨报 1 条：**明早 7:30**（dayOffset=1，atMin=450），id=morning@dateKey；
+ *   · 截止提醒：deadline 剩 3 天 / 1 天各 1 条（当天 20:00，D-3/D-1 口径），
+ *     id=ddl@{id}#{days}——同一 deadline 两天各占一个 id，互不覆盖。
+ * ========================================================== */
+
+/** 晨报/截止类通知的纯描述（非块绑定，无动作按钮） */
+export interface BriefSpec {
+  id: number;
+  /** 当日分钟偏移 */
+  atMin: number;
+  /** 0=今天，1=明天 */
+  dayOffset: 0 | 1;
+  title: string;
+  body: string;
+}
+
+import type { MorningBrief, BriefDeadline } from './morningBrief.ts';
+import { diffDays } from '@/lib/date';
+
+/** 晨报时刻：07:30 */
+export const BRIEF_AT_MIN = 7 * 60 + 30;
+/** 截止提醒时刻：20:00 */
+export const DEADLINE_AT_MIN = 20 * 60;
+
+export function planBriefNotifications(
+  brief: MorningBrief,
+  deadlines: readonly BriefDeadline[],
+  dateKey: string,
+): BriefSpec[] {
+  const out: BriefSpec[] = [];
+  out.push({
+    id: stableHash(`morning@${dateKey}`) % 100_000_000,
+    atMin: BRIEF_AT_MIN,
+    dayOffset: 1,
+    title: brief.title,
+    body: brief.lines[0] ?? '打开看看今天的安排',
+  });
+  for (const d of deadlines) {
+    if (d.done || !d.dueISO) continue;
+    const days = -diffDays(d.dueISO, dateKey); // 剩余天数（负=已过）
+    if (days === 3 || days === 1) {
+      out.push({
+        id: stableHash(`ddl@${d.id}#${days}`) % 100_000_000,
+        atMin: DEADLINE_AT_MIN,
+        dayOffset: 0,
+        title: `「${d.title}」还剩 ${days} 天截止`,
+        body: '提前留出时间——周计划页可以把它排进安排',
+      });
+    }
+  }
+  return out;
+}
+
+/** 排晨报/截止通知（Web no-op；native 追加式——不 cancel 块通知，各自 id 空间） */
+export async function scheduleBriefs(specs: readonly BriefSpec[]): Promise<NotifBridgeResult> {
+  if (!(await isNative())) return { ok: true, scheduled: 0 };
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    if (specs.length === 0) return { ok: true, scheduled: 0 };
+    const pending: Parameters<typeof LocalNotifications.schedule>[0]['notifications'] = [];
+    for (const spec of specs) {
+      const at = new Date();
+      at.setHours(0, 0, 0, 0);
+      at.setDate(at.getDate() + spec.dayOffset);
+      at.setMinutes(spec.atMin);
+      pending.push({
+        id: spec.id,
+        title: spec.title,
+        body: spec.body,
+        schedule: { at, allowWhileIdle: true },
+      });
+    }
+    await LocalNotifications.schedule({ notifications: pending });
+    return { ok: true, scheduled: pending.length };
+  } catch (e) {
+    console.warn('[mobile-notify] 晨报排程失败（不影响块通知）：', e);
+    return { ok: false, scheduled: 0 };
+  }
+}

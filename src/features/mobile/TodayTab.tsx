@@ -14,6 +14,7 @@ import BlockCard from './BlockCard.tsx';
 import NowBlock from './NowBlock.tsx';
 import NextList from './NextList.tsx';
 import QuickBar from './QuickBar.tsx';
+import { MorningCard } from './MorningCard.tsx';
 import TomorrowPreview from './TomorrowPreview.tsx';
 import { Icon } from '@/components/icons/Icon';
 
@@ -66,6 +67,11 @@ export default function TodayTab({ d, displayed, nowMin, onOpenBlock, viewDow, i
           <Icon name="bell" size="sm" className="shrink-0 text-brand" />
           「{banner.title}」{fmtMin(banner.startMin)} 开始 —— 还有 {banner.startMin - nowMin} 分钟
         </div>
+      )}
+
+      {/* F5·C1 晨报卡（纯函数拼装、离线可用；可收起，通知侧另行排程） */}
+      {isTodayView && d.phase === 'ready' && (
+        <MorningCard blocksToday={displayed?.blocks ?? []} nowMin={nowMin} />
       )}
 
       {d.phase === 'loading' && <p data-testid="m-loading" className="py-16 text-center text-sm text-ink-faint">同步中…</p>}
