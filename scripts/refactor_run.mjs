@@ -104,7 +104,7 @@ export const BATCHES = [
   {
     id: 'r4-d6-serve-positioning',
     debt: 'D6', wave: 1, deps: [],
-    title: 'serve.py 定位声明 + 双后端 CORS 一致性互查',
+    title: 'serve.py 定位声明 + 后端地址三处一致性互查（r4 recon 修正：真漂移是 IP 不是 CORS）',
     files: ['serve.py', 'scripts/check_backend_consistency.mjs', 'scripts/backend_consistency.test.ts'],
     message: {
       subject: 'chore(server): serve.py 定位声明（本地一体化，生产以 server/ 为准）+ 后端地址三处一致性互查',
