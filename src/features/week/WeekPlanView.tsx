@@ -53,6 +53,8 @@ import {
 } from './useWeekPlanStore';
 
 import { Toasts, type ToastItem, type ToastKind } from './toast';
+// ── D2（r5, 2026-10-24）：撤销/重做/键盘编排下沉独立模块 ──
+import { useWeekEditActions } from './weekEditActions';
 // 作业的**纯函数**仍从 assignmentStore 取（存储已并入覆盖层，那边只留纯逻辑）
 import { assignmentId, assignmentsOfWeek, clampEstimate } from './assignmentStore';
 // ── S4：用户指定食堂 ──────────────────────────────────────────
@@ -183,43 +185,9 @@ export function WeekPlanView({
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  /**
-   * 撤销（Ctrl+Z / 顶栏按钮）—— 弹出最近一份覆盖层快照恢复。
-   * 撤销后界面通过 `shownPlan` 立即反映（moves/excluded 都在显示口径里），
-   * 不需要强制重排。
-   */
-  const handleUndo = useCallback(() => {
-    // 撤销/重做的栈操作与落库都在 store（useWeekPlanStore）；这里只管提示
-    if (undoLayer()) notify('info', '已撤销上一步改动');
-  }, [notify]);
-
-  /** 重做（Ctrl+Shift+Z / Ctrl+Y）—— 与撤销互为逆操作 */
-  const handleRedo = useCallback(() => {
-    if (redoLayer()) notify('info', '已重做');
-  }, [notify]);
-
-  /** 删除类 Toast 的「撤销」按钮 —— 一键恢复到删除前 */
-  const undoAction = useCallback((): ToastItem['action'] => {
-    return { label: '撤销', run: () => handleUndo() };
-  }, [handleUndo]);
-
-  // Ctrl+Z（Cmd+Z）撤销 / Ctrl+Shift+Z 与 Ctrl+Y 重做 —— 输入框里打字时不拦截
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const k = e.key.toLowerCase();
-      const onInput = (() => {
-        const t = e.target as HTMLElement | null;
-        return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      })();
-      if (onInput) return;
-      if (k === 'z' && e.shiftKey) { e.preventDefault(); handleRedo(); }
-      else if (k === 'z') { e.preventDefault(); handleUndo(); }
-      else if (k === 'y') { e.preventDefault(); handleRedo(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo]);
+  /* ── D2（r5, 2026-10-24）：撤销/重做/删除回执/键盘编排已下沉 weekEditActions.ts
+     （行为逐字节等价搬运；Toast 文案与键盘判定由 scripts/weekEditActions.test.ts 守护）── */
+  const { handleUndo, handleRedo, undoAction } = useWeekEditActions({ undoLayer, redoLayer, notify });
 
   /** 派生视图：下面大量代码引用 `edits.xxx` / `assignments`，这里指向同一份数据 */
   const edits = { userTasks: layer.tasks, excludedBlockIds: layer.excluded };
