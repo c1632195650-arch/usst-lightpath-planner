@@ -20,7 +20,7 @@
 import type { DayOfWeek, PhasePolicy, Schedule, ScenarioFields, TimeBlock, WeekPlan, RollingState } from '@/types';
 import { toHHmm } from '../../constants/time.ts';
 import type { ActivityTemplate, UserTask } from './templates.ts';
-import type { Commit, PlanRequest } from './model.ts';
+import type { Commit, PlanRequest, Weights } from './model.ts';
 import { construct } from './construct.ts';
 
 /* ============================================================
@@ -122,12 +122,30 @@ export interface BuildWeekPlanInput {
    * 结构性新增按 §二契约纪律在此显式申报；缺省 undefined = 旧行为逐字段一致。
    */
   activeDays?: DayOfWeek[];
+  /**
+   * F4（2026-10-24，A2 一键多方案）：请求三档变体（均衡/紧凑/松弛）。
+   * 契约: BuildWeekPlanInput/PlanRequest 增 variants?（可选，opt-in）——透传后由
+   * planWeek 的变体编排填 `BuildWeekPlanResult.variants`；受 `PLAN_VARIANTS=0`
+   * 与总预算闸约束。缺省 undefined = 旧行为逐字段一致（零漂移）。
+   */
+  variants?: boolean;
+  /**
+   * F4-v1.5：权重覆盖（条件透传 `PlanRequest.weights`）。
+   * 契约: BuildWeekPlanInput 增 weights?（可选，opt-in）——不传 = DEFAULT_WEIGHTS，
+   * 行为逐字段一致。供场景模式（F6）等调用侧做安全档内的微调。
+   */
+  weights?: Partial<Weights>;
 }
 
 export interface BuildWeekPlanResult {
   plan: import('@/types').WeekPlan;
   /** 生成过程说明（面向用户） */
   notes: string[];
+  /**
+   * F4：三档变体（仅 `input.variants === true` 且环境开关开启时出现）。
+   * 契约: BuildWeekPlanResult 增 variants?（可选字段，缺席 = 未请求/被预算闸降级）。
+   */
+  variants?: Array<{ id: string; label: string; plan: import('@/types').WeekPlan; costTotal: number }>;
 }
 
 /** `BuildWeekPlanInput` → `PlanRequest`（旧入口到新管道的唯一适配点） */
@@ -189,6 +207,9 @@ export function toPlanRequest(input: BuildWeekPlanInput): PlanRequest {
     ...(input.mealWalkBudgetMin != null ? { mealWalkBudgetMin: input.mealWalkBudgetMin } : {}),
     // W6-A：FOCUS DAYS 硬约束（空数组与 undefined 同义 = 不生效，零漂移）
     ...(input.activeDays?.length ? { activeDays: input.activeDays } : {}),
+    // F4：变体请求与权重覆盖（条件展开——不传不出现，零漂移）
+    ...(input.variants === true ? { variants: true } : {}),
+    ...(input.weights != null ? { weights: input.weights } : {}),
   };
 }
 

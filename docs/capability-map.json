@@ -7,11 +7,11 @@
     "ui": 321
   },
   "totals": {
-    "testFiles": 161,
-    "engineFiles": 115,
+    "testFiles": 162,
+    "engineFiles": 116,
     "uiFiles": 46,
     "guardedSources": 163,
-    "reverseVerified": 101,
+    "reverseVerified": 102,
     "orphans": 0
   },
   "domains": {
@@ -20,7 +20,7 @@
       "prefixes": [
         "src/lib/planner/"
       ],
-      "testCount": 62,
+      "testCount": 63,
       "tests": [
         "scripts/buildPhases.test.ts",
         "scripts/deadlineStore.test.ts",
@@ -77,6 +77,7 @@
         "tests/scoring-transfer.test.ts",
         "tests/solver.test.ts",
         "tests/toPlanRequest-persona.test.ts",
+        "tests/variants.test.ts",
         "tests/weekly-activity-floor.test.ts",
         "tests/wp10.test.ts",
         "tests/wp4a.test.ts",
@@ -1693,6 +1694,14 @@
       "guardCount": 6,
       "reverseVerified": false
     },
+    "tests/variants.test.ts": {
+      "suite": "engine",
+      "guards": [
+        "planner-engine"
+      ],
+      "guardCount": 5,
+      "reverseVerified": true
+    },
     "tests/week-diag-copy.test.ts": {
       "suite": "engine",
       "guards": [
@@ -1971,6 +1980,7 @@
       "tests/timeScale.test.ts",
       "tests/userPlanRestore.test.ts",
       "tests/v1.test.ts",
+      "tests/variants.test.ts",
       "tests/week-view-model.test.ts",
       "tests/wp10.test.ts",
       "tests/wp4a.test.ts",
@@ -2058,7 +2068,8 @@
       "tests/p2-essential-budget.test.ts",
       "tests/p2-incremental-rolling.test.ts",
       "tests/planStability.test.ts",
-      "tests/property/lock.machine.test.ts"
+      "tests/property/lock.machine.test.ts",
+      "tests/variants.test.ts"
     ],
     "src/features/mobile/lib/memoTypes": [
       "scripts/memo-web-workspace.test.ts",
@@ -2223,6 +2234,7 @@
       "tests/places-policy.test.ts",
       "tests/scoring-transfer.test.ts",
       "tests/solver.test.ts",
+      "tests/variants.test.ts",
       "tests/weekly-activity-floor.test.ts",
       "tests/wp5.test.ts"
     ],
@@ -2343,7 +2355,8 @@
       "tests/improve-transfer.test.ts",
       "tests/improve.test.ts",
       "tests/objective-evaluate.test.ts",
-      "tests/scoring-transfer.test.ts"
+      "tests/scoring-transfer.test.ts",
+      "tests/variants.test.ts"
     ],
     "src/features/feedback/store": [
       "tests/feedback.test.ts"
@@ -2486,7 +2499,8 @@
       "tests/places-policy.test.ts"
     ],
     "src/lib/planner/planWeek": [
-      "tests/planweek.test.ts"
+      "tests/planweek.test.ts",
+      "tests/variants.test.ts"
     ],
     "src/lib/behaviorLog": [
       "tests/pref-learn.test.ts"

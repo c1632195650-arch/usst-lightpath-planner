@@ -34,6 +34,7 @@
  */
 import type { TimeBlock } from '@/types';
 import type { PlanRequest, PlanResult } from './model.ts';
+import { DEFAULT_WEIGHTS, VARIANT_PRESETS, type PlanVariant, type Weights } from './model.ts';
 import type { TransferProvider } from './campusLookup.ts';
 import { solveWeek } from './solver.ts';
 import {
@@ -85,7 +86,7 @@ export interface PlanWeekOptions {
  *   · `transferRounds`    —— 实际求解了几轮；
  *   · `transferUncovered` —— 仍缺实测值的路对（空 = 达标）。
  */
-export async function planWeek(
+async function planWeekBase(
   req: PlanRequest,
   opts: PlanWeekOptions = {},
 ): Promise<PlanResult> {
@@ -213,6 +214,68 @@ async function defaultFetchRoutes(): Promise<FetchRoutes | null> {
   } catch {
     return null;
   }
+}
+
+/* ============================================================
+ * F4 · A2 一键多方案（2026-10-24）：变体编排 + 预算闸
+ * ------------------------------------------------------------
+ * 设计（技术方案集 F4 行）：
+ *   · construct 确定性 ⇒ 三个变体共享同一构造基底，仅权重不同驱动 improve 分岔；
+ *   · 每变体经 `SolverConfig.budgetMs`（180ms）约束 improve 迭代，三变体总预算
+ *     600ms，超时**逐个降级**（宁可少给一版，也不让低端机卡顿）；
+ *   · `PLAN_VARIANTS=0 / 'false'`（env，G 批开关惯例，每次调用读）一键回旧；
+ *   · 锁跨变体天然有效：语义键 id 与时间无关，同块在三版里 id 相同。
+ * ========================================================== */
+
+/** 每变体的 improve 预算（毫秒，经 config.budgetMs 传导给求解器） */
+export const VARIANT_BUDGET_MS = 180;
+/** 三变体总预算（毫秒）：超时后不再启动下一变体（已产出的保留） */
+export const VARIANT_TOTAL_BUDGET_MS = 600;
+
+/** 预算闸（纯函数，边界可直测）：已耗时 < 总预算才放行下一变体 */
+export function variantGate(elapsedMs: number, totalBudgetMs: number = VARIANT_TOTAL_BUDGET_MS): boolean {
+  return elapsedMs < totalBudgetMs;
+}
+
+/** `PLAN_VARIANTS` 逃生门：'0'/'false' → 关闭（每次调用读，测试可翻开关再复原） */
+export function variantsEnabled(): boolean {
+  try {
+    const v = typeof process !== 'undefined'
+      ? (process as unknown as { env?: Record<string, string | undefined> }).env?.PLAN_VARIANTS
+      : undefined;
+    return !(v === '0' || v === 'false');
+  } catch {
+    return true;
+  }
+}
+
+/** 给基准结果挂三档变体（req.variants !== true 或开关关闭 → 原样返回，零开销） */
+function attachVariants(base: PlanResult, req: PlanRequest): PlanResult {
+  if (req.variants !== true || !variantsEnabled()) return base;
+  const t0 = performance.now();
+  const merged = (over: Partial<Weights>): Weights => ({ ...DEFAULT_WEIGHTS, ...(req.weights ?? {}), ...over });
+  const list: PlanVariant[] = [];
+  for (const preset of VARIANT_PRESETS) {
+    if (!variantGate(performance.now() - t0)) break; // 预算闸：降级退出
+    if (Object.keys(preset.weights).length === 0) {
+      // balanced = 基准版本身（零额外求解）
+      list.push({ id: preset.id, label: preset.label, weights: merged({}), cost: base.diagnostics.cost.total, plan: base.plan });
+      continue;
+    }
+    const sub = solveWeek({
+      ...req,
+      variants: undefined, // 防递归
+      weights: { ...(req.weights ?? {}), ...preset.weights },
+      config: { ...(req.config ?? {}), budgetMs: VARIANT_BUDGET_MS },
+    });
+    list.push({ id: preset.id, label: preset.label, weights: merged(preset.weights), cost: sub.diagnostics.cost.total, plan: sub.plan });
+  }
+  return list.length > 0 ? { ...base, variants: list } : base;
+}
+
+/** 排一周（对外入口 = 基准求解 + F4 变体挂载；签名与降级行为与既有一致） */
+export async function planWeek(req: PlanRequest, opts: PlanWeekOptions = {}): Promise<PlanResult> {
+  return attachVariants(await planWeekBase(req, opts), req);
 }
 
 export { MAX_TRANSFER_ROUNDS };

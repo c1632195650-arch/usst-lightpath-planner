@@ -221,7 +221,14 @@ export function boostsByWeek(boosts: DeadlineBoost[]): Map<number, DeadlineBoost
 const DAY_START_DEFAULT = 7 * 60;   // 07:00
 const DAY_END_DEFAULT = 23 * 60;    // 23:00
 
-/** 目标函数分项 —— **每一项都已乘权重**，因此 7 项之和恒等于 `total` */
+/**
+ * F4/D10：自习块的「档位上限」（分钟）。超过它的软自习块按超档分钟计价
+ * （`weights.blockLengthOverrun`），驱动 improve 的 `resplit` 拆分方向。
+ * 取 50：与 knowledge 自习档位（25/50）及偏好学习 R2 的档位分界同源。
+ */
+export const STUDY_TIER_CAP_MIN = 50;
+
+/** 目标函数分项 —— **每一项都已乘权重**，因此各项之和恒等于 `total` */
 export interface CostBreakdown {
   studyShortfall: number;
   blankDeficit: number;
@@ -230,7 +237,15 @@ export interface CostBreakdown {
   dueOverdue: number;
   churn: number;
   placeMismatch: number;
-  /** === 上列 7 项之和（构造上保证，无浮点误差） */
+  /**
+   * F4/D10（spec §13.8 回填，2026-10-24）：自习块超档时长（已乘权重）。
+   * DEFAULT 权重 0 → 该项**精确等于 0**（0 × 有限数 = +0，total 增量逐位为 0），
+   * raw 里的原始量恒如实统计（观察用，不参与 total）。
+   */
+  blockLengthOverrun: number;
+  /** F4/D10：提交项窗口违约次数（已乘权重）。DEFAULT 权重 0 → 同上。 */
+  windowViolation: number;
+  /** === 上列各项之和（构造上保证，无浮点误差） */
   total: number;
   /** 未加权的原始量（诊断/解释用，不参与 total） */
   raw: {
@@ -246,6 +261,10 @@ export interface CostBreakdown {
     mismatchedBlocks: number;
     /** 因「校区未知」而**未**计入惩罚的块数（观察用，恒不产生 cost） */
     unknownCampusBlocks: number;
+    /** F4：超档分钟数（未加权；blockLengthOverrun=0 时也如实统计，供诊断观察） */
+    blockOverrunMin: number;
+    /** F4：窗口违约块数（未加权；同上） */
+    windowViolations: number;
   };
 }
 
@@ -536,6 +555,26 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
     if (c !== main) mismatchedBlocks += 1;
   }
 
+  // —— ⑧ F4/D10（2026-10-24，spec §13.8 回填）：超档时长与窗口违约 ——
+  // raw 恒统计（诊断观察）；cost 项 = 权重 × raw —— DEFAULT 权重 0 时精确加 0，
+  // total 与 F4 之前逐位一致（零漂移是数值精确保证，见 CostBreakdown 注）。
+  let blockOverrunMin = 0;
+  for (const b of plan.blocks) {
+    if (b.kind !== 'study' || isHardBlock(b, lockLevels)) continue;
+    const over = (b.endMin - b.startMin) - STUDY_TIER_CAP_MIN;
+    if (over > 0) blockOverrunMin += over;
+  }
+  let windowViolations = 0;
+  for (const c of ctx.commits ?? []) {
+    if (!c.window) continue;
+    for (const b of plan.blocks) {
+      if (b.kind !== 'study') continue;
+      // 块↔提交项关联与 improve::reschedulePlaceCandidates 同一口径（语义键 id 内嵌 commitId）
+      if (!(b.id.endsWith(`-${c.id}`) || b.id.includes(`-${c.id}-`))) continue;
+      if (b.startMin < c.window.fromMin || b.endMin > c.window.toMin) windowViolations += 1;
+    }
+  }
+
   // —— 分项（已乘权重）与 total：total 由分项相加得到，保证「分项之和 === total」——
   const a = w.studyShortfall * studyShortfallRaw;
   const b2 = w.blankDeficit * blankDeficitRaw;
@@ -544,7 +583,9 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
   const g = w.placeMismatch * mismatchedBlocks;
   const c2 = switchCost;
   const f = churn;
-  const total = a + b2 + c2 + d + e + f + g;
+  const h = w.blockLengthOverrun * blockOverrunMin;
+  const i2 = w.windowViolation * windowViolations;
+  const total = a + b2 + c2 + d + e + f + g + h + i2;
 
   return {
     studyShortfall: a,
@@ -554,6 +595,8 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
     dueOverdue: e,
     churn: f,
     placeMismatch: g,
+    blockLengthOverrun: h,
+    windowViolation: i2,
     total,
     raw: {
       studyMin,
@@ -564,6 +607,8 @@ export function evaluate(plan: WeekPlan, ctx: EvalContext): CostBreakdown {
       churnMin: ctx.previousPlan ? churnMinutes(ctx.previousPlan, plan) : 0,
       mismatchedBlocks,
       unknownCampusBlocks,
+      blockOverrunMin,
+      windowViolations,
     },
   };
 }

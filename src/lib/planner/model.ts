@@ -140,6 +140,19 @@ export interface Weights {
   churn: number;
   /** 跨校区/未登记地点惩罚 */
   placeMismatch: number;
+  /**
+   * 自习块超档时长惩罚（每分钟，F4/D10·spec §13.8 回填）。
+   * 档位上限 = `STUDY_TIER_CAP_MIN`（objective.ts，50 分钟，与 knowledge 自习档位同源）。
+   * **DEFAULT = 0**：默认路径不产该项 → 存量 golden 逐字节零漂移；
+   * 只有变体预设（compact）把它设 >0，`resplit` 算子的拆分方向从此被目标驱动。
+   */
+  blockLengthOverrun: number;
+  /**
+   * 提交项窗口违约惩罚（每次，F4/D10·spec §13.8 回填）。
+   * 违约判定与 improve 的 reschedule-place 同一口径（块落在 commit.window 之外）。
+   * **DEFAULT = 0**：同上零漂移；relaxed 预设设 >0 激活。
+   */
+  windowViolation: number;
 }
 
 /** 工程默认权重（规格书 §6.3）——可在 `PlanRequest.weights` 里覆盖 */
@@ -151,7 +164,37 @@ export const DEFAULT_WEIGHTS: Weights = {
   dueOverdue: 8.0,
   churn: 0.8,
   placeMismatch: 3.0,
+  // F4 两新键缺省 0 —— 零漂移钥匙（tests/variants.test.ts 有锁）
+  blockLengthOverrun: 0,
+  windowViolation: 0,
 };
+
+/**
+ * 计划变体预设（F4·A2 一键多方案，2026-10-24）。
+ * 权重为**相对 DEFAULT 的绝对值**（注释给倍数）；balanced = 引擎默认，不覆盖任何键。
+ * 排期依据：技术方案集 F4（路线锁定：固定三档，不做自助滑杆）。
+ */
+export interface VariantPreset {
+  id: 'balanced' | 'compact' | 'relaxed';
+  /** 中文档名（UI/梨宝话术直接用） */
+  label: string;
+  /** 对 DEFAULT_WEIGHTS 的覆盖表（空 = 基准版） */
+  weights: Partial<Weights>;
+}
+
+export const VARIANT_PRESETS: readonly VariantPreset[] = [
+  { id: 'balanced', label: '均衡', weights: {} },
+  {
+    id: 'compact', label: '紧凑',
+    // studyShortfall ×1.3 / blankDeficit ×0.5：多排自习、压缩留白；blockLengthOverrun 0.5 激活拆长块
+    weights: { studyShortfall: 1.3, blankDeficit: 0.5, blockLengthOverrun: 0.5 },
+  },
+  {
+    id: 'relaxed', label: '松弛',
+    // blankDeficit ×1.6 / transferRisk ×2.4：多留白、怕赶路；windowViolation 0.3 激活窗口守约
+    weights: { blankDeficit: 1.6, transferRisk: 4.8, windowViolation: 0.3 },
+  },
+];
 
 /**
  * 评分口径（2026-09-19，PR-A）。
@@ -278,6 +321,13 @@ export interface PlanRequest {
   transfer?: TransferProvider;
   /** 权重覆盖；缺省 = `DEFAULT_WEIGHTS` */
   weights?: Partial<Weights>;
+  /**
+   * 请求产出三档变体（F4·A2）：balanced/compact/relaxed。
+   * 契约: PlanRequest 增 variants?（可选，opt-in）——true 时 `PlanResult.variants`
+   * 填三份（受 `PLAN_VARIANTS=0` 环境开关与总预算闸约束）；缺省 undefined = 旧行为
+   * 逐字段一致（零漂移）。
+   */
+  variants?: boolean;
   /** 求解器配置；缺省 = `DEFAULT_SOLVER_CONFIG` */
   config?: Partial<SolverConfig>;
   /** 一天的可排程区间，默认 07:00 */
@@ -541,6 +591,8 @@ export interface PlanResult {
 export interface PlanVariant {
   /** 变体标识，如 'balanced' / 'compact' / 'relaxed' */
   id: string;
+  /** 中文档名（F4 起填，如「紧凑」；旧调用方无需感知） */
+  label?: string;
   /** 该变体对应的权重（便于比较与复现） */
   weights: Weights;
   /** 该变体的成本分 */

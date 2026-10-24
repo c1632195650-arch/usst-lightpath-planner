@@ -508,7 +508,7 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
     elapsedMs: Math.round((performance.now() - t0) * 1000) / 1000,
     cost: {
       total: cost.total,
-      // 7 项分项（§10.1 AC-3 的「分项之和 === total」恒等式对的就是这七项）
+      // 分项（§10.1 AC-3 的「分项之和 === total」恒等式；F4 起含两新项，缺省权重 0 → 恒 0）
       parts: {
         studyShortfall: cost.studyShortfall,
         blankDeficit: cost.blankDeficit,
@@ -517,6 +517,8 @@ export function solveWeek(req: PlanRequest, ctx: ConstructCtx = {}): PlanResult 
         dueOverdue: cost.dueOverdue,
         churn: cost.churn,
         placeMismatch: cost.placeMismatch,
+        blockLengthOverrun: cost.blockLengthOverrun,
+        windowViolation: cost.windowViolation,
       },
     },
     hardViolations: hard.total,
