@@ -1,7 +1,13 @@
 # tests/ —— 引擎测试（零依赖）
 
-本目录归 **B**（见规格书 §7.3 / §7.2）。**全仓唯一测试钩子**就在这里，
-**不得再新增第二个**（曾经的 `scripts/register-alias.mjs` 是临时脚手架，已合并到此处）。
+## 两套件的语义口径（2026-10-24 钉正）
+
+- **`tests/**/*.test.ts` = engine 套件**（`npm run test:engine`）；**`scripts/**/*.test.ts` = ui 套件**（`npm run test:ui`）——历史形成的目录分居（部分 UI 动线测试也在 tests/），不是语义边界；`docs/capability-map.json` 在弥合两者。
+- 渐进归位口径（重构偿债 D5）：存量 glob 不动（避免 150 文件大搬家），**新测试落语义对应目录**——引擎/排程相关进 `tests/`，UI/脚本/数据工程进 `scripts/`。
+- 新增测试后必须 `node scripts/capability_map.mjs --write`，否则 impact 会漏跑新守护（AGENTS.md §〇之前）。
+- ⚠️ 跑法以 `package.json` 为准：当前两条 npm 脚本均 `--import ./scripts/register-alias.mjs`（`tests/register.mjs` 在库但 npm 入口未指向；下文「跑法」段落为历史口径，读时注意）。
+
+本目录归 **B**（见规格书 §7.3 / §7.2；2026-10-02 起单人负责，历史归属见 AGENTS.md §二）。
 
 ## 跑法
 

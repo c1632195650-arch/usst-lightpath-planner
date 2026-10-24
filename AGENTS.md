@@ -109,7 +109,7 @@ node scripts/gate_overnight.mjs# ③ 提交前：全量门禁（含上面两项�
 
 ---
 
-## 〇、当前进度快照 · 动手前必读（2026-10-01）
+## 〇、当前进度快照 · 动手前必读（2026-10-24 刷新）
 
 > 🔴 **2026-10-22 服务器已迁移**：线上地址改为 **`http://43.142.141.186`**（SSH 登录用户 `ubuntu`，不是 root）。旧机 `101.35.253.143` 于 **10-25 12:17 到期**，仅保留作回滚点；此后部署、验证、文档里的地址都以新机为准。迁移明细、验收证据与未完成项见 `docs/server-asset-inventory-2026-10-22.md` §9。
 
@@ -146,8 +146,11 @@ node scripts/gate_overnight.mjs# ③ 提交前：全量门禁（含上面两项�
 | 问答：脱敏网关 → RAG → DeepSeek 合成（梨宝人格），无 Key 自动降级抽取式 | `server/app.py` | ✅ 实测 `mode:"llm"` |
 | **校园资讯数据资产：520 主条目（515 篇可全文检索）+ 1873 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
 | 数据工程流水线（采集/抓全文/清洗/去重/建索引，五步可单独重跑） | `scripts/*.py` | ✅ 齐全 |
-| 测试/验收体系（engine 458+ / ui 319+ / golden 快照 / RV 源码锁 / E2E 77 断言 / 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与纪律） |
-| **移动端线（安卓 APK + 云同步）**：账号/同步/ICS 服务端、移动今日页（m.html）、Capacitor 壳与签名 APK、网页端云同步钩子（开关默认关） | `server/account.py`、`server/sync.py`、`m.html`、`src/features/mobile/`、`mobile/` | ✅ M1-M5 落地（2026-10-03），公网可用；**入口与操作手册见 `docs/mobile-line-alignment-2026-10-03.md`**，真机走查待做 |
+| 测试/验收体系（**engine 881 / ui 489**（2026-10-24 验收时点；gate 动态基线只增不减，以门禁实跑为准）/ golden 快照 / RV 源码锁 / E2E 77 断言 / 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与两套件语义口径） |
+| **移动端线（安卓 APK + 云同步）**：账号/同步/ICS 服务端、移动今日页（m.html）、Capacitor 壳与签名 APK、网页端云同步钩子（开关默认关） | `server/account.py`、`server/sync.py`、`m.html`、`src/features/mobile/`、`mobile/` | ✅ M1-M5 落地（2026-10-03）→ **v0.4.10**（2026-10-22 迁新机重出，消除旧 IP 硬编码）；**操作手册见 `docs/mobile-line-alignment-2026-10-03.md`**，真机走查待做 |
+| **安全与质量加固（10-11 维护批 14 项）**：登录限速、IDOR 身份闸（X-Identity-Key 认领制）、413 请求上限、WAL、日志落盘、ICS 重置端点、ErrorBoundary、API 超时重试、版本单源校验、CI、envconfig 收敛、allowBackup=false、备份演练 | `server/`、`src/lib/api.ts`、`.github/`、`scripts/release_version.mjs` | ✅ 2026-10-11 落地（明细 `docs/maintenance-optimization-plan-2026-10-11.md`） |
+| **四闸门体系 + 偿债一键驱动器**：preflight（开工闸）/ impact（影响面反查）/ capability-map（能力清单）/ gate_overnight（全量门禁）+ `refactor_run.mjs`（九批偿债台账驱动，无 git 环境走台账、白天 `drain` 补交） | `scripts/*.mjs`、`docs/capability-map.json` | ✅ 在库（2026-10-06 立、10-24 一键化） |
+| **执行章程 + 2026-10-24 方案集**：commit 规范 / 逐批界限 / 零回归判据（章程）+ 重构偿债评估与一键执行方案 + 新功能菜单与技术方案 F1-F8 | `docs/execution-charter-2026-10-24.md`、`docs/refactor-*-2026-10-24.md`、`docs/new-features-*-2026-10-24.md` | ✅ 2026-10-24（F 批未开工，开工前必读章程） |
 
 ### 数据资产说明（重要）
 
@@ -156,13 +159,14 @@ node scripts/gate_overnight.mjs# ③ 提交前：全量门禁（含上面两项�
 - **不要重新爬取**。要新增数据请复用 `scripts/` 里的脚本增量采集，然后跑 `python scripts/rag.py build` 重建索引。
 - 重建索引需 `fastembed`（bge-small-zh-v1.5 ONNX，CPU），模型缓存在 `~/.workbuddy/cache/fastembed`。
 
-### 遗留 / 可以接手的活（按优先级，2026-10-01）
+### 遗留 / 可以接手的活（按优先级，2026-10-24 刷新）
 
-1. **beta-v2 → dev 合并**：本地 beta-v2（主力工作树）与 origin/dev 为 unrelated histories，**必须人工评审合并**（见 `BLOCKERS.md` G 批条）。
-2. **四处 PARTIALS 契约扩展**：睡眠保底窗口（`identity.sleepMin` 进 PlanRequest）/ 每周活动量下限 / 三餐步行预算 / 画像变更受影响天——属跨人契约，需 CY+RAY 确认（`src/lib/planner/*_PARTIALS` 已登记）。
-3. **补数据缺口**：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 → 找后勤保障处 / 信息化办公室官网补爬。
-4. **重采全文**：部分公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
-5. **决赛材料**：申报书 / PPT / 演示视频（10 月底决赛）。
+1. ~~beta-v2 → dev 合并~~ **✅ 已终结（2026-10-06）**：GitHub 默认分支已切 beta-v2、dev 已 lock_branch 只读归档（换代方案 A），unrelated histories 风险消除；**本地 10-11 维护批起的提交尚未推送**（push 属白天人工动作，与章程 §7 积压一并处理）。
+2. ~~四处 PARTIALS 契约扩展~~ **✅ 已销案（2026-10-11 复核）**：四处接线注记见 `docs/progress-status.md` §4.3。
+3. **补数据缺口**（仍有效）：生活服务（食堂/宿舍/校园卡）、数字校园条目偏少 → 找后勤保障处 / 信息化办公室官网补爬。
+4. **重采全文**（仍有效）：57 篇公众号文章因搜狗 token 过期缺全文，仅标题+摘要可检索 → 跑 `scripts/fulltext.py` 补抓。
+5. **决赛材料**（进行中，10 月底决赛）：申报书骨架两版并存待 CY 择一；软著材料 90%（实名注册与 R11 填表须 CY 本人线上操作）；PPT / 演示视频待做。
+6. **移动端真机走查**：0.4.10 已就绪（`docs/真机走查准备清单-2026-10-06.md`，重出 APK 命令已改走 `scripts/stage_apk.mjs`），待真机执行。
 
 > 详细清单见 `docs/progress-status.md` §8；逐批明细见 `docs/wp-ledger-v2.md`（台账）与 `BLOCKERS.md`。
 
