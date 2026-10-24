@@ -29,6 +29,7 @@ evals/runs/run_*.json
 evals/runs/engine_[0-9]*.json
 
 # 编辑器
+.schemathesis/  # contract fuzz 运行产物（2026-10-24 fuzz 批）
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.recommended
