@@ -72,31 +72,44 @@ function walk(dir, acc = []) {
 }
 
 /** 把测试文件里出现的源码路径引用解析成仓库相对路径（正斜杠、去掉扩展名）。
- *  兼容项目里实际并存的四种写法（缺一不可，否则会误判大量测试为「孤立」）：
+ *  兼容项目里实际并存的写法（缺一不可，否则会误判大量测试为「孤立」）：
  *   ① `@/lib/planner/solver.ts`            —— @ 别名（最常见，tests/ 目录几乎全用这种）
  *   ② `../src/lib/planner/schedule.ts`    —— 相对路径带 src/ 前缀（scripts/ 目录多用）
  *   ③ `@/features/libao/weekPlanForChat`  —— @ 别名且无扩展名
  *   ④ `import type { X } from '@/types'`   —— 类型导入，同样是依赖
+ *   ⑤ `./stage_apk.mjs`                    —— 仓内相对导入（scripts/ 下测脚本的兄弟模块；
+ *                                             2026-10-24 r1 补：此前只认 src/，这类被误判孤立 →
+ *                                             --check 红 → 影响面分析永远漏跑该测试，最危险）
  *
  *  ⚠️ 历史坑：早期实现只认含 'src/' 的写法，导致 `@/...` 全被丢弃，
  *     95 个测试里 83 个被误报「无源码依赖」—— 那是假阴性，会让影响面分析漏跑。
  *     故此处按前缀分流，而不是靠 indexOf('src/') 兜。 */
-function normalizeSpec(spec) {
-  const raw = spec.replace(/\.(ts|tsx|js|jsx)$/, '');
+function normalizeSpec(spec, importerRel) {
+  const raw = spec.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, '');
   if (raw.startsWith('@/')) return 'src/' + raw.slice(2);   // ①③
   const i = raw.indexOf('src/');                              // ②
   if (i >= 0) return raw.slice(i);
+  // ⑤ 仓内相对导入：以测试文件自身位置解析；只收真实存在于仓库的路径
+  //   （防把 node_modules、越出仓库或笔误路径收进反向索引）
+  if ((spec.startsWith('./') || spec.startsWith('../')) && importerRel) {
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(importerRel), raw));
+    if (resolved.startsWith('node_modules/') || resolved.startsWith('../')) return null;
+    const exists = ['', '.ts', '.tsx', '.js', '.mjs', '.cjs'].some((ext) =>
+      existsSync(path.join(ROOT, resolved + ext))
+    );
+    return exists ? resolved : null;
+  }
   return null;
 }
 
-function extractDeps(content) {
+function extractDeps(content, importerRel) {
   const deps = new Set();
   const srcLocks = new Set();
   // 静态 import / export-from / import type 统一覆盖
   const re = /(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g;
   let m;
   while ((m = re.exec(content))) {
-    const norm = normalizeSpec(m[1]);
+    const norm = normalizeSpec(m[1], importerRel);
     if (norm) deps.add(norm);
   }
   // 源码锁通道：直接读源码文本做正则断言（RV 反向验证锚点常用）。项目里并存四种写法：
@@ -143,7 +156,7 @@ function build() {
 
   for (const t of rel) {
     const content = readFileSync(path.join(ROOT, t), 'utf8');
-    const { deps, srcLocks } = extractDeps(content);
+    const { deps, srcLocks } = extractDeps(content, t);
     const domains = new Set();
     for (const d of [...deps, ...srcLocks]) {
       const dom = domainOf(d);
