@@ -298,6 +298,28 @@ const ALLOW_DIRTY = !!process.env.GATE_ALLOW_DIRTY;
   });
 }
 
+// ---- 9. 离线 E2E 门禁（2026-10-24 口径③，CY 拍板"离线全绿纳入每批收尾门禁"）----
+// 自足运行器：起隔离离线 vite(5178) → e2e-sched-session(重锚后 91 断言) → 拆实例。
+// exit 3 = 环境缺件（playwright/浏览器/vite 未装）→ WARN 不 FAIL（无人值守环境不因
+// 缺浏览器卡死整条门禁）；真跑且有断言失败 → FAIL。
+{
+  const { code, out, envBlocked } = run('node scripts/e2e-offline-gate.mjs');
+  const isEnv = code === 3 || envBlocked || /WARN 环境缺件|Playwright 浏览器缺件|vite 未安装|不可用/.test(out);
+  const pass = Number((out.match(/pass=(\d+)/) || [])[1]);
+  const fail = Number((out.match(/fail=(\d+)/) || [])[1]);
+  results.push({
+    name: 'E2E离线',
+    ok: isEnv ? true : code === 0,
+    envBlocked: isEnv,
+    detail: isEnv
+      ? '⚠️ 环境缺件（playwright/浏览器/vite），未能判定——请 npx playwright install 后复跑'
+      : code === 0
+        ? `重锚剧本全绿 pass=${pass} fail=${fail}（口径③：离线全绿属收尾门禁）`
+        : `有断言失败 pass=${pass ?? '?'} fail=${fail ?? '?'}（尾部见 raw）`,
+    raw: out,
+  });
+}
+
 // ---- 汇总 ----
 console.log('\n================ 通宵批次门禁 ================');
 for (const r of results) {
@@ -313,7 +335,7 @@ if (blocked.length) {
       `\n   这是沙箱禁止子进程所致，不是测试失败。请在 Bash 里直跑对应命令核实，例如：`
   );
   for (const b of blocked) {
-    const hint = { typecheck: 'npx tsc --noEmit', 'test:engine': 'npm run test:engine', 'test:ui': 'npm run test:ui', 禁区文件: 'git status --porcelain', 风格漂移: 'python scripts/check_style_drift.py', '影响面回归': 'node scripts/impact.mjs --print-command', 版本纪律: 'node scripts/preflight.mjs' }[b.name] || '';
+    const hint = { typecheck: 'npx tsc --noEmit', 'test:engine': 'npm run test:engine', 'test:ui': 'npm run test:ui', 禁区文件: 'git status --porcelain', 风格漂移: 'python scripts/check_style_drift.py', '影响面回归': 'node scripts/impact.mjs --print-command', 版本纪律: 'node scripts/preflight.mjs', E2E离线: 'node scripts/e2e-offline-gate.mjs' }[b.name] || '';
     if (hint) console.log(`     ${b.name.padEnd(12)} → ${hint}`);
   }
   if (blocked.some((b) => b.name === '版本纪律')) {

@@ -14,6 +14,15 @@
  * 会抢答这些轮次 —— 活 LLM 下 D3/F1 实测各漂 1（行为本身可能更优，但断言会假红）。
  * 切离线 vite（API_BASE 指向不存在的端口）后 60/0 稳定复现。G/K/L/M/N 自带 route
  * mock，不受影响。
+ *
+ * ── 重锚批（2026-10-24，CY 三口径肯定后执行）──────────────────────
+ * ① 时间过期根因：A/D/G 的冻结短语「十月中旬」在 2026-10-24 已成过去（窗口落不进
+ *    任何未来周 → 草稿恒 blocked）→ 全部改用**相对时间短语**「下个月中旬」（永远未来，
+ *    timeParse 的 relativeMonths 通道）；onboard 增 `my_schedule.json` 路由中止
+ *    （输入冻结：防本机真实课表文件出现后再次改变剧本前提）。
+ * ② 编辑模式已于 2026-10-08 整体下线（CY 裁决=始终可编辑）：P2/P6/Q 的
+ *    `edit-mode-toggle` 锚全部重锚到「⚙ 调整」抽屉（AdjustDrawer，正统编辑入口）。
+ * ③ 草稿/徽章类断言维持**语义族**口径（不锁具体串，话术微调不碎锚）。
  */
 import { chromium } from '@playwright/test';
 
@@ -35,6 +44,10 @@ const BADGE = '[data-testid="sched-badge"]';
 /** 把一次问卷旅程走完，落到主界面（与 e2e-journey.mjs 同一段成熟路径） */
 async function onboard(page) {
   const T = (ms) => page.waitForTimeout(ms);
+  // 重锚批①（2026-10-24）：冻结课表输入 —— 本机若出现 public/my_schedule.json（真实
+  // 课表）会改写剧本的日历前提（时段窗能否落到未来周）。中止该 fetch → App 用演示
+  // 课表，剧本输入与 10-02 拍锚时同源。
+  await page.route('**/my_schedule.json', (route) => route.abort());
   await page.goto(BASE);
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
   await page.reload();
@@ -129,7 +142,7 @@ const run = async () => {  const browser = await chromium.launch();
     );
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'A4 折返后徽章仍在');
 
-    await say(page, '十月中旬开始；每周3次、每次2小时');
+    await say(page, '下个月中旬开始；每周3次、每次2小时');
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
       'A5 分号答案被收进槽位 → 草稿卡出现',
@@ -180,7 +193,7 @@ const run = async () => {  const browser = await chromium.launch();
   {
     const page = await browser.newPage();
     await onboard(page);
-    await say(page, '十月中旬开始备赛；每周3次、每次2小时');
+    await say(page, '下个月中旬开始备赛；每周3次、每次2小时');
     await page.getByRole('button', { name: '就这么排' }).first().click().catch(() => {});
     await page.waitForTimeout(600);
     await say(page, '取消备赛'); // 多块同名 → 挑块追问
@@ -242,7 +255,7 @@ const run = async () => {  const browser = await chromium.launch();
     await onboard(page);
     await say(page, SEED);
     ok(await page.locator(BADGE).isVisible().catch(() => false), 'G1 LLM 挂了追问照常（规则兜底）');
-    await say(page, '十月中旬开始；每周3次、每次2小时');
+    await say(page, '下个月中旬开始；每周3次、每次2小时');
     ok(
       await page.getByRole('button', { name: '就这么排' }).first().isVisible().catch(() => false),
       'G2 LLM 挂了分号答案照收 → 草稿卡',
@@ -580,7 +593,18 @@ const D_SCENARIOS = async (browser) => {
     ok(reached && ratio >= 0.45, `O2 时间轴占据视觉重心（高度占比 ${(ratio * 100).toFixed(0)}% ≥ 45%）`);
 
     const text = (await tl.innerText().catch(() => '')) || '';
-    ok(!/余\s*\d+/.test(text), 'O3 浏览态无「余 N 分钟」散文（转场已收成徽章）');
+    // 重锚批③（2026-10-24，口径①语义族）：转场徽章现行形态 = `A → B：≈N 分钟 （余 M）`
+    //（weekViewModel L0 的 ≈ 诚实标注 + 括号余量；2026-10-24 现场取证）。旧断言把
+    // 徽章自带的「（余 N）」误判散文。新语义：
+    //   · 正向：转场行必须是 `→ … ≈N 分钟` 徽章形态（估算带 ≈，不把估算说成实测）；
+    //   · 负向：**非转场行**不得出现「余 N」（散文回潮检测）。
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const transferLines = lines.filter((l) => /→/.test(l) && /≈\s*\d+\s*分钟/.test(l));
+    const otherLines = lines.filter((l) => !( /→/.test(l) && /分钟/.test(l) ));
+    ok(transferLines.length > 0,
+      `O3a 转场以徽章形态呈现（${transferLines.length} 行 = 「→ ≈N 分钟 （余 M）」族）`);
+    ok(!otherLines.some((l) => /余\s*\d/.test(l)),
+      'O3b 非转场行无「余 N」散文（散文回潮检测，转场徽章自带余量不算）');
     ok(!text.includes('💡'), 'O4 浏览态不铺开 reason 长句（降级到 L1/L2）');
     ok(!/【|DoD|台账/.test(text), 'O5 无工程内部文案泄漏到界面');
     await page.close();
@@ -596,9 +620,12 @@ const D_SCENARIOS = async (browser) => {
 
     // P1：浏览态**不出现**编辑控件（功能模块只在编辑态出现）
     const lockBtns = await page.getByRole('button', { name: /定住/ }).count();
-    const editToggle = await page.locator('[data-testid="edit-mode-toggle"]').count();
+    // 重锚批②（2026-10-24，口径②）：编辑模式已于 10-08 整体下线（始终可编辑），
+    // 「⚙ 调整」抽屉（AdjustDrawer）是正统低频干预入口 —— P2 改锚到它。
+    const adjustBtn = page.getByRole('button', { name: /调整/ }).first();
+    const adjustCount = await adjustBtn.count();
     ok(reached && lockBtns === 0, 'P1 浏览态无块级编辑按钮（编辑态才出功能模块）');
-    ok(editToggle >= 1, 'P2 编辑开关本身仍在（可进入编辑态）');
+    ok(reached && adjustCount >= 1, 'P2 「⚙ 调整」抽屉入口在位（编辑正统入口，重锚自 edit-mode-toggle）');
 
     // P3：详情入口只在浏览态出现；点开 → 抽屉含「来源」→ Esc 关闭
     const detailBtns = page.locator('button[data-testid^="block-detail-"]');
@@ -619,11 +646,18 @@ const D_SCENARIOS = async (browser) => {
       ok(true, 'P5 同上');
     }
 
-    // P6：切到编辑态后，详情入口应消失（浏览态专属），编辑控件出现
-    await page.locator('[data-testid="edit-mode-toggle"]').first().click();
-    await T(600);
-    ok((await page.locator('button[data-testid^="block-detail-"]').count()) === 0,
-      'P6 编辑态不显示「详情」入口（层级互斥）');
+    // P6 重锚（口径②）：原「编辑态详情互斥」随编辑模式下线失效；等价语义 =
+    // 「⚙ 调整」抽屉可开合（点开可见、可关闭），低频干预入口真实可达。
+    if (adjustCount >= 1) {
+      await adjustBtn.click().catch(() => {});
+      await T(600);
+      const adjustVisible = await page.getByText(/还原引擎周|食堂|不可时段|偏好校正|我的作息/).first().isVisible().catch(() => false);
+      ok(adjustVisible, 'P6 点「⚙ 调整」→ 抽屉内容可达（重锚自 edit-mode-toggle）');
+      await page.keyboard.press('Escape').catch(() => {});
+      await T(400);
+    } else {
+      ok(false, 'P6 无调整入口可点（P2 已红，此处不空转）');
+    }
     await page.close();
   }
 
@@ -635,29 +669,31 @@ const D_SCENARIOS = async (browser) => {
     const reached = await goWeek(page);
     ok(reached, 'Q0 周视图可达（步数对照的前提）');
 
-    // Q：同一视图内，浏览态的**可交互控件数**必须少于编辑态（步数削减的可验收形式）
-    // 【D9 申报 2026-10-07】D2 把块操作从 hover 浮现（4 按钮/卡，opacity-0 也计入按钮数）
-    //   收进每卡一个 ⋯ 菜单（设计稿 §4.3 ⑤，触屏桌面一致）→ 编辑态按钮**计数**下降，
-    //   browse(49) == edit(49) 属方案预告的「可点元素计数下降属预期改善」。
-    //   Q1 改断言功能语义（等价承接「编辑时才铺开功能模块」）：
-    //   ① 每张可拖卡都有 ⋯ 菜单；② 打开菜单后控件数真实增加（菜单行渲染）；
-    //   ③ 浏览态「详情」入口切编辑后消失（P6 已覆盖，此处不重复）。
+    // Q 重锚（2026-10-24，口径②）：编辑模式已下线（浏览=唯一常态），原「浏览 vs 编辑
+    // 控件数对照」失效。等价语义 = 浏览态每张可拖卡都有 ⋯ 菜单 + 打开菜单控件数铺开。
+    // 【现场取证】⋯ 菜单在（43/43 卡），10-08 收敛后改用文本「⋯」、不再带 testid
+    // → 定位器从 block-menu-* 前缀改为卡内按钮文本。
     const countInteractive = async () => page.locator('[data-testid="week-timeline"] button').count();
     const browse = reached ? await countInteractive() : -1;
-    await page.locator('[data-testid="edit-mode-toggle"]').first().click().catch(() => {});
-    await T(600);
-    const edit = reached ? await countInteractive() : -1;
     const draggables = reached ? await page.locator('[data-testid="week-timeline"] [draggable="true"]').count() : 0;
-    const kebabs = reached ? await page.locator('[data-testid="week-timeline"] [draggable="true"]:has([data-testid^="block-menu-"])').count() : 0;
+    const kebabs = reached ? await page.locator('[data-testid="week-timeline"] [draggable="true"] button', { hasText: '⋯' }).count() : 0;
     ok(reached && draggables > 0 && kebabs === draggables,
-      `Q1 编辑态每张可拖卡都有 ⋯ 菜单（${kebabs}/${draggables}；按钮计数 ${browse}→${edit} 持平属 ⋯ 收进预期）`);
+      `Q1 每张可拖卡都有 ⋯ 菜单（${kebabs}/${draggables}；浏览态控件 ${browse}）`);
     if (draggables > 0) {
-      const before = await countInteractive();
-      await page.locator('[data-testid^="block-menu-"]').first().click();
+      // 【现场取证 2026-10-24】⋯ 菜单是**卡片外浮层**（fixed，挂 timeRail 之外）
+      // → timeRail 内计数不变属正确行为；断言改菜单特征行真实渲染（语义族，不锁 DOM 位置）。
+      await page.locator('[data-testid="week-timeline"] [draggable="true"] button', { hasText: '⋯' }).first().click();
       await T(400);
-      const after = await countInteractive();
-      ok(after > before, `Q2 打开 ⋯ 后控件数铺开（${before}→${after}，菜单行真实渲染）`);
-      await page.keyboard.press('Escape');
+      const menuItem = page.getByText('详情预览', { exact: false }).first();
+      const opened = await menuItem.isVisible().catch(() => false);
+      ok(opened, 'Q2 打开 ⋯ → 卡外浮层菜单真实渲染（含「详情预览」行）');
+      if (opened) {
+        // 菜单打开后浮层里的按钮真实可数（挂 timeRail 外，fixed 定位）
+        const floatingButtons = await page.locator('button:visible').count();
+        ok(floatingButtons > browse,
+          `Q2b 菜单铺开（全页可见按钮 ${browse}→${floatingButtons}）`);
+        await page.keyboard.press('Escape');
+      }
     } else {
       ok(true, 'Q2 本页无软块可开菜单（跳过，非静默——Q1 已证 0 卡）');
     }

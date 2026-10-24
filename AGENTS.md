@@ -146,7 +146,7 @@ node scripts/gate_overnight.mjs# ③ 提交前：全量门禁（含上面两项�
 | 问答：脱敏网关 → RAG → DeepSeek 合成（梨宝人格），无 Key 自动降级抽取式 | `server/app.py` | ✅ 实测 `mode:"llm"` |
 | **校园资讯数据资产：520 主条目（515 篇可全文检索）+ 1873 向量块** | `data/usst_articles.db` | ✅ **已就绪，不要重新爬取** |
 | 数据工程流水线（采集/抓全文/清洗/去重/建索引，五步可单独重跑） | `scripts/*.py` | ✅ 齐全 |
-| 测试/验收体系（**engine 881 / ui 489**（2026-10-24 验收时点；gate 动态基线只增不减，以门禁实跑为准）/ golden 快照 / RV 源码锁 / E2E 77 断言 / 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与两套件语义口径） |
+| 测试/验收体系（**engine 881 / ui 489**（2026-10-24 验收时点；gate 动态基线只增不减，以门禁实跑为准）/ golden 快照 / RV 源码锁 / E2E **91 断言**（2026-10-24 重锚后，离线全绿已入 gate_overnight 第 9 步）/ 理解金标评测） | `tests/`、`scripts/e2e-sched-session.mjs`、`evals/golden/`、`scripts/eval_plan_understand.py` | ✅ 就绪（`tests/README.md` 有 golden 重拍记录与两套件语义口径） |
 | **移动端线（安卓 APK + 云同步）**：账号/同步/ICS 服务端、移动今日页（m.html）、Capacitor 壳与签名 APK、网页端云同步钩子（开关默认关） | `server/account.py`、`server/sync.py`、`m.html`、`src/features/mobile/`、`mobile/` | ✅ M1-M5 落地（2026-10-03）→ **v0.4.10**（2026-10-22 迁新机重出，消除旧 IP 硬编码）；**操作手册见 `docs/mobile-line-alignment-2026-10-03.md`**，真机走查待做 |
 | **安全与质量加固（10-11 维护批 14 项）**：登录限速、IDOR 身份闸（X-Identity-Key 认领制）、413 请求上限、WAL、日志落盘、ICS 重置端点、ErrorBoundary、API 超时重试、版本单源校验、CI、envconfig 收敛、allowBackup=false、备份演练 | `server/`、`src/lib/api.ts`、`.github/`、`scripts/release_version.mjs` | ✅ 2026-10-11 落地（明细 `docs/maintenance-optimization-plan-2026-10-11.md`） |
 | **四闸门体系 + 偿债一键驱动器**：preflight（开工闸）/ impact（影响面反查）/ capability-map（能力清单）/ gate_overnight（全量门禁）+ `refactor_run.mjs`（九批偿债台账驱动，无 git 环境走台账、白天 `drain` 补交） | `scripts/*.mjs`、`docs/capability-map.json` | ✅ 在库（2026-10-06 立、10-24 一键化） |
