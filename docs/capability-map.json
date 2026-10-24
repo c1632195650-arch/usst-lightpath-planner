@@ -230,7 +230,7 @@
         "src/lib/lbao.ts",
         "src/lib/api.ts"
       ],
-      "testCount": 33,
+      "testCount": 34,
       "tests": [
         "scripts/chatRestore.test.ts",
         "scripts/chatSources.test.ts",
@@ -263,6 +263,7 @@
         "tests/v0.test.ts",
         "tests/v2.test.ts",
         "tests/v3.test.ts",
+        "tests/variants.test.ts",
         "tests/wp12.test.ts",
         "tests/wp9.test.ts"
       ],
@@ -1709,9 +1710,10 @@
       "suite": "engine",
       "guards": [
         "planner-engine",
+        "libao-chat",
         "week-view"
       ],
-      "guardCount": 7,
+      "guardCount": 8,
       "reverseVerified": true
     },
     "tests/week-diag-copy.test.ts": {
@@ -1921,6 +1923,7 @@
       "tests/libao-eval-entry.test.ts",
       "tests/libao-regression-anchor.test.ts",
       "tests/v2.test.ts",
+      "tests/variants.test.ts",
       "tests/wp9.test.ts"
     ],
     "src/data/usst": [

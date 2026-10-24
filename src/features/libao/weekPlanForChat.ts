@@ -31,7 +31,7 @@
  * 「排得下吗」，不需要精确的步行分钟数。
  */
 import type { PersonaProfile, PlanIssue, Schedule, TimeBlock, WeekPlan } from '@/types';
-import type { PlanRequest } from '@/lib/planner/model';
+import type { PlanRequest, PlanVariant } from '@/lib/planner/model';
 import { toPlanRequest } from '@/lib/planner/schedule';
 import { planWeek } from '@/lib/planner/planWeek';
 import { planWeekV2 } from '@/lib/planner/index';
@@ -251,6 +251,36 @@ export function summarizeWeekPlan(plan: WeekPlan): string[] {
  * ⚠️ 用了默认窗口就必须在草稿里**说出来**（`checkGoalFeasibility` 的 `caveats`），
  *    否则用户会以为这是他给的时间。
  */
+/**
+ * F4⑥（2026-10-24，CY 点名批）：三档变体的梨宝话术摘要 ——「换个节奏」场景。
+ *
+ * 设计边界：
+ *   · **纯函数、零引擎调用**：数据来自已求解的 `PlanVariant[]`（planWeek 的
+ *     `variants: true` 产物），本函数只做「数字 → 人话」的翻译；
+ *   · **不替用户拍板**（智能边界 L3/L4 红线）：只并列三版事实，选择权在用户
+ *     —— 尾行给的是「怎么说就换」，不是「建议你选哪版」；
+ *   · 接缝合规：只 import 类型（`PlanVariant`），不新增运行期引擎依赖。
+ *
+ * @param variants planWeek 变体编排的产物（balanced/compact/relaxed；空数组 → 空）
+ * @returns 每版一行 + 一条切换提示；行序与输入一致（balanced 在首，由编排保证）
+ */
+export function variantSummariesForChat(
+  variants: ReadonlyArray<Pick<PlanVariant, 'id' | 'label' | 'plan' | 'cost'>>,
+): string[] {
+  if (variants.length === 0) return [];
+  const hourOf = (min: number) => {
+    const h = Math.round((min / 60) * 10) / 10;
+    return Number.isInteger(h) ? String(h) : h.toFixed(1);
+  };
+  const out = variants.map((v) => {
+    const name = v.label ?? v.id;
+    const s = v.plan.stats;
+    return `${name}版：这周自习约 ${hourOf(s.studyMin)} 小时、留白约 ${hourOf(s.blankMin)} 小时`;
+  });
+  out.push('三版是同一批课和锁定，只是节奏不同 —— 想换直接说「换紧凑 / 换松弛」，周计划页顶部也能一键切');
+  return out;
+}
+
 export const DEFAULT_GOAL_SPAN_DAYS = 21;
 
 /** 没给单次时长时的默认块长。与校历事件准备块同档（`events.ts` 用 45/60/90）。 */

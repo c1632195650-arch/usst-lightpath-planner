@@ -144,3 +144,20 @@ test('F4-④ UI 接线：切换器只在三档齐备时渲染（变体缺席=零
   assert.match(wv, /testId="variant-switch"/, '切换器带 testid（E2E/走查锚点）');
   assert.match(wv, /value=\{variantId\}/, '受控组件接 hook 的选择态');
 });
+
+/* ---------- F4⑥（梨宝三版摘要，防腐层纯函数） ---------- */
+test('F4-⑥ 变体话术摘要：三版各一行（自习/留白小时）+ 切换提示；不替用户拍板', async () => {
+  const { variantSummariesForChat } = await import('@/features/libao/weekPlanForChat');
+  const result = await planWeek(makeReq({ variants: true }));
+  const lines = variantSummariesForChat(result.variants ?? []);
+  assert.equal(lines.length, 4, '三版三行 + 一条切换提示');
+  assert.match(lines[0], /^均衡版：这周自习约 [\d.]+ 小时、留白约 [\d.]+ 小时$/, '行式=「{名}版：…小时」');
+  assert.match(lines[1], /^紧凑版：/);
+  assert.match(lines[2], /^松弛版：/);
+  assert.match(lines[3], /换紧凑/, '尾行给「怎么说就换」，不是建议选哪版（L3/L4 分寸）');
+  // 空输入 → 空（对话层没拿到变体时零废话）
+  assert.deepEqual(variantSummariesForChat([]), []);
+  // label 缺席 → id 兜底（不编名字）
+  const one = variantSummariesForChat([{ id: 'x-mode', plan: (result.variants ?? [])[0].plan, cost: 1 }]);
+  assert.match(one[0], /^x-mode版：/);
+});
