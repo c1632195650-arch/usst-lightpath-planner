@@ -19,10 +19,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveApiBase } from '@/lib/apiBase';
 // 维护批 P0-1（2026-10-11）：身份密钥头 —— 服务端 LIBAO_REQUIRE_OWNER 开启时防 IDOR 的凭据
 import { getIdentityKey } from '@/lib/identity';
+// F2（2026-10-24）：来源卡 + 置信徽章 —— 与 web 梨宝同一份共享组件（type-only import 无运行时依赖）
+import type { RagSource } from '@/lib/api';
+import { SourceChips } from '@/components/SourceChips';
+import { ConfidenceBadge } from '@/components/ConfidenceBadge';
+
+/** 与后端 /api/chat (stream) 响应里的 confidence 同形（F2/B2，server/confidence.py 计算） */
+type Confidence = { level: 'cited' | 'inferred' | 'structured' | 'none'; reason: string };
 
 interface ChatMsg {
   role: 'user' | 'assistant';
   text: string;
+  /** F2：本轮来源与置信度 —— SSE done 帧 / 一次性响应带回；历史恢复无此字段 → 不渲染 */
+  sources?: RagSource[];
+  confidence?: Confidence;
 }
 
 const API_BASE = resolveApiBase();
@@ -95,7 +105,15 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
     const updateLast = (text: string) => {
       setMsgs((prev) => {
         const next = [...prev];
-        next[next.length - 1] = { role: 'assistant', text };
+        next[next.length - 1] = { ...next[next.length - 1], text };
+        return next;
+      });
+    };
+    /** F2：把 done 帧 / 一次性响应带回的来源与置信度并进最后一条回答（文本流之外的字段） */
+    const patchLast = (patch: Partial<ChatMsg>) => {
+      setMsgs((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = { ...next[next.length - 1], ...patch };
         return next;
       });
     };
@@ -109,6 +127,7 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
       if (!res.ok || !res.body || !ctype.includes('text/event-stream')) {
         // 降级：一次性 /api/chat（e2e 桩 / 老网关 / 流式不可用）
         let text = '梨宝这会儿连不上，稍后再试试？';
+        let meta: Partial<ChatMsg> = {};
         try {
           const body = ctype.includes('application/json')
             ? await res.json()
@@ -118,8 +137,13 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
                 body: JSON.stringify({ q, session_id: sessionId, user_id: userId }),
               })).json();
           text = String(body.answer ?? text);
+          // F2：一次性响应同样带 sources/confidence（旧后端无这些键 → undefined，组件不渲染）
+          meta = {
+            sources: Array.isArray(body.sources) ? body.sources : undefined,
+            confidence: body.confidence ?? undefined,
+          };
         } catch { /* 保持兜底文案 */ }
-        updateLast(text);
+        patchLast({ text, ...meta });
         return;
       }
       // SSE 解析：data: {...} 行流
@@ -136,15 +160,22 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
         for (const line of lines) {
           const t = line.trim();
           if (!t.startsWith('data: ')) continue;
-          let ev: { type?: string; text?: string };
+          let ev: { type?: string; text?: string; sources?: RagSource[]; confidence?: Confidence };
           try {
-            ev = JSON.parse(t.slice(6)) as { type?: string; text?: string };
+            ev = JSON.parse(t.slice(6)) as typeof ev;
           } catch {
             continue;
           }
           if (ev.type === 'delta' && typeof ev.text === 'string' && openRef.current) {
             acc += ev.text;
             updateLast(acc);
+          }
+          // F2：done 帧带来源与置信度（后端 /api/chat/stream 只增键，旧前端忽略无害）
+          if (ev.type === 'done' && openRef.current) {
+            patchLast({
+              sources: ev.sources?.length ? ev.sources : undefined,
+              confidence: ev.confidence ?? undefined,
+            });
           }
         }
       }
@@ -186,6 +217,13 @@ export default function LbaoDrawer({ open, onClose, userId, variant = 'page' }: 
               m.role === 'user' ? 'bg-brand text-white' : 'bg-paper-sunken text-ink'}`}>
               {m.text || (streaming && i === msgs.length - 1 ? '…' : '')}
             </span>
+            {m.role === 'assistant' && (m.confidence || (m.sources && m.sources.length > 0)) && (
+              <div className="mt-1 space-y-1">
+                {/* F2：移动端同款来源卡 + 置信徽章（共享组件；旧消息无字段不渲染） */}
+                <ConfidenceBadge level={m.confidence?.level} reason={m.confidence?.reason} testId="m-confidence" />
+                <SourceChips sources={m.sources} testId="m-sources" />
+              </div>
+            )}
           </div>
         ))}
       </div>

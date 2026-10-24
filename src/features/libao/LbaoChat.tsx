@@ -84,6 +84,9 @@ import { MiniWeekPreview } from '@/features/week/MiniWeekPreview';
 import { ChatDebug } from '@/features/libao/ChatDebug';
 import { MemoryPanel, factLabel } from '@/features/libao/MemoryPanel';
 import { historyToMsgs, mergeHistory, RESTORE_CHAT } from '@/features/libao/chatRestore';
+// F2（2026-10-24）：来源卡 + 置信徽章 —— 共享组件（章程 §3.1.2：新组件放 src/components/ 共享层）
+import { SourceChips } from '@/components/SourceChips';
+import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 
 /** DEV 专用：把「已经拿回来、但一直没人看」的检索与路由信号显示出来。
  *  `import.meta.env.DEV` 在生产构建里是字面量 false → 整段被摇掉，线上零变化。 */
@@ -93,6 +96,8 @@ interface Msg {
   role: 'user' | 'lbao';
   text: string;
   sources?: RagSource[];
+  /** F2/B2 不确定分级（server 一处计算）→ ConfidenceBadge 呈现；历史恢复的旧消息无此字段 → 不渲染 */
+  confidence?: ChatResult['confidence'];
   mode?: string;
   /** 排程要点。来自**真引擎**（与「周计划」页同源），不是模板 —— 见 weekPlanForChat.ts */
   planPoints?: string[];
@@ -1455,6 +1460,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
       setMessages((current) => [...current, {
         role: 'lbao', text: response.answer, sources: response.sources,
         mode: response.mode,
+        confidence: response.confidence,
         debug: response,
         proposals: response.memory_proposals?.length ? response.memory_proposals : undefined,
         applied: response.memory_applied?.length ? response.memory_applied : undefined,
@@ -2181,6 +2187,8 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
                         <path d="M12 2.6l1.9 5.6 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6-5.6-1.9 5.6-1.9z" />
                       </svg>
                     )}
+                    {/* F2/B2：可信度徽章 —— server 端计算的诚实分级（非 DEV 也显示；旧消息无字段不渲染） */}
+                    <ConfidenceBadge level={message.confidence?.level} reason={message.confidence?.reason} testId="lbao-confidence" />
                   </div>
                 )}
                 {(() => {
@@ -2391,20 +2399,9 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
                 )}
 
                 {message.sources && message.sources.length > 0 && (
-                  <div className="w-full divide-y divide-ink/10 border-y border-ink/10 pl-1">
-                    {message.sources.slice(0, 3).map((source, sourceIndex) => (
-                      <a
-                        key={sourceIndex}
-                        href={source.url || undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block py-3 transition-colors hover:text-brand"
-                      >
-                        <div className="font-display text-sm font-semibold leading-5 text-ink">{source.title}</div>
-                        <div className="mt-1 text-xs text-ink-faint">{source.account} · {source.pub_time}</div>
-                      </a>
-                    ))}
-                  </div>
+                  /* F2/B1：来源卡升为共享组件（web/移动端同一份）—— 外链语义不变，
+                     新增 noopener 与「展开更多来源」；空来源仍不渲染（模板答置空的诚实口径）。 */
+                  <SourceChips sources={message.sources} testId="lbao-sources" />
                 )}
 
                 {SHOW_DEBUG && message.debug && <ChatDebug data={message.debug} />}

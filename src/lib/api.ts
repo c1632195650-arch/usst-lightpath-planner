@@ -70,6 +70,14 @@ export interface ChatResult {
   memory_proposals?: MemoryFact[];
   /** 已自动生效的偏好 —— 前端据此出可撤销提示 */
   memory_applied?: MemoryFact[];
+  /* ---- F2（2026-10-24）：引用溯源 + 不确定分级 ----
+     server 端一处计算（server/confidence.py），前端只做呈现，不自行推断。 */
+  /** 四态置信度：cited 有据 / inferred 含推断 / structured 校内结构化 / none 无据 */
+  confidence?: { level: 'cited' | 'inferred' | 'structured' | 'none'; reason: string };
+  /** 本轮主要依据的校内结构化库（space 空间图谱 / method 方法库 / health 健康库 / none） */
+  kb?: 'none' | 'space' | 'method' | 'health';
+  /** D5 相关性门观测（后端一直在返回，此前未声明）：ok=门判相关 / irrelevant_downgraded=假命中已降级 / null=门未触发或不可用 */
+  relevance?: 'ok' | 'irrelevant_downgraded' | null;
 }
 
 /* ---------------- 记忆面板（M2/M3） ----------------
