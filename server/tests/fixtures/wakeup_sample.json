@@ -1,0 +1,15 @@
+{
+  "courseLocale": "0",
+  "courseLength": "5",
+  "startTime": "2026-02-23",
+  "currentWeek": 8,
+  "items": [
+    {"courseName": "高等数学(下)", "teacher": "王建国", "classRoom": "一教201", "day": "1", "startNode": 1, "endNode": 2, "startWeek": 1, "endWeek": 16, "type": 0},
+    {"courseName": "大学英语(四)", "teacher": "李文静", "classRoom": "外语楼305", "day": 2, "startNode": "3", "endNode": "4", "startWeek": "1", "endWeek": "16", "type": "1"},
+    {"courseName": "数据结构", "teacher": "赵明", "classRoom": "计算机楼401", "day": "3", "startNode": 6, "step": 2, "weekList": [1, 3, 5, 7, 9, 11, 13, 15]},
+    {"courseName": "大学物理实验", "teacher": "钱伟", "classRoom": "物理实验楼B202", "day": "4", "startNode": 11, "endNode": 14, "startWeek": 5, "endWeek": 12, "type": "2"},
+    {"courseName": "体育(网球)", "teacher": "孙毅", "classRoom": "网球场", "day": "5", "startNode": 8, "endNode": 9, "startWeek": 1, "endWeek": 16},
+    {"courseName": "形势与政策", "teacher": "", "classRoom": "", "day": "6", "startNode": 3, "endNode": 4, "weekListString": "9-10"},
+    {"courseName": "", "teacher": "无名氏", "classRoom": " nowhere", "day": "9", "startNode": 1, "endNode": 2, "startWeek": 1, "endWeek": 16}
+  ]
+}
