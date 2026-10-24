@@ -59,6 +59,8 @@ import direct
 import agent
 import websearch   # 只为读 LIBAO_WEBSEARCH 开关（真正的搜索在 agent 的工具里）
 import plan_dialog  # S 批 S3：排程对话理解端点 /api/plan/understand（LLM 听懂，规则兜底在前端）
+# F2/B1+B2（2026-10-24）：回答置信度四态 + kb 标记 —— 纯函数独立模块（零重依赖可单测）
+from confidence import compute_confidence, compute_kb
 # 课表解析包（2026-10-08：独立包已归拢进主仓库 server/timetable_parser/；serve.py 同源实现）
 from timetable_parser import parse_pdf
 
@@ -1013,6 +1015,7 @@ def _chat_core(body: ChatReq) -> dict:
     q = desensitize((body.q or "").strip())
     if not q:
         return {"answer": "你想问梨宝什么呢？", "route": "empty", "sources": [],
+                "confidence": compute_confidence("empty", "", None, 0), "kb": "none",
                 "request_id": rid, "elapsed_ms": 0}
 
     # 用户档案：再兜一层脱敏（前端已过滤一轮），并截断防 prompt 膨胀。
@@ -1195,6 +1198,16 @@ def _chat_core(body: ChatReq) -> dict:
         "used_memory": bool(mem_ctx),
         # D5 相关性门观测信号：ok=门判相关｜irrelevant_downgraded=假命中已降级 llm｜None=门未触发/不可用
         "relevance": relevance_result,
+        # F2/B2 不确定分级（server 端一处计算，见 server/confidence.py）：
+        # cited 有据 / inferred 含推断 / structured 校内结构化 / none 无据 —— 前端只呈现不自行推断
+        "confidence": compute_confidence(
+            route, mode, relevance_result, len(sources),
+            used_space=bool(space_ctx), used_study=bool(study_ctx),
+            used_health=bool(health_ctx), study_pseudo=bool(pseudo_ctx),
+            tools_used=bool(tools_used),
+        ),
+        # F2/B1 kb 标记：本轮主要依据的校内结构化库（space/method/health/none）
+        "kb": compute_kb(bool(space_ctx), bool(study_ctx), bool(health_ctx)),
         # 与 used_space / used_memory 对齐：让「这轮到底用上了什么」可被前端与测试观测
         "used_profile": bool(profile_ctx),
         # 方法库命中（2026-09-22 合流补漏：实现一直在跑，但响应字段在三树合流时丢了）。
@@ -1266,6 +1279,8 @@ async def api_chat_stream(body: ChatReq, request: Request):
     done = {k: result.get(k) for k in (
         "sources", "memory_proposals", "memory_applied", "request_id", "elapsed_ms",
         "used_space", "used_memory", "used_profile", "used_study", "used_health",
+        # F2：移动端抽屉的来源卡与置信徽章靠 done 帧拿到（只增键，旧前端忽略无害）
+        "confidence", "kb",
     ) if k in result}
     done["type"] = "done"
 
