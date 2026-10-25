@@ -25,6 +25,7 @@ import { todayISO } from '@/lib/date';
 import { asNoteDraft, PARSE_HINTS, type CorrectionDraft } from './parseCorrection.ts';
 import { makeRuleId } from './store.ts';
 import { toMinutes } from '@/constants/time';
+import { Input } from '@/components/ui/FormControls';
 
 const DAY_OPTIONS: Array<{ d: DayOfWeek; label: string }> = [
   { d: 1, label: '一' }, { d: 2, label: '二' }, { d: 3, label: '三' },
@@ -127,13 +128,15 @@ export function CorrectionCapture({ onAdd, onAddTask, onRemoveBlocks, onAskSched
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <Input
+          label="说什么"
+          name="correction-text"
+          wrapClassName="min-w-[12rem] flex-1"
           value={text}
           onChange={(e) => { setText(e.target.value); setIntent(null); }}
           onKeyDown={(e) => { if (e.key === 'Enter') handleParse(); }}
           placeholder="例如：周四下午别排东西 / 帮我加个周三晚上的实验"
-          className="min-w-0 flex-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-brand"
         />
         <button
           type="button"

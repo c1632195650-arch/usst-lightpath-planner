@@ -17,6 +17,7 @@ import { toHHmm } from '@/constants/time';
 import { DAY_LABELS } from './weekViewUtils';
 import { durationChoices, guessTaskKind } from './gapAdd';
 import { Icon } from '@/components/icons/Icon';
+import { Input, Select } from '@/components/ui/FormControls';
 
 export interface GapAddDraft {
   title: string;
@@ -106,25 +107,24 @@ export function GapAddPopover({ day, startMin, capacityMin, x, y, onSubmit, onCl
         {toHHmm(startMin)}–{toHHmm(startMin + durationMin)}（固定，重排不挪）
       </p>
 
-      <input
+      <Input
         autoFocus
+        label="做什么"
+        name="gap-add-title"
+        wrapClassName="mt-2"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) onSubmit({ title: title.trim(), durationMin, kind }); }}
-        placeholder="做什么？（例：跑步 / 背单词）"
-        className="mt-2 w-full rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-ink-faint focus:border-brand"
+        placeholder="例：跑步 / 背单词"
       />
 
-      <div className="mt-2 flex items-center gap-1.5">
-        <select
-          value={durationMin}
-          onChange={(e) => setDurationMin(Number(e.target.value))}
-          className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink"
-        >
+      <div className="mt-2 flex items-end gap-1.5">
+        <Select label="时长" name="gap-add-duration" wrapClassName="w-32" value={durationMin}
+          onChange={(e) => setDurationMin(Number(e.target.value))}>
           {choices.map((m) => (
             <option key={m} value={m}>{m} 分钟</option>
           ))}
-        </select>
+        </Select>
         {/* 类型（自动判断上色；点一下就改，改后不再跟随标题） */}
         <div className="flex gap-1">
           {KIND_OPTIONS.map(({ k, label }) => {

@@ -2277,6 +2277,7 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
         <div className="mt-3 flex items-center gap-2 border-t border-ink/10 pt-3">
           <input
             data-testid="libao-input"
+            aria-label="对梨宝说"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && send()}

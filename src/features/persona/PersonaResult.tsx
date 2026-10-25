@@ -6,6 +6,7 @@ import { BASIC_INFO_FIELDS, GRADE_LABELS, gradeFromLabel, loadBasicInfo, saveBas
 import { Radar } from '@/components/Radar';
 import { explainProfile } from '@/lib/planner/profilePrefs';
 import { makeEpithet, pickBlurb } from './personaCopy';
+import { Input } from '@/components/ui/FormControls';
 
 interface Props {
   profile: PersonaProfile;
@@ -56,15 +57,14 @@ function BasicInfoCard() {
       </div>
       <div className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:px-7 lg:grid-cols-4">
         {BASIC_INFO_FIELDS.map(({ key, label, placeholder }) => (
-          <label key={key} className="block">
-            <span className="text-xs text-ink-faint">{label}</span>
-            <input
-              value={key === 'grade' ? (info.grade !== undefined ? GRADE_LABELS[info.grade] : '') : info[key] ?? ''}
-              onChange={(e) => update(key, e.target.value)}
-              placeholder={placeholder}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
-            />
-          </label>
+          <Input
+            key={key}
+            label={label}
+            name={`basic-${key}`}
+            value={key === 'grade' ? (info.grade !== undefined ? GRADE_LABELS[info.grade] : '') : info[key] ?? ''}
+            onChange={(e) => update(key, e.target.value)}
+            placeholder={placeholder}
+          />
         ))}
       </div>
     </section>

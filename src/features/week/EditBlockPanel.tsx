@@ -21,6 +21,7 @@ import { useState } from 'react';
 import type { TimeBlock } from '@/types';
 import { toHHmm, toMinutes } from '@/constants/time';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { Input, Select } from '@/components/ui/FormControls';
 
 /** 时长选项（分钟）—— 不给自由输入：乱填的时长（如 7 分钟）只会制造碎片 */
 const DURATIONS = [30, 45, 60, 90, 120, 150, 180];
@@ -77,26 +78,22 @@ export function EditBlockPanel({
         <span className="shrink-0">开始</span>
         <TimeWheelPicker value={startText} onChange={setStartText} step={10} />
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="shrink-0">时长</span>
-        <select
-          value={dur}
-          onChange={(e) => setDur(Number(e.target.value))}
-          className="rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
-        >
+      <div className="flex flex-wrap items-end gap-1.5">
+        <Select label="时长" name="edit-block-dur" wrapClassName="w-32" value={dur}
+          onChange={(e) => setDur(Number(e.target.value))}>
           {durOptions.map((d) => (
             <option key={d} value={d}>{d} 分钟</option>
           ))}
-        </select>
-        <span className="text-ink-faint">→ {toHHmm(start)}–{toHHmm(start + dur)}</span>      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="shrink-0">地点</span>
-        <input
-          type="text"
+        </Select>
+        <span className="pb-2 text-ink-faint">→ {toHHmm(start)}–{toHHmm(start + dur)}</span>      </div>
+      <div className="flex flex-wrap items-end gap-1.5">
+        <Input
+          label="地点"
+          name="edit-block-place"
+          wrapClassName="min-w-0 flex-1"
           value={place}
           onChange={(e) => setPlace(e.target.value)}
           placeholder="留空 = 不指定"
-          className="min-w-0 flex-1 rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
         />
       </div>
       {/* 碰撞提示：说清**和谁**撞了、怎么办 —— 只写「冲突」等于没说 */}

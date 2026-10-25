@@ -17,6 +17,7 @@ import {
 } from '@/lib/timetableClient';
 import { periodStartMin, periodEndMin, toHHmm } from '@/constants/time';
 import { Icon } from '@/components/icons/Icon';
+import { Input } from '@/components/ui/FormControls';
 
 const DAY = ['', '一', '二', '三', '四', '五', '六', '日'];
 
@@ -132,11 +133,13 @@ export function ImportTester({ onApply }: Props) {
             />
           </label>
 
-          <input
+          <Input
+            label="学期 key"
+            name="import-semester-key"
+            wrapClassName="min-w-[180px] flex-1"
             value={semesterKey}
             onChange={(e) => setSemesterKey(e.target.value)}
-            placeholder="学期 key（可留空，如 2026-2027-1）"
-            className="min-w-[180px] flex-1 rounded-xl border border-ink/10 bg-paper px-3 py-2 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/10"
+            placeholder="可留空，如 2026-2027-1"
           />
         </div>
         <div className="text-[11.5px] leading-relaxed text-ink-faint">
