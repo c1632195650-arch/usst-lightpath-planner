@@ -414,3 +414,14 @@
 - [2026-10-25 批6·收尾] **完成**（a7bb2c1）：AGENTS.md §〇 快照刷新——engine 979/ui 495（实测标注）+ 两套件口径注记 + server/tests 部署态 + W8/防再犯/campuskit 框架线三行入已实现清单 + 数据资产 588/695/583/2067 + 遗留清单八条重排（W 系列基本清账、K4/K5 人工窗独立成行）
 - [2026-10-25 ⚠️ 推送待补] 批6（a7bb2c1）commit 时本机 Clash 代理（127.0.0.1:7890）掉线，git push 两次 ECONNREFUSED——**a7bb2c1 尚在本地未上远端**（按「已推送以远端引用核对为准」纪律如实申报）。批 1-4 五笔（10a78b8/eb5d370/c23c568/e003877 及前批 b6f8dc1/55102b7）均已推。代理恢复后请 `git push origin beta-v2` 一笔补推
 - [2026-10-25 状态] beta-v2 本地=a7bb2c1（远端=e003877，差批6 一笔）；campuskit main=3324174（同步）。生产：W8 指标开始积累、server/tests 6/6 在线、metrics cron 04:37 就位；W1 明晨 06:47 首跑
+
+
+# 七至十二行 kickoff（2026-10-25 第三窗口，campuskit 线专场）
+
+- [2026-10-25 批7·开工声明] K8 去烙印清扫：审计 21 处的代码侧已随 K3 最小版清零（42bfc6a，purity PASS）——本批处理剩余白名单文档：README 致谢定调（首个部署改为致谢口径）、founding-doc/E1 审计加「历史文档」横幅、evals README 口径句定调；登记表（借出语义）保留白名单｜验收=purity 全仓 PASS 且白名单逐条为「致谢/历史标注」语义
+- [2026-10-25 批11·开工声明] CI 增强（0.5d，紧跟批 7）：ci.yml 增两步——secrets 扫描（自写 tools/secrets_scan.mjs 零依赖，gitleaks 等价口径）+ purity grep；本地 scripts 同步可跑
+- [2026-10-25 批9·开工声明] MCP 实测验收（0.5d）：用官方 @modelcontextprotocol/sdk 客户端（临时目录安装，不进仓）对 mcp/server.ts 跑 initialize/tools/list/tools/call 三工具往返 → docs/mcp-acceptance 记录；若离线装不了 SDK，退级用第二独立客户端实现并如实标注
+- [2026-10-25 批8·开工声明] K3 完整版（2d）：pipeline/build_kb.py（零依赖 stdlib，campus 参数化=工作单 rag 库名参数化的框架侧等价物，偏离登记）——读 sources.json → 采集（demo 源走本地确定性 fixture，example.edu 不可达）→ 清洗 → 建 FTS5 kb.db（MCP 约定布局）+ server/app.ts 增 GET /api/kb（与 MCP 共用 server/kb.ts 查询单元）+ playground 加检索框出带来源答案 + 排程出块 → 端到端测试
+- [2026-10-25 批10·开工声明] 《新校接入指南》v1（1d，K4 agent 可写部分）：课表/地点/资讯/人格四步 + campuses/<school>/README 试点计时表模板；实跑本身留人工窗
+- [2026-10-25 批12·开工声明] M5 文档件预备（1.5d）：README 中英双语重排（承接批 7 致谢定调）+ docs/site 最小静态文档页（单文件零依赖，链接现有文档集）；发布动作本身仍卡软著答复（M5）
+- [2026-10-25 顺序] 7 → 11 → 9 → 8 → 10 → 12；先试推上批遗留 a7bb2c1+4f42f11（代理掉线待补）
