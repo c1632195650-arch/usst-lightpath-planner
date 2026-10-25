@@ -402,3 +402,15 @@
 - [2026-10-25 批4·开工声明] 本地审核仪式（0.5 天）：本地采集队列 37 条待审（与服务器队列**分账**，只审本地）——逐条看标题/正文质量，approve 干净条目、flag 可疑条目；入库+建索引随 data 批（本批内完成则走 rag.py build）
 - [2026-10-25 批2·开工声明] W8 落地仪表盘 v1（1 天）：注册/问答/排程三计数埋点（**零内容零上报**——只记 count+日期，不记谁问了什么）+ 每日聚合｜界限=server/ 新增 metrics 模块 + 三端点埋点 + tests；先读 remaining-tech-plans W8 工作单对齐口径
 - [2026-10-25 批6·开工声明] AGENTS.md §〇 快照刷新（0.5 天）：测试数字 881/489 → 实测 979/495（gate 基线只增不减口径保留）+ W8/W9/W10/W11/W12/W1/K3-K7 完成态入已实现清单 + 遗留清单刷新——**本批最后做**，以含当日全部产出
+
+
+# 六行白天清单收尾（2026-10-25 第二窗口，批 1-6 全报告）
+
+- [2026-10-25 批3·收尾] **完成**：server/tests 全量部署生产（1/6→6/6：sync_v3/sync_lww/logutil/space_negative/chat_confidence/timetable + fixtures + space_negative 金标补 evals/golden/）。**服务器 6/6 实跑全绿**（兼容矩阵四组/LWW 四组/logutil 并发 200 行/否定金标 15/15/confidence 14/timetable 13）。零业务文件改动、零 restart（测试文件不进 uvicorn 进程）。免 pytest 纪律沿袭（自跑器风格直跑）
+- [2026-10-25 批5·收尾] **巡检完成（只读）**：schtasks usst_w1_backfill 在位、每日 06:47、**首跑=明晨 2026-10-26 06:47**（今日 06:47 前注册，1999/0x41303 系新建任务正常态）；今天 11:40 一次为人工探针（哨兵失败即中止、零写入，backfill_alert.jsonl 留痕）——止损设计按设计工作；尚无机跑成功率数据，明晨 06:47 后才有首批判读（≥60% 继续跑/<60% 自停转人工）
+- [2026-10-25 批1·收尾] **完成**（eb5d370，已推）：①`rag.py rebuild-vectors`（向量单独重建唯一正规入口，`_rebuild_chunks` 与 build 共用，尾部强制 refresh_pins——四次 pins 漂移根因收口）；②`fact_probe._guard_base`（非本机/8000 端口拒绝，默认 base 改 8013，逃生门 FACT_PROBE_ALLOW=1）；③`migrate_effective_to._assert_backup_ok`（体积+integrity+逐表行数三断言，migrate 与 rollback 双侧自证）。守卫 test_audit_guards.py 三组 + 回归 refresh_pins 3/3、probe 自检 24/24、crawl_queue 6/6
+- [2026-10-25 批4·收尾] **完成**（c23c568，已推）：37 条待审清零——approve 20（保卫处流程 4 + 信息化办带摘要指南 16）/ reject 17（时效通知 12 + 纯附件空壳 4 + 智慧教室薄内容 1）。**去重实证**：抽查三条 approve 均恰好一行 is_dup=0——本机人工搬运通道（15:09）已先入库同批内容，正规仪式确认零重复；rag.py build 收口 pins 588/583/2067 与 DB 真值一致；队列归零。此前登记的 15:09 未入库 delta 随本批收编（来源 365/368 行留痕）
+- [2026-10-25 批2·收尾] **完成并部署生产**（e003877）：server/metrics.py（register/chat/plan 三计数，零内容零身份零上报，事件面封闭永不抛）+ 三埋点（注册成功路径/_chat_core 成功返回/sync plan PUT 成功）+ metrics_aggregate.py 每日聚合（幂等，cron 04:37 已上服务器与 04:17 快照/05:17 采集错峰）。RUNBOOK 纪律全程：py_compile×5 本地+服务器 → restart → health 200/llm:true → journal 干净。守卫 test_metrics.py（形状/封闭/聚合数学/幂等逐字节/脏行跳过）。**metrics_events.jsonl 随第一笔真实流量起积累**（截至收尾尚无事件——无注册/问答发生，属预期）
+- [2026-10-25 批6·收尾] **完成**（a7bb2c1）：AGENTS.md §〇 快照刷新——engine 979/ui 495（实测标注）+ 两套件口径注记 + server/tests 部署态 + W8/防再犯/campuskit 框架线三行入已实现清单 + 数据资产 588/695/583/2067 + 遗留清单八条重排（W 系列基本清账、K4/K5 人工窗独立成行）
+- [2026-10-25 ⚠️ 推送待补] 批6（a7bb2c1）commit 时本机 Clash 代理（127.0.0.1:7890）掉线，git push 两次 ECONNREFUSED——**a7bb2c1 尚在本地未上远端**（按「已推送以远端引用核对为准」纪律如实申报）。批 1-4 五笔（10a78b8/eb5d370/c23c568/e003877 及前批 b6f8dc1/55102b7）均已推。代理恢复后请 `git push origin beta-v2` 一笔补推
+- [2026-10-25 状态] beta-v2 本地=a7bb2c1（远端=e003877，差批6 一笔）；campuskit main=3324174（同步）。生产：W8 指标开始积累、server/tests 6/6 在线、metrics cron 04:37 就位；W1 明晨 06:47 首跑
