@@ -18,6 +18,7 @@ import { loadRecords } from '@/lib/behaviorLog';
 import { goalTasksOf } from './goalDecompose';
 import { loadGoalPrefs } from './goalPrefs';
 import { humanHours, summarizeRange, totalForGoal } from './aggregate';
+import { Input, Select } from '@/components/ui/FormControls';
 
 const KINDS: GoalKind[] = ['contest', 'interest', 'study', 'habit'];
 const PACES: GoalPace[] = ['sprint', 'steady', 'both'];
@@ -192,42 +193,44 @@ export function GoalEditor({
 
       {open && (
         <div className="mt-1.5 space-y-1.5 rounded-md border border-ink/10 bg-white/60 px-2.5 py-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <input
-              type="text"
+          <div className="flex flex-wrap items-end gap-1.5">
+            <Input
+              label="目标名"
+              required
+              name="goal-editor-title"
+              wrapClassName="min-w-[8rem] flex-1"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="比如：数学建模国赛"
-              className="min-w-0 flex-1 rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
             />
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as GoalKind)}
-              className="rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
-            >
+            <Select label="类型" name="goal-editor-kind" wrapClassName="w-28" value={kind}
+              onChange={(e) => setKind(e.target.value as GoalKind)}>
               {KINDS.map((k) => (
                 <option key={k} value={k}>{GOAL_KIND_LABEL[k]}</option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
+              label="目标小时"
+              name="goal-editor-target"
+              wrapClassName="w-24"
               type="number"
               min={1}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="目标小时"
-              className="w-20 rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="shrink-0 text-[11.5px] text-ink-soft">截止日期</span>
-            <input
+          <div className="flex flex-wrap items-end gap-1.5">
+            <Input
+              label="截止日期"
+              name="goal-editor-due"
+              wrapClassName="w-40"
               type="date"
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
               min={todayISO()}
-              className="rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
             />
-            <span className="text-[10.5px] text-ink-faint">填了才会问「投入节奏」并排进日程</span>
+            <span className="pb-2 text-[10.5px] text-ink-faint">填了才会问「投入节奏」并排进日程</span>
           </div>
           <button
             type="button"

@@ -72,6 +72,7 @@ export function GoalQuickInput({ onConfirm }: { onConfirm: (draft: { title: stri
         <input
           ref={inputRef}
           type="text"
+          aria-label="想做什么（一句话描述，回车解析）"
           value={line}
           onChange={(e) => setLine(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleInput(); if (e.key === 'Escape') { setShowConfirm(false); setLine(''); } }}

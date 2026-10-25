@@ -6,6 +6,7 @@
  */
 import { useState } from 'react';
 import type { Goal, Todo } from '@/features/mobile/lib/memoTypes.ts';
+import { Input } from '@/components/ui/FormControls';
 
 export interface GoalPanelProps {
   goals: readonly Goal[];
@@ -82,21 +83,26 @@ export default function GoalPanel({
           data-testid="goal-form"
           onSubmit={(e) => { e.preventDefault(); void submitGoal(); }}
         >
-          <input
-            data-testid="goal-form-title"
+          <Input
+            label="目标"
+            required
+            name="goal-form-title"
+            testId="goal-form-title"
+            wrapClassName="w-full"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="目标（如：这学期把算法基础打牢）"
+            placeholder="如：这学期把算法基础打牢"
             maxLength={80}
-            className="w-full rounded-xl border border-ink/15 bg-white px-3 py-2 text-[13px] outline-none focus:border-ink/40"
           />
-          <input
-            data-testid="goal-form-why"
+          <Input
+            label="为什么重要"
+            name="goal-form-why"
+            testId="goal-form-why"
+            wrapClassName="mt-2 w-full"
             value={why}
             onChange={(e) => setWhy(e.target.value)}
-            placeholder="为什么重要？（可空 —— 写给未来的自己）"
+            placeholder="可空 —— 写给未来的自己"
             maxLength={120}
-            className="mt-2 w-full rounded-xl border border-ink/15 bg-white px-3 py-2 text-[13px] outline-none focus:border-ink/40"
           />
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setAdding(false)} className="rounded-lg px-3 py-1 text-[12px] text-ink-soft ring-1 ring-ink/15 transition-colors hover:bg-paper">取消</button>

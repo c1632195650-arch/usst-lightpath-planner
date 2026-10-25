@@ -25,6 +25,7 @@ import TodoList from './TodoList.tsx';
 import TodoEditor, { type TodoDraft } from './TodoEditor.tsx';
 import GoalPanel from './GoalPanel.tsx';
 import { Icon } from '@/components/icons/Icon';
+import { Select } from '@/components/ui/FormControls';
 import { Segmented } from '@/components/ui/Segmented';
 import { Tag } from '@/components/ui/Tag';
 import { monthOptions, periodLabel, periodValues, suggestPeriod } from './milestonePicker.ts';
@@ -306,6 +307,7 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
       <div className="panel flex flex-wrap items-center gap-2 p-3">
         <input
           data-testid="memo-search"
+          aria-label="搜索待办"
           value={filter.q}
           onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
           placeholder="搜标题或备注…"
@@ -405,15 +407,17 @@ export default function MemoPanel({ planAnchor, onGotoPlan }: {
           >
             <h3 className="text-sm font-semibold text-ink">什么时候办成的？</h3>
             <p className="mt-1 text-[12px] text-ink-soft">「{askDone.title}」—— 选个大概时段就行，不精确到日。</p>
-            <div className="mt-3 flex gap-2">
-              <select
-                data-testid="planned-done-month"
+            <div className="mt-3 flex items-end gap-2">
+              <Select
+                label="哪个月"
+                name="planned-done-month"
+                testId="planned-done-month"
+                wrapClassName="min-w-0 flex-1"
                 value={askPeriod.slice(0, 7)}
                 onChange={(e) => setAskPeriod(`${e.target.value}-中旬`)}
-                className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-paper px-2 py-1.5 text-[12px]"
               >
                 {months.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+              </Select>
               <div className="flex gap-1 rounded-xl border border-ink/10 bg-paper p-1">
                 {periodValues(askPeriod.slice(0, 7)).map((v) => (
                   <button
