@@ -163,43 +163,19 @@ def is_default_db(db_path):
 # ---------- 钉值 ----------
 
 def update_pins(db_path, rebuild_status, main_inserted, fts_inserted):
-    """approve 后更新库旁的 data_pins.json（与 scripts/gate_data.py 的钉值口径一致）。
+    """approve 后更新库旁的 data_pins.json（W4：统一走 rag.refresh_pins 真值函数）。
 
-    - 全量重建成功 → 三键按库现值重算（chunks 由重建自然对齐）；
-    - 其余情况 → 只增量修 articles_is_dup0 / articles_fts，chunks 留待下次全量重建；
-    - 文件不存在或结构不符 → 跳过并在输出说明（工单要求，不报错）。
+    旧实现是「增量推算」（main_inserted +1 / fts_inserted +1），与真值漂移过两次
+    （2026-10-24/25 同根因实录）——W4 防三犯收编：approve 路径与 build 路径都调
+    rag.refresh_pins（数三表覆盖写），幂等且恒等于库真值。增量参数保留签名兼容，
+    仅用于打印说明。
     """
-    pins_path = os.path.join(os.path.dirname(os.path.abspath(db_path)), "data_pins.json")
-    if not os.path.exists(pins_path):
-        print("（库旁无 data_pins.json，跳过钉值更新）")
-        return
-    try:
-        with open(pins_path, encoding="utf-8") as f:
-            pins = json.load(f)
-        if not isinstance(pins, dict) or not {"articles_is_dup0", "articles_fts", "chunks"} <= set(pins):
-            raise ValueError("结构不符（需含 articles_is_dup0 / articles_fts / chunks 三键）")
-    except Exception as e:
-        print(f"⚠️ data_pins.json 读取/结构不符，跳过钉值更新：{e}")
-        return
-
-    if rebuild_status == "ok":
-        conn = sqlite3.connect(db_path)
-        for key, sql in gate_data.PIN_SQL.items():
-            try:
-                pins[key] = conn.execute(sql).fetchone()[0]
-            except sqlite3.Error:
-                pass  # 该表尚不存在（如 chunks），维持原钉值
-        conn.close()
+    from rag import refresh_pins  # 局部导入避免环（rag 不依赖本模块）
+    pins = refresh_pins(db_path)
+    if rebuild_status != "ok":
+        print(f"📌（重建状态 {rebuild_status}，pins 已按库真值刷新；本批主表 +{main_inserted}/FTS +{fts_inserted}）")
     else:
-        if main_inserted:
-            pins["articles_is_dup0"] = int(pins["articles_is_dup0"]) + 1
-        if fts_inserted:
-            pins["articles_fts"] = int(pins["articles_fts"]) + 1
-        print("（chunks 钉值待下次全量重建 rag.py build 后对齐）")
-
-    with open(pins_path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(pins, f, ensure_ascii=False, indent=1)
-    print(f"📌 data_pins.json 已更新：{pins}")
+        print(f"📌 data_pins.json 已按真值更新：{pins}")
 
 
 # ---------- 子命令 ----------
