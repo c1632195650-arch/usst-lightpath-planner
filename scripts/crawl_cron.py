@@ -32,6 +32,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -146,6 +147,49 @@ def collect_web_pages(fetcher, pages=1):
                     "source_type": "web",
                     "account": dept,
                 })
+    return out
+
+
+def collect_single_pages(fetcher, sources_path=None):
+    """W2（2026-10-25）单页采集模式：不在任何列表页内的静态服务指南页。
+
+    清单 data/sources_single.json：[{id, url, keyword}]；
+    复用 collect_web.parse_page（与详情页解析同一实现）抽标题/日期/正文摘要，
+    按 source_url 去重入队（与列表页通道同一队列）。pub_time 取页面内日期，
+    无日期留空（within_since 的保守保留语义覆盖）。
+    """
+    path = sources_path or os.path.join(BASE, "..", "data", "sources_single.json")
+    if not os.path.exists(path):
+        return []
+    import json as _json
+    with open(path, encoding="utf-8") as f:
+        spec = _json.load(f)
+    out = []
+    for page in spec.get("pages", []):
+        url, kw = page.get("url", ""), page.get("keyword", "")
+        if not url:
+            continue
+        try:
+            html = fetcher(url)
+        except Exception:
+            continue  # 单页失败只跳过该页，不产半截数据
+        body, d, _pdf = collect_web.parse_page(html)
+        # parse_page 返回 (正文, 日期, pdf)；标题从 <title> 或 h1 取（详情页无标题行）
+        tm = re.search(r"<title>([^<]+)</title>", html)
+        title = (tm.group(1).strip().rsplit("-", 1)[0].strip() if tm else "")
+        if not title:
+            hm = re.search(r"<h1[^>]*>([^<]+)</h1>", html)
+            title = hm.group(1).strip() if hm else ""
+        if not title or not body:
+            continue
+        out.append({
+            "title": title,
+            "summary": body[:200],
+            "pub_time": d or "",
+            "source_url": url,
+            "source_type": "web",
+            "account": kw,
+        })
     return out
 
 
@@ -305,7 +349,8 @@ def run(db_path=None, queue_path=None, logs_dir=None, since_days=7, dry_run=Fals
 
     # 2) 增量采集（候选条目，不写库）
     try:
-        cands = collect_wechat(fetcher, pages=pages) + collect_web_pages(fetcher, pages=pages)
+        cands = (collect_wechat(fetcher, pages=pages) + collect_web_pages(fetcher, pages=pages)
+                 + collect_single_pages(fetcher))
     except Exception as e:
         reason = f"采集阶段异常终止：{e!r}"
         append_jsonl(alert_log, {"time": now_iso, "reason": reason})

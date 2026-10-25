@@ -1,0 +1,32 @@
+{
+  "_comment": "W2 单页采集清单（2026-10-25）：信息化办 net.usst.edu.cn 首页/公告/新闻三页探测到的 27 个 c68xx 静态服务指南页。id = URL 稳定尾段；keyword 填采集归口账号。",
+  "pages": [
+    { "id": "c6844a150639", "url": "http://net.usst.edu.cn/2013/1224/c6844a150639/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a4847", "url": "http://net.usst.edu.cn/2014/0305/c6843a4847/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6844a149164", "url": "http://net.usst.edu.cn/2019/0528/c6844a149164/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6844a149165", "url": "http://net.usst.edu.cn/2019/0528/c6844a149165/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6845a149181", "url": "http://net.usst.edu.cn/2019/0528/c6845a149181/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6849a150710", "url": "http://net.usst.edu.cn/2019/0603/c6849a150710/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6847a156763", "url": "http://net.usst.edu.cn/2019/0620/c6847a156763/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6847a156769", "url": "http://net.usst.edu.cn/2019/0620/c6847a156769/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6847a156771", "url": "http://net.usst.edu.cn/2019/0620/c6847a156771/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6846a158936", "url": "http://net.usst.edu.cn/2019/0626/c6846a158936/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6846a158953", "url": "http://net.usst.edu.cn/2019/0626/c6846a158953/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a160605", "url": "http://net.usst.edu.cn/2019/0701/c6843a160605/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a160606", "url": "http://net.usst.edu.cn/2019/0701/c6843a160606/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a160608", "url": "http://net.usst.edu.cn/2019/0701/c6843a160608/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a160610", "url": "http://net.usst.edu.cn/2019/0701/c6843a160610/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a160611", "url": "http://net.usst.edu.cn/2019/0701/c6843a160611/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6847a160649", "url": "http://net.usst.edu.cn/2019/0702/c6847a160649/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6850a193255", "url": "http://net.usst.edu.cn/2019/1016/c6850a193255/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a196368", "url": "http://net.usst.edu.cn/2019/1111/c6843a196368/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6845a215563", "url": "http://net.usst.edu.cn/2020/0305/c6845a215563/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6845a216089", "url": "http://net.usst.edu.cn/2020/0312/c6845a216089/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6843a291652", "url": "http://net.usst.edu.cn/2023/0414/c6843a291652/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6848a179370", "url": "https://net.usst.edu.cn/2019/0909/c6848a179370/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6845a229755", "url": "https://net.usst.edu.cn/2020/0919/c6845a229755/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6848a256336", "url": "https://net.usst.edu.cn/2021/1015/c6848a256336/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6846a265210", "url": "https://net.usst.edu.cn/2022/0218/c6846a265210/page.htm", "keyword": "信息化办公室" },
+    { "id": "c6844a360413", "url": "https://net.usst.edu.cn/2026/0423/c6844a360413/page.htm", "keyword": "信息化办公室" }
+  ]
+}
