@@ -97,6 +97,15 @@ export async function webSyncTick(deps: WebSyncDeps): Promise<WebSyncTickResult>
   const today = deps.today();
   const termStart = schedule.termStart;
   const clientUpdatedAt = today.toISOString();
+  // W3/C1（2026-10-25）：网页端重要日序列化上行（deadlineStore 只增旁路导出）
+  let deadlines: import('./memoTypes.ts').DeadlineLite[] = [];
+  try {
+    // 动态 require 不可用（ESM）——经懒 import 由调用方注入不可行，这里直接
+    // 复用 deadlineStore 的读取与映射（模块零重依赖，web 端本就加载 calendar/）。
+    // 静态 import 置顶会引入模块环风险 → 用局部动态 import + await。
+    const ds = await import('@/features/calendar/deadlineStore');
+    deadlines = ds.loadUserDeadlines().map(ds.toDeadlineLite);
+  } catch { /* 读失败 → 空数组上行（服务端并集不清空云端） */ }
   const payload = buildSyncPayload({
     schedule: schedule as never,
     planState: (app.planState as never) ?? null,
@@ -106,13 +115,15 @@ export async function webSyncTick(deps: WebSyncDeps): Promise<WebSyncTickResult>
     clientUpdatedAt,
     // schemaVer=2：画像随主状态上行（web 端画像本来就在 AppState 里）
     persona: (app.persona as never) ?? null,
+    // W3/C1：重要日上行（web 端为 source of truth——deadlineStore 建在这边）
+    deadlines,
   });
 
   try {
     const res = await deps.fetchImpl('/api/sync/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${deps.token}` },
-      body: JSON.stringify({ state: payload, schemaVer: 2, clientUpdatedAt }),
+      body: JSON.stringify({ state: payload, schemaVer: 3, clientUpdatedAt }),
     });
     if (!res.ok) {
       deps.log?.(`webSync 上传失败 HTTP ${res.status}`);

@@ -1,7 +1,7 @@
 /**
  * 光溯移动端 · 局部类型（新任务三 §5.3：零改动 src/types.ts，新增类型全部放这里）
  * ============================================================
- * SyncState payload（schemaVer=2）与端点响应的**线协议**形状。
+ * SyncState payload（schemaVer=3，W3/C1）与端点响应的**线协议**形状。
  * 字段语义以 src/types.ts 的 Schedule / PlanPersistState / UserPlanLayer 为准 ——
  * 服务端只透传不解释，客户端对不认识的字段一律忽略（前向兼容条款）。
  *
@@ -9,15 +9,19 @@
  *   · `todos?` / `goals?`：待办与目标（类型在 memoTypes.ts，P0 契约）；
  *   · `persona?`：完整画像 —— 修 planCompute `persona: null` 硬编码（F1）；
  *   · 均可选：旧客户端（v1）不发 → 服务端保留库中原值，不覆盖不清空。
+ * schemaVer 3（W3/C1，2026-10-25 CY 拍板）：
+ *   · `deadlines?`：重要日同步（DeadlineLite，逐项 LWW；MIN_SCHEMA_VER 仍 1，
+ *     v1/v2 旧客户端不发 → 云端保留，响应里旧 APK 忽略未知字段——与 v2 升级同构）。
  */
 import type { Schedule } from '@/types';
 import type { PlanPersistState } from '@/types';
 import type { UserPlanLayer } from '@/features/week/userPlanStore';
-import type { Todo, Goal } from './memoTypes.ts';
+import type { Todo, Goal, DeadlineLite } from './memoTypes.ts';
 
 /** 方案 §5.1 —— 权威状态 */
 export interface SyncStatePayload {
-  schemaVer: 2;
+  /** W3/C1：2→3（deadlines 通道）；服务端 MIN_SCHEMA_VER=1 不变 */
+  schemaVer: 3;
   termStart: string;
   weekNo: number;
   schedule: Schedule;
@@ -26,6 +30,8 @@ export interface SyncStatePayload {
   /** schemaVer=2 新增：待办（最近/中长期）与目标；缺省 = 旧客户端，云端保留原值 */
   todos?: Todo[];
   goals?: Goal[];
+  /** schemaVer=3 新增（W3/C1）：重要日同步条目（逐项 LWW；v2 载荷上行不清空） */
+  deadlines?: DeadlineLite[];
   /** schemaVer=2 新增：完整画像（手机重算的画像微调入口，F1） */
   persona?: import('@/types').PersonaProfile | null;
   clientUpdatedAt: string;

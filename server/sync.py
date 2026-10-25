@@ -43,15 +43,16 @@ from account import _conn, _err, _now_iso, _parse_iso, user_id_from_request
 router = APIRouter()
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SCHEMA_VER = 2
+SCHEMA_VER = 3  # W3/C1（2026-10-25 CY 拍板）：+deadlines[]（重要日同步，逐项 LWW）
 # 支持的最低客户端版本：v1 = schemaVer=2 之前的旧 App（契约扩展后必须仍能同步，
 # 否则已发布的 0.2.0 APK 一夜全坏）。
 MIN_SCHEMA_VER = 1
-# 逐项 LWW 管的数组字段（新任务三 §5.3）：整数组覆盖会丢并发写入
+# 逐项 LWW 管的数组字段（新任务三 §5.3 + W3/C1）：整数组覆盖会丢并发写入
 # （手机勾待办 ∥ 网页加待办 → 一方被拒/被吞），按 id 并集 + updatedAt 新者胜。
-MERGED_ARRAY_KEYS = ("todos", "goals")
-# 旧客户端（schemaVer<2）不知道的字段：PUT 时云端原值保留（不覆盖、不清空）
-PRESERVE_KEYS = ("todos", "goals", "persona")
+MERGED_ARRAY_KEYS = ("todos", "goals", "deadlines")
+# 旧客户端（schemaVer<3）不知道的字段：PUT 时云端原值保留（不覆盖、不清空）。
+# deadlines 对 v2 客户端也保留（v2 不带该字段上行 → 云端值不丢；响应里 v2 老 APK 忽略未知字段）。
+PRESERVE_KEYS = ("todos", "goals", "persona", "deadlines")
 ICS_WINDOW_WEEKS = 1  # 当前周 ±1
 
 _VERSION_FILE = os.path.join(_HERE, "version.json")

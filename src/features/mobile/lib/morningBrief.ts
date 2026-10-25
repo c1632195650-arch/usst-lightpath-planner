@@ -43,6 +43,15 @@ export function morningBrief(input: {
 }): MorningBrief {
   const { blocksToday, todos, goals, dateKey, deadlines } = input;
   const sorted = [...blocksToday].sort((a, b) => a.startMin - b.startMin);
+  // W3/C1（2026-10-25）：同步来的 deadlines（DeadlineLite）并入提醒信号——
+  // archived 剔除；dueAt 与 BriefDeadline.dueISO 同域（ISO 日期）。
+  const syncDeadlines = (input as { syncDeadlines?: readonly import('./memoTypes').DeadlineLite[] }).syncDeadlines;
+  const allDeadlines: BriefDeadline[] = [
+    ...(deadlines ?? []),
+    ...(syncDeadlines ?? []).filter((d) => !d.archived).map((d) => ({
+      id: d.id, title: d.title, dueISO: d.dueAt,
+    })),
+  ];
 
   // 标题：今天 N 个安排 + 第一件（一眼知道节奏）
   const first = sorted[0];
@@ -62,7 +71,7 @@ export function morningBrief(input: {
 
   // 提醒：72h 内且未办结的 deadline（逾期也报），按紧迫排序，≤3
   const warnings: string[] = [];
-  const due = (deadlines ?? [])
+  const due = allDeadlines
     .filter((d) => !d.done && d.dueISO)
     .map((d) => ({ ...d, days: diffDays(d.dueISO, dateKey) })) // 正数 = 已过期
     .filter((d) => d.days >= -WARN_WINDOW_DAYS)

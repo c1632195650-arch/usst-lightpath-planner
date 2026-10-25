@@ -134,12 +134,14 @@ test('⑨ 浮现卡常驻判定：有逾期/无里程碑目标 → 常驻；否�
 
 test('⑩ 缓存容错：坏 JSON / 缺键 → 空仓不白屏；键名与 memoTypes 常量一致', () => {
   const s = store();
+  // W3/C1 断言漂移申报（2026-10-25）：MemoData 增 deadlines?（可选键，v2 缓存无此键
+  // = 空数组归一）→ 空仓形状三键；语义不变（todos/goals 零改动）
   s.write(MEMO_CACHE_KEY, '{bad json');
-  assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY), { todos: [], goals: [] });
+  assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY), { todos: [], goals: [], deadlines: [] });
   s.write(MEMO_CACHE_KEY, JSON.stringify({ todos: 'not-array' }));
   assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY).todos, []);
   s.write(MEMO_CACHE_KEY, JSON.stringify({ todos: [], goals: [] }));
-  assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY), { todos: [], goals: [] });
+  assert.deepEqual(loadMemo(s.read, MEMO_CACHE_KEY), { todos: [], goals: [], deadlines: [] });
 });
 
 /* ---------------- M1c（2026-10-07）：待办排程状态回显 todoScheduleHint ---------------- */

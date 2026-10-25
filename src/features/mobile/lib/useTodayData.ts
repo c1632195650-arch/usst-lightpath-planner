@@ -27,13 +27,14 @@ import {
 } from './sync.ts';
 import { isNative, pickOngoingBlock, registerActionHandler, rescheduleToday, showOngoing, planBriefNotifications, scheduleBriefs } from './notifyBridge.ts';
 import { morningBrief, type BriefDeadline } from './morningBrief.ts';
-import { loadUserDeadlines, mergeDeadlines, upcomingDeadlines } from '@/features/calendar/deadlineStore';
+import { loadUserDeadlines, mergeDeadlines as mergeStaticDeadlines, upcomingDeadlines } from '@/features/calendar/deadlineStore';
+import { mergeDeadlines as mergeCloudDeadlines, type DeadlineLite } from './memoTypes.ts';
 import { DEADLINES } from '@/data/usst';
 
 /** F5 接线①②共用：deadlineStore（用户 ∪ 静态校历）→ 晨报提醒信号（72h 窗） */
 function briefDeadlinesOf(todayIso: string): BriefDeadline[] {
   try {
-    return upcomingDeadlines(mergeDeadlines(DEADLINES, loadUserDeadlines()), todayIso, 8)
+    return upcomingDeadlines(mergeStaticDeadlines(DEADLINES, loadUserDeadlines()), todayIso, 8)
       .filter(({ daysLeft }) => daysLeft >= -3 && daysLeft <= 3)
       .map(({ deadline }) => ({ id: deadline.id ?? deadline.title, title: deadline.title, dueISO: deadline.date }));
   } catch {
@@ -185,9 +186,10 @@ export function useTodayData(identity: { token: string; username: string }, now:
       schedule: serverState.schedule, planState: serverState.planState ?? null, userOverrides: layerRef.current,
       termStart: serverState.termStart, weekNo: wn, clientUpdatedAt,
       todos: memo.todos, goals: memo.goals, persona: serverState.persona ?? null,
+      deadlines: memo.deadlines ?? [], // W3/C1：重要日上行（缓存归一后恒为数组）
     });
     try {
-      const r = await apiPutSyncState(identity.token, { state: payload, schemaVer: 2, clientUpdatedAt });
+      const r = await apiPutSyncState(identity.token, { state: payload, schemaVer: 3, clientUpdatedAt });
       if (!r.accepted) {
         const adopted = r.state?.userOverrides ?? emptyUserPlan();
         saveUserPlan(adopted);
@@ -196,9 +198,11 @@ export function useTodayData(identity: { token: string; username: string }, now:
         // M2b：LWW 被拒 = 服务端版本更新 —— 必须把云端 todos/goals 回落本地，
         // 否则手机端本地与服务端永久分叉（此前只采纳 userOverrides，云端待办更新丢失）。
         const merged = adoptCloudMemo(memoRef.current, r.state?.todos ?? null, r.state?.goals ?? null);
-        saveMemo(LS_WRITE, MEMO_CACHE_KEY, merged);
-        memoRef.current = merged;
-        setMemo(merged);
+        // W3/C1：云端 deadlines 并集（同 todos 通道；v2 响应无此键 → 保留本地）
+        const mergedDl = mergeCloudDeadlines(memoRef.current.deadlines ?? [], (r.state as { deadlines?: DeadlineLite[] } | null)?.deadlines ?? []);
+        saveMemo(LS_WRITE, MEMO_CACHE_KEY, { ...merged, deadlines: mergedDl });
+        memoRef.current = { ...merged, deadlines: mergedDl };
+        setMemo({ ...merged, deadlines: mergedDl });
         setSyncStatus('error');
         return;
       }

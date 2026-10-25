@@ -8,15 +8,17 @@
  */
 import {
   completeTodo, mergeGoals, mergeTodos, todoStamp, stampNewer,
-  type Goal, type Todo,
+  type DeadlineLite, type Goal, type Todo,
 } from './memoTypes.ts';
 
 export interface MemoData {
   todos: Todo[];
   goals: Goal[];
+  /** W3/C1（2026-10-25）：重要日同步条目——可选（v2 缓存无此键 = 空数组，loadMemo 归一） */
+  deadlines?: DeadlineLite[];
 }
 
-export const EMPTY_MEMO: MemoData = { todos: [], goals: [] };
+export const EMPTY_MEMO: MemoData = { todos: [], goals: [], deadlines: [] };
 
 /** 容错读取：坏 JSON / 坏形状 → 空仓（不白屏，丢了也能从云端拉回） */
 export function loadMemo(read: (k: string) => string | null, key: string): MemoData {
@@ -27,6 +29,8 @@ export function loadMemo(read: (k: string) => string | null, key: string): MemoD
     return {
       todos: Array.isArray(p.todos) ? p.todos : [],
       goals: Array.isArray(p.goals) ? p.goals : [],
+      // W3/C1（2026-10-25）：可选键归一——v2 缓存无此键 = 空数组（v3 上行恒为数组）
+      deadlines: Array.isArray(p.deadlines) ? p.deadlines : [],
     };
   } catch {
     return EMPTY_MEMO;

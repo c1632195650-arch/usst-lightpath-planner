@@ -54,6 +54,22 @@ export interface Goal {
   archived?: boolean;
 }
 
+/** W3/C1（2026-10-25）：重要日同步条目（deadlineStore 的跨端形状）。
+ *  与 todos/goals 同一逐项 LWW 通道；删除 = archived 归档。
+ *  dueAt 是 ISO 日期（YYYY-MM-DD）——与 deadlineStore.UserDeadline.date 同域。 */
+export interface DeadlineLite {
+  id: string;
+  title: string;
+  /** ISO 日期（YYYY-MM-DD） */
+  dueAt: string;
+  /** 'user'=用户建 / 'event'=校历事件 */
+  source: 'user' | 'event';
+  /** 逐项 LWW 时间戳（ISO）；缺省退回 createdAt——同步语义与 Todo.updatedAt 同 */
+  createdAt: string;
+  updatedAt?: string;
+  /** 归档而非删除（同 Todo.archived） */
+  archived?: boolean;
+}
 /** 移动端本地缓存 key（GET 采纳后落地，离线可看；与 localStorage 其它键同前缀口径） */
 export const MEMO_CACHE_KEY = 'usst.mobile.memoCache';
 
@@ -105,6 +121,12 @@ function mergeById<T extends Todo | Goal>(lists: Array<readonly T[]>): T[] {
  */
 export function mergeTodos(local: readonly Todo[], remote: readonly Todo[]): Todo[] {
   return mergeById<Todo>([remote, local]);
+}
+
+/** W3/C1（2026-10-25）：重要日并集合并（语义同 mergeTodos；server/sync.py 的
+ *  MERGED_ARRAY_KEYS 含 deadlines，双端同一 LWW 口径）。 */
+export function mergeDeadlines(local: readonly DeadlineLite[], remote: readonly DeadlineLite[]): DeadlineLite[] {
+  return mergeById<DeadlineLite>([remote, local]);
 }
 
 /** 目标并集合并（语义同 mergeTodos；里程碑作为整项随目标一起 LWW） */

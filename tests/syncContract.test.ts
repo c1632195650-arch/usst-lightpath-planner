@@ -75,7 +75,7 @@ test('buildSyncPayload：关键字段经 JSON 消毒后逐值往返相等', () =
     schedule: SCHEDULE, planState: PLAN_STATE, userOverrides: LAYER,
     termStart: '2026-09-07', weekNo: 4, clientUpdatedAt: '2026-10-03T12:00:00.000Z',
   });
-  assert.equal(payload.schemaVer, 2, 'schemaVer=2（新任务三 P0 契约）');
+  assert.equal(payload.schemaVer, 3, 'schemaVer=3（W3/C1 deadlines 通道，CY 拍板 2026-10-25）');
   assert.equal(payload.termStart, '2026-09-07');
   assert.equal(payload.weekNo, 4);
   const rt = JSON.parse(JSON.stringify(payload));
@@ -197,14 +197,14 @@ const G1: Goal = {
   milestones: [{ id: 'ms1', title: '词汇量过 6000', done: false }],
 };
 
-test('buildSyncPayload：todos/goals/persona 随 schemaVer=2 完整往返', () => {
+test('buildSyncPayload：todos/goals/persona 随 schemaVer=3 完整往返（W3/C1 断言漂移申报：2→3）', () => {
   const payload = buildSyncPayload({
     schedule: SCHEDULE, planState: PLAN_STATE, userOverrides: LAYER,
     termStart: '2026-09-07', weekNo: 4, clientUpdatedAt: '2026-10-05T12:00:00.000Z',
     todos: [T1, T2], goals: [G1],
     persona: { axes: { social: 62 }, scenarios: null } as never,
   });
-  assert.equal(payload.schemaVer, 2);
+  assert.equal(payload.schemaVer, 3);
   const rt = JSON.parse(JSON.stringify(payload));
   assert.deepEqual(rt.todos, [T1, T2], 'todos 应原样往返');
   assert.deepEqual(rt.goals, [G1], 'goals 应原样往返');
@@ -367,7 +367,7 @@ test('webSyncTick：开关开 + 内容变化 → 恰好一次 PUT，请求体契
   assert.equal(calls.length, 1, '只发一次');
   assert.equal(calls[0].url, '/api/sync/state');
   const body = JSON.parse(String(calls[0].init.body));
-  assert.equal(body.schemaVer, 2);
+  assert.equal(body.schemaVer, 3, 'W3/C1：deadlines 通道（CY 拍板 2026-10-25）');
   assert.equal(body.state.termStart, '2026-09-07');
   assert.equal(body.state.weekNo, 4, 'termStart+today 推算当前周');
   assert.equal(body.state.userOverrides.moves[0].blockId, 'w4-d1-study-lib-1', 'web 覆盖层原样上行');

@@ -73,11 +73,13 @@ export function buildSyncPayload(args: {
   clientUpdatedAt: string;
   todos?: import('./memoTypes.ts').Todo[] | null;
   goals?: import('./memoTypes.ts').Goal[] | null;
+  /** W3/C1（2026-10-25）：重要日同步（deadlineStore → DeadlineLite 序列化） */
+  deadlines?: import('./memoTypes.ts').DeadlineLite[] | null;
   persona?: import('@/types').PersonaProfile | null;
 }): SyncStatePayload {
   const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v ?? null)) as T;
   return {
-    schemaVer: 2,
+    schemaVer: 3, // W3/C1：deadlines[] 通道（server/sync.py SCHEMA_VER=3 同批）
     termStart: args.termStart,
     weekNo: args.weekNo,
     schedule: clean(args.schedule),
@@ -85,6 +87,8 @@ export function buildSyncPayload(args: {
     userOverrides: args.userOverrides ? clean(args.userOverrides) : null,
     ...(args.todos?.length ? { todos: clean(args.todos) } : {}),
     ...(args.goals?.length ? { goals: clean(args.goals) } : {}),
+    // W3/C1：重要日上行（同 todos 条件展开——空数组 = 没有改动，不覆盖云端）
+    ...(args.deadlines?.length ? { deadlines: clean(args.deadlines) } : {}),
     ...(args.persona ? { persona: clean(args.persona) } : {}),
     clientUpdatedAt: args.clientUpdatedAt,
   };

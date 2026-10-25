@@ -54,6 +54,19 @@ function writeStore(list: UserDeadline[]): void {
   }
 }
 
+/** W3/C1（2026-10-25）：UserDeadline → 移动端 DeadlineLite 同步形状。
+ *  旁路导出（calendar/ 目录只增不改）：cloudSync 推送侧序列化用。 */
+export function toDeadlineLite(u: UserDeadline): import("@/features/mobile/lib/memoTypes").DeadlineLite {
+  return {
+    id: u.id,
+    title: u.title,
+    dueAt: u.date,
+    source: 'user',
+    createdAt: u.date,  // deadlineStore 无独立 createdAt → date 作幂等底值
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function loadUserDeadlines(): UserDeadline[] {
   return readStore();
 }
