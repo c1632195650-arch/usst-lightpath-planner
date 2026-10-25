@@ -30,8 +30,12 @@
     <!-- 系统默认：禁止明文（比 Android 默认更明确，防将来误开） -->
     <base-config cleartextTrafficPermitted="false" />
 
-    <!-- 唯一需要明文的域名：光溯后端 + APK 下载源（同一台服务器） -->
+    <!-- 唯一需要明文的域名：光溯后端 + APK 下载源（同一台服务器）。
+         ⚠️ 换服务器时必须同步改这里：manifest 的 usesCleartextTraffic 会被
+         networkSecurityConfig 压掉（API 24+ 以 NSG 为准），只改 JS 里的 IP 没用
+         —— 2026-10-22 迁机就漏了本文件，0.4.10 在真机上被系统静默拦截发往新机的
+         全部请求（含应用内检查更新，无法自愈），2026-10-25 以 0.4.11 修复。 -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">101.35.253.143</domain>
+        <domain includeSubdomains="false">43.142.141.186</domain>
     </domain-config>
 </network-security-config>
