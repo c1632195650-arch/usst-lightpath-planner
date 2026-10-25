@@ -23,6 +23,8 @@ export interface RagSource {
   score?: number;
   /** 未归一化余弦绝对值 —— 判「知识库到底有没有」看这个（阈值 0.68 / 0.56） */
   raw_vec?: number;
+  /** W7（C2）：effective_to 已过期 → stale:true（后端 search 透传；角标+confidence 降级依据） */
+  stale?: boolean;
 }
 
 export interface ChatResult {

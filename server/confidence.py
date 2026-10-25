@@ -18,7 +18,7 @@
 
 def compute_confidence(route, mode, relevance, n_sources,
                        used_space=False, used_study=False, used_health=False,
-                       study_pseudo=False, tools_used=False):
+                       study_pseudo=False, tools_used=False, stale_used=False):
     """依据 _chat_core 已算出的观测信号算四态置信度。这里零检索、零 LLM 调用。
 
     入参：
@@ -29,6 +29,8 @@ def compute_confidence(route, mode, relevance, n_sources,
       used_*      空间 / 方法库 / 健康库是否命中注入
       study_pseudo 伪科学纠正口径是否命中（确定性文案）
       tools_used  L2 agent 是否动用了自查工具（poi/联网等）
+      stale_used  W7（C2）：本轮 sources 是否含 effective_to 已过期的条目——
+                  过期来源按「含推断」降级（诚实：官方口径可能已变）
     """
     if route == "empty":
         return {"level": "none", "reason": "没有可判定的问题内容"}
@@ -41,6 +43,10 @@ def compute_confidence(route, mode, relevance, n_sources,
     # 门降级后 used_space 仍为 true）。诚实口径 = 含推断。
     if relevance == "irrelevant_downgraded":
         return {"level": "inferred", "reason": "证据相关性存疑，仅供参考，建议以官方信息为准"}
+    # W7：含过期来源（effective_to < today）—— structured/cited 一律降 inferred，
+    # 理由明说「可能已过期」（角标同步呈现）。模板答不受影响（sources 为空不会传 stale）。
+    if stale_used and mode != "template":
+        return {"level": "inferred", "reason": "部分来源可能已过期，建议以最新官方通知为准"}
     # 结构化直出：空间上下文、方法库/健康库的确定性口径
     if used_space:
         return {"level": "structured", "reason": "来自校内空间与图谱数据"}

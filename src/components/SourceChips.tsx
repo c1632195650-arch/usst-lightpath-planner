@@ -30,7 +30,19 @@ export function SourceChips({ sources, max = 3, testId }: {
           rel="noopener noreferrer"
           className="block py-3 transition-colors hover:text-brand"
         >
-          <div className="font-display text-sm font-semibold leading-5 text-ink">{source.title}</div>
+          <div className="font-display text-sm font-semibold leading-5 text-ink">
+            {source.title}
+            {/* W7（C2 已拍板）：effective_to 已过期 → 「可能已过期」角标（与 confidence
+                降 inferred 同一信号源：rag.search 的 stale 字段随 source 透传） */}
+            {(source as { stale?: boolean }).stale && (
+              <span
+                data-testid="source-stale-badge"
+                className="ml-2 inline-block rounded bg-warn/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-warn-text"
+              >
+                可能已过期
+              </span>
+            )}
+          </div>
           <div className="mt-1 text-xs text-ink-faint">{source.account} · {source.pub_time}</div>
         </a>
       ))}

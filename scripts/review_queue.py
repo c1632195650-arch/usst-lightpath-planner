@@ -334,6 +334,10 @@ def main(argv=None):
     p.add_argument("--no-index", action="store_true", help="跳过索引重建（FTS 仍会增量更新）")
     p = sub.add_parser("reject", parents=[common], help="拒绝（仅移出队列，不写库）")
     p.add_argument("id")
+    # W7（C2 已拍板）：审核时顺手标失效日期——检索降权 + stale 角标 + confidence 降级
+    p = sub.add_parser("set-expiry", parents=[common], help="设置条目失效日期（YYYY-MM-DD 或 clear 清除）")
+    p.add_argument("id")
+    p.add_argument("date", help="失效日期 YYYY-MM-DD，或 clear 清除标记")
     a = ap.parse_args(argv)
 
     if a.cmd == "list":
@@ -344,6 +348,30 @@ def main(argv=None):
         return cmd_reject(a.queue, a.id)
     if a.cmd == "approve":
         return cmd_approve(a.db, a.queue, a.id, no_index=a.no_index)
+    if a.cmd == "set-expiry":
+        return cmd_set_expiry(a.db, a.queue, a.id, a.date)
+    return EXIT_ERR
+
+
+def cmd_set_expiry(db_path, queue_path, item_id, date):
+    """W7：按条目 id 在 articles 表标 effective_to（不入库条目也可直接按 id 标——
+    已入库条目的队列副本已移出，用 articles.id 而非队列 id）。
+    date=YYYY-MM-DD 设置；clear 清除标记。检索侧 rag.search 自动降权（无值=永久有效）。
+    """
+    import re as _re
+    if date != "clear" and not _re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        print(f"日期格式应为 YYYY-MM-DD 或 clear，收到：{date}")
+        return EXIT_ERR
+    conn = sqlite3.connect(db_path)
+    # 队列 id 与 articles.id 不同域——先试队列 id 直查，找不到再按 source_url LIKE 尾段匹配
+    n = conn.execute("UPDATE articles SET effective_to=? WHERE id=?",
+                     (None if date == "clear" else date, item_id)).rowcount
+    conn.commit()
+    conn.close()
+    if n:
+        print(f"✅ 已{'清除' if date == 'clear' else '设置'}失效日期（articles.id={item_id}）→ {date}")
+        return EXIT_OK
+    print(f"未找到 articles.id={item_id} —— 队列 id 与库 id 不同域；请用 articles 表 id（SELECT id FROM articles WHERE title LIKE ...）")
     return EXIT_ERR
 
 

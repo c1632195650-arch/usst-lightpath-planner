@@ -419,7 +419,25 @@ def search(query, k=5, top_fts=20, top_vec=20):
     nf, nv = norm(fts_hits), norm(vec_article)
     # 取每篇的发布时间用于时效加权
     pt = dict(conn.execute("SELECT id, pub_time FROM articles").fetchall())
+    # W7（C2 已拍板，2026-10-25）：effective_to 过期条目降权 + stale 标记。
+    # 无 effective_to 值 = 永久有效（存量行为零影响）；过期 → 分数 ×0.6。
     import datetime
+    CUR = datetime.date.today()
+    et = {}
+    try:
+        et = dict(conn.execute(
+            "SELECT id, effective_to FROM articles WHERE effective_to IS NOT NULL AND effective_to != ''"
+        ).fetchall())
+    except sqlite3.OperationalError:
+        pass  # 列未迁移（防御）——无降权
+    def is_stale(aid):
+        v = (et.get(aid) or "").strip()
+        if not v:
+            return False
+        try:
+            return datetime.datetime.strptime(v[:10], "%Y-%m-%d").date() < CUR
+        except Exception:
+            return False
     CUR = datetime.date.today()
 
     def recency(pub_time):
@@ -434,9 +452,14 @@ def search(query, k=5, top_fts=20, top_vec=20):
             return 0.7
 
     merged = {}
+    stale_ids = set()
     for aid in set(nf) | set(nv):
         base = 0.4 * nf.get(aid, 0) + 0.6 * nv.get(aid, 0)
-        merged[aid] = base * recency(pt.get(aid))
+        score = base * recency(pt.get(aid))
+        if is_stale(aid):
+            score *= 0.6  # W7：effective_to 已过期 → 降权
+            stale_ids.add(aid)
+        merged[aid] = score
     # 多取候选（去重需要余量）
     ranked = sorted(merged.items(), key=lambda x: -x[1])[:max(k * 4, k)]
 
@@ -455,6 +478,8 @@ def search(query, k=5, top_fts=20, top_vec=20):
                 "snippet": pick_snippet(conn, aid, r[4], chunk_cos),
                 "full_text": (r[4] or "")[:300],
                 "url": r[5] or "",
+                # W7：effective_to 已过期 → stale:true（前端角标 + confidence 降级依据）
+                "stale": True if aid in stale_ids else None,
             })
     conn.close()
     # 同文去重（多号转载同一篇只留最相关一条），再截到 k

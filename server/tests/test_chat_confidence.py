@@ -77,6 +77,18 @@ def test_kb_marker_priority():
     assert compute_kb(False, False, False) == "none"
 
 
+
+def test_stale_downgrades_structured_and_cited():
+    # W7（C2）：含过期来源（effective_to < today）→ structured/cited 降 inferred
+    assert compute_confidence('llm', 'llm', 'ok', 3, stale_used=True)['level'] == 'inferred'
+    assert compute_confidence('grounded', 'extractive', None, 3, stale_used=True)['level'] == 'inferred'
+
+def test_stale_never_affects_template_and_empty():
+    # 模板答（sources 空，stale 不会真传进来——防御性参数）与 empty 早退不受影响
+    assert compute_confidence('llm', 'template', None, 0, stale_used=True)['level'] == 'structured'
+    assert compute_confidence('empty', '', None, 0, stale_used=True)['level'] == 'none'
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 if __name__ == "__main__":
@@ -92,3 +104,14 @@ if __name__ == "__main__":
         print(f"{failed}/{len(TESTS)} FAILED")
         sys.exit(1)
     print(f"ALL PASS ({len(TESTS)} tests)")
+
+
+def test_stale_downgrades_structured_and_cited():
+    # W7（C2）：含过期来源（effective_to < today）→ structured/cited 降 inferred
+    assert compute_confidence('llm', 'llm', 'ok', 3, stale_used=True)['level'] == 'inferred'
+    assert compute_confidence('grounded', 'extractive', None, 3, stale_used=True)['level'] == 'inferred'
+
+def test_stale_never_affects_template_and_empty():
+    # 模板答（sources 空，stale 不会真传进来——防御性参数）与 empty 早退不受影响
+    assert compute_confidence('llm', 'template', None, 0, stale_used=True)['level'] == 'structured'
+    assert compute_confidence('empty', '', None, 0, stale_used=True)['level'] == 'none'

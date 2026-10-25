@@ -1230,11 +1230,13 @@ def _chat_core(body: ChatReq) -> dict:
         "relevance": relevance_result,
         # F2/B2 不确定分级（server 端一处计算，见 server/confidence.py）：
         # cited 有据 / inferred 含推断 / structured 校内结构化 / none 无据 —— 前端只呈现不自行推断
+        # W7：sources 含 stale:true（effective_to 过期）→ confidence 降级依据传入
         "confidence": compute_confidence(
             route, mode, relevance_result, len(sources),
             used_space=bool(space_ctx), used_study=bool(study_ctx),
             used_health=bool(health_ctx), study_pseudo=bool(pseudo_ctx),
             tools_used=bool(tools_used),
+            stale_used=any(s.get("stale") for s in sources if isinstance(s, dict)),
         ),
         # F2/B1 kb 标记：本轮主要依据的校内结构化库（space/method/health/none）
         "kb": compute_kb(bool(space_ctx), bool(study_ctx), bool(health_ctx)),
