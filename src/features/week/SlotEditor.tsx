@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { humanizeMinutes } from '@/constants/time';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { Input, Select } from '@/components/ui/FormControls';
 import { ActivityCapture } from '../activity/ActivityCapture';
 import type { Goal } from '../activity/goalStore';
 import { addSlot, makeLayerId, removeSlot, type UnavailableSlot } from './userPlanStore';
@@ -115,16 +116,17 @@ export function SlotEditor({
       {open && (
         <div className="mt-2 space-y-1.5 rounded-md border border-ink/10 bg-white/60 px-2.5 py-2">
           <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-            <span className="shrink-0">星期</span>
-            <select
+            <Select
+              label="星期"
+              name="se-day"
+              wrapClassName="w-28"
               value={day}
               onChange={(e) => setDay(Number(e.target.value))}
-              className="rounded border border-ink/20 bg-white px-1.5 py-0.5"
             >
               {DAY_LABELS.map((n, i) => (
                 <option key={n} value={i + 1}>{n}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11.5px]">从</span>
@@ -132,16 +134,14 @@ export function SlotEditor({
             <span className="text-[11.5px]">到</span>
             <TimeWheelPicker value={to} onChange={setTo} step={30} />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-            <span className="shrink-0">备注</span>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="比如：实习 / 固定开会（可不填）"
-              className="min-w-0 flex-1 rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
-            />
-          </div>
+          <Input
+            label="备注"
+            name="se-title"
+            wrapClassName="min-w-0 flex-1"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="比如：实习 / 固定开会（可不填）"
+          />
           <label className="flex items-center gap-1.5 text-[11.5px] text-ink-soft">
             <input type="checkbox" checked={longTerm} onChange={(e) => setLongTerm(e.target.checked)} />
             每周都这样（长期）—— 不勾就只影响第 {weekNo} 周

@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { toHHmm } from '@/constants/time';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { Select } from '@/components/ui/FormControls';
 import { DAY_LABELS } from './weekViewUtils';
 
 export interface TimeAskRequest {
@@ -65,16 +66,15 @@ export function TimeAskDialog({
             <TimeWheelPicker value={text} onChange={setText} step={10} />
           </div>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-[11.5px]">要多久</span>
-          <select
-            value={dur}
-            onChange={(e) => setDur(Number(e.target.value))}
-            className="rounded border border-ink/20 bg-white px-1.5 py-0.5 text-[11.5px]"
-          >
-            {DURATIONS.includes(dur) ? DURATIONS : [...DURATIONS, dur].sort((a, b) => a - b)}
-          </select>
-        </div>
+        <Select
+          label="要多久"
+          name="tad-dur"
+          wrapClassName="w-40"
+          value={dur}
+          onChange={(e) => setDur(Number(e.target.value))}
+        >
+          {DURATIONS.includes(dur) ? DURATIONS : [...DURATIONS, dur].sort((a, b) => a - b)}
+        </Select>
         {req.askScope && (
           <div className="mt-2 space-y-1">
             <span className="text-[11.5px]">只这周，还是每周都这样？</span>
