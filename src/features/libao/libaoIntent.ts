@@ -105,7 +105,8 @@ export type GoalIntent =
   | 'cancel'      // 取消已排的事
   | 'query'       // 只问不建议（「我这周忙不忙」）
   | 'add_deadline' // WP11：记一条重要日/截止日（要比赛/要考/截止/备赛/重要日子）
-  | 'hold';        // V2-2：这段时间别排（写 unavailableSlots —— 与调课语义不同，见 weekPlanForChat 注释）
+  | 'hold'        // V2-2：这段时间别排（写 unavailableSlots —— 与调课语义不同，见 weekPlanForChat 注释）
+  | 'watch';      // W11：半代办「盯一件事」（盯着/提醒我/别让我忘 → 建 deadline，每步确认）
 
 /** 槽位名。`missing` 用它，追问清单也用它 —— 一处定义，两处消费。 */
 export type SlotKey =
@@ -330,6 +331,9 @@ const INTENT_PATTERNS: Array<{ intent: GoalIntent; re: RegExp }> = [
   { intent: 'query', re: /(忙不忙|排得开|来不来得及|有没有空|有空吗|装得下|排得下)/ },
   // WP11：重要日。**放最后** —— 「取消备赛」「把备赛挪到周五」得先被既有意图接住
   { intent: 'add_deadline', re: /(要比赛|要考|截止|备赛|重要日子)/ },
+  // W11（2026-10-25）：半代办「盯一件事」——盯/提醒我/别让我忘。放 add_deadline 之后：
+  // 「要盯着六级报名」的「报名」不抢；「取消提醒」先被 cancel 接住。
+  { intent: 'watch', re: /(盯着|盯一下|提醒我|别让我忘|帮我盯|盯紧)/ },
 ];
 
 /**
@@ -461,6 +465,25 @@ export interface DeadlineProposal {
   prepDays: number;
   /** 建议卡文案（过风格口径：不替用户拍板，先问） */
   message: string;
+}
+
+/**
+ * W11（2026-10-25）：watch 意图 → 半代办提案（盯一件事 = 记一条无 prep 的重要日）。
+ * 复用 add_deadline 的确认卡片机制；每步确认（建前展示卡片、可一键撤销）——
+ * L3 边界：替用户记事可以，替用户决定不行。
+ * 缺日期 → `{ needDate: true }`（追问「盯到什么时候」），不许猜。
+ */
+export function watchProposal(slots: IntentSlots): DeadlineProposal | { needDate: true } {
+  if (!slots.dateFrom || slots.certainty === 'unknown') return { needDate: true };
+  const title = slots.title || '要盯的事';
+  const date = slots.dateFrom;
+  const md = date.slice(5).replace('-', '.');
+  return {
+    title,
+    date,
+    prepDays: 0, // 盯事不产准备块——只提醒
+    message: `要不要盯「${title}」？我会在 ${md} 截止前提醒你（重要日里可随时取消）`,
+  };
 }
 
 /**
@@ -626,6 +649,8 @@ const REQUIRED: Record<GoalIntent, SlotKey[]> = {
   add_deadline: ['title', 'when'],
   // hold 只要「哪段时间」（哪天 + 起止）；没说窗就整天
   hold: ['when'],
+  // W11：盯一件事只要「盯什么 + 盯到什么时候」（同重要日；不产准备块）
+  watch: ['title', 'when'],
 };
 
 /**
@@ -1364,6 +1389,7 @@ export function describeSlots(s: IntentSlots): string[] {
     query: '只看看',
     add_deadline: '记重要日',
     hold: '留空',
+    watch: '盯着', // W11：半代办「盯一件事」
   };
   const out: string[] = [`动作：${verb[s.intent]}`];
   out.push(`事情：${s.title || '（没听清）'}`);
