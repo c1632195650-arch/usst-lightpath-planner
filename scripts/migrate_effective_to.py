@@ -26,6 +26,32 @@ def _col_exists(conn, table, col):
     return any(r[1] == col for r in conn.execute(f"PRAGMA table_info({table})"))
 
 
+def _assert_backup_ok(db, backup):
+    """假备份教训通用化（2026-10-25 全量审计批）：VACUUM INTO 可能静默产出空/坏文件，
+    拿它当备份等于没有备份；拿它 rollback 更是把真库覆盖成垃圾。三道断言：
+      ① 文件在且体积 >0、不小于源库 1%（VACUUM 可压缩空页，但不会缩到痕量）；
+      ② integrity_check = ok（文件结构没坏）；
+      ③ 逐表行数与源库一致（内容真的搬过去了——「文件大小+行数一致」的落点）。
+    """
+    assert os.path.exists(backup) and os.path.getsize(backup) > 0, "备份文件不存在或为 0 字节（假备份）"
+    assert os.path.getsize(backup) >= os.path.getsize(db) * 0.01, "备份体积不足源库 1%（假备份嫌疑）"
+    bk = sqlite3.connect(backup)
+    try:
+        assert bk.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "备份库 integrity_check 不过"
+        src = sqlite3.connect(db)
+        try:
+            tables = [r[0] for r in src.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+            for t in tables:
+                a = src.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0]
+                b = bk.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0]
+                assert a == b, f"备份行数漂移：{t} {a} → {b}"
+        finally:
+            src.close()
+    finally:
+        bk.close()
+
+
 def do_migrate(db, backup_dir):
     conn = sqlite3.connect(db)
     if _col_exists(conn, "articles", "effective_to"):
@@ -41,7 +67,8 @@ def do_migrate(db, backup_dir):
     src = sqlite3.connect(db)
     src.execute(f"VACUUM INTO '{backup}'")
     src.close()
-    print(f"[migrate] 备份 → {backup}")
+    _assert_backup_ok(db, backup)  # 备份先自证，才允许动真库
+    print(f"[migrate] 备份 → {backup}（integrity+行数断言已过）")
 
     conn = sqlite3.connect(db)
     conn.execute("ALTER TABLE articles ADD COLUMN effective_to TEXT")
@@ -63,6 +90,8 @@ def do_rollback(db, backup):
     if not os.path.exists(backup):
         print(f"[rollback] 备份不存在：{backup}")
         sys.exit(1)
+    _assert_backup_ok(db, backup)  # 拿假备份恢复 = 把真库覆盖成垃圾，恢复前先自证
+    print(f"[rollback] 备份自证通过（integrity+行数一致）")
     src = sqlite3.connect(backup)
     src.backup(sqlite3.connect(db))  # SQLite 在线 backup API（比 iterdump 快且无类型问题）
     src.close()

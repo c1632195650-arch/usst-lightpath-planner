@@ -161,7 +161,18 @@ def build():
     n_fts = conn.execute("SELECT count(*) FROM articles_fts").fetchone()[0]
     print(f"[FTS5] 索引建立：{n_fts} 篇")
 
-    # 3. 分块 + 向量（仅主条目）
+    # 3. 分块 + 向量（仅主条目）—— 与 rebuild-vectors 共用 _rebuild_chunks（单一事实源）
+    _rebuild_chunks(conn, rows)
+    conn.close()
+
+    # 4. 数据指纹（pins）随 build 刷新（W4：收编进 refresh_pins 公共函数）
+    refresh_pins(DB_PATH)
+
+    print("✅ 索引构建完成")
+
+
+def _rebuild_chunks(conn, rows):
+    """分块 + 嵌入 + 写 chunks 表（build 与 rebuild-vectors 的公共块，防两处漂移）。"""
     conn.execute("DROP TABLE IF EXISTS chunks")
     conn.execute("""
         CREATE TABLE chunks(
@@ -182,12 +193,26 @@ def build():
         conn.execute("INSERT INTO chunks(article_id, chunk_text, vec) VALUES(?,?,?)", (aid, c, blob))
     conn.commit()
     print(f"[vec] 已写入 {len(embs)} 条向量（{len(embs[0])} 维）")
+
+
+def rebuild_vectors(db_path=None):
+    """只重建 chunks（向量），不动 FTS 与 articles —— 全量 build 的轻量替代。
+
+    W4 防三犯（2026-10-25 全量审计批）：历史上一共四次 pins 漂移，其中
+    「向量单独重建」这条路一直走手工 SQL/临时脚本，绕过一切写点收口 —— 本命令
+    是它的**唯一正规入口**，尾部强制 refresh_pins（漏刷 = 与 build 不同源，即假）。
+    """
+    db_path = db_path or DB_PATH
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute(
+        "SELECT id, account, title, full_text, summary FROM articles "
+        "WHERE is_dup=0 AND COALESCE(low_value,0)=0"
+    ).fetchall()
+    print(f"[rebuild-vectors] 主条目 {len(rows)} 篇（不动 FTS，只重建向量）")
+    _rebuild_chunks(conn, rows)
     conn.close()
-
-    # 4. 数据指纹（pins）随 build 刷新（W4：收编进 refresh_pins 公共函数）
-    refresh_pins(DB_PATH)
-
-    print("✅ 索引构建完成")
+    refresh_pins(db_path)
+    print("✅ 向量重建完成（pins 已随真值刷新）")
 
 
 def refresh_pins(db_path=None):
@@ -489,6 +514,8 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "search"
     if cmd == "build":
         build()
+    elif cmd == "rebuild-vectors":
+        rebuild_vectors()
     elif cmd == "search":
         q = sys.argv[2] if len(sys.argv) > 2 else "四六级报名"
         k = int(sys.argv[3]) if len(sys.argv) > 3 else 5
@@ -498,4 +525,4 @@ if __name__ == "__main__":
             print(f"    [{it['account']} · {it['pub_time']}]")
             print(f"    {it['full_text'][:120]}")
     else:
-        print("用法: python rag.py build | search \"查询\" [k]")
+        print("用法: python rag.py build | rebuild-vectors | search \"查询\" [k]")

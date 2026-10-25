@@ -377,9 +377,33 @@ def selftest_judge():
     return 0 if ok == total else 1
 
 
+def _guard_base(base):
+    """探针防呆（2026-10-25 全量审计教训：两次探针打到生产，留 56 探针会话污染记忆库）。
+
+    规则（宁保守误拦，不冒污染风险）：
+      · 非本机（host 非 loopback）一律拒绝——公网/内网后端都可能是生产；
+      · 端口 8000 即使在本机也拒绝——那是默认生产端口形状，探针约定走自定义端口
+        （历史用法一直是 8013 等）。
+      逃生门：env FACT_PROBE_ALLOW=1（显式豁免，输出大字提醒——记忆库将被写入探针会话）。
+    """
+    u = urllib.parse.urlparse(base)
+    host = (u.hostname or "").lower()
+    port = u.port or (443 if u.scheme == "https" else 80)
+    if os.environ.get("FACT_PROBE_ALLOW") == "1":
+        print(f"⚠️ FACT_PROBE_ALLOW=1：探针豁免防呆，目标 {base} —— 记忆库将被写入探针会话！")
+        return
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        sys.exit(f"🛑 探针防呆：目标 {base} 不是本机后端。生产记忆库已被探针污染过两次；"
+                 f"确要打非本机后端请设 FACT_PROBE_ALLOW=1。")
+    if port == 8000:
+        sys.exit(f"🛑 探针防呆：端口 8000 是默认生产端口形状（两次污染事故端口）。"
+                 f"本地探针请用自定义端口的后端（如 8013），或设 FACT_PROBE_ALLOW=1 豁免。")
+
+
 def main():
     ap = argparse.ArgumentParser(description="梨宝事实探针：KB 出题、对库判分")
-    ap.add_argument("--base", default=os.environ.get("LIBAO_BASE", "http://127.0.0.1:8000"))
+    ap.add_argument("--base", default=os.environ.get("LIBAO_BASE", "http://127.0.0.1:8013"),
+                    help="后端基址（默认 127.0.0.1:8013；8000/非本机被防呆拦截，逃生门 FACT_PROBE_ALLOW=1）")
     ap.add_argument("--kinds", default="", help="逗号分隔，只跑这些维度")
     ap.add_argument("--gate", action="store_true",
                     help="CI 门禁：存在性维度出现否定/伪造幻觉 → exit 1")
@@ -391,6 +415,8 @@ def main():
 
     if args.selftest_judge:
         return selftest_judge()
+
+    _guard_base(base)  # 打后端之前必过闸（离线自检不受影响）
 
     probes = build_probes()
     if args.kinds:
