@@ -425,3 +425,15 @@
 - [2026-10-25 批10·开工声明] 《新校接入指南》v1（1d，K4 agent 可写部分）：课表/地点/资讯/人格四步 + campuses/<school>/README 试点计时表模板；实跑本身留人工窗
 - [2026-10-25 批12·开工声明] M5 文档件预备（1.5d）：README 中英双语重排（承接批 7 致谢定调）+ docs/site 最小静态文档页（单文件零依赖，链接现有文档集）；发布动作本身仍卡软著答复（M5）
 - [2026-10-25 顺序] 7 → 11 → 9 → 8 → 10 → 12；先试推上批遗留 a7bb2c1+4f42f11（代理掉线待补）
+
+
+# 七至十二行收尾（2026-10-25 第三窗口，campuskit 线专场）
+
+- [2026-10-25 批7 K8·收尾] **完成**（campuskit 6a160ce，已推）：README 致谢定调（定位句框架优先，首个部署指名收进文末「致谢与出处」）；founding-doc/E1 审计加「历史文档」横幅；evals README 语料出处改致谢口径、引用块保留首个上榜者数据事实；purity 白名单语义收敛三类（致谢/历史标注/登记语义）——审计 21 处的代码侧已在 K3 最小版清零，本批清完文档侧余量，复扫 PASS
+- [2026-10-25 批11 CI·收尾] **完成**（f9abe52，已推）：tools/secrets_scan.mjs（零依赖 gitleaks 等价九规则）+ purity 两道门禁入 CI（步骤顺序 secrets→purity→tests→typecheck）；RV 实测栽 ghp_ token 恰红→清理→复绿；npm run secrets 本地可跑
+- [2026-10-25 批9 MCP 实测·收尾] **完成**（231ee95，已推）：官方 @modelcontextprotocol/sdk 客户端（临时目录装，零依赖纪律不变）对 mcp/server.ts 完整往返——initialize 握手 serverInfo 回传 / tools/list 三工具 / 三工具 call 全符预期（plan_week 真引擎 32 块；kb 降级契约成立）；验收记录 docs/mcp-acceptance-2026-10-25.md（与仓内 11 组回归闸互补：回归防退化，本记录证协议对外部实现兼容）
+- [2026-10-25 批8 K3 完整版·收尾] **完成**（8e6700b，已推）：pipeline/build_kb.py（零依赖 stdlib，campus 参数化=rag 库名参数化框架侧等价物·偏离登记；example.edu 走确定性 fixture，正文并入 title_hint）→ 30/30 建库；server/kb.ts 共享查询单元（MATCH+LIKE+**零依赖 bigram 兜底**——e2e 冒烟抓到问句整串零命中缺口后补的）；server/app.ts 增 GET /api/kb（handle 转异步）；playground 增 KB 检索框出带来源答案。**E2E 实跑**：起真端口问「校园卡怎么办」→ 命中 3 条带来源答案 + 排程表并列。全量 **290/290** + tsc 0 + purity/secrets 双 PASS；kb.db 构建产物 gitignore
+- [2026-10-25 批10 指南·收尾] **完成**（71bafef，已推）：docs/onboarding-guide-v1.md——四步各带产出形状/坑位/验收命令 + 试点计时表模板（GO 判据 + 诚实条款）；实跑本身留 K4 人工窗
+- [2026-10-25 批12 M5 文档件·收尾] **完成**（campuskit 7a27716）：README 中英双语重排（English Overview 全节 + 快速开始六命令）+ docs/site/index.html 最小文档页（零依赖单文件，六文档卡片+quick start+纪律双语）；发布动作卡软著答复。**流程注记（如实申报）**：本 commit 首次提交时 docs/site 的致谢段漏登 purity 白名单→purity 红→补白名单后 amend 修正（未推送前发现，无远端污染）——这是 CI 双门禁上线后第一次被自己的闸拦住，闸起作用了
+- [2026-10-25 ⚠️ 推送待补] campuskit 7a27716（批12 amend 后）因代理再断（Recv failure: Connection was reset ×3）滞留本地，origin/main=71bafef（差批12 一笔）；上理线 beta-v2 已推齐（5f80c81）。代理恢复后 campuskit 目录 `git push origin main` 一笔补推
+- [2026-10-25 状态] campuskit main 本地=7a27716（远端 71bafef）；上理线 beta-v2=5f80c81（同步）。六行全清：K8 去烙印/K3 完整版/MCP 实测/接入指南/CI 双门禁/M5 文档件。剩余人工窗：K4 实跑计时、K5 开源检查（卡软著答复）、M5 发布动作
