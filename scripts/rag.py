@@ -183,6 +183,25 @@ def build():
     conn.commit()
     print(f"[vec] 已写入 {len(embs)} 条向量（{len(embs[0])} 维）")
     conn.close()
+
+    # 4. 数据指纹（pins）随 build 刷新（2026-10-25，终验批衍生小修）：
+    #    此前只有 review_queue 的 approve 会刷 pins，手动跑 build 不刷 →
+    #    指纹过期误报（2026-10-24 实录：DB 已 531/526/1937，pins 还停在 520/515/1873）。
+    #    挂在 build 尾部后，任何路径的重建都会同步指纹。
+    import json
+    conn = sqlite3.connect(DB_PATH)
+    pins = {
+        "articles_is_dup0": conn.execute("SELECT count(*) FROM articles WHERE is_dup=0").fetchone()[0],
+        "articles_fts": conn.execute("SELECT count(*) FROM articles_fts").fetchone()[0],
+        "chunks": conn.execute("SELECT count(*) FROM chunks").fetchone()[0],
+    }
+    conn.close()
+    pins_path = os.path.join(os.path.dirname(DB_PATH), "data_pins.json")
+    with open(pins_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(pins, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+    print(f"[pins] 指纹已刷新：{pins['articles_is_dup0']}/{pins['articles_fts']}/{pins['chunks']} → {os.path.basename(pins_path)}")
+
     print("✅ 索引构建完成")
 
 # ---------- 同文去重 ----------
