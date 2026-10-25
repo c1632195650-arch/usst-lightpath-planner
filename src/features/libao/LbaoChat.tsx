@@ -8,7 +8,7 @@ import { applyObjectiveFact, basicInfoContext, getUserId, loadBasicInfo, objecti
 import { classifyGoal, evidenceLine } from '@/features/libao/taxonomy';
 import { track } from '@/lib/telemetry';
 import { buildProfileContext } from '@/features/libao/profileContext';
-import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, NATURAL_PLAN_RE, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
+import { applyClarifyAnswers, applyClarifyFragments, deadlineProposal, watchProposal, parseGoalIntent, describeSlots, questionsForSlots, topQuestionPairs, mergeLlmPrimary, missingSlots, parseIntentSlots, parseOptionChoice, NATURAL_PLAN_RE, termAnchorsFrom, type ClarifyAnswersResult, type DeadlineProposal, type IntentSlots, type SlotKey } from '@/features/libao/libaoIntent';
 import {
   EXIT_ACK,
   EXPIRE_NOTE,
@@ -1093,6 +1093,33 @@ export function LbaoChat({ profile, schedule, onGoProfile, seedQuestion, seedMod
         setMessages((current) => [...current, {
           role: 'lbao',
           text: '帮你盯着这个节点（记下不等于现在就重排日程）：',
+          planPoints: [prop.message],
+          deadlineAsk: dKey,
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      // ── W11：watch 半代办 → 同一张确认卡（复用 pendingDeadlines/confirmDeadline，
+      //    prepDays=0 不产准备块）；缺日期必追问，不猜。卡「确认」才落库 —— L3 边界。 ──
+      if (slots.intent === 'watch') {
+        const prop = watchProposal(slots);
+        if ('needDate' in prop) {
+          setTopic(collectTopic({ ...slots, missing: [...new Set([...slots.missing, 'when' as const])] }, ['when'])); setMissStreak(0);
+          setMessages((current) => [...current, {
+            role: 'lbao',
+            text: `想把「${slots.title || '这件事'}」盯起来，我还得问一句：`,
+            planPoints: ['盯到什么时候？（比如「12 月 19 号」）'],
+          }]);
+          setLoading(false);
+          return;
+        }
+        setTopic(null);
+        const dKey = (pendingSeq.current += 1);
+        setPendingDeadlines((p) => ({ ...p, [dKey]: prop }));
+        setMessages((current) => [...current, {
+          role: 'lbao',
+          text: '帮你盯着这件事（记下不等于现在就重排日程）：',
           planPoints: [prop.message],
           deadlineAsk: dKey,
         }]);
