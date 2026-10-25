@@ -7,6 +7,7 @@ import {
   type BasicInfo,
 } from '@/lib/identity';
 import { EMPTY_DRAFT, parseBasicInfo, validateBasicInfo, type BasicInfoDraft } from './basicInfo';
+import { Input, Select } from '@/components/ui/FormControls';
 
 interface Props {
   onComplete: () => void;
@@ -19,6 +20,10 @@ interface Props {
  * 校验逻辑在 ./basicInfo.ts（纯函数，node --test 可直跑）；
  * 必填缺失禁「下一步」，campus 只认军工路本部 | 1100（数据红线）。
  * 提交写入 identity.ts 的单一来源（localStorage），与画像页的基础信息卡同源。
+ *
+ * W9-批1（2026-10-25）：8 处手写 input/select 换 ui/FormControls 三件套——
+ * 外置 label + 44px 命中 + 聚焦外环 + 错误态成体系（placeholder/select 选项序保持，
+ * E2E 锚点零漂移；错误提示从「label 内嵌 span」移到 FieldShell 的 hint 槽位）。
  */
 export function BasicInfoStep({ onComplete, onBack }: Props) {
   const [draft, setDraft] = useState<BasicInfoDraft>(() => {
@@ -52,10 +57,7 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
     onComplete();
   };
 
-  const inputCls = (err?: string | false) =>
-    `mt-1.5 min-h-11 w-full rounded-xl border bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:ring-2 ${
-      err ? 'border-warn focus:border-warn focus:ring-warn/10' : 'border-ink/15 focus:border-brand focus:ring-brand/10'
-    }`;
+  const hint = (msg?: string | false) => (touched && msg ? msg : undefined);
 
   return (
     <div className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
@@ -68,102 +70,97 @@ export function BasicInfoStep({ onComplete, onBack }: Props) {
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs text-ink-faint">称呼 *</span>
-              <input
-                value={draft.nickname}
-                onChange={(e) => set('nickname', e.target.value)}
-                placeholder="怎么称呼你"
-                className={inputCls(touched && errors.nickname)}
-              />
-              {touched && errors.nickname && <span className="mt-1 block text-xs text-warn-text">{errors.nickname}</span>}
-            </label>
+            <Input
+              label="称呼"
+              required
+              name="nickname"
+              value={draft.nickname}
+              onChange={(e) => set('nickname', e.target.value)}
+              placeholder="怎么称呼你"
+              error={touched && Boolean(errors.nickname)}
+              hint={hint(errors.nickname)}
+            />
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">年级 *</span>
-              <select
-                value={draft.grade}
-                onChange={(e) => set('grade', e.target.value)}
-                className={inputCls(touched && errors.grade)}
-              >
-                <option value="">请选择</option>
-                {([1, 2, 3, 4] as const).map((g) => (
-                  <option key={g} value={String(g)}>{GRADE_LABELS[g]}</option>
-                ))}
-              </select>
-              {touched && errors.grade && <span className="mt-1 block text-xs text-warn-text">{errors.grade}</span>}
-            </label>
+            <Select
+              label="年级"
+              required
+              name="grade"
+              value={draft.grade}
+              onChange={(e) => set('grade', e.target.value)}
+              error={touched && Boolean(errors.grade)}
+              hint={hint(errors.grade)}
+            >
+              <option value="">请选择</option>
+              {([1, 2, 3, 4] as const).map((g) => (
+                <option key={g} value={String(g)}>{GRADE_LABELS[g]}</option>
+              ))}
+            </Select>
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">学院 *</span>
-              <input
-                value={draft.college}
-                onChange={(e) => set('college', e.target.value)}
-                placeholder="如：光电学院"
-                className={inputCls(touched && errors.college)}
-              />
-              {touched && errors.college && <span className="mt-1 block text-xs text-warn-text">{errors.college}</span>}
-            </label>
+            <Input
+              label="学院"
+              required
+              name="college"
+              value={draft.college}
+              onChange={(e) => set('college', e.target.value)}
+              placeholder="如：光电学院"
+              error={touched && Boolean(errors.college)}
+              hint={hint(errors.college)}
+            />
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">专业</span>
-              <input
-                value={draft.major}
-                onChange={(e) => set('major', e.target.value)}
-                placeholder="如：光电信息科学与工程"
-                className={inputCls()}
-              />
-            </label>
+            <Input
+              label="专业"
+              name="major"
+              value={draft.major}
+              onChange={(e) => set('major', e.target.value)}
+              placeholder="如：光电信息科学与工程"
+            />
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">校区 *</span>
-              <select
-                value={draft.campus}
-                onChange={(e) => set('campus', e.target.value)}
-                className={inputCls(touched && errors.campus)}
-              >
-                <option value="">请选择</option>
-                {CAMPUS_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              {touched && errors.campus && <span className="mt-1 block text-xs text-warn-text">{errors.campus}</span>}
-            </label>
+            <Select
+              label="校区"
+              required
+              name="campus"
+              value={draft.campus}
+              onChange={(e) => set('campus', e.target.value)}
+              error={touched && Boolean(errors.campus)}
+              hint={hint(errors.campus)}
+            >
+              <option value="">请选择</option>
+              {CAMPUS_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Select>
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">宿舍楼号</span>
-              <input
-                value={draft.dorm}
-                onChange={(e) => set('dorm', e.target.value)}
-                placeholder="如：五公寓，只填楼号"
-                className={inputCls(touched && errors.dorm)}
-              />
-              {touched && errors.dorm && <span className="mt-1 block text-xs text-warn-text">{errors.dorm}</span>}
-            </label>
+            <Input
+              label="宿舍楼号"
+              name="dorm"
+              value={draft.dorm}
+              onChange={(e) => set('dorm', e.target.value)}
+              placeholder="如：五公寓，只填楼号"
+              error={touched && Boolean(errors.dorm)}
+              hint={hint(errors.dorm)}
+            />
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">平日就寝（分钟 0-1440）</span>
-              <input
-                value={draft.sleepMin}
-                onChange={(e) => set('sleepMin', e.target.value)}
-                inputMode="numeric"
-                placeholder="如：1380（23:00）"
-                className={inputCls(touched && errors.sleepMin)}
-              />
-              {touched && errors.sleepMin && <span className="mt-1 block text-xs text-warn-text">{errors.sleepMin}</span>}
-            </label>
+            <Input
+              label="平日就寝（分钟 0-1440）"
+              name="sleepMin"
+              value={draft.sleepMin}
+              onChange={(e) => set('sleepMin', e.target.value)}
+              inputMode="numeric"
+              placeholder="如：1380（23:00）"
+              error={touched && Boolean(errors.sleepMin)}
+              hint={hint(errors.sleepMin)}
+            />
 
-            <label className="block">
-              <span className="text-xs text-ink-faint">每周运动几次（0-7）</span>
-              <input
-                value={draft.exercisePerWeek}
-                onChange={(e) => set('exercisePerWeek', e.target.value)}
-                inputMode="numeric"
-                placeholder="如：3"
-                className={inputCls(touched && errors.exercisePerWeek)}
-              />
-              {touched && errors.exercisePerWeek && <span className="mt-1 block text-xs text-warn-text">{errors.exercisePerWeek}</span>}
-            </label>
+            <Input
+              label="每周运动几次（0-7）"
+              name="exercisePerWeek"
+              value={draft.exercisePerWeek}
+              onChange={(e) => set('exercisePerWeek', e.target.value)}
+              inputMode="numeric"
+              placeholder="如：3"
+              error={touched && Boolean(errors.exercisePerWeek)}
+              hint={hint(errors.exercisePerWeek)}
+            />
           </div>
 
           {touched && !canNext && errorList.length > 0 && (
