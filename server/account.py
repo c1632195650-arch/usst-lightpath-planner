@@ -240,10 +240,21 @@ def user_id_from_request(request: Request) -> int | None:
 
 
 class AuthReq(BaseModel):
-    """注册/登录共用请求体。unknown 字段直接 422（契约即文档，同 ChatReq 口径）。"""
+    """注册/登录共用请求体。unknown 字段直接 422（契约即文档，同 ChatReq 口径）。
+
+    W5（2026-10-25，ST202 销项）：username 的业务规则（`_USERNAME_RE`：2-24 位
+    字母/数字/下划线/中文）编进 schema——pydantic pattern 与正则同一份，
+    fuzzer 生成的「schema 合法但业务非法」用户名从此在 422 拦截（声明的响应），
+    register 的 400 invalid_username 分支自然静默（防御仍在，双保险）。
+    """
     model_config = ConfigDict(extra="forbid")
-    username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=128)
+    username: str = Field(
+        min_length=2, max_length=24,
+        pattern=r"^[A-Za-z0-9_\u4e00-\u9fa5]{2,24}$",
+    )
+    # W5：密码长度规则同步编进 schema（MIN/MAX_PASSWORD_LEN=6/64）——
+    # 既有存量口令均在此区间（注册端从第一天起就按同一常量校验）。
+    password: str = Field(min_length=6, max_length=64)
 
 
 def _err(status: int, code: str) -> JSONResponse:

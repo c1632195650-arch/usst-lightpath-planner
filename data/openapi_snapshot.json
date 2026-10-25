@@ -1,3 +1,1841 @@
-{"openapi": "3.1.0", "info": {"title": "上理生活助手 · 梨宝 API", "version": "0.4.1"}, "paths": {"/api/health": {"get": {"summary": "Health", "operationId": "health_api_health_get", "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}}}}, "/api/weather": {"get": {"summary": "Api Weather", "description": "未来若干天天气，含**分时段**（上午 / 下午 / 晚间）摘要。\n\n只返回数据、不返回建议 —— 「下雨该不该把跑步改到室内」是产品策略，\n归前端 `features/weather/`，那里才可测试、可调整。\n\n数据源不可用时返回 `ok: false` 而**不是 5xx**：天气是可选增强，\n拉不到就不显示，不该把整个周计划页拖成报错。", "operationId": "api_weather_api_weather_get", "parameters": [{"name": "days", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 16, "minimum": 1, "default": 7, "title": "Days"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/search": {"get": {"summary": "Api Search", "operationId": "api_search_api_search_get", "parameters": [{"name": "q", "in": "query", "required": true, "schema": {"type": "string", "title": "Q"}}, {"name": "k", "in": "query", "required": false, "schema": {"type": "integer", "default": 5, "title": "K"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/poi": {"get": {"summary": "Api Poi", "description": "`/api/poi?q=吃饭&funcs=life&k=5`\n\nq 支持官方名（第三教学楼）、别名（三教）、口语黑话（图文 / 取快递 / 看病）。\nfuncs 为五类功能过滤：teach 教学 / office 办公 / life 生活 / sport 运动 / transport 交通。\n返回 {query, funcs, results:[{id,name,type,func,emoji,campus,campus_cn,zone,hours,…}]}\n\n⚠️ 参数名**不能叫 `func`** —— FastAPI 内部\n`run_in_threadpool(func, ...)` 的第一个位置参数就叫 `func`，\n接口签名里再用 `func` 会撞成 `got multiple values for argument 'func'`，\n运行时直接 500（2026-09-15 实测踩到，故改名 `funcs`）。", "operationId": "api_poi_api_poi_get", "parameters": [{"name": "q", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Q"}}, {"name": "funcs", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Funcs"}}, {"name": "k", "in": "query", "required": false, "schema": {"type": "integer", "default": 5, "title": "K"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/nearby": {"get": {"summary": "Api Nearby", "description": "`/api/nearby?from=第三教学楼&k=5&funcs=life&types=食堂`\n\n按**步行分钟**（OSM 路网实算，不是直线距离）升序返回最近的设施。\n候选只取 `pois`（吃/买/快递/打印/办事），校园地标不参与。\n`funcs` 五类功能过滤；`types` 精确到 type（「下课饿了去哪吃」用 `types=食堂`\n比 `funcs=life` 准 —— 后者会把心理健康中心也带进来）。\n起点无法定位、或与某地点分属不同教学区时不猜：前者 `walkable:false`，\n后者直接不出现在结果里。\n返回 `results`（可算分钟的，按分钟升序）+ `unrefined`（位置只细化到片区、\n与起点落在同一参考点，**给不出分钟就不给**）；后者不占 `k` 名额，也不会被丢掉。\n\n⚠️ 同理，参数名避开 `func`（FastAPI 保留），见 `/api/poi` 的说明。", "operationId": "api_nearby_api_nearby_get", "parameters": [{"name": "from", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "From"}}, {"name": "k", "in": "query", "required": false, "schema": {"type": "integer", "default": 5, "title": "K"}}, {"name": "funcs", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Funcs"}}, {"name": "types", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Types"}}, {"name": "max_min", "in": "query", "required": false, "schema": {"type": "number", "default": 0, "title": "Max Min"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/route": {"get": {"summary": "Api Route", "description": "两点间步行路径。\n\nq: /api/route?from=第三教学楼&to=第五食堂\n返回 {from,to,meters,minutes,reliable,locate} 或 {\"route\": null}\n（查不到时返回 null 而不是报错 —— 前端据此退回估算值）", "operationId": "api_route_api_route_get", "parameters": [{"name": "from", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "From"}}, {"name": "to", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "To"}}, {"name": "mode", "in": "query", "required": false, "schema": {"type": "string", "default": "fastest", "title": "Mode"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/route/batch": {"post": {"summary": "Api Route Batch", "description": "批量问路，返回 {'<from>→<to>': payload|null}。", "operationId": "api_route_batch_api_route_batch_post", "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RouteBatchReq"}}}, "required": true}, "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/chat": {"post": {"summary": "Api Chat", "operationId": "api_chat_api_chat_post", "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ChatReq"}}}, "required": true}, "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "object", "properties": {"confidence": {"type": "object", "description": "F2/B2 不确定分级（server 端一处计算，server/confidence.py）", "properties": {"level": {"type": "string", "enum": ["cited", "inferred", "structured", "none"]}, "reason": {"type": "string"}}}, "kb": {"type": "string", "enum": ["none", "space", "method", "health"], "description": "F2/B1 本轮主要依据的校内结构化库标记"}}}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/memory/reset": {"post": {"summary": "Reset Mem", "operationId": "reset_mem_api_memory_reset_post", "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ResetReq"}}}, "required": true}, "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}},
-  "/api/import_file": {"post": {"summary": "Import File Route", "description": "F7-2/D1（2026-10-24）：课表多格式导入。\n\n请求体=文件原始字节（与 /api/import_pdf 相同）；`?format=wakeup|ics` 选解析器：`wakeup`=WakeUp 课程表 App 导出的 JSON，`ics`=含课程 VEVENT 的日历 .ics（RRULE 仅展开 FREQ=WEEKLY）。\n\n返回 {ok:true,count,records} 或 {ok:false,error}（业务失败不当 HTTP 错）；records 与 PDF 导入的 course_records 逐字段同形（ICS 记录额外带 time 时段字段、节次留空——不硬造节次）。format 非法/解析失败/空结果同为 {ok:false,error}。同时登记 /timetable/api/import_file 前缀别名。", "operationId": "import_file_route_api_import_file_post", "parameters": [{"name": "format", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Format"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}}}}},
-  "components": {"schemas": {"ChatReq": {"properties": {"q": {"type": "string", "maxLength": 500, "minLength": 1, "title": "Q"}, "session_id": {"type": "string", "title": "Session Id", "default": "default"}, "user_id": {"type": "string", "title": "User Id", "default": "anon"}, "profile_ctx": {"type": "string", "title": "Profile Ctx", "default": ""}, "k": {"type": "integer", "title": "K", "default": 4}}, "additionalProperties": false, "type": "object", "required": ["q"], "title": "ChatReq"}, "HTTPValidationError": {"properties": {"detail": {"items": {"$ref": "#/components/schemas/ValidationError"}, "type": "array", "title": "Detail"}}, "type": "object", "title": "HTTPValidationError"}, "ResetReq": {"properties": {"session_id": {"type": "string", "title": "Session Id", "default": "default"}, "user_id": {"type": "string", "title": "User Id", "default": "anon"}}, "additionalProperties": false, "type": "object", "title": "ResetReq"}, "RouteBatchReq": {"properties": {"pairs": {"items": {"items": {"type": "string"}, "type": "array"}, "type": "array", "maxItems": 200, "title": "Pairs"}, "mode": {"type": "string", "title": "Mode", "default": "fastest"}}, "additionalProperties": false, "type": "object", "title": "RouteBatchReq", "description": "批量问路：排程引擎一次要问十几对地点，逐条 HTTP 太慢。"}, "ValidationError": {"properties": {"loc": {"items": {"anyOf": [{"type": "string"}, {"type": "integer"}]}, "type": "array", "title": "Location"}, "msg": {"type": "string", "title": "Message"}, "type": {"type": "string", "title": "Error Type"}, "input": {"title": "Input"}, "ctx": {"type": "object", "title": "Context"}}, "type": "object", "required": ["loc", "msg", "type"], "title": "ValidationError"}}}}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "上理生活助手 · 梨宝 API",
+    "version": "0.4.1"
+  },
+  "paths": {
+    "/api/plan/understand": {
+      "post": {
+        "summary": "Plan Understand",
+        "operationId": "plan_understand_api_plan_understand_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnderstandReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/plan/review": {
+      "post": {
+        "summary": "Api Plan Review",
+        "description": "对前端摘要逐维度调三库检索，产出 findings + advice（每条带 source=库名+tier）。\n\n只建议不改日程（L4 边界）；检索失败降级为静态口径（retrieved=false），不报错。",
+        "operationId": "api_plan_review_api_plan_review_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanReviewReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Api Auth Register",
+        "operationId": "api_auth_register_api_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "400": {
+            "description": "Bad Request（业务拒绝，如用户名已存在/用户名非法）"
+          },
+          "409": {
+            "description": "Conflict（用户名已被占用）"
+          },
+          "429": {
+            "description": "Too Many Requests（登录限速）"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Api Auth Login",
+        "operationId": "api_auth_login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          },
+          "429": {
+            "description": "Too Many Requests（登录限速）"
+          }
+        }
+      }
+    },
+    "/api/auth/ics/reset": {
+      "post": {
+        "summary": "Api Ics Reset",
+        "description": "维护批 P0-7（2026-10-11）：重置 ICS 订阅令牌。\n\n场景：订阅链接（token 明文在 URL）被转发/进了日志/误发给他人时，用户需要\n一个「作废旧链接」的开关 —— 此前注释里写着「重置接口留白天做」，一直没做。\n行为：Bearer 鉴权 → 换发新 32B urlsafe token → 旧 token 立即失效\n（/api/sync/plan.ics 用旧 token 将 404）。",
+        "operationId": "api_ics_reset_api_auth_ics_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          }
+        }
+      }
+    },
+    "/api/sync/state": {
+      "get": {
+        "summary": "Api Sync State Get",
+        "operationId": "api_sync_state_get_api_sync_state_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          }
+        }
+      },
+      "put": {
+        "summary": "Api Sync State Put",
+        "operationId": "api_sync_state_put_api_sync_state_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncStatePut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          }
+        }
+      }
+    },
+    "/api/sync/plan": {
+      "get": {
+        "summary": "Api Sync Plan Get",
+        "operationId": "api_sync_plan_get_api_sync_plan_get",
+        "parameters": [
+          {
+            "name": "weekNo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Weekno"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          }
+        }
+      },
+      "put": {
+        "summary": "Api Sync Plan Put",
+        "operationId": "api_sync_plan_put_api_sync_plan_put",
+        "parameters": [
+          {
+            "name": "weekNo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Weekno"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncPlanPut"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          }
+        }
+      }
+    },
+    "/api/sync/plan.ics": {
+      "get": {
+        "summary": "Api Sync Plan Ics",
+        "description": "免鉴权头（日历 App 填不了 Header）—— token 即凭据，泄露可重置（白天做重置接口）。",
+        "operationId": "api_sync_plan_ics_api_sync_plan_ics_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "401": {
+            "description": "Unauthorized（缺/坏凭据；或身份不符）"
+          },
+          "404": {
+            "description": "Not Found（如 token 无对应计划）"
+          }
+        }
+      }
+    },
+    "/api/version": {
+      "get": {
+        "summary": "Api Version",
+        "description": "读 server/version.json（部署时放置）。文件缺失/坏 JSON → 404 JSON，不 500。",
+        "operationId": "api_version_api_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/api/weather": {
+      "get": {
+        "summary": "Api Weather",
+        "description": "未来若干天天气，含**分时段**（上午 / 下午 / 晚间）摘要。\n\n`past_days`：同时返回过去 N 天（Open-Meteo 原生支持）——\n前端固定传 6，让「本周」无论今天周几都有完整七天的数据\n（否则周末打开页面，本周的周一到周五没有天气 —— 实测教训 2026-09-19）。\n\n只返回数据、不返回建议 —— 「下雨该不该把跑步改到室内」是产品策略，\n归前端 `features/weather/`，那里才可测试、可调整。\n\n数据源不可用时返回 `ok: false` 而**不是 5xx**：天气是可选增强，\n拉不到就不显示，不该把整个周计划页拖成报错。",
+        "operationId": "api_weather_api_weather_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 16,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "past_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 7,
+              "minimum": 0,
+              "default": 0,
+              "title": "Past Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "summary": "Api Search",
+        "operationId": "api_search_api_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/poi": {
+      "get": {
+        "summary": "Api Poi",
+        "description": "`/api/poi?q=吃饭&funcs=life&k=5`\n\nq 支持官方名（第三教学楼）、别名（三教）、口语黑话（图文 / 取快递 / 看病）。\nfuncs 为五类功能过滤：teach 教学 / office 办公 / life 生活 / sport 运动 / transport 交通。\n返回 {query, funcs, results:[{id,name,type,func,emoji,campus,campus_cn,zone,hours,…}]}\n\n⚠️ 参数名**不能叫 `func`** —— FastAPI 内部\n`run_in_threadpool(func, ...)` 的第一个位置参数就叫 `func`，\n接口签名里再用 `func` 会撞成 `got multiple values for argument 'func'`，\n运行时直接 500（2026-09-15 实测踩到，故改名 `funcs`）。",
+        "operationId": "api_poi_api_poi_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "funcs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Funcs"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/nearby": {
+      "get": {
+        "summary": "Api Nearby",
+        "description": "`/api/nearby?from=第三教学楼&k=5&funcs=life&types=食堂`\n\n按**步行分钟**（OSM 路网实算，不是直线距离）升序返回最近的设施。\n候选只取 `pois`（吃/买/快递/打印/办事），校园地标不参与。\n`funcs` 五类功能过滤；`types` 精确到 type（「下课饿了去哪吃」用 `types=食堂`\n比 `funcs=life` 准 —— 后者会把心理健康中心也带进来）。\n起点无法定位、或与某地点分属不同教学区时不猜：前者 `walkable:false`，\n后者直接不出现在结果里。\n返回 `results`（可算分钟的，按分钟升序）+ `unrefined`（位置只细化到片区、\n与起点落在同一参考点，**给不出分钟就不给**）；后者不占 `k` 名额，也不会被丢掉。\n\n⚠️ 同理，参数名避开 `func`（FastAPI 保留），见 `/api/poi` 的说明。",
+        "operationId": "api_nearby_api_nearby_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "From"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "K"
+            }
+          },
+          {
+            "name": "funcs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Funcs"
+            }
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Types"
+            }
+          },
+          {
+            "name": "max_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0,
+              "title": "Max Min"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/route": {
+      "get": {
+        "summary": "Api Route",
+        "description": "两点间步行路径。\n\nq: /api/route?from=第三教学楼&to=第五食堂\n返回 {from,to,meters,minutes,reliable,locate} 或 {\"route\": null}\n（查不到时返回 null 而不是报错 —— 前端据此退回估算值）",
+        "operationId": "api_route_api_route_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "To"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "fastest",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/route/batch": {
+      "post": {
+        "summary": "Api Route Batch",
+        "description": "批量问路，返回 {'<from>→<to>': payload|null}。",
+        "operationId": "api_route_batch_api_route_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteBatchReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "summary": "Api Chat",
+        "operationId": "api_chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/chat/stream": {
+      "post": {
+        "summary": "Api Chat Stream",
+        "description": "梨宝抽屉专用 SSE 端点（新任务三 P3-1）。\n\n🔴 复用而非重写：检索路由（rag/campus/memory/method_rag/health_rag/space_ctx/\nprofile_ctx）与 llm_answer()/agent 全部照 _chat_core 原样，只改输出方式。\n协议：`data: {\"type\":\"meta\",...}` → `{\"type\":\"delta\",\"text\":..}`* → `{\"type\":\"done\",...}`；\nChatReq 原样复用（extra=\"forbid\" 不放宽）；无 LLM Key 时 _chat_core 自动降级\nextractive，同样正常推流不报错；中途断开 = is_disconnected 逐块检测 +\nStarlette 关闭生成器（GeneratorExit），连接不泄漏。",
+        "operationId": "api_chat_stream_api_chat_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/reset": {
+      "post": {
+        "summary": "Reset Mem",
+        "operationId": "reset_mem_api_memory_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/chat/history": {
+      "get": {
+        "summary": "Api Chat History",
+        "description": "跨会话恢复聊天记录（E8，2026-09-21）。\n\n后端一直在存 messages（L0 短期原文），但没有读取端点 —— 前端聊天记录只在\nsessionStorage 里，关标签页即丢（方案 §一 #14「半实现」）。本端点把已存的\n原文按会话吐回去：升序、带自增 id（前端按 id/文本去重合并）与 created_at。\n\n`user_id` 当前不参与过滤（messages 表按 session_id 归档），保留在契约里是给\n将来「按用户隔离历史」留位置 —— 与 /api/chat 的身份契约对齐。\nP0-1（2026-10-11）：本端点此前是最大的 IDOR 面（任意 session_id 可读任意人\n聊天记录），现挂身份闸 —— LIBAO_REQUIRE_OWNER 关闭时行为零变化。\n脱敏逻辑同 chat：库里存的是已脱敏文本，读出时**再过一遍** desensitize，\n防止历史脏数据（旧版本落库的未脱敏内容）回流到前端。",
+        "operationId": "api_chat_history_api_chat_history_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "anon",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "default",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/facts": {
+      "get": {
+        "summary": "Api List Facts",
+        "description": "status=pending / applied / 空表示两者都要。P0-1：挂身份闸（关闭时行为零变化）。",
+        "operationId": "api_list_facts_api_memory_facts_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "anon",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      },
+      "post": {
+        "summary": "Api Add Fact",
+        "description": "课表事实回写：只落 pending（add_pending_fact 状态机闸门），MemoryPanel 可拒。\nP0-1：挂身份闸 —— 此前任何人可往任意 user_id 名下写事实（画像投毒通道）。",
+        "operationId": "api_add_fact_api_memory_facts_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryFactReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/facts/{fact_id}/confirm": {
+      "post": {
+        "summary": "Api Confirm Fact",
+        "operationId": "api_confirm_fact_api_memory_facts__fact_id__confirm_post",
+        "parameters": [
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 9223372036854775808,
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FactUserReq"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/facts/{fact_id}/reject": {
+      "post": {
+        "summary": "Api Reject Fact",
+        "operationId": "api_reject_fact_api_memory_facts__fact_id__reject_post",
+        "parameters": [
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 9223372036854775808,
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FactUserReq"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/facts/{fact_id}/undo": {
+      "post": {
+        "summary": "Api Undo Fact",
+        "operationId": "api_undo_fact_api_memory_facts__fact_id__undo_post",
+        "parameters": [
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 9223372036854775808,
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FactUserReq"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/memory/facts/{fact_id}": {
+      "delete": {
+        "summary": "Api Delete Fact",
+        "operationId": "api_delete_fact_api_memory_facts__fact_id__delete",
+        "parameters": [
+          {
+            "name": "fact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 9223372036854775808,
+              "title": "Fact Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/timetable/courses": {
+      "get": {
+        "summary": "Course Records List",
+        "operationId": "course_records_list_timetable_courses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/courses": {
+      "get": {
+        "summary": "Course Records List",
+        "operationId": "course_records_list_courses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/timetable/api/import_pdf": {
+      "post": {
+        "summary": "Import Pdf Route",
+        "operationId": "import_pdf_route_timetable_api_import_pdf_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/api/import_pdf": {
+      "post": {
+        "summary": "Import Pdf Route",
+        "operationId": "import_pdf_route_api_import_pdf_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          },
+          "422": {
+            "description": "Validation Error（请求参数校验失败）"
+          }
+        }
+      }
+    },
+    "/timetable/api/import_file": {
+      "post": {
+        "summary": "Import File Route",
+        "operationId": "import_file_route_timetable_api_import_file_post",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    },
+    "/api/import_file": {
+      "post": {
+        "summary": "Import File Route",
+        "operationId": "import_file_route_api_import_file_post",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed（该路径未声明的方法；带 Allow 头）"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthReq": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 2,
+            "pattern": "^[A-Za-z0-9_\\u4e00-\\u9fa5]{2,24}$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 6,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AuthReq",
+        "description": "注册/登录共用请求体。unknown 字段直接 422（契约即文档，同 ChatReq 口径）。\n\nW5（2026-10-25，ST202 销项）：username 的业务规则（`_USERNAME_RE`：2-24 位\n字母/数字/下划线/中文）编进 schema——pydantic pattern 与正则同一份，\nfuzzer 生成的「schema 合法但业务非法」用户名从此在 422 拦截（声明的响应），\nregister 的 400 invalid_username 分支自然静默（防御仍在，双保险）。"
+      },
+      "ChatReq": {
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Q"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "default": "default"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "anon"
+          },
+          "profile_ctx": {
+            "type": "string",
+            "title": "Profile Ctx",
+            "default": ""
+          },
+          "k": {
+            "type": "integer",
+            "title": "K",
+            "default": 4
+          },
+          "recent_plan_events": {
+            "items": {},
+            "type": "array",
+            "title": "Recent Plan Events"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "q"
+        ],
+        "title": "ChatReq"
+      },
+      "FactUserReq": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FactUserReq",
+        "description": "P0-1：事实操作的属主声明。前端 decideFact 一直就在 post {user_id}（api.ts:98），\n此前后端只是没看 —— 现在开始校验，前端零改动。"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MemoryFactReq": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "anon"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "MemoryFactReq",
+        "description": "WP12-H7：课表回写等系统侧事实（前端生成纯统计摘要，无坐标）。"
+      },
+      "PlanReviewReq": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "anon"
+          },
+          "week_no": {
+            "type": "integer",
+            "title": "Week No",
+            "default": 0
+          },
+          "digest": {
+            "additionalProperties": true,
+            "type": "object",
+            "minProperties": 1,
+            "title": "Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "title": "PlanReviewReq",
+        "description": "入参：plan_digest（前端摘要，DigestFact 形状的 JSON）+ user_id + week_no。"
+      },
+      "ResetReq": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "default": "default"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": "anon"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResetReq"
+      },
+      "RouteBatchReq": {
+        "properties": {
+          "pairs": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Pairs"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "default": "fastest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RouteBatchReq",
+        "description": "批量问路：排程引擎一次要问十几对地点，逐条 HTTP 太慢。"
+      },
+      "SyncPlanPut": {
+        "properties": {
+          "plan": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Plan"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan"
+        ],
+        "title": "SyncPlanPut",
+        "description": "PUT /api/sync/plan 请求体 —— WeekPlan 副本，仅作 ICS 素材，不校验内部逻辑。"
+      },
+      "SyncStatePut": {
+        "properties": {
+          "state": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "State"
+          },
+          "schemaVer": {
+            "type": "integer",
+            "title": "Schemaver"
+          },
+          "clientUpdatedAt": {
+            "type": "string",
+            "title": "Clientupdatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "schemaVer",
+          "clientUpdatedAt"
+        ],
+        "title": "SyncStatePut",
+        "description": "PUT /api/sync/state 请求体。state 原样透传（服务端不解释 payload 内部字段）。"
+      },
+      "UnderstandReq": {
+        "properties": {
+          "scene": {
+            "type": "string",
+            "enum": [
+              "intent",
+              "answer",
+              "dialog"
+            ],
+            "title": "Scene"
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Q"
+          },
+          "asked": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked"
+          },
+          "slots": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slots"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scene",
+          "q"
+        ],
+        "title": "UnderstandReq"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

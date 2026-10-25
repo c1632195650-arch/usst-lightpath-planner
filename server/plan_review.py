@@ -400,7 +400,9 @@ class PlanReviewReq(BaseModel):
     """入参：plan_digest（前端摘要，DigestFact 形状的 JSON）+ user_id + week_no。"""
     model_config = ConfigDict(extra="forbid")
     user_id: str = "anon"
-    week_no: int = 0
+    # W5（2026-10-25，ST201 销项）：strict 防 bool→int 静默强转
+    #（Python 里 bool 是 int 子类，lax 模式 week_no:false 会被收成 0 返回 200）
+    week_no: int = Field(default=0, strict=True)
     # digest 必填且非空（R批验收：缺 digest 曾静默 200 全 unknown —— 与
     # MemoryFactReq 的 pydantic 校验纪律对齐，缺字段/空对象一律 422）
     digest: dict = Field(min_length=1)

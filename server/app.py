@@ -42,7 +42,7 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from typing import Annotated
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Path, Query, Request  # W5: 增 Path（fact_id 边界，sqlite int64 溢出→500 的 422 化）
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +68,28 @@ from timetable_parser.ics import parse_ics
 from timetable_parser.wakeup import parse_wakeup
 
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
+
+# W5（2026-10-25，ST204 销项）：405 必须带 `Allow` 头（RFC 9110 §15.5.6）。
+# Starlette 默认 405 响应不带 Allow（schemathesis --checks all 实测 32 处），
+# 这里按路由表回填该路径的受支持方法集。
+from starlette.exceptions import HTTPException as _StarletteHTTPException  # noqa: E402
+from starlette.requests import Request as _Request  # noqa: E402  此处原名 Request 尚未导入（首次部署实录 NameError，2026-10-25）
+from fastapi.responses import JSONResponse as _JSONResponse  # noqa: E402
+
+
+@app.exception_handler(405)
+async def _method_not_allowed_with_allow(request: _Request, exc: _StarletteHTTPException):
+    allowed = sorted(
+        {m for r in app.routes
+         if getattr(r, "path", None) == request.url.path
+         for m in (getattr(r, "methods", None) or []) if m != "HEAD"}
+    )
+    return _JSONResponse(
+        {"detail": "Method Not Allowed"},
+        status_code=405,
+        headers={"Allow": ", ".join(allowed)},
+    )
+
 app.include_router(plan_dialog.router)
 import plan_review  # R批 Wave3 H2：后端日程复核 /api/plan/review（三库检索，findings+advice 带 source）——2026-10-06 收官批次 P0-1a 自 integration-full 移植
 app.include_router(plan_review.router)  # R批 H2
@@ -1406,7 +1428,7 @@ class FactUserReq(BaseModel):
 
 
 @app.post("/api/memory/facts/{fact_id}/confirm")
-def api_confirm_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+def api_confirm_fact(request: Request, body: FactUserReq | None = None, fact_id: int = Path(..., ge=0, lt=2**63)):
     uid = body.user_id if body else ""
     guard = _owner_guard(request, uid)
     if guard is not None:
@@ -1417,7 +1439,7 @@ def api_confirm_fact(fact_id: int, request: Request, body: FactUserReq | None = 
     return {"ok": r is not None, "fact": r}
 
 @app.post("/api/memory/facts/{fact_id}/reject")
-def api_reject_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+def api_reject_fact(request: Request, body: FactUserReq | None = None, fact_id: int = Path(..., ge=0, lt=2**63)):
     uid = body.user_id if body else ""
     guard = _owner_guard(request, uid)
     if guard is not None:
@@ -1428,7 +1450,7 @@ def api_reject_fact(fact_id: int, request: Request, body: FactUserReq | None = N
     return {"ok": r is not None, "fact": r}
 
 @app.post("/api/memory/facts/{fact_id}/undo")
-def api_undo_fact(fact_id: int, request: Request, body: FactUserReq | None = None):
+def api_undo_fact(request: Request, body: FactUserReq | None = None, fact_id: int = Path(..., ge=0, lt=2**63)):
     uid = body.user_id if body else ""
     guard = _owner_guard(request, uid)
     if guard is not None:
@@ -1439,7 +1461,7 @@ def api_undo_fact(fact_id: int, request: Request, body: FactUserReq | None = Non
     return {"ok": r is not None, "fact": r}
 
 @app.delete("/api/memory/facts/{fact_id}")
-def api_delete_fact(fact_id: int, request: Request, user_id: str = ""):
+def api_delete_fact(request: Request, user_id: str = "", fact_id: int = Path(..., ge=0, lt=2**63)):
     guard = _owner_guard(request, user_id)
     if guard is not None:
         return guard
