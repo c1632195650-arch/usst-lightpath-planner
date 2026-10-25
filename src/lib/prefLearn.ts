@@ -28,7 +28,7 @@ import { diffDays } from './date';
  * 一、形状
  * ========================================================== */
 
-export type PrefKind = 'routine' | 'tier' | 'estimate';
+export type PrefKind = 'routine' | 'tier' | 'estimate' | 'weights';
 
 /** 一条建议（可直接展示）。`status` 由存储层叠加，纯函数 learnPrefs **从不填它**。 */
 export interface PrefSuggestion {
@@ -41,6 +41,12 @@ export interface PrefSuggestion {
   evidence: string;
   /** 处置状态：'applied' 采纳 / 'dismissed' 忽略；未处置 = 缺席 */
   status?: 'applied' | 'dismissed';
+  /**
+   * W12（v1.5，2026-10-25）：weights 类建议采纳后要注入引擎的权重补丁。
+   * 只有 kind='weights' 且 status='applied' 时调用方才读它；
+   * **缺省/空对象 = 无权重改动**（缺省路径零漂移——golden 不动）。
+   */
+  weightsPatch?: Partial<{ blankDeficit: number; churn: number }>;
 }
 
 export type SuggestionStatus = NonNullable<PrefSuggestion['status']>;
@@ -120,7 +126,58 @@ export function median(nums: number[]): number {
  */
 export function learnPrefs(records: BehaviorRecord[], now: string): PrefSuggestion[] {
   const win = records.filter((r) => inWindow(r, now));
-  return [...learnRoutine(win), ...learnTier(win), ...learnEstimate(win)];
+  return [...learnRoutine(win), ...learnTier(win), ...learnEstimate(win), ...learnWeights(win)];
+}
+
+/* ============================================================
+ * W12（v1.5，2026-10-25）：两条全局权重规则
+ * ------------------------------------------------------------
+ * F4 已打通 weights 透传；这里把行为信号翻译成**权重微调建议**：
+ *   W-1 高频删除活动块 → blankDeficit 微降（用户在用行动说「别排这么满」，
+ *      引擎就不该那么重地惩罚留白不足）；
+ *   W-2 高频整周重排 → churn 微升（用户不在乎计划变动，最小扰动可以轻一点）。
+ * 纪律：样本不足不开口（与 R1-R3 同保守）；建议只是建议——采纳（applied）
+ * 后调用方才把 weightsPatch 注入引擎，缺省路径零漂移（golden 不动）。
+ * ========================================================== */
+
+/** W-1：近 4 周删除类记录 n ≥ 5 才开口 */
+export const W1_DELETE_MIN_N = 5;
+/** W-1：blankDeficit 建议乘数（0.8 = 降两成，仍在正区间） */
+export const W1_BLANK_FACTOR = 0.8;
+/** W-2：近 4 周重排类记录 n ≥ 4 才开口（重排比删除低频） */
+export const W2_REPLAN_MIN_N = 4;
+/** W-2：churn 建议乘数（1.25 = 升四分之一） */
+export const W2_CHURN_FACTOR = 1.25;
+
+function learnWeights(win: BehaviorRecord[]): PrefSuggestion[] {
+  const out: PrefSuggestion[] = [];
+  // W-1：活动块的「删除」记录（kind=activity + skipped 即删除语义——
+  // 移动端 GoalTodoCard 的删除走 excluded，行为日志记 skipped）
+  const deleted = win.filter((r) => r.kind === 'activity' && r.status === 'skipped').length;
+  if (deleted >= W1_DELETE_MIN_N) {
+    out.push({
+      id: 'weights-blank',
+      kind: 'weights',
+      text: `最近 4 周你删了 ${deleted} 个活动块 —— 要不要让排程默认松一点（少惩罚留白）？采纳后新计划会自然多留白。`,
+      evidence: `近 4 周 · 活动块删除 ${deleted} 次（门槛 ${W1_DELETE_MIN_N}）→ blankDeficit ×${W1_BLANK_FACTOR}`,
+      weightsPatch: { blankDeficit: Number((1 * W1_BLANK_FACTOR).toFixed(2)) },
+    });
+  }
+  // W-2：整周重排（dayReplan/整周 replan 的行为信号在 status 前缀上区分不了，
+  // 用 planState 层的重排计数最准——但那是调用方手里的数据；行为日志侧的
+  // 近似口径：done+skipped 总量高波动即频繁动计划。v1.5 先用简单可信口径：
+  // 窗口内 skipped（含 W-1 重复计数没关系——两条建议独立呈递、独立采纳）。
+  const replans = win.filter((r) => r.status === 'skipped').length;
+  if (replans >= W2_REPLAN_MIN_N) {
+    out.push({
+      id: 'weights-churn',
+      kind: 'weights',
+      text: `最近 4 周你改动了 ${replans} 处安排 —— 要不要让重排更愿意给你换新方案（少守旧）？采纳后重排会更积极。`,
+      evidence: `近 4 周 · 计划变动 ${replans} 次（门槛 ${W2_REPLAN_MIN_N}）→ churn ×${W2_CHURN_FACTOR}`,
+      weightsPatch: { churn: Number((0.8 * W2_CHURN_FACTOR).toFixed(2)) },
+    });
+  }
+  return out;
 }
 
 /**
