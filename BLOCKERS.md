@@ -391,3 +391,14 @@
 - [2026-10-25 K4/K5·处置确认] 按 CY 指示**登记不动**：K4（第二校实跑，人工窗）、K5（开源检查，硬前置=软著名义答复）——等人工窗，零代码动作
 - [2026-10-25 W1·处置确认] 按 CY 指示**勿动**：schtasks 每日自跑中。今日 11:40 首批哨兵拦（antispider，backfill_alert.jsonl 留痕、零写入）——止损设计按设计工作
 - [2026-10-25 data_pins.json 脏·观察登记] 工作树出现 data_pins.json 未提交改动（chunks 2046→2067，is_dup0 588 不变）：**非本会话产物**（本会话零 DB 写入）；实测 DB counts 与新 pins 完全一致（chunks 2067/is_dup0 588，venv python 实证），DB mtime 15:09、pins mtime 16:39——判定为本机人工搬运通道/并行会话的 DB 更新+pins 刷新，未随批入库。**处置：不提交（避免与归属批撞车）、不还原（保住运行证据）、不二次刷新**——归属批请按 data/ 变更规范自行提交（rag.py build 产物随批）；若归属方确认丢失，可用 python scripts/rag.py build 一键重生成
+- [2026-10-25 11:0x 验收方终验·**W11 接线批核实通过 + data/ 脏态归属澄清（含本批自首）**] ①W11：a7ca33f/55102b7 在册；watchProposal 分支在 LbaoChat 实证；接缝测落点=tests/watch-intent.test.ts（5 测，含④真落库 source=user/leadDays=0、⑤幂等去重）；engine 979-0 独立复跑（977+2）；ui 495-0。②data/ 脏态归属**更正执行批判断**：pins chunks 2046→2067 的手修系**本验收审计批所为**（2026-10-25 01:5x 全量检验时双侧 pins 修正，BLOCKERS 02:2x 条有登记）——执行批看到的是我的在途产物，非纯并行会话；DB mtime 15:09 的刷新来历仍未明（疑似另一并行会话/人工 rag build），但**实测内容可信**：本地 DB 588/2067 与服务器逐项一致（全量检验批双测）。③处置：数据本身已验证为正源状态，需**一笔 chore(data) 补提交**（data/usst_articles.db + data/data_pins.json 一并，message 注明含审计批 pins 修正+来历不明但已验证的 DB 刷新）——本机沙箱无 git 无法执行，白天人工补（与既积压文档同批）；补完后恢复「本地为正源」不变量且工作树干净。④两仓同步态复验：上理线 b6f8dc1、campuskit 3324174 与 origin 一致｜需要人决定：仅剩 chore(data) 白天补提交一笔（其余全部闭环）
+
+
+# 六行白天清单 kickoff（2026-10-25，CY 表格指令）
+
+- [2026-10-25 批3·开工声明] server/tests 全量部署（0.5h）：本地 6 个测试文件 → scp /opt/usst/app/server/tests/（服务器现只有 1/6）｜界限=server/tests/*.py 上行 + 服务器跑 pytest，**零业务文件改动、零 restart**（测试文件不进 uvicorn 进程）｜验收=6/6 服务器在线跑绿
+- [2026-10-25 批5·开工声明] W1 慢跑巡检（每日 10 分钟）：只读 _logs/backfill_run.jsonl / backfill_alert.jsonl + 成功率判读（≥60% 继续跑、<60% 已自停转人工）——**零写入零修复**（勿动纪律）
+- [2026-10-25 批1·开工声明] 防再犯三小修并一批（1 天）：① pins 第三写点——向量单独重建路径补 refresh_pins（scripts/rag.py 或其向量子路径，先 grep 全部 pins 写点定位）；② scripts/fact_probe.py 加 8000 端口防呆（两次污染生产记忆库的根因）；③ VACUUM INTO 类脚本（migrate_effective_to.py）备份后加成功断言（integrity_check + 逐表行数一致 + 体积>0，假备份教训通用化）｜界限=scripts/*.py + 对应 tests，零 server/ 业务文件｜验收=每修一项带反向验证（漂移路径必产 pins 失配告警等）
+- [2026-10-25 批4·开工声明] 本地审核仪式（0.5 天）：本地采集队列 37 条待审（与服务器队列**分账**，只审本地）——逐条看标题/正文质量，approve 干净条目、flag 可疑条目；入库+建索引随 data 批（本批内完成则走 rag.py build）
+- [2026-10-25 批2·开工声明] W8 落地仪表盘 v1（1 天）：注册/问答/排程三计数埋点（**零内容零上报**——只记 count+日期，不记谁问了什么）+ 每日聚合｜界限=server/ 新增 metrics 模块 + 三端点埋点 + tests；先读 remaining-tech-plans W8 工作单对齐口径
+- [2026-10-25 批6·开工声明] AGENTS.md §〇 快照刷新（0.5 天）：测试数字 881/489 → 实测 979/495（gate 基线只增不减口径保留）+ W8/W9/W10/W11/W12/W1/K3-K7 完成态入已实现清单 + 遗留清单刷新——**本批最后做**，以含当日全部产出
