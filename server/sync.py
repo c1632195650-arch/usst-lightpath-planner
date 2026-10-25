@@ -39,6 +39,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
 
 from account import _conn, _err, _now_iso, _parse_iso, user_id_from_request
+from metrics import track  # W8（2026-10-25）：落地仪表盘计数（零内容零身份）
 
 router = APIRouter()
 
@@ -240,6 +241,7 @@ def api_sync_plan_put(request: Request, body: SyncPlanPut, weekNo: int = Query(.
         c.commit()
     finally:
         c.close()
+    track("plan")  # W8：用户把生成的一周计划落云 = 排程生成事实（PUT 成功才 +1）
     return {"updatedAt": now}
 
 

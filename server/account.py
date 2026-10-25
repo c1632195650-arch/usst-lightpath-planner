@@ -62,6 +62,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from metrics import track  # W8（2026-10-25）：落地仪表盘计数（零内容零身份）
+
 router = APIRouter()
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -291,6 +293,7 @@ def api_auth_register(body: AuthReq, request: Request):
         return _err(409, "username_taken")
     finally:
         c.close()
+    track("register")  # W8：注册成功才 +1（冲突/限流不计）
     return {"userId": user_id, "token": issue_token(user_id), "icsToken": ics_token}
 
 

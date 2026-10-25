@@ -68,6 +68,7 @@ from timetable_parser.ics import parse_ics
 from timetable_parser.wakeup import parse_wakeup
 
 from logutil import log_event  # W10c（2026-10-25）：结构化事件出口（print 保留，双写过渡）
+from metrics import track  # W8（2026-10-25）：落地仪表盘计数（零内容零身份）
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
 # W5（2026-10-25，ST204 销项）：405 必须带 `Allow` 头（RFC 9110 §15.5.6）。
@@ -1219,6 +1220,9 @@ def _chat_core(body: ChatReq) -> dict:
         _chat_trace(rid, q, route, intent, top_raw, len(results), sources,
                     space_ctx, mem_ctx, profile_ctx, mode, answer, elapsed_ms,
                     tools=tools_used)
+
+    # W8 落地仪表盘：问答完成计数（零内容零身份，只 +1；/api/chat 与 stream 双端点共用此处）
+    track("chat")
 
     return {
         "answer": answer, "mode": mode, "route": route,
