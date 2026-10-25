@@ -383,3 +383,11 @@
 - [2026-10-25 K7·收尾] **完成**（campuskit 3324174，已推）：docs/tech-report-draft-2026-10-25.md（构造方法/双通道指标/成绩榜/复现指南）；基准数据零改动（wc -l 实证 42+45+111+15=213）；评测器零改动；purity 白名单 +1（报告文件，M5 公开口径裁决）
 - [2026-10-25 状态] campuskit main=3324174（origin 同步）；上理线 beta-v2=9602a79（origin 同步）。**剩余登记不动**：K4/K5 人工窗（第二校实跑/软著答复）、W1 schtasks 每日自跑中勿动、W11 接线半项（见上）
 - [2026-10-25 W11接线·开工声明] 工作单=W11 半项收尾：LbaoChat watch 意图接线（watchProposal 卡「确认」→ addUserDeadline）｜界限=src/features/libao/LbaoChat.tsx（runGoalSlots 增 watch 分支 + import watchProposal；**复用**既有 pendingDeadlines 卡机制与 confirmDeadline，零改动）、src/features/calendar/deadlineStore.ts（零改动验证）、tests/watch-intent.test.ts（增接缝契约测：卡载荷→addUserDeadline 落库+幂等去重，localStorage stub）｜红线=红线 6 接缝：LbaoChat→calendar/deadlineStore 是既有 import（L48），本次不新增跨层 import｜L3 边界=卡确认才落库、prepDays=0 不产准备块、确认后不触发重排（WP11 铁律沿袭）｜零回归=R1-R3 与 add_deadline 卡流程零改动；RV=接缝测含幂等反向（重复确认不双记）｜估 0.5d
+
+
+# W11 接线批 + 三项处置确认（2026-10-25 第二窗口）
+
+- [2026-10-25 W11接线·收尾] **完成**：watch 意图 → 确认卡 → addUserDeadline 全链通（55102b7，已推）。runGoalSlots 增 watch 分支（有日期出卡/缺日期必追问），**复用**既有 pendingDeadlines 卡机制与 confirmDeadline（卡机制零改动）；L3 边界全保：确认才落库、prepDays=0 不产准备块、落库不触发重排。接缝测 +2（④ 真落库形状＋⑤ 幂等反向：重复确认 title+date 去重不双记）。engine 979-0（977+2）/ ui 495-0 / tsc 0。**W11 至此整项闭环**
+- [2026-10-25 K4/K5·处置确认] 按 CY 指示**登记不动**：K4（第二校实跑，人工窗）、K5（开源检查，硬前置=软著名义答复）——等人工窗，零代码动作
+- [2026-10-25 W1·处置确认] 按 CY 指示**勿动**：schtasks 每日自跑中。今日 11:40 首批哨兵拦（antispider，backfill_alert.jsonl 留痕、零写入）——止损设计按设计工作
+- [2026-10-25 data_pins.json 脏·观察登记] 工作树出现 data_pins.json 未提交改动（chunks 2046→2067，is_dup0 588 不变）：**非本会话产物**（本会话零 DB 写入）；实测 DB counts 与新 pins 完全一致（chunks 2067/is_dup0 588，venv python 实证），DB mtime 15:09、pins mtime 16:39——判定为本机人工搬运通道/并行会话的 DB 更新+pins 刷新，未随批入库。**处置：不提交（避免与归属批撞车）、不还原（保住运行证据）、不二次刷新**——归属批请按 data/ 变更规范自行提交（rag.py build 产物随批）；若归属方确认丢失，可用 python scripts/rag.py build 一键重生成
