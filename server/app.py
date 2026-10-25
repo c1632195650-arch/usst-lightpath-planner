@@ -67,6 +67,7 @@ from timetable_parser import parse_pdf
 from timetable_parser.ics import parse_ics
 from timetable_parser.wakeup import parse_wakeup
 
+from logutil import log_event  # W10c（2026-10-25）：结构化事件出口（print 保留，双写过渡）
 app = FastAPI(title="上理生活助手 · 梨宝 API", version="0.4.1")
 
 # W5（2026-10-25，ST204 销项）：405 必须带 `Allow` 头（RFC 9110 §15.5.6）。
@@ -413,6 +414,7 @@ def relevance_gate(q, sources):
         _relevance_cache[key] = (now, relevant)
         return relevant
     except Exception as e:
+        log_event("relevance", "gate_call_failed", err=e)
         print("[relevance] 门调用失败（按现状放行，不加伪门）：", e)
         return None
 
@@ -430,6 +432,7 @@ def study_context(q, k=3):
     try:
         rs = method_rag.search(q, k)
     except Exception as e:
+        log_event("method", "search_failed", err=e)
         print("[method] 检索失败：", e)
         return "", []
     if not rs:
@@ -606,6 +609,7 @@ def llm_answer(question, sources, route, mem_ctx="", space_ctx="", profile_ctx="
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
+        log_event("chat", "llm_fallback_extractive", err=e)
         print("[LLM] 调用失败，降级抽取式：", e)
         return None
 
@@ -759,6 +763,7 @@ def api_weather(
         r.raise_for_status()
         raw = r.json()
     except Exception as e:
+        log_event("weather", "fetch_failed", err=e)
         print("[WEATHER] 拉取失败：", e)
         # 维护批 P0-6（2026-10-11）：异常串不再回传客户端（可能带网络/代理细节）；
         # 前端只消费 ok 字段决定「显示/不显示天气」，固定代码足够。

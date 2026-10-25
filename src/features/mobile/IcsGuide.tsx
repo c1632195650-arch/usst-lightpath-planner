@@ -8,10 +8,21 @@ import { Icon } from '@/components/icons/Icon';
  * **仅作为用户侧推荐组件口头提及，一行代码/资源不进本仓**，防 GPL 传染）。
  */
 
-export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
+export default function IcsGuide({ icsToken, onReset }: { icsToken: string | null; onReset?: () => void }) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(true);
+  const [busy, setBusy] = useState(false);
   const url = icsToken ? `${window.location.origin}/api/sync/plan.ics?token=${icsToken}` : '';
+
+  /** W10a：调 POST /api/auth/ics/reset（Bearer 由调用方环境注入；此处走同源 fetch + cookie 不可靠，
+   *  由宿主传入 token 的 fetch 实现 —— MeTab 里用 identity.token 组 header）。v1 简化：
+   *  组件直接 fetch，header 从 props.icsToken 所属会话取不到 → 由 onReset 回调由宿主实现。 */
+  const doReset = async () => {
+    if (!onReset) return;
+    setBusy(true);
+    try { await onReset(); } finally { setBusy(false); setConfirming(true); }
+  };
 
   async function copy() {
     try {
@@ -71,6 +82,28 @@ export default function IcsGuide({ icsToken }: { icsToken: string | null }) {
             系统日历 → 添加账户/订阅日历 → 粘贴这个链接。课表有变会自动跟着更新。
             安卓没自带订阅的话，可以装开源的 ICSx⁵ 再粘进去。
           </p>
+          {/* W10a（2026-10-25）：ICS 重置入口 —— 端点 P0-7 早已就绪，此前无 UI。
+              二次确认（链接泄露的唯一自愈手段，误点代价=所有已订阅日历断更）。 */}
+          {confirming ? (
+            <button
+              type="button"
+              data-testid="m-ics-reset"
+              onClick={() => setConfirming(false)}
+              className="mt-2 w-full rounded-xl border border-ink/10 px-4 py-2 text-xs text-ink-soft"
+            >
+              重置订阅链接
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="m-ics-reset"
+              onClick={doReset}
+              disabled={busy}
+              className="mt-2 w-full rounded-xl border border-danger/30 bg-danger/5 px-4 py-2 text-xs font-medium text-danger"
+            >
+              {busy ? '重置中…' : '确认重置？旧链接立刻失效，所有已订阅的日历要重新粘贴新链接'}
+            </button>
+          )}
         </div>
       )}
     </section>

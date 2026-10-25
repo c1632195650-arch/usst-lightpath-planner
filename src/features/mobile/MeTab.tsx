@@ -14,6 +14,8 @@ import IcsGuide from './IcsGuide.tsx';
 import WhitelistGuide from './WhitelistGuide.tsx';
 import EvalSection from './EvalSection.tsx';
 import { WeeklyReviewCard } from './WeeklyReviewCard.tsx';
+import { apiResetIcs } from './lib/api.ts';
+import { ICS_KEY } from './lib/auth.ts';
 import { Icon } from '@/components/icons/Icon';
 
 export default function MeTab({ d, displayed, nowMin, identity, onLogout }: {
@@ -62,7 +64,14 @@ export default function MeTab({ d, displayed, nowMin, identity, onLogout }: {
           <p className="text-sm font-semibold text-ink">提醒与帮助</p>
           <span className="text-xs text-ink-faint">日历订阅 · 后台保活</span>
         </div>
-        <IcsGuide icsToken={identity.icsToken} />
+        <IcsGuide
+          icsToken={identity.icsToken}
+          onReset={async () => {
+            // W10a：重置成功 → 新 icsToken 落本机（auth.ts 的 ICS_KEY 单键存储，与 loadIdentity 同构）
+            const r = await apiResetIcs(identity.token);
+            localStorage.setItem(ICS_KEY, r.icsToken);
+          }}
+        />
         <WhitelistGuide />
       </section>
 

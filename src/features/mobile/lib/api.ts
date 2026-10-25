@@ -82,6 +82,12 @@ export function apiLogin(username: string, password: string): Promise<AuthRespon
   return call('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
 }
 
+/** W10a（2026-10-25）：ICS 订阅链接重置 —— P0-7 端点的移动端入口。
+ *  返回新 icsToken；旧链接即刻 404（泄露自愈）。 */
+export function apiResetIcs(token: string): Promise<{ icsToken: string }> {
+  return call('/api/auth/ics/reset', { method: 'POST', headers: authHeaders(token) });
+}
+
 /* ---------- 同步（F8/F9） ---------- */
 
 export function apiGetSyncState(token: string): Promise<SyncStateResponse> {
